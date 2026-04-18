@@ -199,24 +199,19 @@ echo.
 echo [5/5] Creating Desktop shortcut...
 
 set "SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
-set "LAUNCHER=%INSTALL_DIR%\launch.bat"
 
-:: Create a launcher.bat (runs without a visible cmd window)
-(
-    echo @echo off
-    echo cd /d "%INSTALL_DIR%"
-    echo set "PATH=%FFMPEG_DIR%;%%PATH%%"
-    echo pythonw "%INSTALL_DIR%\video_translator_gui.py"
-) > "%LAUNCHER%"
+:: Resolve full path to pythonw.exe (avoids PATH lookup issues from desktop)
+for /f "tokens=*" %%i in ('python -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
 
-:: Create the .lnk shortcut via PowerShell
+:: Create the .lnk shortcut via PowerShell — no CMD window, no admin required
 powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
     "$s = $ws.CreateShortcut('%SHORTCUT%');" ^
-    "$s.TargetPath = 'pythonw';" ^
+    "$s.TargetPath = '%PYTHONW%';" ^
     "$s.Arguments = '\"%INSTALL_DIR%\video_translator_gui.py\"';" ^
     "$s.WorkingDirectory = '%INSTALL_DIR%';" ^
     "$s.Description = 'Video Translator AI';" ^
+    "$env:Path = '%FFMPEG_DIR%;' + $env:Path;" ^
     "$s.Save();"
 
 if exist "%SHORTCUT%" (
