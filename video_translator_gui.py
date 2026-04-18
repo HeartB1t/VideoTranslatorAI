@@ -2902,23 +2902,33 @@ class App(tk.Tk):
 
         def do():
             cmd = [sys.executable, "-m", "pip", "install",
-                   "--break-system-packages", "--quiet"] + packages
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            self.after(0, self._install_done, proc.returncode == 0,
-                       packages if proc.returncode == 0 else proc.stderr)
+                   "--break-system-packages", "--no-color"] + packages
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            )
+            ok = True
+            try:
+                for line in proc.stdout:
+                    line = line.rstrip()
+                    if line:
+                        self.after(0, self._log_write, f"    {line}\n")
+                proc.wait()
+                ok = proc.returncode == 0
+            except Exception:
+                proc.kill()
+                proc.wait()
+                ok = False
+            self.after(0, self._install_done, ok, packages)
 
         threading.Thread(target=do, daemon=True).start()
 
-    def _install_done(self, ok, info):
+    def _install_done(self, ok, packages):
         self._progress.stop()
         self._btn.configure(state="normal", text=self._s("btn_start"))
         if ok:
-            self._log_write(f"[✓] Installed: {', '.join(info)}\n")
-            messagebox.showinfo(self._s("msg_completed_t"), self._s("msg_installed"))
+            self._log_write(f"[✓] Installed: {', '.join(packages)}\n")
         else:
-            self._log_write(f"[✗] Error:\n{info}\n")
-            messagebox.showerror(self._s("msg_error_t"),
-                                 self._s("msg_install_failed").format(info))
+            self._log_write("[✗] Installation failed. Check the log above for details.\n")
 
     # ── UI builder ───────────────────────────────────────────────────────────
 
