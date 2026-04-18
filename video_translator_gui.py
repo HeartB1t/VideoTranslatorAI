@@ -91,6 +91,7 @@ REQUIRED_PACKAGES = {
     "pydub":          "pydub",
     "demucs":         "demucs",
     "yt_dlp":         "yt-dlp",
+    "torchcodec":     "torchcodec",
 }
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
