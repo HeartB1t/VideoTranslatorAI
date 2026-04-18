@@ -1149,19 +1149,22 @@ class App(tk.Tk):
 
         # Log
         log_frame = tk.Frame(self, bg=BG)
-        log_frame.grid(row=16, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="ew")
-        self._log = tk.Text(log_frame, height=12, width=76,
+        log_frame.grid(row=16, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="nsew")
+        log_frame.rowconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+        self._log = tk.Text(log_frame, height=8, width=76,
                             bg="#11111b", fg=GRN, font=("Monospace", 8),
                             relief="flat", state="disabled", wrap="word")
         vsb = tk.Scrollbar(log_frame, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
-        self._log.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="right", fill="y")
+        self._log.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
 
         self._progress = ttk.Progressbar(self, mode="indeterminate", length=500)
         self._progress.grid(row=17, column=0, columnspan=3, padx=16, pady=(0, 12))
 
         self.columnconfigure(1, weight=1)
+        self.rowconfigure(16, weight=1)  # log row expands, progress bar stays at bottom
 
     def _row_label(self, row, text):
         lbl = tk.Label(self, text=text, bg=BG, fg="#bac2de",
