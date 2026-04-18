@@ -128,6 +128,9 @@ python -m pip install Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 
+:: Helper: activate MSVC compiler environment if vcvarsall.bat is available
+call :find_vcvarsall
+
 :: Attempt 1: no-build-isolation (works if VS Build Tools already present)
 python -m pip install TTS --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
@@ -136,7 +139,7 @@ if not errorlevel 1 goto tts_ok
 python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
-:: Attempt 3: auto-install VS C++ Build Tools, then retry TTS
+:: Attempt 3: auto-install VS C++ Build Tools, then activate env and retry
 echo  [*] VS C++ Build Tools not found - downloading and installing silently...
 echo      (this may take 5-10 minutes, please wait)
 powershell -Command ^
@@ -145,7 +148,7 @@ powershell -Command ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
     "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
     "Write-Host '     Installing VS C++ Build Tools (silent)...';" ^
-    "Start-Process -FilePath $out -ArgumentList '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Wait;" ^
+    "Start-Process -FilePath $out -ArgumentList '--quiet --wait --norestart --nocache --installPath C:\BuildTools --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Wait;" ^
     "Remove-Item $out -Force;" ^
     "Write-Host '  [+] VS Build Tools installed.'"
 
@@ -154,7 +157,10 @@ if errorlevel 1 (
     goto tts_failed
 )
 
-:: Retry TTS after VS Build Tools install
+:: Activate MSVC compiler environment (makes cl.exe visible in current session)
+call :find_vcvarsall
+
+:: Retry TTS with compiler now active
 python -m pip install TTS --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
@@ -163,17 +169,17 @@ if not errorlevel 1 goto tts_ok
 
 :tts_failed
 echo.
-echo  ╔══════════════════════════════════════════════════════╗
-echo  ║  Voice Cloning (XTTS v2) could not be installed.    ║
-echo  ║  Everything else works normally.                     ║
-echo  ║                                                      ║
-echo  ║  To enable voice cloning manually:                   ║
-echo  ║  1. Install Visual Studio Build Tools 2022:          ║
-echo  ║     https://aka.ms/vs/17/release/vs_BuildTools.exe   ║
-echo  ║     Select: "Desktop development with C++"           ║
-echo  ║  2. Reopen this terminal and run:                    ║
-echo  ║     pip install TTS --no-build-isolation             ║
-echo  ╚══════════════════════════════════════════════════════╝
+echo  +------------------------------------------------------+
+echo  ^|  Voice Cloning (XTTS v2) could not be installed.    ^|
+echo  ^|  Everything else works normally.                     ^|
+echo  ^|                                                      ^|
+echo  ^|  To enable voice cloning manually:                   ^|
+echo  ^|  1. Install Visual Studio Build Tools 2022:          ^|
+echo  ^|     https://aka.ms/vs/17/release/vs_BuildTools.exe   ^|
+echo  ^|     Select: "Desktop development with C++"           ^|
+echo  ^|  2. Reopen this terminal and run:                    ^|
+echo  ^|     pip install TTS --no-build-isolation             ^|
+echo  +------------------------------------------------------+
 echo.
 goto tts_end
 
@@ -287,3 +293,27 @@ echo   NOTE: on first use, Whisper will download
 echo   the selected model (150MB - 3GB depending on model).
 echo.
 pause
+exit /b 0
+
+:: ── Subroutine: find and activate MSVC compiler environment ──────────────────
+:find_vcvarsall
+set "VCVARSALL="
+:: Check default VS 2022 BuildTools path (our silent install uses C:\BuildTools)
+if exist "C:\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+    set "VCVARSALL=C:\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+    goto activate_vc
+)
+:: Check standard VS install paths
+for %%d in (
+    "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+    "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
+    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+    "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+) do (
+    if exist %%d set "VCVARSALL=%%~d"
+)
+:activate_vc
+if defined VCVARSALL (
+    call "!VCVARSALL!" x64 >nul 2>&1
+)
+goto :eof
