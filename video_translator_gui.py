@@ -131,6 +131,14 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
+        "label_engine":       "Motore traduzione:",
+        "engine_google":      "Google (default)",
+        "engine_deepl":       "DeepL Free",
+        "engine_marian":      "MarianMT (locale)",
+        "label_deepl_key":    "API key DeepL:",
+        "opt_diarization":    "👥 Diarization multi-speaker (pyannote)",
+        "label_hf_token":     "HF token:",
+        "hint_hf_token":      "Token HF gratuito: huggingface.co/settings/tokens",
         "msg_xtts_no_lang":   "XTTS v2 non supporta '{lang}'. Verrà usato Edge-TTS.",
         "msg_no_video":       "Aggiungi almeno un video.",
         "msg_completed":      "Traduzione completata!",
@@ -194,6 +202,14 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
+        "label_engine":       "Translation engine:",
+        "engine_google":      "Google (default)",
+        "engine_deepl":       "DeepL Free",
+        "engine_marian":      "MarianMT (local)",
+        "label_deepl_key":    "DeepL API key:",
+        "opt_diarization":    "👥 Multi-speaker diarization (pyannote)",
+        "label_hf_token":     "HF token:",
+        "hint_hf_token":      "Free HF token: huggingface.co/settings/tokens",
         "msg_xtts_no_lang":   "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video":       "Add at least one video.",
         "msg_completed":      "Translation completed!",
@@ -1783,7 +1799,7 @@ UI_LANG_OPTIONS = [
 # ═══════════════════════════════════════════════════════════
 
 def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         err = (proc.stderr or "").strip().splitlines()[-10:]
         raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
@@ -1862,7 +1878,7 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
         vocals = sources[3].mean(0, keepdim=True).cpu()
         background = sources[:3].sum(0).mean(0, keepdim=True).cpu()
     finally:
-        del model
+        del model, waveform, sources
         if device == "cuda":
             torch.cuda.empty_cache()
 
@@ -1926,12 +1942,97 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> list[dict]
     return result
 
 
+def _marian_normalize_lang(code: str) -> str:
+    """Normalize language codes to the short form Helsinki-NLP models expect."""
+    if not code:
+        return code
+    c = code.lower()
+    # Helsinki-NLP uses 'zh' not 'zh-cn'
+    if c.startswith("zh"):
+        return "zh"
+    # Norwegian: 'no' -> 'nb' on HF (Bokmal)
+    if c == "no":
+        return "nb"
+    return c.split("-")[0]
+
+
 def translate_segments(
     segments: list[dict], source: str, target: str,
     engine: str = "google", deepl_key: str = "",
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
+
+    # ── MarianMT local translation ──────────────────────────────────────────
+    if engine == "marian":
+        # Auto-detect is not supported: we need an explicit source language.
+        if src == "auto":
+            print("     ! MarianMT requires explicit source language (auto not supported), falling back to Google.", flush=True)
+        else:
+            m_src = _marian_normalize_lang(src)
+            m_tgt = _marian_normalize_lang(target)
+            model_name = f"Helsinki-NLP/opus-mt-{m_src}-{m_tgt}"
+            tokenizer = None
+            model = None
+            try:
+                # lazy import to keep startup fast
+                from transformers import MarianMTModel, MarianTokenizer
+                import torch
+                tokenizer = MarianTokenizer.from_pretrained(model_name)
+                model = MarianMTModel.from_pretrained(model_name)
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                model = model.to(device)
+                print(f"     → MarianMT loaded ({model_name}, device={device})", flush=True)
+
+                texts = [(seg.get("text") or "").strip() for seg in segments]
+                results: list[str] = []
+                batch_size = 8
+                for i in range(0, len(texts), batch_size):
+                    batch = texts[i:i + batch_size]
+                    # Preserve empty strings to keep indices aligned
+                    non_empty_idx = [j for j, t in enumerate(batch) if t]
+                    batch_out = [""] * len(batch)
+                    if non_empty_idx:
+                        inputs = tokenizer(
+                            [batch[j] for j in non_empty_idx],
+                            return_tensors="pt", padding=True,
+                            truncation=True, max_length=512,
+                        ).to(device)
+                        with torch.no_grad():
+                            translated = model.generate(**inputs)
+                        decoded = [tokenizer.decode(t, skip_special_tokens=True) for t in translated]
+                        for j, out in zip(non_empty_idx, decoded):
+                            batch_out[j] = out
+                    results.extend(batch_out)
+                    print(f"     {min(i + batch_size, len(texts))}/{len(texts)}...", end="\r", flush=True)
+
+                translated_segs = []
+                for seg, tr in zip(segments, results):
+                    text = (seg.get("text") or "").strip()
+                    translated_segs.append({
+                        "start": seg["start"],
+                        "end":   seg["end"],
+                        "text_src": text,
+                        "text_tgt": tr or text,
+                        **({"speaker": seg["speaker"]} if "speaker" in seg else {}),
+                    })
+                print("     → Translation done (MarianMT)          ", flush=True)
+                return translated_segs
+            except Exception as e:
+                print(f"     ! MarianMT model {model_name} not available ({e.__class__.__name__}), falling back to Google.", flush=True)
+            finally:
+                # free VRAM
+                try:
+                    del model
+                    del tokenizer
+                    import torch as _t
+                    if _t.cuda.is_available():
+                        _t.cuda.empty_cache()
+                except Exception:
+                    pass
+        # fall through to Google if MarianMT failed
+        engine = "google"
+
     if engine == "deepl" and deepl_key.strip():
         from deep_translator import DeeplTranslator
         translator = DeeplTranslator(
@@ -1953,12 +2054,15 @@ def translate_segments(
             except Exception as e:
                 print(f"     ! Error segment {i}: {e}", flush=True)
                 text_tgt = text
-        translated.append({
+        entry = {
             "start": seg["start"],
             "end": seg["end"],
             "text_src": text,
             "text_tgt": text_tgt,
-        })
+        }
+        if "speaker" in seg:
+            entry["speaker"] = seg["speaker"]
+        translated.append(entry)
         if i % 10 == 0:
             print(f"     {i+1}/{len(segments)}...", end="\r", flush=True)
     print("     → Translation done          ", flush=True)
@@ -1984,14 +2088,19 @@ async def _tts_segment(text: str, voice: str, out_path: str, rate: str = "+0%", 
 async def _tts_all(segments: list[dict], voice: str, tmp_dir: str, rate: str) -> list[str]:
     files = []
     total = len(segments)
+    failed = 0
     for i, seg in enumerate(segments):
         out = os.path.join(tmp_dir, f"seg_{i:04d}.mp3")
         text = (seg.get("text_tgt") or "").strip()
         if text:
             await _tts_segment(text, voice, out, rate=rate)
+            if not os.path.exists(out):
+                failed += 1
         files.append(out)
         if i % 10 == 0:
             print(f"     {i+1}/{total}...", end="\r", flush=True)
+    if failed:
+        print(f"     ! Warning: {failed}/{total} TTS segments failed and will be silent.", flush=True)
     return files
 
 
@@ -2007,8 +2116,12 @@ def generate_tts_xtts(
     reference_audio: str,
     lang_target: str,
     tmp_dir: str,
+    diar_segments: list[dict] | None = None,
 ) -> list[str]:
-    """Voice cloning TTS via Coqui XTTS v2. Uses reference_audio to clone speaker voice."""
+    """Voice cloning TTS via Coqui XTTS v2. Uses reference_audio to clone speaker voice.
+    If diar_segments is provided, extracts per-speaker reference clips and uses the
+    correct one for each segment (based on seg['speaker']).
+    """
     import torch
     from TTS.api import TTS as CoquiTTS
 
@@ -2021,7 +2134,7 @@ def generate_tts_xtts(
     print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device})...", flush=True)
     print(f"     Reference audio: {Path(reference_audio).name}", flush=True)
 
-    # Prepare 30s reference clip (XTTS works best with 6-30s of clean speech)
+    # Global (fallback) 30s reference clip
     ref_clip = os.path.join(tmp_dir, "xtts_ref.wav")
     try:
         subprocess.run([
@@ -2030,6 +2143,18 @@ def generate_tts_xtts(
         ], capture_output=True, check=True)
     except subprocess.CalledProcessError:
         shutil.copy(reference_audio, ref_clip)
+
+    # Per-speaker references when diarization is available
+    speaker_refs: dict[str, str] = {}
+    if diar_segments:
+        unique_speakers = sorted({d["speaker"] for d in diar_segments})
+        print(f"     Building per-speaker references for: {', '.join(unique_speakers)}", flush=True)
+        for spk in unique_speakers:
+            ref = _extract_speaker_reference(reference_audio, diar_segments, spk, tmp_dir)
+            if ref:
+                speaker_refs[spk] = ref
+            else:
+                print(f"     ! No reference for {spk}, will use global reference.", flush=True)
 
     tts_model = None
     try:
@@ -2040,10 +2165,12 @@ def generate_tts_xtts(
             out = os.path.join(tmp_dir, f"seg_{i:04d}.wav")
             text = (seg.get("text_tgt") or "").strip()
             if text:
+                spk = seg.get("speaker")
+                spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
                 try:
                     tts_model.tts_to_file(
                         text=text,
-                        speaker_wav=ref_clip,
+                        speaker_wav=spk_ref,
                         language=xtts_lang,
                         file_path=out,
                     )
@@ -2175,6 +2302,118 @@ def mux_video(video_input: str, audio_track: str, output_path: str):
     ], step="mux_video")
 
 
+CONFIG_PATH = Path.home() / ".videotranslatorai_config.json"
+
+
+def load_config() -> dict:
+    try:
+        if CONFIG_PATH.exists():
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_config(data: dict) -> None:
+    try:
+        existing = load_config()
+        existing.update(data)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=2)
+    except Exception as e:
+        print(f"     ! Could not save config: {e}", flush=True)
+
+
+def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
+    """Run pyannote speaker-diarization-3.1. Returns [{start,end,speaker}, ...]."""
+    from pyannote.audio import Pipeline
+    print("[3b] Running speaker diarization (pyannote)...", flush=True)
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        use_auth_token=hf_token,
+    )
+    # Use GPU if available
+    try:
+        import torch
+        if torch.cuda.is_available():
+            pipeline.to(torch.device("cuda"))
+    except Exception:
+        pass
+    diarization = pipeline(audio_path)
+    segments: list[dict] = []
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        segments.append({"start": float(turn.start), "end": float(turn.end), "speaker": str(speaker)})
+    speakers = sorted({s["speaker"] for s in segments})
+    print(f"     → {len(segments)} diarization turns | {len(speakers)} speakers: {', '.join(speakers)}", flush=True)
+    return segments
+
+
+def assign_speakers(whisper_segments: list[dict], diar_segments: list[dict]) -> list[dict]:
+    """For each Whisper segment, assign the speaker with the largest temporal overlap."""
+    if not diar_segments:
+        return whisper_segments
+    for seg in whisper_segments:
+        s_start = seg["start"]
+        s_end = seg["end"]
+        best_speaker = None
+        best_overlap = 0.0
+        for d in diar_segments:
+            overlap = max(0.0, min(s_end, d["end"]) - max(s_start, d["start"]))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_speaker = d["speaker"]
+        if best_speaker is not None:
+            seg["speaker"] = best_speaker
+    return whisper_segments
+
+
+def _extract_speaker_reference(
+    vocals_path: str, diar_segments: list[dict], speaker: str,
+    tmp_dir: str, max_duration: float = 30.0,
+) -> str | None:
+    """Concat up to max_duration seconds of clean vocals from one speaker."""
+    turns = [d for d in diar_segments if d["speaker"] == speaker]
+    if not turns:
+        return None
+    # Prefer longer turns first (cleaner reference)
+    turns.sort(key=lambda d: d["end"] - d["start"], reverse=True)
+    selected: list[tuple[float, float]] = []
+    total = 0.0
+    for d in turns:
+        dur = d["end"] - d["start"]
+        if dur < 1.0:
+            continue
+        take = min(dur, max_duration - total)
+        if take <= 0:
+            break
+        selected.append((d["start"], d["start"] + take))
+        total += take
+        if total >= max_duration:
+            break
+    if not selected:
+        return None
+
+    # Build ffmpeg concat via filter_complex trim
+    safe_spk = speaker.replace(" ", "_")
+    out = os.path.join(tmp_dir, f"ref_{safe_spk}.wav")
+    filter_parts = []
+    for i, (s, e) in enumerate(selected):
+        filter_parts.append(f"[0:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{i}]")
+    concat_inputs = "".join(f"[a{i}]" for i in range(len(selected)))
+    filter_complex = ";".join(filter_parts) + f";{concat_inputs}concat=n={len(selected)}:v=0:a=1[out]"
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", vocals_path,
+            "-filter_complex", filter_complex,
+            "-map", "[out]", "-ar", "22050", "-ac", "1", out,
+        ], capture_output=True, check=True)
+        return out
+    except subprocess.CalledProcessError as e:
+        print(f"     ! Could not extract reference for {speaker}: {e}", flush=True)
+        return None
+
+
 def translate_video(
     video_in: str,
     output: str | None = None,
@@ -2190,6 +2429,8 @@ def translate_video(
     deepl_key: str = "",
     segments_override: list[dict] | None = None,
     tts_engine: str = "edge",   # "edge" or "xtts"
+    use_diarization: bool = False,
+    hf_token: str = "",
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -2244,10 +2485,19 @@ def translate_video(
             ], step="resample audio")
             vocals_path = vocals_16k
 
+        diar_segments: list[dict] = []
         if segments_override is not None:
             segments = segments_override
         else:
             raw_segs = transcribe(vocals_path, model, lang_source)
+            # Speaker diarization (before translation so speaker info propagates)
+            if use_diarization and hf_token.strip():
+                try:
+                    diar_segments = diarize_audio(vocals_path, hf_token.strip())
+                    raw_segs = assign_speakers(raw_segs, diar_segments)
+                except Exception as e:
+                    print(f"     ! Diarization failed ({e.__class__.__name__}: {e}), continuing without speaker info.", flush=True)
+                    diar_segments = []
             segments = translate_segments(raw_segs, lang_source, lang_target, engine=translation_engine, deepl_key=deepl_key)
 
         if not no_subs:
@@ -2261,7 +2511,10 @@ def translate_video(
         tts_files = None
         if tts_engine == "xtts":
             try:
-                tts_files = generate_tts_xtts(segments, vocals_path, lang_target, tmp_dir)
+                tts_files = generate_tts_xtts(
+                    segments, vocals_path, lang_target, tmp_dir,
+                    diar_segments=diar_segments,
+                )
             except Exception as e:
                 print(f"     ! XTTS failed ({e}), falling back to Edge-TTS.", flush=True)
                 tts_files = None
@@ -2430,8 +2683,13 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
-        self._use_deepl     = tk.BooleanVar(value=False)
-        self._deepl_key_var = tk.StringVar()
+        # Translation engine: "google" | "deepl" | "marian"
+        self._translation_engine = tk.StringVar(value="google")
+        self._deepl_key_var      = tk.StringVar()
+        # Diarization
+        _cfg = load_config()
+        self._use_diarization = tk.BooleanVar(value=False)
+        self._hf_token_var    = tk.StringVar(value=_cfg.get("hf_token", ""))
         self._running   = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
@@ -2662,21 +2920,68 @@ class App(tk.Tk):
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
         self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w")
 
-        # DeepL row
-        deepl_row = tk.Frame(opts, bg=BG)
-        deepl_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        self._chk_deepl = tk.Checkbutton(
-            deepl_row, text="DeepL Free", variable=self._use_deepl,
-            command=self._on_deepl_toggle,
+        # Translation engine radio group
+        engine_row = tk.Frame(opts, bg=BG)
+        engine_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self._lbl_engine = tk.Label(engine_row, text=self._s("label_engine"),
+                                    bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+        self._lbl_engine.pack(side="left")
+        self._rb_eng_google = tk.Radiobutton(
+            engine_row, text=self._s("engine_google"),
+            variable=self._translation_engine, value="google",
+            command=self._on_engine_change,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._chk_deepl.pack(side="left")
-        tk.Label(deepl_row, text="  ⚠️ 500k char/mese gratuiti — API key:",
-                 bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
+        self._rb_eng_google.pack(side="left", padx=(6, 0))
+        self._rb_eng_deepl = tk.Radiobutton(
+            engine_row, text=self._s("engine_deepl"),
+            variable=self._translation_engine, value="deepl",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
+        self._rb_eng_deepl.pack(side="left", padx=(6, 0))
+        self._rb_eng_marian = tk.Radiobutton(
+            engine_row, text=self._s("engine_marian"),
+            variable=self._translation_engine, value="marian",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
+        self._rb_eng_marian.pack(side="left", padx=(6, 0))
+
+        # DeepL API key row (visible only when DeepL selected)
+        self._deepl_row = tk.Frame(opts, bg=BG)
+        self._deepl_row.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._lbl_deepl_key = tk.Label(self._deepl_row, text=self._s("label_deepl_key"),
+                                       bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_deepl_key.pack(side="left")
         self._deepl_key_entry = tk.Entry(
-            deepl_row, textvariable=self._deepl_key_var, width=28,
+            self._deepl_row, textvariable=self._deepl_key_var, width=32,
             bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8), show="*", state="disabled")
+            font=("Monospace", 8), show="*")
         self._deepl_key_entry.pack(side="left", padx=(4, 0))
+        self._deepl_row.grid_remove()  # hidden until DeepL selected
+
+        # Diarization row
+        diar_row = tk.Frame(opts, bg=BG)
+        diar_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self._chk_diar = tk.Checkbutton(
+            diar_row, text=self._s("opt_diarization"),
+            variable=self._use_diarization,
+            command=self._on_diarization_toggle,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
+        self._chk_diar.pack(side="left")
+
+        self._hf_row = tk.Frame(opts, bg=BG)
+        self._hf_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._lbl_hf_token = tk.Label(self._hf_row, text=self._s("label_hf_token"),
+                                      bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_hf_token.pack(side="left")
+        self._hf_token_entry = tk.Entry(
+            self._hf_row, textvariable=self._hf_token_var, width=40,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8), show="*")
+        self._hf_token_entry.pack(side="left", padx=(4, 0))
+        self._lbl_hf_hint = tk.Label(self._hf_row, text="  " + self._s("hint_hf_token"),
+                                     bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_hf_hint.pack(side="left")
+        self._hf_row.grid_remove()  # hidden until diarization enabled
 
         ttk.Separator(self, orient="horizontal").grid(
             row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
@@ -2748,6 +3053,14 @@ class App(tk.Tk):
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
+        self._lbl_engine.configure(text=self._s("label_engine"))
+        self._rb_eng_google.configure(text=self._s("engine_google"))
+        self._rb_eng_deepl.configure(text=self._s("engine_deepl"))
+        self._rb_eng_marian.configure(text=self._s("engine_marian"))
+        self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
+        self._chk_diar.configure(text=self._s("opt_diarization"))
+        self._lbl_hf_token.configure(text=self._s("label_hf_token"))
+        self._lbl_hf_hint.configure(text="  " + self._s("hint_hf_token"))
         # Update source language combo labels
         lang = self._ui_lang.get()
         src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
@@ -2790,9 +3103,17 @@ class App(tk.Tk):
         if self._subs_only.get():
             self._no_subs.set(False)
 
-    def _on_deepl_toggle(self):
-        state = "normal" if self._use_deepl.get() else "disabled"
-        self._deepl_key_entry.configure(state=state)
+    def _on_engine_change(self):
+        if self._translation_engine.get() == "deepl":
+            self._deepl_row.grid()
+        else:
+            self._deepl_row.grid_remove()
+
+    def _on_diarization_toggle(self):
+        if self._use_diarization.get():
+            self._hf_row.grid()
+        else:
+            self._hf_row.grid_remove()
 
     def _on_no_subs(self):
         if self._no_subs.get():
@@ -2856,6 +3177,8 @@ class App(tk.Tk):
                             # Move to a stable path outside the TemporaryDirectory
                             fd, stable = tempfile.mkstemp(suffix=".mp4", prefix="yt_")
                             os.close(fd)
+                            if os.path.exists(stable):
+                                os.remove(stable)
                             shutil.move(video_path, stable)
                         translate_video(
                             video_in=stable,
@@ -2871,6 +3194,8 @@ class App(tk.Tk):
                             tts_engine=p["tts_engine"],
                             translation_engine=p["translation_engine"],
                             deepl_key=p["deepl_key"],
+                            use_diarization=p["use_diarization"],
+                            hf_token=p["hf_token"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -2935,7 +3260,7 @@ class App(tk.Tk):
             rate = int(round(self._tts_rate.get()))
         except (ValueError, tk.TclError):
             rate = 0
-        return {
+        snap = {
             "model":      self._model.get(),
             "lang_src":   self._lang_src.get(),
             "lang_tgt":   self._lang_tgt.get(),
@@ -2946,9 +3271,15 @@ class App(tk.Tk):
             "no_demucs":  self._no_demucs.get(),
             "output":     self._output_var.get().strip(),
             "tts_engine":  "xtts" if self._use_xtts.get() else "edge",
-            "translation_engine": "deepl" if self._use_deepl.get() else "google",
+            "translation_engine": self._translation_engine.get(),
             "deepl_key":          self._deepl_key_var.get().strip(),
+            "use_diarization":    self._use_diarization.get(),
+            "hf_token":           self._hf_token_var.get().strip(),
         }
+        # Persist HF token for next launch
+        if snap["hf_token"] and snap["use_diarization"]:
+            save_config({"hf_token": snap["hf_token"]})
+        return snap
 
     def _start_with_editor(self, video_path: str):
         """Phase 1: transcribe + translate, then open subtitle editor."""
@@ -2973,6 +3304,8 @@ class App(tk.Tk):
                     tts_engine=p["tts_engine"],
                     translation_engine=p["translation_engine"],
                     deepl_key=p["deepl_key"],
+                    use_diarization=p["use_diarization"],
+                    hf_token=p["hf_token"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
@@ -3024,6 +3357,8 @@ class App(tk.Tk):
                     tts_engine=p["tts_engine"],
                     translation_engine=p["translation_engine"],
                     deepl_key=p["deepl_key"],
+                    use_diarization=p["use_diarization"],
+                    hf_token=p["hf_token"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -3070,6 +3405,8 @@ class App(tk.Tk):
                             tts_engine=p["tts_engine"],
                             translation_engine=p["translation_engine"],
                             deepl_key=p["deepl_key"],
+                            use_diarization=p["use_diarization"],
+                            hf_token=p["hf_token"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -3132,6 +3469,13 @@ def _cli():
     parser.add_argument("--no-subs", action="store_true")
     parser.add_argument("--subs-only", action="store_true")
     parser.add_argument("--no-demucs", action="store_true")
+    parser.add_argument("--translation-engine", default="google",
+                        choices=["google", "deepl", "marian"])
+    parser.add_argument("--deepl-key", default="")
+    parser.add_argument("--diarize", action="store_true",
+                        help="Enable pyannote speaker diarization")
+    parser.add_argument("--hf-token", default="",
+                        help="HuggingFace token (falls back to ~/.videotranslatorai_config.json)")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -3140,6 +3484,7 @@ def _cli():
         parser.print_help()
         sys.exit(0)
 
+    hf_token_cli = args.hf_token or load_config().get("hf_token", "")
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
@@ -3155,6 +3500,10 @@ def _cli():
             no_subs=args.no_subs,
             subs_only=args.subs_only,
             no_demucs=args.no_demucs,
+            translation_engine=args.translation_engine,
+            deepl_key=args.deepl_key,
+            use_diarization=args.diarize,
+            hf_token=hf_token_cli,
         )
 
 
