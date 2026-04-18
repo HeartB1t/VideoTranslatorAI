@@ -6,25 +6,30 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 
 1. **Transcription** — [faster-Whisper](https://github.com/SYSTRAN/faster-whisper) transcribes the audio (GPU accelerated)
 2. **Voice/music separation** — [Demucs](https://github.com/facebookresearch/demucs) isolates vocals from background music
-3. **Translation** — Google Translate (default) or DeepL Free (optional)
-4. **Dubbing** — [Edge-TTS](https://github.com/rany2/edge-tts) (400+ voices) or [Coqui XTTS v2](https://github.com/coqui-ai/TTS) (voice cloning)
-5. **Mixing** — dubbed voice mixed back with original background music
-6. **Normalization** — final audio normalized to -23 LUFS (EBU R128 broadcast standard)
+3. **Translation** — MarianMT (local, offline) or Google Translate or DeepL Free
+4. **Speaker diarization** *(optional)* — [pyannote-audio](https://github.com/pyannote/pyannote-audio) identifies who is speaking in each segment
+5. **Dubbing** — [Edge-TTS](https://github.com/rany2/edge-tts) (400+ voices) or [Coqui XTTS v2](https://github.com/coqui-ai/TTS) (voice cloning, per-speaker)
+6. **Mixing** — dubbed voice mixed back with original background music
+7. **Normalization** — final audio normalized to -23 LUFS (EBU R128 broadcast standard)
+8. **Lip Sync** *(optional)* — [Wav2Lip](https://github.com/Rudrabha/Wav2Lip) synchronizes mouth movements to the dubbed audio
 
 ## Features
 
 - 🖥️ Dark-themed GUI (Tkinter) — no command line needed
+- 🌍 **26 target languages** with multiple voices per language
+- 🌐 **UI in 26 languages** — the interface itself adapts to your language
 - 🎬 **YouTube & URL support** — paste any YouTube link and translate directly (powered by yt-dlp)
-- 🌍 26 target languages with multiple voices per language
 - 🎵 Voice/music separation via Demucs (keeps background music)
-- 🎙️ **Voice cloning** — [Coqui XTTS v2](https://github.com/coqui-ai/TTS) clones the original speaker's voice in the target language (optional, ~1.8 GB model)
+- 🧠 **MarianMT** — fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
+- 🎙️ **Voice cloning** — Coqui XTTS v2 clones the original speaker's voice in the target language (~1.8 GB model)
+- 👥 **Speaker diarization** — pyannote-audio 3.1 identifies multiple speakers; XTTS clones each voice separately
+- 💋 **Lip Sync** — Wav2Lip GAN synchronizes mouth movements to the dubbed audio (~416 MB model)
 - 🔊 **Audio normalization** — automatic -23 LUFS loudness normalization (EBU R128)
 - ✏️ Subtitle editor — review and correct subtitles before dubbing
 - 📦 Batch processing — translate multiple videos or URLs at once
 - ⚡ GPU acceleration via CUDA (falls back to CPU automatically)
-- 🌐 UI available in Italian and English
 - 📄 Optional `.srt` subtitle export
-- 🔁 **DeepL Free** translation engine (optional — 500k chars/month free, requires API key)
+- 🔁 **DeepL Free** translation engine (optional — 500k chars/month, requires API key)
 
 ## Supported languages
 
@@ -32,14 +37,42 @@ Arabic, Chinese, Czech, Danish, Dutch, English, Finnish, French, German, Greek,
 Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian, Polish,
 Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
 
+## Translation engines
+
+| Engine | Setup | Limits | Quality |
+|--------|-------|--------|---------|
+| **MarianMT** (default recommended) | None — auto-downloads ~298 MB per language pair | None — fully offline | ★★★★ |
+| **Google Translate** | None | ~100 req/day (unofficial scraping) | ★★★★ |
+| **DeepL Free** | Free API key at [deepl.com](https://www.deepl.com/pro-api) | 500k chars/month | ★★★★★ |
+
+> **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models. Models are downloaded automatically on first use and cached locally. Requires explicit source language (auto-detect not supported).
+
 ## Voice Cloning (XTTS v2)
 
-When enabled, the app extracts the speaker's voice from the original video (via Demucs) and uses it as reference to clone the voice in the target language.
+When enabled, the app extracts the speaker's voice from the original video and uses it as reference to clone the voice in the target language.
 
 - Supported languages: AR, ZH, CS, DE, EN, ES, FR, HI, HU, IT, JA, KO, NL, PL, PT, RU, TR (17/26)
 - For the remaining 9 languages, Edge-TTS is used automatically as fallback
-- Model (~1.8 GB) is downloaded automatically on first use
+- Model (~1.8 GB) downloaded automatically on first use to `~/.local/share/tts/`
 - Runs on CUDA or CPU
+
+## Speaker Diarization (pyannote-audio)
+
+When enabled alongside Voice Cloning, the app identifies who is speaking in each segment and clones each speaker's voice separately — ideal for interviews, podcasts, and multi-person videos.
+
+- Requires a free [HuggingFace token](https://huggingface.co/settings/tokens) (one-time registration)
+- Token is saved locally and reused on subsequent runs
+- After the first download, works fully offline
+- Model: `pyannote/speaker-diarization-3.1`
+
+## Lip Sync (Wav2Lip)
+
+When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth movements with the dubbed audio — the person appears to speak the translated language.
+
+- Model (~416 MB) and repo cloned automatically on first use to `~/.local/share/wav2lip/`
+- Runs on CUDA (recommended) or CPU
+- Increases processing time significantly
+- Works best on videos with a single, clearly visible face
 
 ## Requirements
 
@@ -87,30 +120,28 @@ python video_translator_gui.py
 
 **From local files:**
 1. Click **Add** to select one or more video files
-2. Choose the source and target language
+2. Choose source and target language
 3. Select a Whisper model (`small` is a good balance of speed/accuracy)
 4. Pick a voice and adjust TTS speed if needed
-5. (Optional) Check **Voice Cloning** to clone the original speaker's voice
-6. Click **Start Translation**
+5. *(Optional)* Select translation engine: **MarianMT** (local), **Google**, or **DeepL Free**
+6. *(Optional)* Enable **Voice Cloning** (XTTS v2) and/or **Speaker Diarization**
+7. *(Optional)* Enable **Lip Sync** (Wav2Lip)
+8. Click **Start Translation**
 
 **From YouTube (or any supported site):**
 1. Paste one or more URLs in the **URL** field (one per line)
 2. Configure language, model and voice as usual
-3. Click **⬇ Download & Translate** — the app downloads and translates automatically
+3. Click **⬇ Download & Translate**
 
 > yt-dlp supports YouTube, Vimeo, Twitter/X, TikTok, and [1000+ other sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
-
-**Translation engines (Options):**
-- **Google Translate** — default, no setup required, no rate limits for typical use
-- **DeepL Free** — optional, higher quality, 500k characters/month free ([register at deepl.com](https://www.deepl.com/pro-api))
 
 ### Command line
 
 ```bash
-python video_translator_gui.py video.mp4 --lang-target it --voice it-IT-ElsaNeural
+python video_translator_gui.py video.mp4 --lang-target en
 ```
 
-**Main options:**
+**All options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -119,11 +150,32 @@ python video_translator_gui.py video.mp4 --lang-target it --voice it-IT-ElsaNeur
 | `--voice` | Edge-TTS voice name | auto |
 | `--model` | Whisper model (`tiny` → `large-v3`) | `small` |
 | `--tts-rate` | TTS speed adjustment (e.g. `+10%`, `-20%`) | `+0%` |
+| `--translation-engine` | `google`, `marian`, or `deepl` | `google` |
+| `--deepl-key` | DeepL Free API key | — |
+| `--diarize` | Enable speaker diarization (pyannote) | — |
+| `--hf-token` | HuggingFace token for diarization | — |
+| `--lipsync` | Apply Wav2Lip lip sync after dubbing | — |
 | `--subs-only` | Generate `.srt` only, skip dubbing | — |
 | `--no-subs` | Skip `.srt` generation | — |
 | `--no-demucs` | Skip voice/music separation | — |
 | `--output` / `-o` | Output file path | auto |
 | `--batch` | Process multiple files | — |
+
+**Examples:**
+
+```bash
+# Translate Italian video to English with local MarianMT (no internet needed)
+python video_translator_gui.py video.mp4 --lang-source it --lang-target en --translation-engine marian
+
+# Translate with voice cloning + speaker diarization
+python video_translator_gui.py interview.mp4 --lang-target en --diarize --hf-token hf_xxx
+
+# Translate with lip sync
+python video_translator_gui.py video.mp4 --lang-target en --lipsync
+
+# Subtitles only (no dubbing)
+python video_translator_gui.py video.mp4 --lang-target fr --subs-only
+```
 
 ## Whisper models
 

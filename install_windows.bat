@@ -93,7 +93,7 @@ echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm transformers sentencepiece pyannote.audio
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -187,6 +187,93 @@ goto tts_end
 echo  [+] Coqui TTS installed successfully.
 
 :tts_end
+
+:: ── 3b. Install Wav2Lip dependencies (Lip Sync) ──────────────────────────
+echo.
+echo  [*] Installing Wav2Lip dependencies (basicsr, facexlib, dlib)...
+
+:: Detect Python major.minor version for dlib wheel selection
+for /f "tokens=*" %%i in ('python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"') do set "PY_TAG=%%i"
+echo  [*] Python tag detected: cp%PY_TAG%
+
+set "DLIB_WHEEL_URL="
+if "%PY_TAG%"=="39"  set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.22.99-cp39-cp39-win_amd64.whl"
+if "%PY_TAG%"=="310" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.22.99-cp310-cp310-win_amd64.whl"
+if "%PY_TAG%"=="311" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.1-cp311-cp311-win_amd64.whl"
+if "%PY_TAG%"=="312" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp312-cp312-win_amd64.whl"
+if "%PY_TAG%"=="313" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp313-cp313-win_amd64.whl"
+
+python -c "import dlib" >nul 2>&1
+if not errorlevel 1 (
+    echo  [+] dlib already installed.
+    goto dlib_done
+)
+
+if not defined DLIB_WHEEL_URL (
+    echo  [!] No pre-built dlib wheel for cp%PY_TAG%. Lip Sync may not work.
+    goto dlib_done
+)
+
+echo  [*] Downloading dlib wheel for cp%PY_TAG%...
+powershell -Command ^
+    "$url = '%DLIB_WHEEL_URL%';" ^
+    "$out = $env:TEMP + '\dlib_wheel.whl';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
+    "Write-Host '  [+] dlib wheel downloaded.'"
+if errorlevel 1 (
+    echo  [!] dlib wheel download failed. Lip Sync may not work.
+    goto dlib_done
+)
+python -m pip install "%TEMP%\dlib_wheel.whl" --quiet
+if errorlevel 1 (
+    echo  [!] dlib wheel install failed. Lip Sync may not work.
+) else (
+    echo  [+] dlib installed from pre-built wheel.
+)
+del /Q "%TEMP%\dlib_wheel.whl" >nul 2>&1
+
+:dlib_done
+python -m pip install basicsr facexlib --quiet
+if errorlevel 1 (
+    echo  [!] basicsr/facexlib install failed. Lip Sync may not work.
+) else (
+    echo  [+] basicsr and facexlib installed.
+)
+
+:: Download Wav2Lip GAN model (~416MB) and clone repo
+set "WAV2LIP_DIR=%USERPROFILE%\.local\share\wav2lip"
+set "WAV2LIP_MODEL=%WAV2LIP_DIR%\wav2lip_gan.pth"
+set "WAV2LIP_REPO=%WAV2LIP_DIR%\Wav2Lip"
+
+if not exist "%WAV2LIP_DIR%" mkdir "%WAV2LIP_DIR%"
+
+if exist "%WAV2LIP_REPO%\inference.py" (
+    echo  [+] Wav2Lip repo already present.
+) else (
+    where git >nul 2>&1
+    if errorlevel 1 (
+        echo  [!] git not found. Install Git for Windows to enable Lip Sync.
+    ) else (
+        echo  [*] Cloning Wav2Lip repo...
+        git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git "%WAV2LIP_REPO%"
+    )
+)
+
+if exist "%WAV2LIP_MODEL%" (
+    echo  [+] Wav2Lip GAN model already present.
+) else (
+    echo  [*] Downloading Wav2Lip GAN model (~416MB)...
+    powershell -Command ^
+        "$url = 'https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth';" ^
+        "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+        "Invoke-WebRequest -Uri $url -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing;" ^
+        "Write-Host '  [+] Wav2Lip model downloaded.'"
+    if errorlevel 1 (
+        echo  [!] Wav2Lip model download failed. Lip Sync disabled.
+        if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+    )
+)
 
 echo  [+] Python packages installed.
 

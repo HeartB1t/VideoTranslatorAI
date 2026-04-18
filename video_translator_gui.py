@@ -131,6 +131,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
+        "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
         "label_engine":       "Motore traduzione:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -202,6 +203,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
+        "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "label_engine":       "Translation engine:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -273,6 +275,7 @@ UI_STRINGS = {
         "opt_no_demucs": "تخطي فصل الصوت/الموسيقى (Demucs)",
         "opt_edit_subs": "إظهار محرر الترجمة قبل الدبلجة",
         "opt_xtts": "استنساخ الصوت (Coqui XTTS v2 — التشغيل الأول: التنزيلات ~1.8 جيجابايت)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "أضف مقطع فيديو واحدًا على الأقل.",
         "msg_completed": "اكتملت الترجمة!",
@@ -336,6 +339,7 @@ UI_STRINGS = {
         "opt_no_demucs": "跳过语音/音乐分离 (Demucs)",
         "opt_edit_subs": "配音前显示字幕编辑器",
         "opt_xtts": "语音克隆（Coqui XTTS v2 — 首次运行：下载量约 1.8GB）",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "添加至少一个视频。",
         "msg_completed": "翻译完成！",
@@ -399,6 +403,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Přeskočit oddělení hlasu a hudby (Demucs)",
         "opt_edit_subs": "Před dabováním zobrazit editor titulků",
         "opt_xtts": "Hlasové klonování (Coqui XTTS v2 – první spuštění: stažení ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Přidejte alespoň jedno video.",
         "msg_completed": "Překlad dokončen!",
@@ -462,6 +467,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Spring stemme-/musikadskillelse over (demucs)",
         "opt_edit_subs": "Vis underteksteditor før dubbing",
         "opt_xtts": "Stemmekloning (Coqui XTTS v2 — første kørsel: downloads ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Tilføj mindst én video.",
         "msg_completed": "Oversættelse afsluttet!",
@@ -525,6 +531,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Stem-/muziekscheiding overslaan (Demucs)",
         "opt_edit_subs": "Toon de ondertiteleditor vóór het kopiëren",
         "opt_xtts": "Spraakklonen (Coqui XTTS v2 – eerste keer: downloads ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Voeg ten minste één video toe.",
         "msg_completed": "Vertaling voltooid!",
@@ -588,6 +595,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Ohita äänen ja musiikin erottelu (Demucs)",
         "opt_edit_subs": "Näytä tekstityseditori ennen kopiointia",
         "opt_xtts": "Äänen kloonaus (Coqui XTTS v2 – ensimmäinen käyttökerta: lataukset ~1,8 Gt)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Lisää vähintään yksi video.",
         "msg_completed": "Käännös valmis!",
@@ -651,6 +659,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Passer la séparation voix/musique (Demucs)",
         "opt_edit_subs": "Afficher l'éditeur de sous-titres avant la copie",
         "opt_xtts": "Clonage vocal (Coqui XTTS v2 — première exécution : téléchargements ~ 1,8 Go)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Ajoutez au moins une vidéo.",
         "msg_completed": "Traduction terminée !",
@@ -714,6 +723,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Sprach-/Musiktrennung überspringen (Demucs)",
         "opt_edit_subs": "Untertitel-Editor vor dem Überspielen anzeigen",
         "opt_xtts": "Voice Cloning (Coqui XTTS v2 – erster Durchlauf: Downloads ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Fügen Sie mindestens ein Video hinzu.",
         "msg_completed": "Übersetzung abgeschlossen!",
@@ -777,6 +787,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Παράλειψη διαχωρισμού φωνής/μουσικής (Demucs)",
         "opt_edit_subs": "Εμφάνιση του επεξεργαστή υποτίτλων πριν από τη μεταγλώττιση",
         "opt_xtts": "Κλωνοποίηση φωνής (Coqui XTTS v2 — πρώτη εκτέλεση: λήψεις ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Προσθέστε τουλάχιστον ένα βίντεο.",
         "msg_completed": "Η μετάφραση ολοκληρώθηκε!",
@@ -840,6 +851,7 @@ UI_STRINGS = {
         "opt_no_demucs": "आवाज/संगीत पृथक्करण छोड़ें (डेमुक्स)",
         "opt_edit_subs": "डबिंग से पहले उपशीर्षक संपादक दिखाएँ",
         "opt_xtts": "वॉयस क्लोनिंग (कोक्वी XTTS v2 - पहला रन: डाउनलोड ~1.8GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "कम से कम एक वीडियो जोड़ें.",
         "msg_completed": "अनुवाद पूरा हुआ!",
@@ -903,6 +915,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Hang/zene szétválasztásának kihagyása (Demucs)",
         "opt_edit_subs": "Feliratszerkesztő megjelenítése szinkronizálás előtt",
         "opt_xtts": "Hangklónozás (Coqui XTTS v2 – első futtatás: letöltések ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Adjon hozzá legalább egy videót.",
         "msg_completed": "A fordítás elkészült!",
@@ -966,6 +979,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Lewati pemisahan suara/musik (Demucs)",
         "opt_edit_subs": "Tampilkan editor subtitle sebelum melakukan dubbing",
         "opt_xtts": "Kloning Suara (Coqui XTTS v2 — dijalankan pertama kali: unduh ~1,8GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Tambahkan setidaknya satu video.",
         "msg_completed": "Terjemahan selesai!",
@@ -1029,6 +1043,7 @@ UI_STRINGS = {
         "opt_no_demucs": "音声と音楽の分離をスキップする (Demucs)",
         "opt_edit_subs": "吹き替え前に字幕エディタを表示",
         "opt_xtts": "音声クローン作成 (Coqui XTTS v2 — 初回実行: ダウンロード ~1.8GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "少なくとも 1 つのビデオを追加します。",
         "msg_completed": "翻訳が完了しました！",
@@ -1092,6 +1107,7 @@ UI_STRINGS = {
         "opt_no_demucs": "음성/음악 분리 건너뛰기(Demucs)",
         "opt_edit_subs": "더빙하기 전에 자막 편집기 표시",
         "opt_xtts": "음성 복제(Coqui XTTS v2 — 첫 실행: 다운로드 ~1.8GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "동영상을 하나 이상 추가하세요.",
         "msg_completed": "번역 완료!",
@@ -1155,6 +1171,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Hopp over stemme-/musikkseparasjon (demucs)",
         "opt_edit_subs": "Vis undertekstredigering før dubbing",
         "opt_xtts": "Stemmekloning (Coqui XTTS v2 — første kjøring: nedlastinger ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Legg til minst én video.",
         "msg_completed": "Oversettelsen fullført!",
@@ -1218,6 +1235,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Pomiń separację głosu/muzyki (Demucs)",
         "opt_edit_subs": "Pokaż edytor napisów przed kopiowaniem",
         "opt_xtts": "Klonowanie głosu (Coqui XTTS v2 — pierwsze uruchomienie: pliki do pobrania ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Dodaj co najmniej jeden film.",
         "msg_completed": "Tłumaczenie zakończone!",
@@ -1281,6 +1299,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Pular separação voz/música (Demucs)",
         "opt_edit_subs": "Mostrar editor de legendas antes da dublagem",
         "opt_xtts": "Clonagem de voz (Coqui XTTS v2 – primeira execução: downloads de aproximadamente 1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Adicione pelo menos um vídeo.",
         "msg_completed": "Tradução concluída!",
@@ -1344,6 +1363,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Omiteți separarea voce/muzică (Demucs)",
         "opt_edit_subs": "Afișați editorul de subtitrări înainte de dublare",
         "opt_xtts": "Clonarea vocii (Coqui XTTS v2 — prima rulare: descărcări ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Adăugați cel puțin un videoclip.",
         "msg_completed": "Traducerea finalizată!",
@@ -1407,6 +1427,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Пропустить разделение голоса и музыки (Demucs)",
         "opt_edit_subs": "Показывать редактор субтитров перед перезаписью",
         "opt_xtts": "Голосовое клонирование (Coqui XTTS v2 — первый запуск: загрузка ~ 1,8 ГБ)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Добавьте хотя бы одно видео.",
         "msg_completed": "Перевод завершен!",
@@ -1470,6 +1491,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Saltar separación de voz/música (Demucs)",
         "opt_edit_subs": "Mostrar editor de subtítulos antes del doblaje",
         "opt_xtts": "Clonación de voz (Coqui XTTS v2 – primera ejecución: descargas ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Añade al menos un vídeo.",
         "msg_completed": "¡Traducción completada!",
@@ -1533,6 +1555,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Hoppa över röst-/musikseparation (Demucs)",
         "opt_edit_subs": "Visa undertextredigerare före dubbning",
         "opt_xtts": "Röstkloning (Coqui XTTS v2 — första körningen: nedladdningar ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Lägg till minst en video.",
         "msg_completed": "Översättningen klar!",
@@ -1596,6 +1619,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Ses/müzik ayrımını atla (Demucs)",
         "opt_edit_subs": "Dublajdan önce altyazı düzenleyiciyi göster",
         "opt_xtts": "Ses Klonlama (Coqui XTTS v2 — ilk çalıştırma: indirmeler ~1,8 GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "En az bir video ekleyin.",
         "msg_completed": "Çeviri tamamlandı!",
@@ -1659,6 +1683,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Пропустити розділення голосу та музики (Demucs)",
         "opt_edit_subs": "Показати редактор субтитрів перед дубляжем",
         "opt_xtts": "Клонування голосу (Coqui XTTS v2 — перший запуск: завантаження ~1,8 ГБ)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Додайте хоча б одне відео.",
         "msg_completed": "Переклад завершено!",
@@ -1722,6 +1747,7 @@ UI_STRINGS = {
         "opt_no_demucs": "Bỏ qua việc tách giọng/nhạc (Demucs)",
         "opt_edit_subs": "Hiển thị trình chỉnh sửa phụ đề trước khi lồng tiếng",
         "opt_xtts": "Nhân bản giọng nói (Coqui XTTS v2 — lần chạy đầu tiên: tải xuống ~1,8GB)",
+        "opt_lipsync": "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_xtts_no_lang": "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video": "Thêm ít nhất một video.",
         "msg_completed": "Bản dịch đã hoàn tất!",
@@ -1871,6 +1897,7 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
         waveform = waveform.repeat(2, 1)
     waveform = waveform.to(device)
 
+    sources = None
     try:
         with torch.no_grad():
             sources = apply_model(model, waveform.unsqueeze(0), device=device)[0]
@@ -1878,7 +1905,9 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
         vocals = sources[3].mean(0, keepdim=True).cpu()
         background = sources[:3].sum(0).mean(0, keepdim=True).cpu()
     finally:
-        del model, waveform, sources
+        del model, waveform
+        if sources is not None:
+            del sources
         if device == "cuda":
             torch.cuda.empty_cache()
 
@@ -2124,6 +2153,7 @@ def generate_tts_xtts(
     correct one for each segment (based on seg['speaker']).
     """
     import torch
+    os.environ.setdefault("COQUI_TOS_AGREED", "1")
     from TTS.api import TTS as CoquiTTS
 
     xtts_lang = XTTS_LANGS.get(lang_target)
@@ -2303,6 +2333,122 @@ def mux_video(video_input: str, audio_track: str, output_path: str):
     ], step="mux_video")
 
 
+# ═══════════════════════════════════════════════════════════
+#  LIP SYNC (Wav2Lip)
+# ═══════════════════════════════════════════════════════════
+
+WAV2LIP_DIR   = Path.home() / ".local" / "share" / "wav2lip"
+WAV2LIP_REPO  = WAV2LIP_DIR / "Wav2Lip"
+WAV2LIP_MODEL = WAV2LIP_DIR / "wav2lip_gan.pth"
+WAV2LIP_REPO_URL  = "https://github.com/Rudrabha/Wav2Lip.git"
+WAV2LIP_MODEL_URL = "https://huggingface.co/numz/wav2lip_studio/resolve/main/Wav2lip/wav2lip_gan.pth"
+
+
+def _ensure_wav2lip_assets():
+    """Ensure Wav2Lip repo and GAN weights are available locally."""
+    WAV2LIP_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not WAV2LIP_REPO.exists():
+        print(f"     Cloning Wav2Lip repo → {WAV2LIP_REPO}", flush=True)
+        if not shutil.which("git"):
+            raise RuntimeError("git not found: required to clone Wav2Lip repo")
+        subprocess.run(
+            ["git", "clone", "--depth", "1", WAV2LIP_REPO_URL, str(WAV2LIP_REPO)],
+            check=True, capture_output=True,
+        )
+        # Install only the packages Wav2Lip needs that aren't already present
+        # (skip the repo's requirements.txt — it pins ancient versions incompatible with Python 3.13+)
+        wav2lip_pkgs = ["opencv-python", "librosa", "tqdm"]
+        print("     Installing Wav2Lip dependencies...", flush=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet",
+             "--break-system-packages"] + wav2lip_pkgs,
+            check=False,
+        )
+        # Patch audio.py: librosa>=0.9 changed filters.mel() to keyword-only args
+        audio_py = WAV2LIP_REPO / "audio.py"
+        if audio_py.exists():
+            txt = audio_py.read_text(encoding="utf-8")
+            patched = txt.replace(
+                "librosa.filters.mel(hp.sample_rate, hp.n_fft,",
+                "librosa.filters.mel(sr=hp.sample_rate, n_fft=hp.n_fft,",
+            )
+            if patched != txt:
+                audio_py.write_text(patched, encoding="utf-8")
+                print("     Patched audio.py for librosa>=0.9 compatibility.", flush=True)
+
+    if not WAV2LIP_MODEL.exists():
+        print("     Downloading Wav2Lip GAN model (~416MB)...", flush=True)
+        part = Path(str(WAV2LIP_MODEL) + ".part")
+        try:
+            from urllib.request import Request, urlopen
+            req = Request(WAV2LIP_MODEL_URL, headers={"User-Agent": "VideoTranslatorAI/1.0"})
+            with urlopen(req, timeout=120) as r, open(part, "wb") as f:
+                shutil.copyfileobj(r, f)
+            part.replace(WAV2LIP_MODEL)
+        except Exception as e:
+            part.unlink(missing_ok=True)
+            raise RuntimeError(f"Failed downloading Wav2Lip model: {e}") from e
+
+
+def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
+    """Sync lips of video_path with audio_path via Wav2Lip. Returns path to synced video."""
+    print("[+] Applying Lip Sync (Wav2Lip)...", flush=True)
+    _ensure_wav2lip_assets()
+
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Free VRAM before starting subprocess so Wav2Lip finds GPU available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        device = "cpu"
+    print(f"     Wav2Lip device: {device}", flush=True)
+
+    inference_py = WAV2LIP_REPO / "inference.py"
+    if not inference_py.exists():
+        raise RuntimeError(f"Wav2Lip inference script not found: {inference_py}")
+
+    out_path = os.path.join(tmp_dir, "video_lipsync.mp4")
+
+    cmd = [
+        sys.executable, str(inference_py),
+        "--checkpoint_path", str(WAV2LIP_MODEL),
+        "--face", video_path,
+        "--audio", audio_path,
+        "--outfile", out_path,
+        "--nosmooth",
+    ]
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(WAV2LIP_REPO) + os.pathsep + env.get("PYTHONPATH", "")
+
+    # Stream output line-by-line so the GUI log shows progress in real time
+    output_lines: list[str] = []
+    proc = subprocess.Popen(
+        cmd, cwd=str(WAV2LIP_REPO), env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )
+    try:
+        for line in proc.stdout:
+            line = line.rstrip()
+            output_lines.append(line)
+            print(f"     [wav2lip] {line}", flush=True)
+        proc.wait()
+    except Exception:
+        proc.kill()
+        proc.wait()
+        raise
+
+    if proc.returncode != 0 or not os.path.exists(out_path):
+        tail = "\n".join(output_lines[-20:])
+        raise RuntimeError(f"Wav2Lip failed (exit {proc.returncode}):\n{tail}")
+
+    print(f"     → Lip sync done: {out_path}", flush=True)
+    return out_path
+
+
 CONFIG_PATH = Path.home() / ".videotranslatorai_config.json"
 
 
@@ -2320,8 +2466,14 @@ def save_config(data: dict) -> None:
     try:
         existing = load_config()
         existing.update(data)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        tmp = Path(str(CONFIG_PATH) + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=2)
+        try:
+            os.chmod(tmp, 0o600)
+        except Exception:
+            pass
+        tmp.replace(CONFIG_PATH)
     except Exception as e:
         print(f"     ! Could not save config: {e}", flush=True)
 
@@ -2396,7 +2548,8 @@ def _extract_speaker_reference(
         return None
 
     # Build ffmpeg concat via filter_complex trim
-    safe_spk = speaker.replace(" ", "_")
+    import re as _re
+    safe_spk = _re.sub(r'[^A-Za-z0-9_-]', '_', speaker)
     out = os.path.join(tmp_dir, f"ref_{safe_spk}.wav")
     filter_parts = []
     for i, (s, e) in enumerate(selected):
@@ -2432,6 +2585,7 @@ def translate_video(
     tts_engine: str = "edge",   # "edge" or "xtts"
     use_diarization: bool = False,
     hf_token: str = "",
+    use_lipsync: bool = False,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -2525,6 +2679,15 @@ def translate_video(
         duration  = get_duration(video_in)
         track     = build_dubbed_track(segments, tts_files, bg_path, duration, tmp_dir)
         mux_video(video_in, track, output)
+
+        if use_lipsync:
+            try:
+                # Build a vocals-only track (no background music) for accurate lip sync
+                track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir)
+                synced = apply_lipsync(output, track_vocals, tmp_dir)
+                shutil.move(synced, output)
+            except Exception as e:
+                print(f"     ! Lip sync failed ({e.__class__.__name__}: {e}), keeping video without lip sync.", flush=True)
 
     print(f"\n[✓] Done: {output}")
     return {"video": output, "srt": output_base + ".srt", "segments": segments}
@@ -2685,6 +2848,7 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
+        self._use_lipsync = tk.BooleanVar(value=False)
         # Translation engine: "google" | "deepl" | "marian"
         self._translation_engine = tk.StringVar(value="google")
         self._deepl_key_var      = tk.StringVar()
@@ -2922,6 +3086,8 @@ class App(tk.Tk):
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
         self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
+        self._chk_lipsync.grid(row=2, column=2, sticky="w", padx=16, pady=(8, 0))
 
         # Translation engine radio group
         engine_row = tk.Frame(opts, bg=BG)
@@ -3056,6 +3222,7 @@ class App(tk.Tk):
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
+        self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_engine.configure(text=self._s("label_engine"))
         self._rb_eng_google.configure(text=self._s("engine_google"))
         self._rb_eng_deepl.configure(text=self._s("engine_deepl"))
@@ -3199,6 +3366,7 @@ class App(tk.Tk):
                             deepl_key=p["deepl_key"],
                             use_diarization=p["use_diarization"],
                             hf_token=p["hf_token"],
+                            use_lipsync=p["use_lipsync"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -3278,6 +3446,7 @@ class App(tk.Tk):
             "deepl_key":          self._deepl_key_var.get().strip(),
             "use_diarization":    self._use_diarization.get(),
             "hf_token":           self._hf_token_var.get().strip(),
+            "use_lipsync":        self._use_lipsync.get(),
         }
         # Persist HF token for next launch
         if snap["hf_token"] and snap["use_diarization"]:
@@ -3362,6 +3531,7 @@ class App(tk.Tk):
                     deepl_key=p["deepl_key"],
                     use_diarization=p["use_diarization"],
                     hf_token=p["hf_token"],
+                    use_lipsync=p["use_lipsync"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -3410,6 +3580,7 @@ class App(tk.Tk):
                             deepl_key=p["deepl_key"],
                             use_diarization=p["use_diarization"],
                             hf_token=p["hf_token"],
+                            use_lipsync=p["use_lipsync"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -3479,6 +3650,8 @@ def _cli():
                         help="Enable pyannote speaker diarization")
     parser.add_argument("--hf-token", default="",
                         help="HuggingFace token (falls back to ~/.videotranslatorai_config.json)")
+    parser.add_argument("--lipsync", action="store_true",
+                        help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -3507,6 +3680,7 @@ def _cli():
             deepl_key=args.deepl_key,
             use_diarization=args.diarize,
             hf_token=hf_token_cli,
+            use_lipsync=args.lipsync,
         )
 
 
