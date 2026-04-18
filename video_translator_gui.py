@@ -1936,7 +1936,15 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
     compute = "float16" if device == "cuda" else "int8"
     print(f"[3/6] Transcribing with faster-Whisper (model={model_name}, device={device})...", flush=True)
 
-    model = WhisperModel(model_name, device=device, compute_type=compute)
+    try:
+        model = WhisperModel(model_name, device=device, compute_type=compute)
+    except Exception as e:
+        if device == "cuda":
+            print(f"     ! CUDA unavailable ({e}), falling back to CPU...", flush=True)
+            device, compute = "cpu", "int8"
+            model = WhisperModel(model_name, device=device, compute_type=compute)
+        else:
+            raise
     lang = None if lang_source == "auto" else lang_source
     try:
         segments, info = model.transcribe(
