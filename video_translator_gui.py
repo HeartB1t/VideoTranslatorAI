@@ -2906,20 +2906,36 @@ class App(tk.Tk):
 
     def _install_ffmpeg_linux(self) -> bool:
         # Detect package manager
-        for mgr, cmd in [
-            ("apt-get",  ["apt-get", "install", "-y", "ffmpeg"]),
-            ("dnf",      ["dnf",     "install", "-y", "ffmpeg"]),
-            ("pacman",   ["pacman",  "-S",  "--noconfirm", "ffmpeg"]),
+        for mgr, update_cmd, install_cmd in [
+            ("apt-get", ["apt-get", "update"], ["apt-get", "install", "-y", "ffmpeg"]),
+            ("dnf",     ["dnf",     "makecache"], ["dnf", "install", "-y", "ffmpeg"]),
+            ("pacman",  ["pacman",  "-Sy"],     ["pacman", "-S", "--noconfirm", "ffmpeg"]),
         ]:
             if not shutil.which(mgr):
                 continue
             # Try pkexec first (graphical sudo), fall back to sudo
             for prefix in (["pkexec"], ["sudo", "-n"], ["sudo"]):
-                full_cmd = prefix + cmd
+                # Step 1: update package cache
+                update = prefix + update_cmd
+                self.after(0, self._log_write, f"    Running: {' '.join(update)}\n")
+                proc = subprocess.Popen(
+                    update, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                )
+                try:
+                    for line in proc.stdout:
+                        line = line.rstrip()
+                        if line:
+                            self.after(0, self._log_write, f"    {line}\n")
+                    proc.wait()
+                except Exception:
+                    proc.kill(); proc.wait()
+                if proc.returncode != 0:
+                    continue  # try next prefix
+                # Step 2: install ffmpeg
+                full_cmd = prefix + install_cmd
                 self.after(0, self._log_write, f"    Running: {' '.join(full_cmd)}\n")
                 proc = subprocess.Popen(
-                    full_cmd, stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT, text=True,
+                    full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                 )
                 try:
                     for line in proc.stdout:
@@ -2931,7 +2947,6 @@ class App(tk.Tk):
                     proc.kill(); proc.wait()
                 if proc.returncode == 0:
                     return True
-                # pkexec/sudo -n failed (no password) — try next prefix
         return False
 
     def _install_ffmpeg_windows(self) -> bool:
