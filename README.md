@@ -1,6 +1,6 @@
 # 🎬 Video Translator AI
 
-AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required.
+AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
 
 ## How it works
 
