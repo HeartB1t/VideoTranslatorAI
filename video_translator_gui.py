@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
 """
-video_translator_gui.py v2 — GUI per Video Translator AI
-Nuove feature: faster-whisper GPU, Demucs, lingua sorgente, editor sottotitoli,
-               velocità TTS, batch processing, controllo dipendenze, UI multilingua.
+Video Translator AI — single-file edition
+Pipeline: faster-Whisper (GPU) + Demucs + Google Translate + Edge-TTS
+Run with arguments for CLI mode, without for GUI mode.
 """
 
-import importlib
+# ═══════════════════════════════════════════════════════════
+#  IMPORTS
+# ═══════════════════════════════════════════════════════════
+
+import argparse
+import asyncio
 import importlib.util
 import io
+import json
+import traceback
+import math
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+
+# ═══════════════════════════════════════════════════════════
+#  CONSTANTS
+# ═══════════════════════════════════════════════════════════
 
 LANGUAGES = {
     "ar":    {"name": "🇸🇦 Arabo",       "voices": ["ar-SA-ZariyahNeural", "ar-SA-HamedNeural", "ar-EG-SalmaNeural"]},
@@ -46,37 +59,43 @@ LANGUAGES = {
     "vi":    {"name": "🇻🇳 Vietnamita",  "voices": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"]},
 }
 
-SOURCE_LANGS = {"auto": "🔍 Rilevamento automatico", "en": "🇬🇧 Inglese", "it": "🇮🇹 Italiano",
-                "es": "🇪🇸 Spagnolo", "fr": "🇫🇷 Francese", "de": "🇩🇪 Tedesco",
-                "pt": "🇧🇷 Portoghese", "ru": "🇷🇺 Russo", "zh-CN": "🇨🇳 Cinese",
-                "ja": "🇯🇵 Giapponese", "ko": "🇰🇷 Coreano", "ar": "🇸🇦 Arabo"}
+SOURCE_LANGS = {
+    "auto": "🔍 Rilevamento automatico", "en": "🇬🇧 Inglese", "it": "🇮🇹 Italiano",
+    "es": "🇪🇸 Spagnolo", "fr": "🇫🇷 Francese", "de": "🇩🇪 Tedesco",
+    "pt": "🇧🇷 Portoghese", "ru": "🇷🇺 Russo", "zh-CN": "🇨🇳 Cinese",
+    "ja": "🇯🇵 Giapponese", "ko": "🇰🇷 Coreano", "ar": "🇸🇦 Arabo",
+}
 
-SOURCE_LANGS_EN = {"auto": "🔍 Auto detect", "en": "🇬🇧 English", "it": "🇮🇹 Italian",
-                   "es": "🇪🇸 Spanish", "fr": "🇫🇷 French", "de": "🇩🇪 German",
-                   "pt": "🇧🇷 Portuguese", "ru": "🇷🇺 Russian", "zh-CN": "🇨🇳 Chinese",
-                   "ja": "🇯🇵 Japanese", "ko": "🇰🇷 Korean", "ar": "🇸🇦 Arabic"}
+SOURCE_LANGS_EN = {
+    "auto": "🔍 Auto detect", "en": "🇬🇧 English", "it": "🇮🇹 Italian",
+    "es": "🇪🇸 Spanish", "fr": "🇫🇷 French", "de": "🇩🇪 German",
+    "pt": "🇧🇷 Portuguese", "ru": "🇷🇺 Russian", "zh-CN": "🇨🇳 Chinese",
+    "ja": "🇯🇵 Japanese", "ko": "🇰🇷 Korean", "ar": "🇸🇦 Arabic",
+}
 
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
-TRANSLATOR_SCRIPT = Path(__file__).parent / "video_translator.py"
+DEFAULT_LANG = "it"
 
 REQUIRED_PACKAGES = {
     "faster_whisper": "faster-whisper",
     "edge_tts":       "edge-tts",
-    "deep_translator":"deep-translator",
+    "deep_translator": "deep-translator",
     "pydub":          "pydub",
     "demucs":         "demucs",
 }
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
 
-BG = "#1e1e2e"
-FG = "#cdd6f4"
+# ── GUI colours ──────────────────────────────────────────────
+BG  = "#1e1e2e"
+FG  = "#cdd6f4"
 FG2 = "#6c7086"
 ACC = "#89b4fa"
 SEL = "#313244"
 RED = "#f38ba8"
 GRN = "#a6e3a1"
 
+# ── UI translation strings ───────────────────────────────────
 UI_STRINGS = {
     "it": {
         "label_video":        "Video:",
@@ -103,7 +122,6 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "msg_no_video":       "Aggiungi almeno un video.",
-        "msg_script_missing": "Script non trovato:\n{}",
         "msg_completed":      "Traduzione completata!",
         "msg_error":          "Qualcosa è andato storto. Controlla il log.",
         "msg_confirm_stop":   "Elaborazione in corso. Interrompere?",
@@ -157,7 +175,6 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "msg_no_video":       "Add at least one video.",
-        "msg_script_missing": "Script not found:\n{}",
         "msg_completed":      "Translation completed!",
         "msg_error":          "Something went wrong. Check the log.",
         "msg_confirm_stop":   "Processing in progress. Stop?",
@@ -188,9 +205,336 @@ UI_STRINGS = {
     },
 }
 
-# Displayed in the UI language dropdown
 UI_LANG_OPTIONS = [("it", "🇮🇹 Italiano"), ("en", "🇬🇧 English")]
 
+
+# ═══════════════════════════════════════════════════════════
+#  PIPELINE FUNCTIONS
+# ═══════════════════════════════════════════════════════════
+
+def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or "").strip().splitlines()[-10:]
+        raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
+    return proc
+
+
+def extract_audio(video_path: str, audio_path: str):
+    print(f"[1/6] Extracting audio from: {Path(video_path).name}", flush=True)
+    _run_ffmpeg([
+        "ffmpeg", "-y", "-i", video_path,
+        "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", audio_path
+    ], step="extract_audio")
+    print(f"     → {audio_path}", flush=True)
+
+
+def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
+    """Separates voice and music with Demucs htdemucs. Returns (vocals_path, background_path)."""
+    print("[2/6] Separating voice/music with Demucs...", flush=True)
+    import torch
+    import torchaudio
+    from demucs import pretrained
+    from demucs.apply import apply_model
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = pretrained.get_model("htdemucs")
+    model.to(device)
+
+    waveform, sr = torchaudio.load(audio_path)
+    if waveform.shape[0] == 1:
+        waveform = waveform.repeat(2, 1)
+    waveform = waveform.to(device)
+
+    try:
+        with torch.no_grad():
+            sources = apply_model(model, waveform.unsqueeze(0), device=device)[0]
+        # htdemucs order: [drums, bass, other, vocals]
+        vocals = sources[3].mean(0, keepdim=True).cpu()
+        background = sources[:3].sum(0).mean(0, keepdim=True).cpu()
+    finally:
+        del model
+        if device == "cuda":
+            torch.cuda.empty_cache()
+
+    vocals_16k = os.path.join(tmp_dir, "vocals_16k.wav")
+    bg_path = os.path.join(tmp_dir, "background.wav")
+
+    torchaudio.save(os.path.join(tmp_dir, "vocals_raw.wav"), vocals, sr)
+    torchaudio.save(bg_path, background, sr)
+
+    _run_ffmpeg([
+        "ffmpeg", "-y", "-i", os.path.join(tmp_dir, "vocals_raw.wav"),
+        "-ar", "16000", "-ac", "1", vocals_16k
+    ], step="resample vocals")
+
+    print(f"     → Vocals (16kHz): {vocals_16k}", flush=True)
+    print(f"     → Background: {bg_path}", flush=True)
+    return vocals_16k, bg_path
+
+
+def transcribe(audio_path: str, model_name: str, lang_source: str) -> list[dict]:
+    import torch
+    from faster_whisper import WhisperModel
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    compute = "float16" if device == "cuda" else "int8"
+    print(f"[3/6] Transcribing with faster-Whisper (model={model_name}, device={device})...", flush=True)
+
+    model = WhisperModel(model_name, device=device, compute_type=compute)
+    lang = None if lang_source == "auto" else lang_source
+    try:
+        segments, info = model.transcribe(audio_path, language=lang, beam_size=5, vad_filter=True)
+        result = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segments]
+    finally:
+        del model
+        try:
+            import torch as _t
+            if device == "cuda":
+                _t.cuda.empty_cache()
+        except Exception:
+            pass
+    print(f"     → {len(result)} segments | detected language: {info.language}", flush=True)
+    return result
+
+
+def translate_segments(segments: list[dict], source: str, target: str) -> list[dict]:
+    from deep_translator import GoogleTranslator
+    src = "auto" if source == "auto" else source
+    print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments)...", flush=True)
+    translator = GoogleTranslator(source=src, target=target)
+    translated = []
+    for i, seg in enumerate(segments):
+        text = (seg.get("text") or "").strip()
+        if not text:
+            text_tgt = ""
+        else:
+            try:
+                text_tgt = translator.translate(text) or text
+            except Exception as e:
+                print(f"     ! Error segment {i}: {e}", flush=True)
+                text_tgt = text
+        translated.append({
+            "start": seg["start"],
+            "end": seg["end"],
+            "text_src": text,
+            "text_tgt": text_tgt,
+        })
+        if i % 10 == 0:
+            print(f"     {i+1}/{len(segments)}...", end="\r", flush=True)
+    print("     → Translation done          ", flush=True)
+    return translated
+
+
+async def _tts_segment(text: str, voice: str, out_path: str, rate: str = "+0%", retries: int = 5):
+    import edge_tts
+    for attempt in range(retries):
+        try:
+            comm = edge_tts.Communicate(text, voice, rate=rate)
+            await comm.save(out_path)
+            return
+        except Exception as e:
+            if attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"     ! TTS retry {attempt+1} ({e.__class__.__name__}) in {wait}s...", flush=True)
+                await asyncio.sleep(wait)
+            else:
+                print(f"     ! TTS failed: {text[:40]!r} ({e.__class__.__name__}: {e})", flush=True)
+
+
+async def _tts_all(segments: list[dict], voice: str, tmp_dir: str, rate: str) -> list[str]:
+    files = []
+    total = len(segments)
+    for i, seg in enumerate(segments):
+        out = os.path.join(tmp_dir, f"seg_{i:04d}.mp3")
+        text = (seg.get("text_tgt") or "").strip()
+        if text:
+            await _tts_segment(text, voice, out, rate=rate)
+        files.append(out)
+        if i % 10 == 0:
+            print(f"     {i+1}/{total}...", end="\r", flush=True)
+    return files
+
+
+def generate_tts(segments: list[dict], voice: str, tmp_dir: str, rate: str = "+0%") -> list[str]:
+    print(f"[5/6] Generating TTS (voice={voice}, rate={rate})...", flush=True)
+    files = asyncio.run(_tts_all(segments, voice, tmp_dir, rate))
+    print("     → TTS done                   ", flush=True)
+    return files
+
+
+def build_dubbed_track(
+    segments: list[dict],
+    tts_files: list[str],
+    bg_path: str | None,
+    total_duration: float,
+    tmp_dir: str,
+    bg_volume: float = 0.15,
+) -> str:
+    from pydub import AudioSegment
+
+    print("[6/6] Assembling dubbed track...", flush=True)
+    total_ms = int(total_duration * 1000)
+    dubbed = AudioSegment.silent(duration=total_ms)
+
+    for i, (seg, tts_file) in enumerate(zip(segments, tts_files)):
+        if not os.path.exists(tts_file) or os.path.getsize(tts_file) == 0:
+            continue
+        try:
+            tts_audio = AudioSegment.from_file(tts_file)
+        except Exception as e:
+            print(f"     ! Cannot read {tts_file}: {e}", flush=True)
+            continue
+        if len(tts_audio) == 0:
+            continue
+        start_ms = int(seg["start"] * 1000)
+        end_ms   = int(seg["end"] * 1000)
+        slot_ms  = max(end_ms - start_ms, 1)
+        if len(tts_audio) > slot_ms:
+            ratio = min(len(tts_audio) / slot_ms, 1.5)
+            sped  = os.path.join(tmp_dir, f"seg_{i:04d}_sped.mp3")
+            try:
+                _run_ffmpeg([
+                    "ffmpeg", "-y", "-i", tts_file,
+                    "-filter:a", f"atempo={ratio:.3f}", sped
+                ], step=f"atempo seg {i}")
+                tts_audio = AudioSegment.from_file(sped)
+            except Exception as e:
+                print(f"     ! atempo failed seg {i}: {e}", flush=True)
+        dubbed = dubbed.overlay(tts_audio, position=start_ms)
+
+    if bg_path and os.path.exists(bg_path):
+        bg = AudioSegment.from_file(bg_path)
+        if len(bg) < total_ms:
+            bg = bg + AudioSegment.silent(duration=total_ms - len(bg))
+        bg = bg[:total_ms]
+        if bg_volume <= 0:
+            bg = AudioSegment.silent(duration=total_ms)
+        elif bg_volume < 1.0:
+            bg = bg + (20 * math.log10(bg_volume))
+        dubbed = bg.overlay(dubbed)
+
+    out = os.path.join(tmp_dir, "track_dubbed.wav")
+    dubbed.export(out, format="wav")
+    print(f"     → Track: {out}", flush=True)
+    return out
+
+
+def save_subtitles(segments: list[dict], output_base: str):
+    def fmt(s: float) -> str:
+        h, rem = divmod(s, 3600)
+        m, sec = divmod(rem, 60)
+        ms = int((sec % 1) * 1000)
+        return f"{int(h):02d}:{int(m):02d}:{int(sec):02d},{ms:03d}"
+
+    path = output_base + ".srt"
+    with open(path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, 1):
+            text = (seg.get("text_tgt") or "").strip()
+            f.write(f"{i}\n{fmt(seg['start'])} --> {fmt(seg['end'])}\n{text}\n\n")
+    print(f"[+] Subtitles: {path}", flush=True)
+
+
+def get_duration(video_path: str) -> float:
+    r = subprocess.run([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "json", video_path
+    ], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"ffprobe failed: {r.stderr.strip()}")
+    try:
+        return float(json.loads(r.stdout)["format"]["duration"])
+    except (KeyError, ValueError, json.JSONDecodeError) as e:
+        raise RuntimeError(f"Cannot read duration of {video_path}: {e}")
+
+
+def mux_video(video_input: str, audio_track: str, output_path: str):
+    print(f"[+] Muxing → {output_path}", flush=True)
+    _run_ffmpeg([
+        "ffmpeg", "-y", "-i", video_input, "-i", audio_track,
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v:0", "-map", "1:a:0", output_path
+    ], step="mux_video")
+
+
+def translate_video(
+    video_in: str,
+    output: str | None = None,
+    model: str = "small",
+    lang_source: str = "auto",
+    lang_target: str = DEFAULT_LANG,
+    voice: str | None = None,
+    tts_rate: str = "+0%",
+    no_subs: bool = False,
+    subs_only: bool = False,
+    no_demucs: bool = False,
+    segments_override: list[dict] | None = None,
+) -> dict:
+    """
+    Main pipeline. Returns dict with output paths and segments.
+    segments_override: skip transcription+translation and use these segments (GUI editor).
+    """
+    if lang_target not in LANGUAGES:
+        raise ValueError(f"Unsupported target language: {lang_target}")
+    if not os.path.exists(video_in):
+        raise FileNotFoundError(f"Video not found: {video_in}")
+
+    voice = voice or LANGUAGES[lang_target]["voices"][0]
+    stem  = Path(video_in).stem
+    output = output or str(Path(video_in).parent / f"{stem}_{lang_target}.mp4")
+    output_base = str(Path(output).with_suffix(""))
+
+    print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
+
+    with tempfile.TemporaryDirectory(prefix="vidtrans_") as tmp_dir:
+        audio_raw = os.path.join(tmp_dir, "audio_raw.wav")
+        extract_audio(video_in, audio_raw)
+
+        bg_path = None
+        vocals_path = audio_raw
+
+        if not no_demucs:
+            try:
+                vocals_path, bg_path = separate_audio(audio_raw, tmp_dir)
+            except Exception as e:
+                print(f"     ! Demucs failed ({e}), proceeding without separation", flush=True)
+                vocals_16k = os.path.join(tmp_dir, "audio_16k.wav")
+                _run_ffmpeg([
+                    "ffmpeg", "-y", "-i", audio_raw, "-ar", "16000", "-ac", "1", vocals_16k
+                ], step="resample audio")
+                vocals_path = vocals_16k
+        else:
+            vocals_16k = os.path.join(tmp_dir, "audio_16k.wav")
+            _run_ffmpeg([
+                "ffmpeg", "-y", "-i", audio_raw, "-ar", "16000", "-ac", "1", vocals_16k
+            ], step="resample audio")
+            vocals_path = vocals_16k
+
+        if segments_override is not None:
+            segments = segments_override
+        else:
+            raw_segs = transcribe(vocals_path, model, lang_source)
+            segments = translate_segments(raw_segs, lang_source, lang_target)
+
+        if not no_subs:
+            save_subtitles(segments, output_base)
+
+        if subs_only:
+            print("\n[+] --subs-only mode complete.")
+            return {"srt": output_base + ".srt", "segments": segments}
+
+        tts_files = generate_tts(segments, voice, tmp_dir, rate=tts_rate)
+        duration  = get_duration(video_in)
+        track     = build_dubbed_track(segments, tts_files, bg_path, duration, tmp_dir)
+        mux_video(video_in, track, output)
+
+    print(f"\n[✓] Done: {output}")
+    return {"video": output, "srt": output_base + ".srt", "segments": segments}
+
+
+# ═══════════════════════════════════════════════════════════
+#  GUI HELPERS
+# ═══════════════════════════════════════════════════════════
 
 def check_dependencies():
     missing_pkgs = []
@@ -206,11 +550,11 @@ def check_dependencies():
 
 
 class _TkStreamRedirect(io.TextIOBase):
-    """File-like che inoltra ogni scrittura a una callback Tk-safe (via after)."""
+    """Redirects print() output to the GUI log widget (thread-safe via after())."""
 
     def __init__(self, tk_root, on_write):
         super().__init__()
-        self._root = tk_root
+        self._root    = tk_root
         self._on_write = on_write
 
     def writable(self):
@@ -228,31 +572,18 @@ class _TkStreamRedirect(io.TextIOBase):
         pass
 
 
-def _load_translator_module(script_path: Path):
-    """Carica video_translator.py come modulo una volta sola (cached)."""
-    if "_vt_module" in _load_translator_module.__dict__:
-        return _load_translator_module._vt_module
-    spec = importlib.util.spec_from_file_location("video_translator_lib", str(script_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Impossibile caricare {script_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["video_translator_lib"] = module
-    spec.loader.exec_module(module)
-    _load_translator_module._vt_module = module
-    return module
-
+# ═══════════════════════════════════════════════════════════
+#  SUBTITLE EDITOR
+# ═══════════════════════════════════════════════════════════
 
 class SubtitleEditor(tk.Toplevel):
-    """Finestra per rivedere e correggere i sottotitoli prima del doppiaggio."""
-
     def __init__(self, parent, segments: list[dict], on_confirm, ui_s=None):
         super().__init__(parent)
-        # ui_s is a callable(key) -> str for UI language support
         self._s = ui_s if callable(ui_s) else (lambda k: UI_STRINGS["it"].get(k, k))
         self.title(self._s("editor_title"))
         self.configure(bg=BG)
         self.geometry("900x600")
-        self.segments = [s.copy() for s in segments]
+        self.segments   = [s.copy() for s in segments]
         self.on_confirm = on_confirm
 
         tk.Label(self, text=self._s("editor_hint"),
@@ -262,7 +593,8 @@ class SubtitleEditor(tk.Toplevel):
         frame.pack(fill="both", expand=True, padx=12, pady=4)
 
         cols = (self._s("editor_col_num"), self._s("editor_col_start"),
-                self._s("editor_col_end"), self._s("editor_col_orig"), self._s("editor_col_trans"))
+                self._s("editor_col_end"), self._s("editor_col_orig"),
+                self._s("editor_col_trans"))
         self._tree = ttk.Treeview(frame, columns=cols, show="headings", height=20)
         for c, w in zip(cols, [40, 80, 80, 350, 350]):
             self._tree.heading(c, text=c)
@@ -299,12 +631,12 @@ class SubtitleEditor(tk.Toplevel):
 
     def _on_edit(self, event):
         item = self._tree.identify_row(event.y)
-        col = self._tree.identify_column(event.x)
+        col  = self._tree.identify_column(event.x)
         if not item or col not in ("#4", "#5"):
             return
-        idx = int(item)
-        field = "text_src" if col == "#4" else "text_tgt"
-        current = self.segments[idx].get(field, self.segments[idx].get("text", ""))
+        idx      = int(item)
+        field    = "text_src" if col == "#4" else "text_tgt"
+        current  = self.segments[idx].get(field, self.segments[idx].get("text", ""))
         col_name = self._s("editor_col_orig") if col == "#4" else self._s("editor_col_trans")
 
         win = tk.Toplevel(self)
@@ -333,6 +665,10 @@ class SubtitleEditor(tk.Toplevel):
         self.destroy()
 
 
+# ═══════════════════════════════════════════════════════════
+#  MAIN GUI APP
+# ═══════════════════════════════════════════════════════════
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -340,18 +676,17 @@ class App(tk.Tk):
         self.resizable(False, False)
         self.configure(bg=BG)
 
-        self._ui_lang = tk.StringVar(value="it")
-        self._model = tk.StringVar(value="small")
-        self._lang_src = tk.StringVar(value="auto")
-        self._lang_tgt = tk.StringVar(value="it")
-        self._voice = tk.StringVar(value=LANGUAGES["it"]["voices"][0])
-        self._tts_rate = tk.IntVar(value=0)
+        self._ui_lang   = tk.StringVar(value="it")
+        self._model     = tk.StringVar(value="small")
+        self._lang_src  = tk.StringVar(value="auto")
+        self._lang_tgt  = tk.StringVar(value="it")
+        self._voice     = tk.StringVar(value=LANGUAGES["it"]["voices"][0])
+        self._tts_rate  = tk.IntVar(value=0)
         self._subs_only = tk.BooleanVar(value=False)
-        self._no_subs = tk.BooleanVar(value=False)
+        self._no_subs   = tk.BooleanVar(value=False)
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
-        self._running = False
-        self._process = None
+        self._running   = False
         self._batch_files: list[str] = []
 
         self._build_ui()
@@ -359,11 +694,9 @@ class App(tk.Tk):
         self.after(200, self._check_deps_on_start)
 
     def _s(self, key: str) -> str:
-        """Returns the UI string for the current language."""
-        lang = self._ui_lang.get()
-        return UI_STRINGS.get(lang, UI_STRINGS["it"]).get(key, key)
+        return UI_STRINGS.get(self._ui_lang.get(), UI_STRINGS["it"]).get(key, key)
 
-    # ── Deps check ───────────────────────────────────────────────────────────
+    # ── Dependency check ─────────────────────────────────────────────────────
 
     def _check_deps_on_start(self):
         missing_pkgs, missing_bins = check_dependencies()
@@ -376,10 +709,8 @@ class App(tk.Tk):
             msg_parts.append(self._s("msg_deps_bins") + "\n  • ".join(missing_bins))
         msg = "\n\n".join(msg_parts)
         if missing_bins:
-            messagebox.showerror(self._s("msg_deps_missing"),
-                                 msg + self._s("msg_deps_ffmpeg"))
-        elif messagebox.askyesno(self._s("msg_deps_missing"),
-                                 msg + self._s("msg_deps_install")):
+            messagebox.showerror(self._s("msg_deps_missing"), msg + self._s("msg_deps_ffmpeg"))
+        elif messagebox.askyesno(self._s("msg_deps_missing"), msg + self._s("msg_deps_install")):
             self._install_deps(missing_pkgs)
 
     def _install_deps(self, packages):
@@ -407,32 +738,28 @@ class App(tk.Tk):
             messagebox.showerror(self._s("msg_error_t"),
                                  self._s("msg_install_failed").format(info))
 
-    # ── UI ───────────────────────────────────────────────────────────────────
+    # ── UI builder ───────────────────────────────────────────────────────────
 
     def _build_ui(self):
         pad = {"padx": 16, "pady": 5}
 
-        # ── Header row: title + UI language selector ──
+        # Header: title + UI language selector
         header = tk.Frame(self, bg=BG)
         header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=16, pady=(16, 2))
         header.columnconfigure(0, weight=1)
 
         tk.Label(header, text="🎬 Video Translator AI",
-                 font=("Helvetica", 16, "bold"), bg=BG, fg=FG).grid(
-            row=0, column=0, sticky="w")
+                 font=("Helvetica", 16, "bold"), bg=BG, fg=FG).grid(row=0, column=0, sticky="w")
 
-        lang_sel_frame = tk.Frame(header, bg=BG)
-        lang_sel_frame.grid(row=0, column=1, sticky="e")
-        self._lbl_ui_lang = tk.Label(lang_sel_frame, text=self._s("label_ui_lang"),
+        lang_sel = tk.Frame(header, bg=BG)
+        lang_sel.grid(row=0, column=1, sticky="e")
+        self._lbl_ui_lang = tk.Label(lang_sel, text=self._s("label_ui_lang"),
                                      bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_ui_lang.pack(side="left", padx=(0, 4))
-        lang_display = [label for _, label in UI_LANG_OPTIONS]
-        self._ui_lang_combo = ttk.Combobox(lang_sel_frame, values=lang_display,
+        self._ui_lang_combo = ttk.Combobox(lang_sel,
+                                            values=[lbl for _, lbl in UI_LANG_OPTIONS],
                                             state="readonly", width=12, font=("Helvetica", 8))
-        # Set current selection
-        current_idx = next((i for i, (k, _) in enumerate(UI_LANG_OPTIONS)
-                            if k == self._ui_lang.get()), 0)
-        self._ui_lang_combo.current(current_idx)
+        self._ui_lang_combo.current(0)
         self._ui_lang_combo.pack(side="left")
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
@@ -442,7 +769,7 @@ class App(tk.Tk):
         ttk.Separator(self, orient="horizontal").grid(
             row=2, column=0, columnspan=3, sticky="ew", padx=16, pady=6)
 
-        # ── Batch file list ──
+        # Batch file list
         self._lbl_video = self._row_label(3, self._s("label_video"))
         batch_frame = tk.Frame(self, bg=BG)
         batch_frame.grid(row=3, column=1, columnspan=2, sticky="ew", **pad)
@@ -455,87 +782,79 @@ class App(tk.Tk):
         sb.pack(side="left", fill="y")
         btn_col = tk.Frame(batch_frame, bg=BG)
         btn_col.pack(side="left", padx=(6, 0))
-        self._btn_add = tk.Button(btn_col, text=self._s("btn_add"), command=self._add_files,
-                                   bg=SEL, fg=FG, relief="flat", width=10)
+        self._btn_add    = tk.Button(btn_col, text=self._s("btn_add"),
+                                     command=self._add_files, bg=SEL, fg=FG, relief="flat", width=10)
         self._btn_add.pack(pady=2)
-        self._btn_remove = tk.Button(btn_col, text=self._s("btn_remove"), command=self._remove_file,
-                                      bg=SEL, fg=FG, relief="flat", width=10)
+        self._btn_remove = tk.Button(btn_col, text=self._s("btn_remove"),
+                                     command=self._remove_file, bg=SEL, fg=FG, relief="flat", width=10)
         self._btn_remove.pack(pady=2)
-        self._btn_clear = tk.Button(btn_col, text=self._s("btn_clear"), command=self._clear_files,
-                                     bg=SEL, fg=FG, relief="flat", width=10)
+        self._btn_clear  = tk.Button(btn_col, text=self._s("btn_clear"),
+                                     command=self._clear_files, bg=SEL, fg=FG, relief="flat", width=10)
         self._btn_clear.pack(pady=2)
 
         # Output
         self._lbl_output = self._row_label(4, self._s("label_output"))
         self._output_var = tk.StringVar()
-        out_entry = tk.Entry(self, textvariable=self._output_var, width=42,
-                             bg=SEL, fg=FG, insertbackground=FG,
-                             relief="flat", font=("Helvetica", 9))
-        out_entry.grid(row=4, column=1, sticky="ew", padx=(0, 6), pady=5)
-        self._btn_browse = tk.Button(self, text=self._s("btn_browse"), command=self._browse_output,
-                                      bg="#45475a", fg=FG, relief="flat")
+        tk.Entry(self, textvariable=self._output_var, width=42,
+                 bg=SEL, fg=FG, insertbackground=FG,
+                 relief="flat", font=("Helvetica", 9)).grid(
+            row=4, column=1, sticky="ew", padx=(0, 6), pady=5)
+        self._btn_browse = tk.Button(self, text=self._s("btn_browse"),
+                                     command=self._browse_output, bg="#45475a", fg=FG, relief="flat")
         self._btn_browse.grid(row=4, column=2, padx=(0, 16))
 
         ttk.Separator(self, orient="horizontal").grid(
             row=5, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
-        # ── Modello Whisper ──
+        # Whisper model
         self._lbl_model = self._row_label(6, self._s("label_model"))
         mf = tk.Frame(self, bg=BG)
         mf.grid(row=6, column=1, columnspan=2, sticky="w", **pad)
         for m in WHISPER_MODELS:
-            color = RED if "large" in m else FG
             tk.Radiobutton(mf, text=m, variable=self._model, value=m,
-                           bg=BG, fg=color, selectcolor=SEL,
-                           activebackground=BG, font=("Helvetica", 9)).pack(side="left", padx=3)
+                           bg=BG, fg=RED if "large" in m else FG,
+                           selectcolor=SEL, activebackground=BG,
+                           font=("Helvetica", 9)).pack(side="left", padx=3)
         self._lbl_model_hint = tk.Label(mf, text=self._s("label_model_hint"),
                                          bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_model_hint.pack(side="left", padx=6)
 
-        # ── Lingua sorgente ──
+        # Source language
         self._lbl_from = self._row_label(7, self._s("label_from"))
         src_frame = tk.Frame(self, bg=BG)
         src_frame.grid(row=7, column=1, columnspan=2, sticky="w", **pad)
-        src_names = list(SOURCE_LANGS.values())
-        src_keys = list(SOURCE_LANGS.keys())
-        self._src_combo = ttk.Combobox(src_frame, values=src_names,
+        self._src_combo = ttk.Combobox(src_frame, values=list(SOURCE_LANGS.values()),
                                         state="readonly", width=22, font=("Helvetica", 9))
         self._src_combo.current(0)
         self._src_combo.pack(side="left")
+        src_keys = list(SOURCE_LANGS.keys())
         self._src_combo.bind("<<ComboboxSelected>>",
-                              lambda e: self._lang_src.set(src_keys[self._src_combo.current()]))
+                              lambda e, k=src_keys: self._lang_src.set(k[self._src_combo.current()]))
 
-        # ── Lingua destinazione ──
+        # Target language
         self._lbl_to = self._row_label(8, self._s("label_to"))
         tgt_frame = tk.Frame(self, bg=BG)
         tgt_frame.grid(row=8, column=1, columnspan=2, sticky="w", **pad)
-        tgt_names = [v["name"] for v in LANGUAGES.values()]
-        self._tgt_combo = ttk.Combobox(tgt_frame, values=tgt_names,
+        self._tgt_combo = ttk.Combobox(tgt_frame, values=[v["name"] for v in LANGUAGES.values()],
                                         state="readonly", width=22, font=("Helvetica", 9))
-        it_idx = list(LANGUAGES.keys()).index("it")
-        self._tgt_combo.current(it_idx)
+        self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
         self._tgt_combo.pack(side="left")
         self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
 
-        # ── Voce ──
+        # Voice
         self._lbl_voice = self._row_label(9, self._s("label_voice"))
         self._voice_frame = tk.Frame(self, bg=BG)
         self._voice_frame.grid(row=9, column=1, columnspan=2, sticky="w", **pad)
         self._build_voice_buttons()
 
-        # ── Velocità TTS ──
+        # TTS rate
         self._lbl_tts_rate = self._row_label(10, self._s("label_tts_rate"))
         rate_frame = tk.Frame(self, bg=BG)
         rate_frame.grid(row=10, column=1, columnspan=2, sticky="w", **pad)
-        self._lbl_rate_minus = tk.Label(rate_frame, text="-50%", bg=BG, fg=FG2,
-                                         font=("Helvetica", 8))
-        self._lbl_rate_minus.pack(side="left")
-        self._rate_slider = ttk.Scale(rate_frame, from_=-50, to=50,
-                                       variable=self._tts_rate, orient="horizontal", length=200)
-        self._rate_slider.pack(side="left", padx=6)
-        self._lbl_rate_plus = tk.Label(rate_frame, text="+50%", bg=BG, fg=FG2,
-                                        font=("Helvetica", 8))
-        self._lbl_rate_plus.pack(side="left")
+        tk.Label(rate_frame, text="-50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
+        ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
+                  orient="horizontal", length=200).pack(side="left", padx=6)
+        tk.Label(rate_frame, text="+50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
         self._rate_lbl = tk.Label(rate_frame, text="+0%", bg=BG, fg=ACC,
                                    font=("Helvetica", 9, "bold"), width=6)
         self._rate_lbl.pack(side="left", padx=4)
@@ -544,7 +863,7 @@ class App(tk.Tk):
         ttk.Separator(self, orient="horizontal").grid(
             row=11, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
-        # ── Opzioni ──
+        # Options
         self._lbl_options = self._row_label(12, self._s("label_options"))
         opts = tk.Frame(self, bg=BG)
         opts.grid(row=12, column=1, columnspan=2, sticky="w", **pad)
@@ -558,7 +877,7 @@ class App(tk.Tk):
 
         self._chk_subs_only = cb(opts, "opt_subs_only", self._subs_only, self._on_subs_only)
         self._chk_subs_only.grid(row=0, column=0, sticky="w")
-        self._chk_no_subs = cb(opts, "opt_no_subs", self._no_subs, self._on_no_subs)
+        self._chk_no_subs   = cb(opts, "opt_no_subs",   self._no_subs,   self._on_no_subs)
         self._chk_no_subs.grid(row=1, column=0, sticky="w")
         self._chk_no_demucs = cb(opts, "opt_no_demucs", self._no_demucs)
         self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16)
@@ -568,15 +887,14 @@ class App(tk.Tk):
         ttk.Separator(self, orient="horizontal").grid(
             row=13, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
-        # ── Bottone avvia ──
-        self._btn = tk.Button(self, text=self._s("btn_start"),
-                              command=self._start,
+        # Start button
+        self._btn = tk.Button(self, text=self._s("btn_start"), command=self._start,
                               bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
                               relief="flat", padx=20, pady=8, cursor="hand2",
                               activebackground="#74c7ec")
         self._btn.grid(row=14, column=0, columnspan=3, pady=8)
 
-        # ── Log ──
+        # Log
         log_frame = tk.Frame(self, bg=BG)
         log_frame.grid(row=15, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="ew")
         self._log = tk.Text(log_frame, height=12, width=76,
@@ -598,14 +916,13 @@ class App(tk.Tk):
         lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=5)
         return lbl
 
+    # ── Language switcher ────────────────────────────────────────────────────
+
     def _on_ui_lang_change(self, _=None):
-        idx = self._ui_lang_combo.current()
-        new_lang = UI_LANG_OPTIONS[idx][0]
-        self._ui_lang.set(new_lang)
+        self._ui_lang.set(UI_LANG_OPTIONS[self._ui_lang_combo.current()][0])
         self._apply_lang()
 
     def _apply_lang(self):
-        """Update all UI widget texts to the current language."""
         self._lbl_ui_lang.configure(text=self._s("label_ui_lang"))
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
@@ -620,33 +937,32 @@ class App(tk.Tk):
         self._btn_remove.configure(text=self._s("btn_remove"))
         self._btn_clear.configure(text=self._s("btn_clear"))
         self._btn_browse.configure(text=self._s("btn_browse"))
-        # Only update main button text if not currently running
         if not self._running:
             self._btn.configure(text=self._s("btn_start"))
         self._chk_subs_only.configure(text=self._s("opt_subs_only"))
         self._chk_no_subs.configure(text=self._s("opt_no_subs"))
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
-        # Update source language combo values when language changes
+        # Update source language combo labels
         lang = self._ui_lang.get()
-        src_map = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
-        src_names = list(src_map.values())
+        src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
         src_keys = list(src_map.keys())
-        cur_key = self._lang_src.get()
-        self._src_combo["values"] = src_names
+        cur_key  = self._lang_src.get()
+        self._src_combo["values"] = list(src_map.values())
         try:
             self._src_combo.current(src_keys.index(cur_key))
         except ValueError:
             self._src_combo.current(0)
-        # Rebind source combo to use updated keys
         self._src_combo.bind("<<ComboboxSelected>>",
                               lambda e, k=src_keys: self._lang_src.set(k[self._src_combo.current()]))
+
+    # ── Voice buttons ────────────────────────────────────────────────────────
 
     def _build_voice_buttons(self):
         for w in self._voice_frame.winfo_children():
             w.destroy()
         lang_key = list(LANGUAGES.keys())[self._tgt_combo.current()]
-        voices = LANGUAGES[lang_key]["voices"]
+        voices   = LANGUAGES[lang_key]["voices"]
         self._voice.set(voices[0])
         for v in voices:
             label = v.split("-")[2].replace("Neural", "").replace("Multilingual", "ML")
@@ -655,8 +971,7 @@ class App(tk.Tk):
                            activebackground=BG, font=("Helvetica", 9)).pack(side="left", padx=3)
 
     def _on_lang_tgt_change(self, _=None):
-        lang_key = list(LANGUAGES.keys())[self._tgt_combo.current()]
-        self._lang_tgt.set(lang_key)
+        self._lang_tgt.set(list(LANGUAGES.keys())[self._tgt_combo.current()])
         self._build_voice_buttons()
 
     def _update_rate_label(self, *_):
@@ -687,8 +1002,7 @@ class App(tk.Tk):
                 self._batch_listbox.insert("end", Path(p).name)
 
     def _remove_file(self):
-        sel = self._batch_listbox.curselection()
-        for i in reversed(sel):
+        for i in reversed(self._batch_listbox.curselection()):
             self._batch_files.pop(i)
             self._batch_listbox.delete(i)
 
@@ -705,7 +1019,7 @@ class App(tk.Tk):
         if p:
             self._output_var.set(p)
 
-    # ── Avvio ────────────────────────────────────────────────────────────────
+    # ── Translation start ─────────────────────────────────────────────────────
 
     def _start(self):
         if self._running:
@@ -713,65 +1027,53 @@ class App(tk.Tk):
         if not self._batch_files:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_video"))
             return
-        if not TRANSLATOR_SCRIPT.exists():
-            messagebox.showerror(self._s("msg_error_t"),
-                                 self._s("msg_script_missing").format(TRANSLATOR_SCRIPT))
-            return
-
         if self._edit_subs.get() and len(self._batch_files) == 1:
             self._start_with_editor(self._batch_files[0])
         else:
             self._run_batch(self._batch_files)
 
-    def _build_cmd(self, video_path: str, output: str | None = None) -> list[str]:
-        cmd = [sys.executable, str(TRANSLATOR_SCRIPT), video_path]
-        out = output or self._output_var.get().strip()
-        if out and len(self._batch_files) == 1:
-            cmd += ["-o", out]
-        cmd += ["--model", self._model.get()]
-        cmd += ["--lang-source", self._lang_src.get()]
-        cmd += ["--lang-target", self._lang_tgt.get()]
-        cmd += ["--voice", self._voice.get()]
+    def _snapshot_params(self) -> dict:
+        """Reads all Tk vars on the main thread (thread-safe snapshot)."""
         try:
             rate = int(round(self._tts_rate.get()))
         except (ValueError, tk.TclError):
             rate = 0
-        cmd += ["--tts-rate", f"{rate:+d}%"]
-        if self._subs_only.get():
-            cmd.append("--subs-only")
-        if self._no_subs.get():
-            cmd.append("--no-subs")
-        if self._no_demucs.get():
-            cmd.append("--no-demucs")
-        return cmd
+        return {
+            "model":      self._model.get(),
+            "lang_src":   self._lang_src.get(),
+            "lang_tgt":   self._lang_tgt.get(),
+            "voice":      self._voice.get(),
+            "tts_rate":   f"{rate:+d}%",
+            "subs_only":  self._subs_only.get(),
+            "no_subs":    self._no_subs.get(),
+            "no_demucs":  self._no_demucs.get(),
+            "output":     self._output_var.get().strip(),
+        }
 
     def _start_with_editor(self, video_path: str):
-        """Fase 1: trascrizione+traduzione, poi apre editor prima del doppiaggio."""
+        """Phase 1: transcribe + translate, then open subtitle editor."""
         self._log_write("Phase 1: Transcription + translation (no dubbing)...\n")
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_transcribing"))
         self._progress.start(12)
+        p = self._snapshot_params()
 
         def phase1():
             redirect = _TkStreamRedirect(self, self._log_write)
             old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = redirect
-            sys.stderr = redirect
+            sys.stdout = sys.stderr = redirect
             try:
-                vt = _load_translator_module(TRANSLATOR_SCRIPT)
-                result = vt.translate_video(
+                result = translate_video(
                     video_in=video_path,
-                    model=self._model.get(),
-                    lang_source=self._lang_src.get(),
-                    lang_target=self._lang_tgt.get(),
+                    model=p["model"],
+                    lang_source=p["lang_src"],
+                    lang_target=p["lang_tgt"],
                     subs_only=True,
-                    no_demucs=self._no_demucs.get(),
+                    no_demucs=p["no_demucs"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                self.after(0, self._log_write, f"[x] Error: {e}\n{tb}\n")
+                self.after(0, self._log_write, f"[x] Error: {e}\n{traceback.format_exc()}\n")
                 self.after(0, self._on_done, False)
             finally:
                 sys.stdout, sys.stderr = old_out, old_err
@@ -783,60 +1085,43 @@ class App(tk.Tk):
         self._running = False
         self._btn.configure(state="normal", text=self._s("btn_start"))
         self._log_write(f"[i] {len(segments)} segments ready. Opening editor...\n")
-
         if not segments:
             messagebox.showwarning(self._s("warn_editor"), self._s("msg_no_segments"))
             return
 
-        def on_confirm(edited_segments):
+        def on_confirm(edited):
             self._log_write("[i] Subtitles confirmed. Starting dubbing...\n")
-            self._run_batch_with_segments(video_path, edited_segments)
+            self._run_with_segments(video_path, edited)
 
         SubtitleEditor(self, segments, on_confirm, ui_s=self._s)
 
-    def _run_batch_with_segments(self, video_path: str, segments: list[dict]):
-        """Fase 2: doppiaggio con segmenti dall'editor."""
+    def _run_with_segments(self, video_path: str, segments: list[dict]):
+        """Phase 2: dubbing with editor segments."""
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_dubbing"))
         self._progress.start(12)
-
-        try:
-            rate_int = int(round(self._tts_rate.get()))
-        except (ValueError, tk.TclError):
-            rate_int = 0
-        params = {
-            "model": self._model.get(),
-            "lang_source": self._lang_src.get(),
-            "lang_target": self._lang_tgt.get(),
-            "voice": self._voice.get(),
-            "tts_rate": f"{rate_int:+d}%",
-            "no_subs": self._no_subs.get(),
-            "no_demucs": self._no_demucs.get(),
-        }
+        p = self._snapshot_params()
 
         def do():
             redirect = _TkStreamRedirect(self, self._log_write)
             old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = redirect
-            sys.stderr = redirect
+            sys.stdout = sys.stderr = redirect
             try:
-                vt = _load_translator_module(TRANSLATOR_SCRIPT)
-                vt.translate_video(
+                translate_video(
                     video_in=video_path,
-                    model=params["model"],
-                    lang_source=params["lang_source"],
-                    lang_target=params["lang_target"],
-                    voice=params["voice"],
-                    tts_rate=params["tts_rate"],
-                    no_subs=params["no_subs"],
-                    no_demucs=params["no_demucs"],
+                    output=p["output"] or None,
+                    model=p["model"],
+                    lang_source=p["lang_src"],
+                    lang_target=p["lang_tgt"],
+                    voice=p["voice"],
+                    tts_rate=p["tts_rate"],
+                    no_subs=p["no_subs"],
+                    no_demucs=p["no_demucs"],
                     segments_override=segments,
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                self.after(0, self._log_write, f"[x] {e}\n{tb}\n")
+                self.after(0, self._log_write, f"[x] {e}\n{traceback.format_exc()}\n")
                 self.after(0, self._on_done, False)
             finally:
                 sys.stdout, sys.stderr = old_out, old_err
@@ -844,78 +1129,50 @@ class App(tk.Tk):
         threading.Thread(target=do, daemon=True).start()
 
     def _run_batch(self, files: list[str]):
+        """Batch translation — calls translate_video() directly in a worker thread."""
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_processing"))
         self._progress.start(12)
         self._log.configure(state="normal")
         self._log.delete("1.0", "end")
         self._log.configure(state="disabled")
-
-        total = len(files)
-        cmds = [(i, f, self._build_cmd(f)) for i, f in enumerate(files)]
+        p = self._snapshot_params()
 
         def run_all():
+            redirect = _TkStreamRedirect(self, self._log_write)
+            old_out, old_err = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = redirect
+            total  = len(files)
             all_ok = True
-            for i, f, cmd in cmds:
-                self.after(0, self._log_write,
-                           f"\n{'-'*50}\n[{i+1}/{total}] {Path(f).name}\n{'-'*50}\n")
-                env = os.environ.copy()
-                env["PYTHONUNBUFFERED"] = "1"
-                try:
-                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT, bufsize=0, env=env)
-                except FileNotFoundError as e:
-                    self.after(0, self._log_write, f"[x] {e}\n")
-                    all_ok = False
-                    continue
-                self._process = proc
-                buf = bytearray()
-                in_progress = False
-                try:
-                    while True:
-                        chunk = proc.stdout.read(64)
-                        if not chunk:
-                            break
-                        for b in chunk:
-                            if b == 0x0D:
-                                line = bytes(buf).decode("utf-8", errors="replace")
-                                buf.clear()
-                                if in_progress:
-                                    self.after(0, self._log_replace_last, line)
-                                else:
-                                    self.after(0, self._log_write, line)
-                                    in_progress = True
-                            elif b == 0x0A:
-                                line = bytes(buf).decode("utf-8", errors="replace")
-                                buf.clear()
-                                if in_progress:
-                                    if line:
-                                        self.after(0, self._log_replace_last, line)
-                                    self.after(0, self._log_write, "\n")
-                                    in_progress = False
-                                else:
-                                    self.after(0, self._log_write, line + "\n")
-                            else:
-                                buf.append(b)
-                    if buf:
-                        self.after(0, self._log_write,
-                                   bytes(buf).decode("utf-8", errors="replace"))
-                        buf.clear()
-                finally:
+            try:
+                for i, f in enumerate(files):
+                    self.after(0, self._log_write,
+                               f"\n{'-'*50}\n[{i+1}/{total}] {Path(f).name}\n{'-'*50}\n")
+                    out = p["output"] if len(files) == 1 else None
                     try:
-                        proc.stdout.close()
-                    except Exception:
-                        pass
-                rc = proc.wait()
-                if rc != 0:
-                    all_ok = False
-                    self.after(0, self._log_write, f"\n[x] Exit code {rc} for {Path(f).name}\n")
-            self._process = None
+                        translate_video(
+                            video_in=f,
+                            output=out,
+                            model=p["model"],
+                            lang_source=p["lang_src"],
+                            lang_target=p["lang_tgt"],
+                            voice=p["voice"],
+                            tts_rate=p["tts_rate"],
+                            no_subs=p["no_subs"],
+                            subs_only=p["subs_only"],
+                            no_demucs=p["no_demucs"],
+                        )
+                    except Exception as e:
+                        self.after(0, self._log_write,
+                                   f"[x] {e}\n{traceback.format_exc()}\n")
+                        all_ok = False
+            finally:
+                sys.stdout, sys.stderr = old_out, old_err
             self.after(0, self._on_done, all_ok)
 
         threading.Thread(target=run_all, daemon=True).start()
 
-    # ── Log ─────────────────────────────────────────────────────────────────
+    # ── Log ──────────────────────────────────────────────────────────────────
 
     def _log_write(self, text: str):
         self._log.configure(state="normal")
@@ -923,14 +1180,7 @@ class App(tk.Tk):
         self._log.see("end")
         self._log.configure(state="disabled")
 
-    def _log_replace_last(self, text: str):
-        self._log.configure(state="normal")
-        self._log.delete("end-1c linestart", "end-1c lineend")
-        self._log.insert("end-1c linestart", text.rstrip("\r\n"))
-        self._log.see("end")
-        self._log.configure(state="disabled")
-
-    # ── Fine ─────────────────────────────────────────────────────────────────
+    # ── Done / Close ─────────────────────────────────────────────────────────
 
     def _on_done(self, success: bool):
         self._running = False
@@ -943,20 +1193,63 @@ class App(tk.Tk):
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_error"))
 
     def _on_close(self):
-        if self._running and self._process:
-            if messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
-                try:
-                    self._process.terminate()
-                    self._process.wait(timeout=3)
-                except Exception:
-                    try:
-                        self._process.kill()
-                    except Exception:
-                        pass
-            else:
+        if self._running:
+            if not messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
                 return
         self.destroy()
 
 
+# ═══════════════════════════════════════════════════════════
+#  CLI ENTRY POINT
+# ═══════════════════════════════════════════════════════════
+
+def _cli():
+    missing_pkgs, missing_bins = check_dependencies()
+    if missing_pkgs or missing_bins:
+        all_missing = missing_pkgs + missing_bins
+        print(f"[!] Missing dependencies: {', '.join(all_missing)}", file=sys.stderr)
+        print("    Install with: pip install -r requirements.txt", file=sys.stderr)
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser(description="Video Translator AI")
+    parser.add_argument("input", nargs="?", help="Input video")
+    parser.add_argument("-o", "--output", help="Output file")
+    parser.add_argument("--model", default="small", choices=WHISPER_MODELS)
+    parser.add_argument("--lang-source", default="auto")
+    parser.add_argument("--lang-target", default=DEFAULT_LANG, choices=list(LANGUAGES.keys()))
+    parser.add_argument("--voice", default=None)
+    parser.add_argument("--tts-rate", default="+0%")
+    parser.add_argument("--no-subs", action="store_true")
+    parser.add_argument("--subs-only", action="store_true")
+    parser.add_argument("--no-demucs", action="store_true")
+    parser.add_argument("--batch", nargs="+", metavar="FILE")
+    args = parser.parse_args()
+
+    files = args.batch if args.batch else ([args.input] if args.input else [])
+    if not files:
+        parser.print_help()
+        sys.exit(0)
+
+    for f in files:
+        if not os.path.exists(f):
+            print(f"[!] File not found: {f}")
+            continue
+        translate_video(
+            video_in=f,
+            output=args.output if len(files) == 1 else None,
+            model=args.model,
+            lang_source=args.lang_source,
+            lang_target=args.lang_target,
+            voice=args.voice,
+            tts_rate=args.tts_rate,
+            no_subs=args.no_subs,
+            subs_only=args.subs_only,
+            no_demucs=args.no_demucs,
+        )
+
+
 if __name__ == "__main__":
-    App().mainloop()
+    if len(sys.argv) > 1:
+        _cli()
+    else:
+        App().mainloop()
