@@ -875,7 +875,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Video Translator AI")
-        self.resizable(False, False)
+        self.resizable(True, True)
         self.configure(bg=BG)
 
         self._ui_lang   = tk.StringVar(value="it")
@@ -897,7 +897,18 @@ class App(tk.Tk):
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(100, self._fit_to_screen)
         self.after(200, self._check_deps_on_start)
+
+    def _fit_to_screen(self):
+        self.update_idletasks()
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w    = min(self.winfo_reqwidth(),  screen_w - 40)
+        win_h    = min(self.winfo_reqheight(), screen_h - 80)
+        x = (screen_w - win_w) // 2
+        y = max(0, (screen_h - win_h) // 2 - 20)
+        self.geometry(f"{win_w}x{win_h}+{x}+{y}")
 
     def _s(self, key: str) -> str:
         return UI_STRINGS.get(self._ui_lang.get(), UI_STRINGS["it"]).get(key, key)
