@@ -613,7 +613,7 @@ def translate_video(
 
     voice = voice or LANGUAGES[lang_target]["voices"][0]
     stem  = Path(video_in).stem
-    if output is None:
+    if not output:
         input_dir = Path(video_in).parent
         tmp_root  = Path(tempfile.gettempdir())
         try:
