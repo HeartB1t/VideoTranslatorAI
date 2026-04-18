@@ -93,7 +93,7 @@ echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp TTS pyloudnorm
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -117,6 +117,22 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+:: Install Coqui TTS separately (known Windows build issue with README.md path)
+echo  [*] Installing Coqui TTS (voice cloning)...
+python -m pip install TTS --no-build-isolation --quiet
+if errorlevel 1 (
+    echo  [!] TTS install failed, retrying with --no-cache-dir...
+    python -m pip install TTS --no-build-isolation --no-cache-dir --quiet
+)
+if errorlevel 1 (
+    echo  [!] Coqui TTS could not be installed.
+    echo      Voice cloning will not be available but everything else works.
+    echo      To retry manually: pip install TTS --no-build-isolation
+) else (
+    echo  [+] Coqui TTS installed.
+)
+
 echo  [+] Python packages installed.
 
 :: ── 4. Download and install ffmpeg ────────────────────────────────────────
