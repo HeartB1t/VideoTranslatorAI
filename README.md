@@ -29,7 +29,8 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 📦 Batch processing — translate multiple videos or URLs at once
 - ⚡ GPU acceleration via CUDA (falls back to CPU automatically)
 - 📄 Optional `.srt` subtitle export
-- 🔁 **DeepL Free** translation engine (optional — 500k chars/month, requires API key)
+- 🔁 **DeepL Free** translation engine (optional — 500k chars/month, requires free API key)
+- 🔧 **Auto-install** — missing Python packages and ffmpeg are installed automatically on first launch
 
 ## Supported languages
 
@@ -41,11 +42,11 @@ Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
 
 | Engine | Setup | Limits | Quality |
 |--------|-------|--------|---------|
-| **Google Translate** *(default)* | None | ~100 req/day (unofficial scraping) | ★★★★ |
-| **MarianMT** *(recommended for heavy use)* | None — auto-downloads ~298 MB per language pair | None — fully offline | ★★★★ |
+| **Google Translate** *(default)* | None | Unofficial scraping — may be throttled on large videos | ★★★★ |
+| **MarianMT** *(recommended for heavy use)* | None — downloads ~298 MB per language pair on first use | None — fully offline after download | ★★★★ |
 | **DeepL Free** | Free API key at [deepl.com](https://www.deepl.com/pro-api) | 500k chars/month | ★★★★★ |
 
-> **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models. Models are downloaded automatically on first use and cached locally. Requires explicit source language (auto-detect not supported).
+> **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models, cached locally after the first download. Requires explicit source language (auto-detect not supported — select source language manually).
 
 ## Voice Cloning (XTTS v2)
 
@@ -58,7 +59,7 @@ When enabled, the app extracts the speaker's voice from the original video and u
 
 ## Speaker Diarization (pyannote-audio)
 
-When enabled alongside Voice Cloning, the app identifies who is speaking in each segment and clones each speaker's voice separately — ideal for interviews, podcasts, and multi-person videos.
+When enabled, the app identifies who is speaking in each segment. Combined with Voice Cloning, each speaker's voice is cloned separately — ideal for interviews, podcasts, and multi-person videos.
 
 - Requires a free [HuggingFace token](https://huggingface.co/settings/tokens) (one-time registration)
 - Token is saved locally and reused on subsequent runs
@@ -102,7 +103,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Install PyTorch with CUDA 12.4 (NVIDIA GPU) — skip for CPU only
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install --break-system-packages torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Launch — everything else installs automatically on first run
 python video_translator_gui.py
@@ -123,7 +124,7 @@ python video_translator_gui.py
 2. Choose source and target language
 3. Select a Whisper model (`small` is a good balance of speed/accuracy)
 4. Pick a voice and adjust TTS speed if needed
-5. *(Optional)* Select translation engine: **MarianMT** (local), **Google**, or **DeepL Free**
+5. *(Optional)* Select translation engine: **Google** (default), **MarianMT** (local/offline), or **DeepL Free**
 6. *(Optional)* Enable **Voice Cloning** (XTTS v2) and/or **Speaker Diarization**
 7. *(Optional)* Enable **Lip Sync** (Wav2Lip)
 8. Click **Start Translation**
@@ -164,7 +165,8 @@ python video_translator_gui.py video.mp4 --lang-target en
 **Examples:**
 
 ```bash
-# Translate Italian video to English with local MarianMT (no internet needed)
+# Translate Italian video to English with local MarianMT
+# (downloads ~298 MB model on first use, then fully offline)
 python video_translator_gui.py video.mp4 --lang-source it --lang-target en --translation-engine marian
 
 # Translate with voice cloning + speaker diarization
