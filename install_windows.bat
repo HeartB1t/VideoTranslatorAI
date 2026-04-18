@@ -110,6 +110,10 @@ if errorlevel 1 (
     python -m pip install torch torchaudio --quiet
 )
 
+:: Install ctranslate2 explicitly first (faster-whisper dependency, Windows-sensitive)
+echo  [*] Installing ctranslate2...
+python -m pip install ctranslate2 --quiet
+
 echo  [*] Installing packages: %PACKAGES%
 python -m pip install %PACKAGES% --quiet
 if errorlevel 1 (
