@@ -118,17 +118,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Install Coqui TTS separately (known Windows build issue with README.md path)
+:: Install Coqui TTS separately (requires Cython + no-build-isolation on Windows)
 echo  [*] Installing Coqui TTS (voice cloning)...
+python -m pip install Cython setuptools wheel --quiet
 python -m pip install TTS --no-build-isolation --quiet
-if errorlevel 1 (
-    echo  [!] TTS install failed, retrying with --no-cache-dir...
-    python -m pip install TTS --no-build-isolation --no-cache-dir --quiet
-)
 if errorlevel 1 (
     echo  [!] Coqui TTS could not be installed.
     echo      Voice cloning will not be available but everything else works.
-    echo      To retry manually: pip install TTS --no-build-isolation
+    echo      To retry manually: pip install Cython ^&^& pip install TTS --no-build-isolation
 ) else (
     echo  [+] Coqui TTS installed.
 )
