@@ -537,7 +537,20 @@ def translate_video(
 
     voice = voice or LANGUAGES[lang_target]["voices"][0]
     stem  = Path(video_in).stem
-    output = output or str(Path(video_in).parent / f"{stem}_{lang_target}.mp4")
+    if output is None:
+        input_dir = Path(video_in).parent
+        tmp_root  = Path(tempfile.gettempdir())
+        try:
+            input_dir.relative_to(tmp_root)
+            is_tmp = True
+        except ValueError:
+            is_tmp = False
+        if is_tmp:
+            videos_dir = Path.home() / "Videos"
+            videos_dir.mkdir(exist_ok=True)
+            output = str(videos_dir / f"{stem}_{lang_target}.mp4")
+        else:
+            output = str(input_dir / f"{stem}_{lang_target}.mp4")
     output_base = str(Path(output).with_suffix(""))
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
