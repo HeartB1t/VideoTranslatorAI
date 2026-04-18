@@ -1898,7 +1898,7 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
     return vocals_16k, bg_path
 
 
-def transcribe(audio_path: str, model_name: str, lang_source: str) -> list[dict]:
+def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list[dict], str]:
     import torch
     from faster_whisper import WhisperModel
 
@@ -1938,8 +1938,9 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> list[dict]
                 _t.cuda.empty_cache()
         except Exception:
             pass
-    print(f"     → {len(result)} segments | detected language: {info.language}", flush=True)
-    return result
+    detected = info.language or lang_source
+    print(f"     → {len(result)} segments | detected language: {detected}", flush=True)
+    return result, detected
 
 
 def _marian_normalize_lang(code: str) -> str:
@@ -2489,7 +2490,8 @@ def translate_video(
         if segments_override is not None:
             segments = segments_override
         else:
-            raw_segs = transcribe(vocals_path, model, lang_source)
+            raw_segs, detected_lang = transcribe(vocals_path, model, lang_source)
+            effective_src = detected_lang if lang_source == "auto" else lang_source
             # Speaker diarization (before translation so speaker info propagates)
             if use_diarization and hf_token.strip():
                 try:
@@ -2498,7 +2500,7 @@ def translate_video(
                 except Exception as e:
                     print(f"     ! Diarization failed ({e.__class__.__name__}: {e}), continuing without speaker info.", flush=True)
                     diar_segments = []
-            segments = translate_segments(raw_segs, lang_source, lang_target, engine=translation_engine, deepl_key=deepl_key)
+            segments = translate_segments(raw_segs, effective_src, lang_target, engine=translation_engine, deepl_key=deepl_key)
 
         if not no_subs:
             save_subtitles(segments, output_base)
