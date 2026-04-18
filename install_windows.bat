@@ -30,18 +30,35 @@ set "INSTALL_DIR=%USERPROFILE%\VideoTranslatorAI"
 set "FFMPEG_DIR=%INSTALL_DIR%\ffmpeg"
 set "SCRIPT_DIR=%~dp0"
 
-:: ── 1. Check Python ───────────────────────────────────────────────────────
+:: ── 1. Check / Auto-install Python ───────────────────────────────────────
 echo [1/5] Checking Python...
 python --version >nul 2>&1
+if not errorlevel 1 goto python_found
+
+echo  [!] Python not found. Downloading and installing Python 3.11 silently...
+powershell -Command ^
+    "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
+    "$out = $env:TEMP + '\python_installer.exe';" ^
+    "Write-Host '     Downloading Python 3.11.9...';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
+    "Write-Host '     Installing silently (this may take a minute)...';" ^
+    "Start-Process -FilePath $out -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_doc=0' -Wait;" ^
+    "Remove-Item $out -Force;" ^
+    "Write-Host '  [+] Python 3.11 installed successfully.'"
+
 if errorlevel 1 (
-    echo.
-    echo  [!] Python not found!
-    echo      Download it from: https://www.python.org/downloads/
-    echo      Make sure to check "Add Python to PATH" during installation.
-    echo.
+    echo  [!] Auto-install failed. Download manually from:
+    echo      https://www.python.org/downloads/
+    echo      Check "Add Python to PATH" during installation, then re-run this bat.
     pause
     exit /b 1
 )
+
+:: Reload PATH so python is available in current session
+for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\") + \";\" + [Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i"
+
+:python_found
 for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PY_VER=%%i
 echo  [+] Found: %PY_VER%
 
