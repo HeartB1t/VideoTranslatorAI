@@ -128,7 +128,7 @@ python -m pip install Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 
-:: Attempt 1: no-build-isolation
+:: Attempt 1: no-build-isolation (works if VS Build Tools already present)
 python -m pip install TTS --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
@@ -136,7 +136,32 @@ if not errorlevel 1 goto tts_ok
 python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
-:: All attempts failed
+:: Attempt 3: auto-install VS C++ Build Tools, then retry TTS
+echo  [*] VS C++ Build Tools not found - downloading and installing silently...
+echo      (this may take 5-10 minutes, please wait)
+powershell -Command ^
+    "$url = 'https://aka.ms/vs/17/release/vs_BuildTools.exe';" ^
+    "$out = $env:TEMP + '\vs_BuildTools.exe';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
+    "Write-Host '     Installing VS C++ Build Tools (silent)...';" ^
+    "Start-Process -FilePath $out -ArgumentList '--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Wait;" ^
+    "Remove-Item $out -Force;" ^
+    "Write-Host '  [+] VS Build Tools installed.'"
+
+if errorlevel 1 (
+    echo  [!] VS Build Tools auto-install failed. Voice cloning skipped.
+    goto tts_failed
+)
+
+:: Retry TTS after VS Build Tools install
+python -m pip install TTS --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+
+python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+
+:tts_failed
 echo.
 echo  ╔══════════════════════════════════════════════════════╗
 echo  ║  Voice Cloning (XTTS v2) could not be installed.    ║
