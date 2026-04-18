@@ -2885,12 +2885,110 @@ class App(tk.Tk):
         if not missing_pkgs and not missing_bins:
             return
         if missing_bins:
-            messagebox.showerror(
-                self._s("msg_deps_missing"),
-                self._s("msg_deps_bins") + "\n  • ".join(missing_bins) + self._s("msg_deps_ffmpeg"),
-            )
+            self._install_ffmpeg()
         if missing_pkgs:
             self._install_deps(missing_pkgs)
+
+    def _install_ffmpeg(self):
+        self._btn.configure(state="disabled", text=self._s("btn_installing"))
+        self._progress.start(12)
+        self._log_write("[*] ffmpeg not found — installing automatically...\n")
+
+        def do():
+            ok = False
+            if sys.platform == "win32":
+                ok = self._install_ffmpeg_windows()
+            else:
+                ok = self._install_ffmpeg_linux()
+            self.after(0, self._ffmpeg_done, ok)
+
+        threading.Thread(target=do, daemon=True).start()
+
+    def _install_ffmpeg_linux(self) -> bool:
+        # Detect package manager
+        for mgr, cmd in [
+            ("apt-get",  ["apt-get", "install", "-y", "ffmpeg"]),
+            ("dnf",      ["dnf",     "install", "-y", "ffmpeg"]),
+            ("pacman",   ["pacman",  "-S",  "--noconfirm", "ffmpeg"]),
+        ]:
+            if not shutil.which(mgr):
+                continue
+            # Try pkexec first (graphical sudo), fall back to sudo
+            for prefix in (["pkexec"], ["sudo", "-n"], ["sudo"]):
+                full_cmd = prefix + cmd
+                self.after(0, self._log_write, f"    Running: {' '.join(full_cmd)}\n")
+                proc = subprocess.Popen(
+                    full_cmd, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True,
+                )
+                try:
+                    for line in proc.stdout:
+                        line = line.rstrip()
+                        if line:
+                            self.after(0, self._log_write, f"    {line}\n")
+                    proc.wait()
+                except Exception:
+                    proc.kill(); proc.wait()
+                if proc.returncode == 0:
+                    return True
+                # pkexec/sudo -n failed (no password) — try next prefix
+        return False
+
+    def _install_ffmpeg_windows(self) -> bool:
+        import urllib.request, zipfile, ctypes
+        # Download ffmpeg essentials build from GitHub releases
+        ffmpeg_url  = "https://github.com/BtbN/ffmpeg-builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        install_dir = Path.home() / ".local" / "bin" / "ffmpeg"
+        install_dir.mkdir(parents=True, exist_ok=True)
+        zip_path    = install_dir / "ffmpeg.zip"
+
+        self.after(0, self._log_write, "    Downloading ffmpeg (~60 MB)...\n")
+        try:
+            def _progress(block, block_size, total):
+                if total > 0:
+                    pct = min(100, block * block_size * 100 // total)
+                    self.after(0, self._log_write, f"\r    Downloading... {pct}%")
+            urllib.request.urlretrieve(ffmpeg_url, zip_path, reporthook=_progress)
+            self.after(0, self._log_write, "\n    Extracting...\n")
+            with zipfile.ZipFile(zip_path, "r") as z:
+                for member in z.namelist():
+                    if member.endswith(("ffmpeg.exe", "ffprobe.exe")):
+                        z.extract(member, install_dir)
+                        # Move to install_dir root
+                        src = install_dir / member
+                        dst = install_dir / Path(member).name
+                        if src != dst:
+                            shutil.move(str(src), str(dst))
+            zip_path.unlink(missing_ok=True)
+            # Add to user PATH via registry
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE)
+            try:
+                old_path, _ = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                old_path = ""
+            if str(install_dir) not in old_path:
+                winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ,
+                                  old_path + ";" + str(install_dir))
+            winreg.CloseKey(key)
+            os.environ["PATH"] += os.pathsep + str(install_dir)
+            return True
+        except Exception as e:
+            self.after(0, self._log_write, f"    ! ffmpeg download failed: {e}\n")
+            return False
+
+    def _ffmpeg_done(self, ok: bool):
+        self._progress.stop()
+        self._btn.configure(state="normal", text=self._s("btn_start"))
+        if ok:
+            self._log_write("[✓] ffmpeg installed successfully.\n")
+        else:
+            self._log_write(
+                "[✗] Could not install ffmpeg automatically.\n"
+                "    Linux:   sudo apt install ffmpeg\n"
+                "    Windows: https://ffmpeg.org/download.html\n"
+            )
 
     def _install_deps(self, packages):
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
