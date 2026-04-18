@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Output files
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.wav
+*.srt
+
+# Temp/cache directories
+tmp/
+temp/
+.cache/
+demucs_tmp/
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

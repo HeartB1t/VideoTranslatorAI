@@ -1,0 +1,9 @@
+faster-whisper
+demucs
+soundfile
+edge-tts
+deep-translator
+pydub
+audioop-lts; python_version >= "3.13"
+torch>=2.6.0
+torchaudio==2.6.0
