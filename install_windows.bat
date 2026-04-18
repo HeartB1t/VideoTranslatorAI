@@ -122,19 +122,40 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Install Coqui TTS separately (Windows requires UTF-8 mode + Cython)
+:: Install Coqui TTS separately (requires C++ Build Tools on Windows)
 echo  [*] Installing Coqui TTS (voice cloning)...
 python -m pip install Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
-python -m pip install TTS --no-build-isolation --quiet
-if errorlevel 1 (
-    echo  [!] Coqui TTS could not be installed.
-    echo      Voice cloning will not be available but everything else works.
-    echo      To retry manually: set PYTHONUTF8=1 ^&^& pip install Cython ^&^& pip install TTS --no-build-isolation
-) else (
-    echo  [+] Coqui TTS installed.
-)
+
+:: Attempt 1: no-build-isolation
+python -m pip install TTS --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+
+:: Attempt 2: older stable version
+python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+
+:: All attempts failed
+echo.
+echo  ╔══════════════════════════════════════════════════════╗
+echo  ║  Voice Cloning (XTTS v2) could not be installed.    ║
+echo  ║  Everything else works normally.                     ║
+echo  ║                                                      ║
+echo  ║  To enable voice cloning manually:                   ║
+echo  ║  1. Install Visual Studio Build Tools 2022:          ║
+echo  ║     https://aka.ms/vs/17/release/vs_BuildTools.exe   ║
+echo  ║     Select: "Desktop development with C++"           ║
+echo  ║  2. Reopen this terminal and run:                    ║
+echo  ║     pip install TTS --no-build-isolation             ║
+echo  ╚══════════════════════════════════════════════════════╝
+echo.
+goto tts_end
+
+:tts_ok
+echo  [+] Coqui TTS installed successfully.
+
+:tts_end
 
 echo  [+] Python packages installed.
 
