@@ -2909,20 +2909,21 @@ class App(tk.Tk):
             w._text_key = text_key
             return w
 
+        _opy = {"pady": (4, 0)}
         self._chk_subs_only = cb(opts, "opt_subs_only", self._subs_only, self._on_subs_only)
-        self._chk_subs_only.grid(row=0, column=0, sticky="w")
+        self._chk_subs_only.grid(row=0, column=0, sticky="w", **_opy)
         self._chk_no_subs   = cb(opts, "opt_no_subs",   self._no_subs,   self._on_no_subs)
-        self._chk_no_subs.grid(row=1, column=0, sticky="w")
+        self._chk_no_subs.grid(row=1, column=0, sticky="w", **_opy)
         self._chk_no_demucs = cb(opts, "opt_no_demucs", self._no_demucs)
-        self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16)
+        self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16, **_opy)
         self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
-        self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16)
+        self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
-        self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w")
+        self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         # Translation engine radio group
         engine_row = tk.Frame(opts, bg=BG)
-        engine_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        engine_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._lbl_engine = tk.Label(engine_row, text=self._s("label_engine"),
                                     bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
         self._lbl_engine.pack(side="left")
@@ -2960,7 +2961,7 @@ class App(tk.Tk):
 
         # Diarization row
         diar_row = tk.Frame(opts, bg=BG)
-        diar_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        diar_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._chk_diar = tk.Checkbutton(
             diar_row, text=self._s("opt_diarization"),
             variable=self._use_diarization,
@@ -3015,7 +3016,7 @@ class App(tk.Tk):
     def _row_label(self, row, text):
         lbl = tk.Label(self, text=text, bg=BG, fg="#bac2de",
                        font=("Helvetica", 9, "bold"), anchor="e")
-        lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=5)
+        lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=7)
         return lbl
 
     # ── Language switcher ────────────────────────────────────────────────────
