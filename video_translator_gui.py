@@ -247,9 +247,14 @@ def download_youtube(url: str, out_dir: str) -> str:
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": out_template,
         "quiet": True,
-        "no_warnings": False,
+        "no_warnings": True,
         "merge_output_format": "mp4",
         "noplaylist": True,
+        "restrictfilenames": True,
+        "socket_timeout": 30,
+        "retries": 5,
+        # Use iOS client to avoid YouTube 403/SABR streaming issues
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
