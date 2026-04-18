@@ -3,6 +3,22 @@ setlocal enabledelayedexpansion
 title Video Translator AI - Installer
 color 0A
 
+:: ── Check Administrator privileges ───────────────────────────────────────────
+net session >nul 2>&1
+if errorlevel 1 (
+    color 0C
+    echo.
+    echo  ============================================
+    echo    ERROR: Run as Administrator!
+    echo  ============================================
+    echo.
+    echo  Right-click on install_windows.bat and select
+    echo  "Run as administrator", then try again.
+    echo.
+    pause
+    exit /b 1
+)
+
 echo.
 echo  ============================================
 echo    Video Translator AI - Windows Installer
