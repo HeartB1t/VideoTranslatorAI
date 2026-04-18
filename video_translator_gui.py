@@ -2884,15 +2884,12 @@ class App(tk.Tk):
         missing_pkgs, missing_bins = check_dependencies()
         if not missing_pkgs and not missing_bins:
             return
-        msg_parts = []
+        if missing_bins:
+            messagebox.showerror(
+                self._s("msg_deps_missing"),
+                self._s("msg_deps_bins") + "\n  • ".join(missing_bins) + self._s("msg_deps_ffmpeg"),
+            )
         if missing_pkgs:
-            msg_parts.append(self._s("msg_deps_python") + "\n  • ".join(missing_pkgs))
-        if missing_bins:
-            msg_parts.append(self._s("msg_deps_bins") + "\n  • ".join(missing_bins))
-        msg = "\n\n".join(msg_parts)
-        if missing_bins:
-            messagebox.showerror(self._s("msg_deps_missing"), msg + self._s("msg_deps_ffmpeg"))
-        elif messagebox.askyesno(self._s("msg_deps_missing"), msg + self._s("msg_deps_install")):
             self._install_deps(missing_pkgs)
 
     def _install_deps(self, packages):
