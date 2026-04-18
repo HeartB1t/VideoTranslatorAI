@@ -13,10 +13,11 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 ## Features
 
 - 🖥️ Dark-themed GUI (Tkinter) — no command line needed
+- 🎬 **YouTube & URL support** — paste any YouTube link and translate directly (powered by yt-dlp)
 - 🌍 26 target languages with multiple voices per language
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - ✏️ Subtitle editor — review and correct subtitles before dubbing
-- 📦 Batch processing — translate multiple videos at once
+- 📦 Batch processing — translate multiple videos or URLs at once
 - ⚡ GPU acceleration via CUDA (falls back to CPU automatically)
 - 🌐 UI available in Italian and English
 - 📄 Optional `.srt` subtitle export
@@ -70,16 +71,24 @@ python video_translator_gui.py
 python video_translator_gui.py
 ```
 
+**From local files:**
 1. Click **Add** to select one or more video files
 2. Choose the source and target language
 3. Select a Whisper model (`small` is a good balance of speed/accuracy)
 4. Pick a voice and adjust TTS speed if needed
 5. Click **Start Translation**
 
+**From YouTube (or any supported site):**
+1. Paste one or more URLs in the **URL** field (one per line)
+2. Configure language, model and voice as usual
+3. Click **⬇ Download & Translate** — the app downloads and translates automatically
+
+> yt-dlp supports YouTube, Vimeo, Twitter/X, TikTok, and [1000+ other sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
+
 ### Command line
 
 ```bash
-python video_translator.py video.mp4 --lang-target it --voice it-IT-ElsaNeural
+python video_translator_gui.py video.mp4 --lang-target it --voice it-IT-ElsaNeural
 ```
 
 **Main options:**

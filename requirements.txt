@@ -1,4 +1,5 @@
 faster-whisper
+yt-dlp
 demucs
 soundfile
 edge-tts

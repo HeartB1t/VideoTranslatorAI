@@ -82,6 +82,7 @@ REQUIRED_PACKAGES = {
     "deep_translator": "deep-translator",
     "pydub":          "pydub",
     "demucs":         "demucs",
+    "yt_dlp":         "yt-dlp",
 }
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
@@ -149,6 +150,14 @@ UI_STRINGS = {
         "editor_seg_label":   "Segmento {} —",
         "editor_btn_save":    "Salva",
         "warn_editor":        "Editor",
+        "label_url":          "URL:",
+        "btn_download":       "⬇  Scarica e Traduci",
+        "url_placeholder":    "Incolla link YouTube (o altro sito supportato da yt-dlp)...",
+        "msg_no_url":         "Incolla almeno un URL valido.",
+        "msg_downloading":    "⏳ Download in corso...",
+        "log_downloading":    "Download: {}",
+        "log_dl_done":        "Download completato → {}",
+        "log_dl_error":       "Errore download: {}",
     },
     "en": {
         "label_video":        "Video:",
@@ -202,6 +211,14 @@ UI_STRINGS = {
         "editor_seg_label":   "Segment {} —",
         "editor_btn_save":    "Save",
         "warn_editor":        "Editor",
+        "label_url":          "URL:",
+        "btn_download":       "⬇  Download & Translate",
+        "url_placeholder":    "Paste YouTube link (or other yt-dlp supported site)...",
+        "msg_no_url":         "Paste at least one valid URL.",
+        "msg_downloading":    "⏳ Downloading...",
+        "log_downloading":    "Downloading: {}",
+        "log_dl_done":        "Download complete → {}",
+        "log_dl_error":       "Download error: {}",
     },
 }
 
@@ -218,6 +235,40 @@ def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
         err = (proc.stderr or "").strip().splitlines()[-10:]
         raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
     return proc
+
+
+def download_youtube(url: str, out_dir: str) -> str:
+    """Downloads a video from YouTube (or any yt-dlp supported site) to out_dir.
+    Returns the path of the downloaded file."""
+    import yt_dlp
+
+    out_template = os.path.join(out_dir, "%(title).80s.%(ext)s")
+    ydl_opts = {
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl": out_template,
+        "quiet": True,
+        "no_warnings": False,
+        "merge_output_format": "mp4",
+        "noplaylist": True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+        # yt-dlp may change extension after merge
+        if not os.path.exists(filename):
+            stem = os.path.splitext(filename)[0]
+            for ext in (".mp4", ".mkv", ".webm"):
+                candidate = stem + ext
+                if os.path.exists(candidate):
+                    filename = candidate
+                    break
+
+    if not os.path.exists(filename):
+        raise RuntimeError(f"Download completed but file not found: {filename}")
+
+    print(f"[+] Downloaded: {filename}", flush=True)
+    return filename
 
 
 def extract_audio(video_path: str, audio_path: str):
@@ -688,6 +739,7 @@ class App(tk.Tk):
         self._edit_subs = tk.BooleanVar(value=False)
         self._running   = False
         self._batch_files: list[str] = []
+        self._url_placeholder_active = True
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -803,13 +855,31 @@ class App(tk.Tk):
                                      command=self._browse_output, bg="#45475a", fg=FG, relief="flat")
         self._btn_browse.grid(row=4, column=2, padx=(0, 16))
 
+        # URL download field
+        self._lbl_url = self._row_label(5, self._s("label_url"))
+        url_frame = tk.Frame(self, bg=BG)
+        url_frame.grid(row=5, column=1, columnspan=2, sticky="ew", **pad)
+        self._url_text = tk.Text(url_frame, height=2, width=52,
+                                  bg=SEL, fg=FG, insertbackground=FG,
+                                  font=("Monospace", 8), relief="flat", wrap="none")
+        self._url_text.insert("1.0", self._s("url_placeholder"))
+        self._url_text.configure(fg=FG2)
+        self._url_text.bind("<FocusIn>",  self._url_focus_in)
+        self._url_text.bind("<FocusOut>", self._url_focus_out)
+        self._url_text.pack(side="left", fill="both", expand=True)
+        self._btn_download = tk.Button(url_frame, text=self._s("btn_download"),
+                                        command=self._start_download,
+                                        bg=GRN, fg=BG, font=("Helvetica", 9, "bold"),
+                                        relief="flat", padx=8, cursor="hand2")
+        self._btn_download.pack(side="left", padx=(6, 0))
+
         ttk.Separator(self, orient="horizontal").grid(
-            row=5, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
+            row=6, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Whisper model
-        self._lbl_model = self._row_label(6, self._s("label_model"))
+        self._lbl_model = self._row_label(7, self._s("label_model"))
         mf = tk.Frame(self, bg=BG)
-        mf.grid(row=6, column=1, columnspan=2, sticky="w", **pad)
+        mf.grid(row=7, column=1, columnspan=2, sticky="w", **pad)
         for m in WHISPER_MODELS:
             tk.Radiobutton(mf, text=m, variable=self._model, value=m,
                            bg=BG, fg=RED if "large" in m else FG,
@@ -820,9 +890,9 @@ class App(tk.Tk):
         self._lbl_model_hint.pack(side="left", padx=6)
 
         # Source language
-        self._lbl_from = self._row_label(7, self._s("label_from"))
+        self._lbl_from = self._row_label(8, self._s("label_from"))
         src_frame = tk.Frame(self, bg=BG)
-        src_frame.grid(row=7, column=1, columnspan=2, sticky="w", **pad)
+        src_frame.grid(row=8, column=1, columnspan=2, sticky="w", **pad)
         self._src_combo = ttk.Combobox(src_frame, values=list(SOURCE_LANGS.values()),
                                         state="readonly", width=22, font=("Helvetica", 9))
         self._src_combo.current(0)
@@ -832,9 +902,9 @@ class App(tk.Tk):
                               lambda e, k=src_keys: self._lang_src.set(k[self._src_combo.current()]))
 
         # Target language
-        self._lbl_to = self._row_label(8, self._s("label_to"))
+        self._lbl_to = self._row_label(9, self._s("label_to"))
         tgt_frame = tk.Frame(self, bg=BG)
-        tgt_frame.grid(row=8, column=1, columnspan=2, sticky="w", **pad)
+        tgt_frame.grid(row=9, column=1, columnspan=2, sticky="w", **pad)
         self._tgt_combo = ttk.Combobox(tgt_frame, values=[v["name"] for v in LANGUAGES.values()],
                                         state="readonly", width=22, font=("Helvetica", 9))
         self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
@@ -842,15 +912,15 @@ class App(tk.Tk):
         self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
 
         # Voice
-        self._lbl_voice = self._row_label(9, self._s("label_voice"))
+        self._lbl_voice = self._row_label(10, self._s("label_voice"))
         self._voice_frame = tk.Frame(self, bg=BG)
-        self._voice_frame.grid(row=9, column=1, columnspan=2, sticky="w", **pad)
+        self._voice_frame.grid(row=10, column=1, columnspan=2, sticky="w", **pad)
         self._build_voice_buttons()
 
         # TTS rate
-        self._lbl_tts_rate = self._row_label(10, self._s("label_tts_rate"))
+        self._lbl_tts_rate = self._row_label(11, self._s("label_tts_rate"))
         rate_frame = tk.Frame(self, bg=BG)
-        rate_frame.grid(row=10, column=1, columnspan=2, sticky="w", **pad)
+        rate_frame.grid(row=11, column=1, columnspan=2, sticky="w", **pad)
         tk.Label(rate_frame, text="-50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
         ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
                   orient="horizontal", length=200).pack(side="left", padx=6)
@@ -861,12 +931,12 @@ class App(tk.Tk):
         self._tts_rate.trace_add("write", self._update_rate_label)
 
         ttk.Separator(self, orient="horizontal").grid(
-            row=11, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
+            row=12, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Options
-        self._lbl_options = self._row_label(12, self._s("label_options"))
+        self._lbl_options = self._row_label(13, self._s("label_options"))
         opts = tk.Frame(self, bg=BG)
-        opts.grid(row=12, column=1, columnspan=2, sticky="w", **pad)
+        opts.grid(row=13, column=1, columnspan=2, sticky="w", **pad)
 
         def cb(parent, text_key, var, cmd=None):
             w = tk.Checkbutton(parent, text=self._s(text_key), variable=var, command=cmd,
@@ -885,18 +955,18 @@ class App(tk.Tk):
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16)
 
         ttk.Separator(self, orient="horizontal").grid(
-            row=13, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
+            row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Start button
         self._btn = tk.Button(self, text=self._s("btn_start"), command=self._start,
                               bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
                               relief="flat", padx=20, pady=8, cursor="hand2",
                               activebackground="#74c7ec")
-        self._btn.grid(row=14, column=0, columnspan=3, pady=8)
+        self._btn.grid(row=15, column=0, columnspan=3, pady=8)
 
         # Log
         log_frame = tk.Frame(self, bg=BG)
-        log_frame.grid(row=15, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="ew")
+        log_frame.grid(row=16, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="ew")
         self._log = tk.Text(log_frame, height=12, width=76,
                             bg="#11111b", fg=GRN, font=("Monospace", 8),
                             relief="flat", state="disabled", wrap="word")
@@ -906,7 +976,7 @@ class App(tk.Tk):
         vsb.pack(side="right", fill="y")
 
         self._progress = ttk.Progressbar(self, mode="indeterminate", length=500)
-        self._progress.grid(row=16, column=0, columnspan=3, padx=16, pady=(0, 12))
+        self._progress.grid(row=17, column=0, columnspan=3, padx=16, pady=(0, 12))
 
         self.columnconfigure(1, weight=1)
 
@@ -933,6 +1003,13 @@ class App(tk.Tk):
         self._lbl_voice.configure(text=self._s("label_voice"))
         self._lbl_tts_rate.configure(text=self._s("label_tts_rate"))
         self._lbl_options.configure(text=self._s("label_options"))
+        self._lbl_url.configure(text=self._s("label_url"))
+        if not self._running:
+            self._btn_download.configure(text=self._s("btn_download"))
+        if self._url_placeholder_active:
+            self._url_text.delete("1.0", "end")
+            self._url_text.insert("1.0", self._s("url_placeholder"))
+            self._url_text.configure(fg=FG2)
         self._btn_add.configure(text=self._s("btn_add"))
         self._btn_remove.configure(text=self._s("btn_remove"))
         self._btn_clear.configure(text=self._s("btn_clear"))
@@ -990,6 +1067,91 @@ class App(tk.Tk):
             self._subs_only.set(False)
 
     # ── File management ──────────────────────────────────────────────────────
+
+    # ── URL field helpers ────────────────────────────────────────────────────
+
+    def _url_focus_in(self, _=None):
+        if self._url_placeholder_active:
+            self._url_text.delete("1.0", "end")
+            self._url_text.configure(fg=FG)
+            self._url_placeholder_active = False
+
+    def _url_focus_out(self, _=None):
+        if not self._url_text.get("1.0", "end").strip():
+            self._url_text.insert("1.0", self._s("url_placeholder"))
+            self._url_text.configure(fg=FG2)
+            self._url_placeholder_active = True
+
+    def _get_urls(self) -> list[str]:
+        if self._url_placeholder_active:
+            return []
+        raw = self._url_text.get("1.0", "end").strip()
+        if not raw:
+            return []
+        return [u.strip() for u in raw.splitlines() if u.strip()]
+
+    def _start_download(self):
+        if self._running:
+            return
+        urls = self._get_urls()
+        if not urls:
+            messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_url"))
+            return
+        self._running = True
+        self._btn.configure(state="disabled")
+        self._btn_download.configure(state="disabled", text=self._s("msg_downloading"))
+        self._progress.start(12)
+        self._log.configure(state="normal")
+        self._log.delete("1.0", "end")
+        self._log.configure(state="disabled")
+        p = self._snapshot_params()
+
+        def run():
+            redirect = _TkStreamRedirect(self, self._log_write)
+            old_out, old_err = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = redirect
+            all_ok = True
+            try:
+                for url in urls:
+                    self.after(0, self._log_write,
+                               f"\n{'─'*50}\n{self._s('log_downloading').format(url)}\n{'─'*50}\n")
+                    stable = None
+                    try:
+                        with tempfile.TemporaryDirectory(prefix="ytdl_") as tmp_dl:
+                            video_path = download_youtube(url, tmp_dl)
+                            self.after(0, self._log_write,
+                                       self._s("log_dl_done").format(Path(video_path).name) + "\n")
+                            # Move to a stable path outside the TemporaryDirectory
+                            fd, stable = tempfile.mkstemp(suffix=".mp4", prefix="yt_")
+                            os.close(fd)
+                            shutil.move(video_path, stable)
+                        translate_video(
+                            video_in=stable,
+                            output=p["output"] if len(urls) == 1 else None,
+                            model=p["model"],
+                            lang_source=p["lang_src"],
+                            lang_target=p["lang_tgt"],
+                            voice=p["voice"],
+                            tts_rate=p["tts_rate"],
+                            no_subs=p["no_subs"],
+                            subs_only=p["subs_only"],
+                            no_demucs=p["no_demucs"],
+                        )
+                    except Exception as e:
+                        self.after(0, self._log_write,
+                                   f"[x] {type(e).__name__}: {e}\n{traceback.format_exc()}\n")
+                        all_ok = False
+                    finally:
+                        if stable and os.path.exists(stable):
+                            try:
+                                os.remove(stable)
+                            except OSError:
+                                pass
+            finally:
+                sys.stdout, sys.stderr = old_out, old_err
+            self.after(0, self._on_done, all_ok)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _add_files(self):
         paths = filedialog.askopenfilenames(
@@ -1186,6 +1348,7 @@ class App(tk.Tk):
         self._running = False
         self._progress.stop()
         self._btn.configure(state="normal", text=self._s("btn_start"))
+        self._btn_download.configure(state="normal", text=self._s("btn_download"))
         if success:
             self._log_write("\n✓ Done!\n")
             messagebox.showinfo(self._s("msg_completed_t"), self._s("msg_completed"))
