@@ -41,8 +41,8 @@ Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
 
 | Engine | Setup | Limits | Quality |
 |--------|-------|--------|---------|
-| **MarianMT** (default recommended) | None — auto-downloads ~298 MB per language pair | None — fully offline | ★★★★ |
-| **Google Translate** | None | ~100 req/day (unofficial scraping) | ★★★★ |
+| **Google Translate** *(default)* | None | ~100 req/day (unofficial scraping) | ★★★★ |
+| **MarianMT** *(recommended for heavy use)* | None — auto-downloads ~298 MB per language pair | None — fully offline | ★★★★ |
 | **DeepL Free** | Free API key at [deepl.com](https://www.deepl.com/pro-api) | 500k chars/month | ★★★★★ |
 
 > **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models. Models are downloaded automatically on first use and cached locally. Requires explicit source language (auto-detect not supported).
@@ -77,38 +77,38 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 ## Requirements
 
 - Python 3.9+
-- ffmpeg
 - NVIDIA GPU recommended (CUDA 12.4) — CPU works but is slower
+
+> **ffmpeg and all Python packages are installed automatically** on first launch if missing. No manual setup required.
 
 ## Installation
 
 ### Windows
 
-1. Download or clone this repository
+1. Clone or download this repository
 2. Right-click `install_windows.bat` → **Run as administrator**
-3. The installer will automatically:
-   - Install Python 3.11 if not present
-   - Install all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, etc.)
-   - Install VS C++ Build Tools (required for Coqui TTS voice cloning)
-   - Download and install ffmpeg
-   - Create a Desktop shortcut
+3. The installer automatically:
+   - Installs Python 3.11 if not present
+   - Installs all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, etc.)
+   - Installs VS C++ Build Tools (required for Coqui TTS voice cloning)
+   - Downloads and installs ffmpeg
+   - Creates a Desktop shortcut
 
 ### Linux / macOS
 
 ```bash
-# Install ffmpeg
-sudo apt install ffmpeg       # Debian/Ubuntu/Kali
-# brew install ffmpeg         # macOS
+# Clone the repo
+git clone https://github.com/HeartB1t/VideoTranslatorAI.git
+cd VideoTranslatorAI
 
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install PyTorch with CUDA 12.4 (NVIDIA GPU)
+# Install PyTorch with CUDA 12.4 (NVIDIA GPU) — skip for CPU only
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# Launch the GUI
+# Launch — everything else installs automatically on first run
 python video_translator_gui.py
 ```
+
+> On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows).
 
 ## Usage
 
