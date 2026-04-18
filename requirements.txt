@@ -5,6 +5,7 @@ soundfile
 edge-tts
 deep-translator
 pydub
+pyloudnorm
 TTS>=0.22.0
 audioop-lts; python_version >= "3.13"
 torch>=2.6.0

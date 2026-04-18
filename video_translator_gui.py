@@ -385,11 +385,22 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> list[dict]
     return result
 
 
-def translate_segments(segments: list[dict], source: str, target: str) -> list[dict]:
-    from deep_translator import GoogleTranslator
+def translate_segments(
+    segments: list[dict], source: str, target: str,
+    engine: str = "google", deepl_key: str = "",
+) -> list[dict]:
     src = "auto" if source == "auto" else source
-    print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments)...", flush=True)
-    translator = GoogleTranslator(source=src, target=target)
+    print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
+    if engine == "deepl" and deepl_key.strip():
+        from deep_translator import DeeplTranslator
+        translator = DeeplTranslator(
+            api_key=deepl_key.strip(), source=src, target=target, use_free_api=True
+        )
+    else:
+        from deep_translator import GoogleTranslator
+        if engine == "deepl":
+            print("     ! DeepL key missing, falling back to Google Translate.", flush=True)
+        translator = GoogleTranslator(source=src, target=target)
     translated = []
     for i, seg in enumerate(segments):
         text = (seg.get("text") or "").strip()
@@ -566,6 +577,22 @@ def build_dubbed_track(
 
     out = os.path.join(tmp_dir, "track_dubbed.wav")
     dubbed.export(out, format="wav")
+
+    # Normalize to -23 LUFS (EBU R128 broadcast standard)
+    try:
+        import numpy as np
+        import soundfile as sf
+        import pyloudnorm as pyln
+        data, rate = sf.read(out)
+        meter = pyln.Meter(rate)
+        loudness = meter.integrated_loudness(data)
+        if loudness > -70:  # skip if signal too quiet (silence)
+            normalized = pyln.normalize.loudness(data, loudness, -23.0)
+            sf.write(out, normalized, rate)
+            print(f"     → Normalized: {loudness:.1f} LUFS → -23.0 LUFS", flush=True)
+    except Exception as e:
+        print(f"     ! Loudness normalization skipped: {e}", flush=True)
+
     print(f"     → Track: {out}", flush=True)
     return out
 
@@ -618,6 +645,8 @@ def translate_video(
     no_subs: bool = False,
     subs_only: bool = False,
     no_demucs: bool = False,
+    translation_engine: str = "google",
+    deepl_key: str = "",
     segments_override: list[dict] | None = None,
     tts_engine: str = "edge",   # "edge" or "xtts"
 ) -> dict:
@@ -678,7 +707,7 @@ def translate_video(
             segments = segments_override
         else:
             raw_segs = transcribe(vocals_path, model, lang_source)
-            segments = translate_segments(raw_segs, lang_source, lang_target)
+            segments = translate_segments(raw_segs, lang_source, lang_target, engine=translation_engine, deepl_key=deepl_key)
 
         if not no_subs:
             save_subtitles(segments, output_base)
@@ -860,6 +889,8 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
+        self._use_deepl     = tk.BooleanVar(value=False)
+        self._deepl_key_var = tk.StringVar()
         self._running   = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
@@ -1079,6 +1110,22 @@ class App(tk.Tk):
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
         self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w")
 
+        # DeepL row
+        deepl_row = tk.Frame(opts, bg=BG)
+        deepl_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._chk_deepl = tk.Checkbutton(
+            deepl_row, text="DeepL Free", variable=self._use_deepl,
+            command=self._on_deepl_toggle,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
+        self._chk_deepl.pack(side="left")
+        tk.Label(deepl_row, text="  ⚠️ 500k char/mese gratuiti — API key:",
+                 bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
+        self._deepl_key_entry = tk.Entry(
+            deepl_row, textvariable=self._deepl_key_var, width=28,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8), show="*", state="disabled")
+        self._deepl_key_entry.pack(side="left", padx=(4, 0))
+
         ttk.Separator(self, orient="horizontal").grid(
             row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
@@ -1188,6 +1235,10 @@ class App(tk.Tk):
         if self._subs_only.get():
             self._no_subs.set(False)
 
+    def _on_deepl_toggle(self):
+        state = "normal" if self._use_deepl.get() else "disabled"
+        self._deepl_key_entry.configure(state=state)
+
     def _on_no_subs(self):
         if self._no_subs.get():
             self._subs_only.set(False)
@@ -1263,6 +1314,8 @@ class App(tk.Tk):
                             subs_only=p["subs_only"],
                             no_demucs=p["no_demucs"],
                             tts_engine=p["tts_engine"],
+                            translation_engine=p["translation_engine"],
+                            deepl_key=p["deepl_key"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -1338,6 +1391,8 @@ class App(tk.Tk):
             "no_demucs":  self._no_demucs.get(),
             "output":     self._output_var.get().strip(),
             "tts_engine":  "xtts" if self._use_xtts.get() else "edge",
+            "translation_engine": "deepl" if self._use_deepl.get() else "google",
+            "deepl_key":          self._deepl_key_var.get().strip(),
         }
 
     def _start_with_editor(self, video_path: str):
@@ -1361,6 +1416,8 @@ class App(tk.Tk):
                     subs_only=True,
                     no_demucs=p["no_demucs"],
                     tts_engine=p["tts_engine"],
+                    translation_engine=p["translation_engine"],
+                    deepl_key=p["deepl_key"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
@@ -1410,6 +1467,8 @@ class App(tk.Tk):
                     no_demucs=p["no_demucs"],
                     segments_override=segments,
                     tts_engine=p["tts_engine"],
+                    translation_engine=p["translation_engine"],
+                    deepl_key=p["deepl_key"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -1454,6 +1513,8 @@ class App(tk.Tk):
                             subs_only=p["subs_only"],
                             no_demucs=p["no_demucs"],
                             tts_engine=p["tts_engine"],
+                            translation_engine=p["translation_engine"],
+                            deepl_key=p["deepl_key"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,

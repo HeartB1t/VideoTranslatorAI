@@ -76,7 +76,7 @@ echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp TTS
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp TTS pyloudnorm
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
