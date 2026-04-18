@@ -73,6 +73,14 @@ SOURCE_LANGS_EN = {
     "ja": "🇯🇵 Japanese", "ko": "🇰🇷 Korean", "ar": "🇸🇦 Arabic",
 }
 
+# Languages supported by XTTS v2 (maps our codes → XTTS codes)
+XTTS_LANGS = {
+    "ar": "ar", "zh-CN": "zh-cn", "cs": "cs", "de": "de",
+    "en": "en", "es": "es", "fr": "fr", "hi": "hi",
+    "hu": "hu", "it": "it", "ja": "ja", "ko": "ko",
+    "nl": "nl", "pl": "pl", "pt": "pt", "ru": "ru", "tr": "tr",
+}
+
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 DEFAULT_LANG = "it"
 
@@ -122,6 +130,8 @@ UI_STRINGS = {
         "opt_no_subs":        "Non voglio sottotitoli",
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
+        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
+        "msg_xtts_no_lang":   "XTTS v2 non supporta '{lang}'. Verrà usato Edge-TTS.",
         "msg_no_video":       "Aggiungi almeno un video.",
         "msg_completed":      "Traduzione completata!",
         "msg_error":          "Qualcosa è andato storto. Controlla il log.",
@@ -183,6 +193,8 @@ UI_STRINGS = {
         "opt_no_subs":        "I don't want subtitles",
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
+        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
+        "msg_xtts_no_lang":   "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video":       "Add at least one video.",
         "msg_completed":      "Translation completed!",
         "msg_error":          "Something went wrong. Check the log.",
@@ -419,6 +431,69 @@ def generate_tts(segments: list[dict], voice: str, tmp_dir: str, rate: str = "+0
     return files
 
 
+def generate_tts_xtts(
+    segments: list[dict],
+    reference_audio: str,
+    lang_target: str,
+    tmp_dir: str,
+) -> list[str]:
+    """Voice cloning TTS via Coqui XTTS v2. Uses reference_audio to clone speaker voice."""
+    import torch
+    from TTS.api import TTS as CoquiTTS
+
+    xtts_lang = XTTS_LANGS.get(lang_target)
+    if not xtts_lang:
+        print(f"[!] XTTS v2 does not support '{lang_target}', falling back to Edge-TTS.", flush=True)
+        return None  # caller will fall back to edge-tts
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device})...", flush=True)
+    print(f"     Reference audio: {Path(reference_audio).name}", flush=True)
+
+    # Prepare 30s reference clip (XTTS works best with 6-30s of clean speech)
+    ref_clip = os.path.join(tmp_dir, "xtts_ref.wav")
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", reference_audio,
+            "-t", "30", "-ar", "22050", "-ac", "1", ref_clip
+        ], capture_output=True, check=True)
+    except subprocess.CalledProcessError:
+        shutil.copy(reference_audio, ref_clip)
+
+    tts_model = None
+    try:
+        tts_model = CoquiTTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        files = []
+        total = len(segments)
+        for i, seg in enumerate(segments):
+            out = os.path.join(tmp_dir, f"seg_{i:04d}.wav")
+            text = (seg.get("text_tgt") or "").strip()
+            if text:
+                try:
+                    tts_model.tts_to_file(
+                        text=text,
+                        speaker_wav=ref_clip,
+                        language=xtts_lang,
+                        file_path=out,
+                    )
+                except Exception as e:
+                    print(f"     ! XTTS seg {i}: {e}", flush=True)
+            files.append(out)
+            if i % 10 == 0:
+                print(f"     {i+1}/{total}...", end="\r", flush=True)
+    finally:
+        del tts_model
+        if device == "cuda":
+            try:
+                import torch as _t
+                _t.cuda.empty_cache()
+            except Exception:
+                pass
+
+    print("     → XTTS done                   ", flush=True)
+    return files
+
+
 def build_dubbed_track(
     segments: list[dict],
     tts_files: list[str],
@@ -525,6 +600,7 @@ def translate_video(
     subs_only: bool = False,
     no_demucs: bool = False,
     segments_override: list[dict] | None = None,
+    tts_engine: str = "edge",   # "edge" or "xtts"
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -592,7 +668,16 @@ def translate_video(
             print("\n[+] --subs-only mode complete.")
             return {"srt": output_base + ".srt", "segments": segments}
 
-        tts_files = generate_tts(segments, voice, tmp_dir, rate=tts_rate)
+        # TTS generation — Edge-TTS or Coqui XTTS v2
+        tts_files = None
+        if tts_engine == "xtts":
+            try:
+                tts_files = generate_tts_xtts(segments, vocals_path, lang_target, tmp_dir)
+            except Exception as e:
+                print(f"     ! XTTS failed ({e}), falling back to Edge-TTS.", flush=True)
+                tts_files = None
+        if tts_files is None:
+            tts_files = generate_tts(segments, voice, tmp_dir, rate=tts_rate)
         duration  = get_duration(video_in)
         track     = build_dubbed_track(segments, tts_files, bg_path, duration, tmp_dir)
         mux_video(video_in, track, output)
@@ -755,6 +840,7 @@ class App(tk.Tk):
         self._no_subs   = tk.BooleanVar(value=False)
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
+        self._use_xtts  = tk.BooleanVar(value=False)
         self._running   = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
@@ -833,7 +919,7 @@ class App(tk.Tk):
         self._ui_lang_combo.pack(side="left")
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
-        tk.Label(self, text="faster-whisper  •  Demucs  •  Google Translate  •  Edge-TTS",
+        tk.Label(self, text="faster-whisper  •  Demucs  •  Google Translate  •  Edge-TTS / XTTS v2",
                  font=("Helvetica", 9), bg=BG, fg=FG2).grid(row=1, column=0, columnspan=3)
 
         ttk.Separator(self, orient="horizontal").grid(
@@ -971,6 +1057,8 @@ class App(tk.Tk):
         self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16)
         self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16)
+        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
+        self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w")
 
         ttk.Separator(self, orient="horizontal").grid(
             row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
@@ -1038,6 +1126,7 @@ class App(tk.Tk):
         self._chk_no_subs.configure(text=self._s("opt_no_subs"))
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
+        self._chk_xtts.configure(text=self._s("opt_xtts"))
         # Update source language combo labels
         lang = self._ui_lang.get()
         src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
@@ -1154,6 +1243,7 @@ class App(tk.Tk):
                             no_subs=p["no_subs"],
                             subs_only=p["subs_only"],
                             no_demucs=p["no_demucs"],
+                            tts_engine=p["tts_engine"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -1228,6 +1318,7 @@ class App(tk.Tk):
             "no_subs":    self._no_subs.get(),
             "no_demucs":  self._no_demucs.get(),
             "output":     self._output_var.get().strip(),
+            "tts_engine":  "xtts" if self._use_xtts.get() else "edge",
         }
 
     def _start_with_editor(self, video_path: str):
@@ -1250,6 +1341,7 @@ class App(tk.Tk):
                     lang_target=p["lang_tgt"],
                     subs_only=True,
                     no_demucs=p["no_demucs"],
+                    tts_engine=p["tts_engine"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
@@ -1298,6 +1390,7 @@ class App(tk.Tk):
                     no_subs=p["no_subs"],
                     no_demucs=p["no_demucs"],
                     segments_override=segments,
+                    tts_engine=p["tts_engine"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -1341,6 +1434,7 @@ class App(tk.Tk):
                             no_subs=p["no_subs"],
                             subs_only=p["subs_only"],
                             no_demucs=p["no_demucs"],
+                            tts_engine=p["tts_engine"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
