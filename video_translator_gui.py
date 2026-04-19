@@ -99,13 +99,13 @@ if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
 
 # Pacchetti opzionali: migliorano la qualità ma non bloccano l'avvio.
-# chiave = modulo Python principale, valore = (pip_name, descrizione UI)
-# TTS (Coqui) supporta solo <=3.11; su 3.12+ si usa il fork community coqui-tts
-_TTS_PIP = "coqui-tts" if sys.version_info >= (3, 12) else "TTS"
-OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
-    "sacremoses":    ("sacremoses",    "MarianMT tokenizer (traduzione offline)"),
-    "sentencepiece": ("sentencepiece", "MarianMT tokenizer (traduzione offline)"),
-    "TTS":           (_TTS_PIP,        "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
+# chiave = modulo Python, valore = (lista pip requirements, descrizione UI)
+# coqui-tts richiede transformers<5 (isin_mps_friendly rimossa in transformers 5.x)
+_TTS_PKGS = ["coqui-tts", "transformers<5"] if sys.version_info >= (3, 12) else ["TTS"]
+OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
+    "sacremoses":    (["sacremoses"],    "MarianMT tokenizer (traduzione offline)"),
+    "sentencepiece": (["sentencepiece"], "MarianMT tokenizer (traduzione offline)"),
+    "TTS":           (_TTS_PKGS,         "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
 }
 # Alias per moduli che possono avere nomi diversi a seconda della versione installata
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
@@ -3221,22 +3221,23 @@ class App(tk.Tk):
             return any(importlib.util.find_spec(a) is not None for a in aliases)
 
         missing = [
-            (mod, pip_name, desc)
-            for mod, (pip_name, desc) in OPTIONAL_PACKAGES.items()
+            (mod, pip_pkgs, desc)
+            for mod, (pip_pkgs, desc) in OPTIONAL_PACKAGES.items()
             if not _is_present(mod)
         ]
         if not missing:
             return
 
-        # Deduplicate pip names (sacremoses+sentencepiece share the same pip package)
+        # Deduplicate by primary pip package name; collect all requirements to install
         seen: set[str] = set()
-        items: list[tuple[str, str]] = []
-        for _mod, pip_name, desc in missing:
-            if pip_name not in seen:
-                seen.add(pip_name)
-                items.append((pip_name, desc))
+        items: list[tuple[list[str], str]] = []
+        for _mod, pip_pkgs, desc in missing:
+            key = pip_pkgs[0]
+            if key not in seen:
+                seen.add(key)
+                items.append((pip_pkgs, desc))
 
-        names_str = "\n".join(f"  • {pip} — {desc}" for pip, desc in items)
+        names_str = "\n".join(f"  • {pkgs[0]} — {desc}" for pkgs, desc in items)
         answer = messagebox.askyesno(
             "Pacchetti opzionali mancanti",
             f"I seguenti pacchetti opzionali non sono installati:\n\n{names_str}\n\n"
@@ -3244,7 +3245,8 @@ class App(tk.Tk):
             parent=self,
         )
         if answer:
-            self._install_deps([pip for pip, _desc in items])
+            all_pkgs = [pkg for pkgs, _ in items for pkg in pkgs]
+            self._install_deps(all_pkgs)
         else:
             self._log_write("[i] Pacchetti opzionali saltati. Puoi installarli manualmente.\n")
 
