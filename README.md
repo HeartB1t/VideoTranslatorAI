@@ -46,7 +46,7 @@ Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
 | **MarianMT** *(recommended for heavy use)* | None — downloads ~298 MB per language pair on first use | None — fully offline after download | ★★★★ |
 | **DeepL Free** | Free API key at [deepl.com](https://www.deepl.com/pro-api) | 500k chars/month | ★★★★★ |
 
-> **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models, cached locally after the first download. Requires explicit source language (auto-detect not supported — select source language manually).
+> **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models, cached locally after the first download. Requires explicit source language (auto-detect not supported — select source language manually). Required Python packages (`sacremoses`, `sentencepiece`) are installed automatically on first selection if missing.
 
 ## Voice Cloning (XTTS v2)
 
