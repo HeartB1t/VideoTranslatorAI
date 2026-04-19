@@ -98,6 +98,18 @@ REQUIRED_PACKAGES = {
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
 
+# Pacchetti opzionali: migliorano la qualità ma non bloccano l'avvio.
+# chiave = modulo Python principale (o lista alias), valore = (pip_name, descrizione UI)
+OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
+    "sacremoses":    ("sacremoses",    "MarianMT tokenizer (traduzione offline)"),
+    "sentencepiece": ("sentencepiece", "MarianMT tokenizer (traduzione offline)"),
+    "TTS":           ("TTS",           "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
+}
+# Alias per moduli che possono avere nomi diversi a seconda della versione installata
+_OPTIONAL_ALIASES: dict[str, list[str]] = {
+    "TTS": ["TTS", "coqui_tts"],
+}
+
 # ── GUI colours ──────────────────────────────────────────────
 BG  = "#1e1e2e"
 FG  = "#cdd6f4"
@@ -2967,6 +2979,8 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._fit_to_screen)
         self.after(200, self._check_deps_on_start)
+        self.after(800, self._upgrade_ytdlp_in_background)
+        self._optional_checked = False
 
         # Install global redirect once — routes print() to per-thread GUI log
         sys.stdout = _GlobalRedirect(sys.stdout)
@@ -2990,6 +3004,8 @@ class App(tk.Tk):
     def _check_deps_on_start(self):
         missing_pkgs, missing_bins = check_dependencies()
         if not missing_pkgs and not missing_bins:
+            # Nothing required to install — safe to check optional now
+            self.after(300, self._check_optional_deps)
             return
         # Serialize: install ffmpeg first, then pip packages in _ffmpeg_done callback
         self._pending_pkgs_after_ffmpeg = missing_pkgs
@@ -3029,7 +3045,8 @@ class App(tk.Tk):
                 update = prefix + update_cmd
                 self.after(0, self._log_write, f"    Running: {' '.join(update)}\n")
                 proc = subprocess.Popen(
-                    update, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    update, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL, text=True,
                 )
                 try:
                     for line in proc.stdout:
@@ -3045,7 +3062,8 @@ class App(tk.Tk):
                 full_cmd = prefix + install_cmd
                 self.after(0, self._log_write, f"    Running: {' '.join(full_cmd)}\n")
                 proc = subprocess.Popen(
-                    full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL, text=True,
                 )
                 try:
                     for line in proc.stdout:
@@ -3125,6 +3143,7 @@ class App(tk.Tk):
             self._install_deps(pending)
         else:
             self._btn.configure(state="normal", text=self._s("btn_start"))
+            self.after(300, self._check_optional_deps)
 
     def _install_deps(self, packages):
         self._running = True
@@ -3162,6 +3181,70 @@ class App(tk.Tk):
             self._log_write(f"[✓] Installed: {', '.join(packages)}\n")
         else:
             self._log_write("[✗] Installation failed. Check the log above for details.\n")
+        # Required install chain finished — safe to check optional packages now
+        self.after(300, self._check_optional_deps)
+
+    def _upgrade_ytdlp_in_background(self):
+        """Silently upgrade yt-dlp in a daemon thread; logs only if a new version is installed."""
+        import re as _re
+
+        def do():
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade",
+                     "--break-system-packages", "--no-color", "yt-dlp"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    timeout=120,
+                )
+                for line in (result.stdout or "").splitlines():
+                    if "Successfully installed" in line:
+                        m = _re.search(r"yt[-_]dlp-([\d.]+)", line)
+                        if m and not self._destroying:
+                            self.after(0, self._log_write,
+                                       f"[✓] yt-dlp aggiornato a {m.group(1)}\n")
+                        break
+            except Exception:
+                pass  # upgrade failure is non-fatal
+
+        threading.Thread(target=do, daemon=True).start()
+
+    def _check_optional_deps(self):
+        """Show one-time popup if optional packages are missing; let user choose to install."""
+        if self._optional_checked:
+            return
+        self._optional_checked = True
+
+        def _is_present(mod: str) -> bool:
+            aliases = _OPTIONAL_ALIASES.get(mod, [mod])
+            return any(importlib.util.find_spec(a) is not None for a in aliases)
+
+        missing = [
+            (mod, pip_name, desc)
+            for mod, (pip_name, desc) in OPTIONAL_PACKAGES.items()
+            if not _is_present(mod)
+        ]
+        if not missing:
+            return
+
+        # Deduplicate pip names (sacremoses+sentencepiece share the same pip package)
+        seen: set[str] = set()
+        items: list[tuple[str, str]] = []
+        for _mod, pip_name, desc in missing:
+            if pip_name not in seen:
+                seen.add(pip_name)
+                items.append((pip_name, desc))
+
+        names_str = "\n".join(f"  • {pip} — {desc}" for pip, desc in items)
+        answer = messagebox.askyesno(
+            "Pacchetti opzionali mancanti",
+            f"I seguenti pacchetti opzionali non sono installati:\n\n{names_str}\n\n"
+            "Vuoi installarli adesso? (operazione in background)",
+            parent=self,
+        )
+        if answer:
+            self._install_deps([pip for pip, _desc in items])
+        else:
+            self._log_write("[i] Pacchetti opzionali saltati. Puoi installarli manualmente.\n")
 
     # ── UI builder ───────────────────────────────────────────────────────────
 
