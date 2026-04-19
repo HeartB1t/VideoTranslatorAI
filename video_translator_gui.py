@@ -2476,7 +2476,8 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
     output_lines: list[str] = []
     proc = subprocess.Popen(
         cmd, cwd=str(WAV2LIP_REPO), env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
     )
     _active_subprocesses.add(proc)
     # Watchdog: kill Wav2Lip if it hangs beyond timeout
