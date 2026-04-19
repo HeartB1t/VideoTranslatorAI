@@ -11,9 +11,11 @@ Run with arguments for CLI mode, without for GUI mode.
 
 import argparse
 import asyncio
+import contextlib
 import importlib.util
 import io
 import json
+import locale
 import traceback
 import math
 import os
@@ -1826,7 +1828,8 @@ UI_LANG_OPTIONS = [
 # ═══════════════════════════════════════════════════════════
 
 def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    enc = "utf-8" if sys.platform != "win32" else locale.getpreferredencoding(False)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding=enc, errors="replace")
     if proc.returncode != 0:
         err = (proc.stderr or "").strip().splitlines()[-10:]
         raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
@@ -2255,10 +2258,11 @@ def build_dubbed_track(
     total_duration: float,
     tmp_dir: str,
     bg_volume: float = 0.15,
+    label: str = "[6/6] Assembling dubbed track...",
 ) -> str:
     from pydub import AudioSegment
 
-    print("[6/6] Assembling dubbed track...", flush=True)
+    print(label, flush=True)
     total_ms = int(total_duration * 1000)
     dubbed = AudioSegment.silent(duration=total_ms)
 
@@ -2362,11 +2366,14 @@ def mux_video(video_input: str, audio_track: str, output_path: str):
 #  LIP SYNC (Wav2Lip)
 # ═══════════════════════════════════════════════════════════
 
-WAV2LIP_DIR   = Path.home() / ".local" / "share" / "wav2lip"
-WAV2LIP_REPO  = WAV2LIP_DIR / "Wav2Lip"
-WAV2LIP_MODEL = WAV2LIP_DIR / "wav2lip_gan.pth"
+WAV2LIP_DIR     = Path.home() / ".local" / "share" / "wav2lip"
+WAV2LIP_REPO    = WAV2LIP_DIR / "Wav2Lip"
+WAV2LIP_MODEL   = WAV2LIP_DIR / "wav2lip_gan.pth"
 WAV2LIP_REPO_URL  = "https://github.com/Rudrabha/Wav2Lip.git"
 WAV2LIP_MODEL_URL = "https://huggingface.co/numz/wav2lip_studio/resolve/main/Wav2lip/wav2lip_gan.pth"
+WAV2LIP_TIMEOUT = 3600  # seconds before Wav2Lip subprocess is forcibly killed
+
+_active_subprocesses: set[subprocess.Popen] = set()
 
 
 def _ensure_wav2lip_assets():
@@ -2384,12 +2391,14 @@ def _ensure_wav2lip_assets():
         # Install only the packages Wav2Lip needs that aren't already present
         # (skip the repo's requirements.txt — it pins ancient versions incompatible with Python 3.13+)
         wav2lip_pkgs = ["opencv-python", "librosa", "tqdm"]
-        print("     Installing Wav2Lip dependencies...", flush=True)
-        subprocess.run(
+        print(f"     Installing Wav2Lip dependencies: {', '.join(wav2lip_pkgs)}", flush=True)
+        result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--quiet",
              "--break-system-packages"] + wav2lip_pkgs,
             check=False,
         )
+        if result.returncode != 0:
+            print("     ! Some Wav2Lip dependencies failed to install — lipsync may not work.", flush=True)
         # Patch audio.py: librosa>=0.9 changed filters.mel() to keyword-only args
         audio_py = WAV2LIP_REPO / "audio.py"
         if audio_py.exists():
@@ -2455,6 +2464,10 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
         cmd, cwd=str(WAV2LIP_REPO), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
+    _active_subprocesses.add(proc)
+    # Watchdog: kill Wav2Lip if it hangs beyond timeout
+    _watchdog = threading.Timer(WAV2LIP_TIMEOUT, proc.kill)
+    _watchdog.start()
     try:
         for line in proc.stdout:
             line = line.rstrip()
@@ -2465,6 +2478,13 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
         proc.kill()
         proc.wait()
         raise
+    finally:
+        _watchdog.cancel()
+        _active_subprocesses.discard(proc)
+        # Clean up Wav2Lip temp/ to avoid disk accumulation
+        wav2lip_tmp = WAV2LIP_REPO / "temp"
+        if wav2lip_tmp.exists():
+            shutil.rmtree(wav2lip_tmp, ignore_errors=True)
 
     if proc.returncode != 0 or not os.path.exists(out_path):
         tail = "\n".join(output_lines[-20:])
@@ -2511,20 +2531,25 @@ def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
         "pyannote/speaker-diarization-3.1",
         use_auth_token=hf_token,
     )
-    # Use GPU if available
     try:
         import torch
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
     except Exception:
         pass
-    diarization = pipeline(audio_path)
-    segments: list[dict] = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        segments.append({"start": float(turn.start), "end": float(turn.end), "speaker": str(speaker)})
-    speakers = sorted({s["speaker"] for s in segments})
-    print(f"     → {len(segments)} diarization turns | {len(speakers)} speakers: {', '.join(speakers)}", flush=True)
-    return segments
+    try:
+        diarization = pipeline(audio_path)
+        segments: list[dict] = []
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            segments.append({"start": float(turn.start), "end": float(turn.end), "speaker": str(speaker)})
+        speakers = sorted({s["speaker"] for s in segments})
+        print(f"     → {len(segments)} diarization turns | {len(speakers)} speakers: {', '.join(speakers)}", flush=True)
+        return segments
+    finally:
+        with contextlib.suppress(Exception):
+            import torch
+            del pipeline
+            torch.cuda.empty_cache()
 
 
 def assign_speakers(whisper_segments: list[dict], diar_segments: list[dict]) -> list[dict]:
@@ -2708,7 +2733,8 @@ def translate_video(
         if use_lipsync:
             try:
                 # Build a vocals-only track (no background music) for accurate lip sync
-                track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir)
+                track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir,
+                                                   label="[6/6] Assembling vocals track for lip-sync...")
                 synced = apply_lipsync(output, track_vocals, tmp_dir)
                 shutil.move(synced, output)
             except Exception as e:
@@ -2735,27 +2761,77 @@ def check_dependencies():
     return missing_pkgs, missing_bins
 
 
+_thread_local = threading.local()
+
+
+class _GlobalRedirect(io.TextIOBase):
+    """Installed once at GUI startup. Routes print() to the per-thread _TkStreamRedirect
+    if one is active for the calling thread, otherwise passes through to the original stream."""
+
+    def __init__(self, original):
+        super().__init__()
+        self._original = original
+
+    def writable(self): return True
+
+    def write(self, s):
+        redir = getattr(_thread_local, "redirect", None)
+        if redir is not None:
+            return redir.write(s)
+        return self._original.write(s)
+
+    def flush(self):
+        redir = getattr(_thread_local, "redirect", None)
+        if redir is not None:
+            redir.flush()
+        else:
+            self._original.flush()
+
+    def fileno(self):
+        return self._original.fileno()
+
+
 class _TkStreamRedirect(io.TextIOBase):
-    """Redirects print() output to the GUI log widget (thread-safe via after())."""
+    """Per-thread redirect to the GUI log widget with 100ms throttle to avoid flooding Tk."""
 
     def __init__(self, tk_root, on_write):
         super().__init__()
-        self._root    = tk_root
-        self._on_write = on_write
+        self._root      = tk_root
+        self._on_write  = on_write
+        self._buf: list[str] = []
+        self._flush_pending  = False
 
-    def writable(self):
-        return True
+    def writable(self): return True
 
     def write(self, s):
-        if s:
+        if not s:
+            return 0
+        self._buf.append(s)
+        if not self._flush_pending:
+            self._flush_pending = True
             try:
-                self._root.after(0, self._on_write, s)
+                self._root.after(100, self._flush_buf)
             except RuntimeError:
                 pass
-        return len(s) if s else 0
+        return len(s)
+
+    def _flush_buf(self):
+        self._flush_pending = False
+        buf, self._buf = self._buf, []  # atomic swap under GIL — safe against concurrent append()
+        if buf:
+            try:
+                self._on_write("".join(buf))
+            except Exception:
+                pass
 
     def flush(self):
-        pass
+        buf, self._buf = self._buf, []  # atomic swap
+        self._flush_pending = False
+        if buf:
+            try:
+                self._root.after(0, self._on_write, "".join(buf))
+            except RuntimeError:
+                pass
 
 
 # ═══════════════════════════════════════════════════════════
@@ -2881,14 +2957,20 @@ class App(tk.Tk):
         _cfg = load_config()
         self._use_diarization = tk.BooleanVar(value=False)
         self._hf_token_var    = tk.StringVar(value=_cfg.get("hf_token", ""))
-        self._running   = False
+        self._running    = False
+        self._destroying = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
+        self._pending_pkgs_after_ffmpeg: list[str] = []
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._fit_to_screen)
         self.after(200, self._check_deps_on_start)
+
+        # Install global redirect once — routes print() to per-thread GUI log
+        sys.stdout = _GlobalRedirect(sys.stdout)
+        sys.stderr = _GlobalRedirect(sys.stderr)
 
     def _fit_to_screen(self):
         self.update_idletasks()
@@ -2909,12 +2991,15 @@ class App(tk.Tk):
         missing_pkgs, missing_bins = check_dependencies()
         if not missing_pkgs and not missing_bins:
             return
+        # Serialize: install ffmpeg first, then pip packages in _ffmpeg_done callback
+        self._pending_pkgs_after_ffmpeg = missing_pkgs
         if missing_bins:
             self._install_ffmpeg()
-        if missing_pkgs:
+        elif missing_pkgs:
             self._install_deps(missing_pkgs)
 
     def _install_ffmpeg(self):
+        self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
         self._progress.start(12)
         self._log_write("[*] ffmpeg not found — installing automatically...\n")
@@ -2990,11 +3075,15 @@ class App(tk.Tk):
                     self.after(0, self._log_write, f"\r    Downloading... {pct}%")
             urllib.request.urlretrieve(ffmpeg_url, zip_path, reporthook=_progress)
             self.after(0, self._log_write, "\n    Extracting...\n")
+            install_dir_resolved = install_dir.resolve()
             with zipfile.ZipFile(zip_path, "r") as z:
                 for member in z.namelist():
                     if member.endswith(("ffmpeg.exe", "ffprobe.exe")):
+                        # Guard against zip slip
+                        member_resolved = (install_dir / member).resolve()
+                        if not member_resolved.is_relative_to(install_dir_resolved):
+                            continue
                         z.extract(member, install_dir)
-                        # Move to install_dir root
                         src = install_dir / member
                         dst = install_dir / Path(member).name
                         if src != dst:
@@ -3019,8 +3108,8 @@ class App(tk.Tk):
             return False
 
     def _ffmpeg_done(self, ok: bool):
+        self._running = False
         self._progress.stop()
-        self._btn.configure(state="normal", text=self._s("btn_start"))
         if ok:
             self._log_write("[✓] ffmpeg installed successfully.\n")
         else:
@@ -3029,8 +3118,16 @@ class App(tk.Tk):
                 "    Linux:   sudo apt install ffmpeg\n"
                 "    Windows: https://ffmpeg.org/download.html\n"
             )
+        # Chain: install pending Python packages now that ffmpeg is done
+        pending = self._pending_pkgs_after_ffmpeg
+        self._pending_pkgs_after_ffmpeg = []
+        if pending:
+            self._install_deps(pending)
+        else:
+            self._btn.configure(state="normal", text=self._s("btn_start"))
 
     def _install_deps(self, packages):
+        self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
         self._progress.start(12)
         self._log_write(f"[*] Installing: {', '.join(packages)}\n")
@@ -3058,6 +3155,7 @@ class App(tk.Tk):
         threading.Thread(target=do, daemon=True).start()
 
     def _install_done(self, ok, packages):
+        self._running = False
         self._progress.stop()
         self._btn.configure(state="normal", text=self._s("btn_start"))
         if ok:
@@ -3335,7 +3433,10 @@ class App(tk.Tk):
     # ── Language switcher ────────────────────────────────────────────────────
 
     def _on_ui_lang_change(self, _=None):
-        self._ui_lang.set(UI_LANG_OPTIONS[self._ui_lang_combo.current()][0])
+        idx = self._ui_lang_combo.current()
+        if idx < 0:
+            return
+        self._ui_lang.set(UI_LANG_OPTIONS[idx][0])
         self._apply_lang()
 
     def _apply_lang(self):
@@ -3497,9 +3598,7 @@ class App(tk.Tk):
         p = self._snapshot_params()
 
         def run():
-            redirect = _TkStreamRedirect(self, self._log_write)
-            old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = sys.stderr = redirect
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             all_ok = True
             try:
                 for url in urls:
@@ -3512,10 +3611,9 @@ class App(tk.Tk):
                             self.after(0, self._log_write,
                                        self._s("log_dl_done").format(Path(video_path).name) + "\n")
                             # Move to a stable path outside the TemporaryDirectory
+                            # shutil.move overwrites the placeholder atomically via os.rename
                             fd, stable = tempfile.mkstemp(suffix=".mp4", prefix="yt_")
                             os.close(fd)
-                            if os.path.exists(stable):
-                                os.remove(stable)
                             shutil.move(video_path, stable)
                         translate_video(
                             video_in=stable,
@@ -3546,7 +3644,7 @@ class App(tk.Tk):
                             except OSError:
                                 pass
             finally:
-                sys.stdout, sys.stderr = old_out, old_err
+                _thread_local.redirect = None
             self.after(0, self._on_done, all_ok)
 
         threading.Thread(target=run, daemon=True).start()
@@ -3629,9 +3727,7 @@ class App(tk.Tk):
         p = self._snapshot_params()
 
         def phase1():
-            redirect = _TkStreamRedirect(self, self._log_write)
-            old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = sys.stderr = redirect
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             try:
                 result = translate_video(
                     video_in=video_path,
@@ -3651,7 +3747,7 @@ class App(tk.Tk):
                 self.after(0, self._log_write, f"[x] Error: {e}\n{traceback.format_exc()}\n")
                 self.after(0, self._on_done, False)
             finally:
-                sys.stdout, sys.stderr = old_out, old_err
+                _thread_local.redirect = None
 
         threading.Thread(target=phase1, daemon=True).start()
 
@@ -3678,9 +3774,7 @@ class App(tk.Tk):
         p = self._snapshot_params()
 
         def do():
-            redirect = _TkStreamRedirect(self, self._log_write)
-            old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = sys.stderr = redirect
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             try:
                 translate_video(
                     video_in=video_path,
@@ -3705,7 +3799,7 @@ class App(tk.Tk):
                 self.after(0, self._log_write, f"[x] {e}\n{traceback.format_exc()}\n")
                 self.after(0, self._on_done, False)
             finally:
-                sys.stdout, sys.stderr = old_out, old_err
+                _thread_local.redirect = None
 
         threading.Thread(target=do, daemon=True).start()
 
@@ -3720,9 +3814,7 @@ class App(tk.Tk):
         p = self._snapshot_params()
 
         def run_all():
-            redirect = _TkStreamRedirect(self, self._log_write)
-            old_out, old_err = sys.stdout, sys.stderr
-            sys.stdout = sys.stderr = redirect
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             total  = len(files)
             all_ok = True
             try:
@@ -3754,7 +3846,7 @@ class App(tk.Tk):
                                    f"[x] {e}\n{traceback.format_exc()}\n")
                         all_ok = False
             finally:
-                sys.stdout, sys.stderr = old_out, old_err
+                _thread_local.redirect = None
             self.after(0, self._on_done, all_ok)
 
         threading.Thread(target=run_all, daemon=True).start()
@@ -3762,6 +3854,8 @@ class App(tk.Tk):
     # ── Log ──────────────────────────────────────────────────────────────────
 
     def _log_write(self, text: str):
+        if self._destroying:
+            return
         self._log.configure(state="normal")
         self._log.insert("end", text)
         self._log.see("end")
@@ -3770,6 +3864,8 @@ class App(tk.Tk):
     # ── Done / Close ─────────────────────────────────────────────────────────
 
     def _on_done(self, success: bool):
+        if self._destroying:
+            return
         self._running = False
         self._progress.stop()
         self._btn.configure(state="normal", text=self._s("btn_start"))
@@ -3784,6 +3880,10 @@ class App(tk.Tk):
         if self._running:
             if not messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
                 return
+        self._destroying = True
+        for p in list(_active_subprocesses):
+            with contextlib.suppress(Exception):
+                p.terminate()
         self.destroy()
 
 
