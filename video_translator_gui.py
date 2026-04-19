@@ -3423,6 +3423,28 @@ class App(tk.Tk):
             self._deepl_row.grid()
         else:
             self._deepl_row.grid_remove()
+        if self._translation_engine.get() == "marian":
+            self._check_marian_deps()
+
+    def _check_marian_deps(self):
+        """Check sacremoses/sentencepiece; offer pip install if missing."""
+        missing = [
+            pkg for pkg in ("sacremoses", "sentencepiece")
+            if importlib.util.find_spec(pkg) is None
+        ]
+        if not missing:
+            return
+        pkg_list = "\n  • ".join(missing)
+        msg = (
+            f"MarianMT richiede pacchetti aggiuntivi:\n  • {pkg_list}\n\n"
+            f"Verranno installati con pip (--break-system-packages)."
+            f"{self._s('msg_deps_install')}"
+        )
+        if messagebox.askyesno(self._s("msg_deps_missing"), msg):
+            self._install_deps(missing)
+        else:
+            self._translation_engine.set("google")
+            self._deepl_row.grid_remove()
 
     def _on_diarization_toggle(self):
         if self._use_diarization.get():
