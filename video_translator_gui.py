@@ -1946,28 +1946,44 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
         else:
             raise
     lang = None if lang_source == "auto" else lang_source
-    try:
+
+    def _run_transcribe(dev, cmp):
+        nonlocal model
+        if dev != device:
+            del model
+            model = WhisperModel(model_name, device=dev, compute_type=cmp)
         segments, info = model.transcribe(
             audio_path,
             language=lang,
             beam_size=5,
             vad_filter=True,
             vad_parameters={"threshold": 0.3, "min_silence_duration_ms": 300},
-            condition_on_previous_text=False,  # prevents hallucination/repetition loops
-            repetition_penalty=1.3,            # penalizes repeated tokens
-            no_repeat_ngram_size=3,            # blocks n-gram repetition
-            compression_ratio_threshold=2.4,   # discards hallucinated segments
+            condition_on_previous_text=False,
+            repetition_penalty=1.3,
+            no_repeat_ngram_size=3,
+            compression_ratio_threshold=2.4,
             log_prob_threshold=-1.0,
             temperature=0,
         )
-        # Remove consecutive duplicate segments (extra safety net)
-        result = []
+        out = []
         prev_text = None
         for s in segments:
             text = s.text.strip()
             if text and text != prev_text:
-                result.append({"start": s.start, "end": s.end, "text": text})
+                out.append({"start": s.start, "end": s.end, "text": text})
                 prev_text = text
+        return out, info
+
+    try:
+        try:
+            result, info = _run_transcribe(device, compute)
+        except RuntimeError as e:
+            if device == "cuda" and ("libcublas" in str(e) or "CUDA" in str(e) or "cuda" in str(e).lower()):
+                print(f"     ! CUDA error during inference ({e}), retrying on CPU...", flush=True)
+                result, info = _run_transcribe("cpu", "int8")
+                device = "cpu"
+            else:
+                raise
     finally:
         del model
         try:
