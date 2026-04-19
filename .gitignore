@@ -32,3 +32,7 @@ Thumbs.db
 .idea/
 CHANGELOG.md
 video_translator_gui.py.bak
+video_translator_gui_v1.0_pre-wav2lip.bak
+
+# Dev/one-shot scripts (storia locale, non pushati)
+_dev/
