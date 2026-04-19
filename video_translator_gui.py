@@ -99,11 +99,13 @@ if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
 
 # Pacchetti opzionali: migliorano la qualità ma non bloccano l'avvio.
-# chiave = modulo Python principale (o lista alias), valore = (pip_name, descrizione UI)
+# chiave = modulo Python principale, valore = (pip_name, descrizione UI)
+# TTS (Coqui) supporta solo <=3.11; su 3.12+ si usa il fork community coqui-tts
+_TTS_PIP = "coqui-tts" if sys.version_info >= (3, 12) else "TTS"
 OPTIONAL_PACKAGES: dict[str, tuple[str, str]] = {
     "sacremoses":    ("sacremoses",    "MarianMT tokenizer (traduzione offline)"),
     "sentencepiece": ("sentencepiece", "MarianMT tokenizer (traduzione offline)"),
-    "TTS":           ("TTS",           "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
+    "TTS":           (_TTS_PIP,        "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
 }
 # Alias per moduli che possono avere nomi diversi a seconda della versione installata
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
