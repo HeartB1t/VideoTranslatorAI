@@ -2014,6 +2014,47 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
     return result, detected
 
 
+def _merge_short_segments(
+    segments: list[dict],
+    min_duration: float = 1.5,
+    max_gap: float = 0.4,
+    max_merged_duration: float = 12.0,
+) -> list[dict]:
+    """Unisce segmenti consecutivi molto brevi (<min_duration) con il successivo se:
+    - gap tra fine precedente e inizio successivo < max_gap
+    - lo stesso speaker (se presente l'informazione)
+    - la durata risultante non supera max_merged_duration
+    Riduce le hallucinations di XTTS e migliora la fluidità della traduzione.
+    """
+    if not segments:
+        return segments
+    merged: list[dict] = []
+    for seg in segments:
+        if not merged:
+            merged.append(dict(seg))
+            continue
+        prev = merged[-1]
+        prev_dur = prev["end"] - prev["start"]
+        gap = seg["start"] - prev["end"]
+        same_speaker = prev.get("speaker") == seg.get("speaker")
+        new_dur = seg["end"] - prev["start"]
+        if (
+            prev_dur < min_duration
+            and gap <= max_gap
+            and same_speaker
+            and new_dur <= max_merged_duration
+        ):
+            # guard: se segmenti overlapping preserva il max end
+            prev["end"] = max(prev["end"], seg["end"])
+            prev["text"] = (prev.get("text", "") + " " + seg.get("text", "")).strip()
+            # preserva eventuali metadati per-word (Whisper word_timestamps)
+            if "words" in prev or "words" in seg:
+                prev["words"] = prev.get("words", []) + seg.get("words", [])
+        else:
+            merged.append(dict(seg))
+    return merged
+
+
 def _marian_normalize_lang(code: str) -> str:
     """Normalize language codes to the short form Helsinki-NLP models expect."""
     if not code:
@@ -2105,16 +2146,73 @@ def translate_segments(
         # fall through to Google if MarianMT failed
         engine = "google"
 
+    # ── DeepL: batch API con retry/backoff ──────────────────────────────────
     if engine == "deepl" and deepl_key.strip():
-        from deep_translator import DeeplTranslator
-        translator = DeeplTranslator(
-            api_key=deepl_key.strip(), source=src, target=target, use_free_api=True
-        )
-    else:
-        from deep_translator import GoogleTranslator
-        if engine == "deepl":
-            print("     ! DeepL key missing, falling back to Google Translate.", flush=True)
-        translator = GoogleTranslator(source=src, target=target)
+        key = deepl_key.strip()
+        endpoint = "https://api-free.deepl.com/v2/translate" if key.endswith(":fx") else "https://api.deepl.com/v2/translate"
+        import requests, time as _time
+        texts = [(seg.get("text") or "").strip() for seg in segments]
+        results: list[str] = [""] * len(texts)
+        idx_nonempty = [i for i, t in enumerate(texts) if t]
+        BATCH = 50
+        MAX_RETRIES = 5
+        headers = {"Authorization": f"DeepL-Auth-Key {key}"}
+        deepl_target = target.upper()
+        if deepl_target == "EN":
+            deepl_target = "EN-US"
+        deepl_source = None if src == "auto" else src.upper()
+        try:
+            for i in range(0, len(idx_nonempty), BATCH):
+                chunk_idx = idx_nonempty[i:i + BATCH]
+                payload = [("target_lang", deepl_target)]
+                if deepl_source:
+                    payload.append(("source_lang", deepl_source))
+                for j in chunk_idx:
+                    payload.append(("text", texts[j]))
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        r = requests.post(endpoint, headers=headers, data=payload, timeout=60)
+                        if r.status_code == 429 or r.status_code >= 500:
+                            wait = float(r.headers.get("Retry-After", 2 ** attempt))
+                            print(f"     ! DeepL {r.status_code}, retry in {wait:.1f}s...", flush=True)
+                            _time.sleep(wait)
+                            continue
+                        if r.status_code == 403:
+                            raise RuntimeError(f"DeepL 403 Forbidden — verifica la API key ({r.text[:200]})")
+                        r.raise_for_status()
+                        data = r.json()
+                        for j, item in zip(chunk_idx, data.get("translations", [])):
+                            results[j] = item.get("text", "") or texts[j]
+                        break
+                    except requests.RequestException as e:
+                        if attempt == MAX_RETRIES - 1:
+                            print(f"     ! DeepL batch {i}-{i+len(chunk_idx)} failed: {e}", flush=True)
+                            for j in chunk_idx:
+                                results[j] = texts[j]
+                        else:
+                            _time.sleep(2 ** attempt)
+                print(f"     {min(i + BATCH, len(idx_nonempty))}/{len(idx_nonempty)}...", end="\r", flush=True)
+            translated = []
+            for seg, tr in zip(segments, results):
+                text = (seg.get("text") or "").strip()
+                entry = {
+                    "start": seg["start"], "end": seg["end"],
+                    "text_src": text, "text_tgt": tr or text,
+                }
+                if "speaker" in seg:
+                    entry["speaker"] = seg["speaker"]
+                translated.append(entry)
+            print("     → Translation done (DeepL)          ", flush=True)
+            return translated
+        except Exception as e:
+            print(f"     ! DeepL failed ({e}), falling back to Google Translate.", flush=True)
+            engine = "google"
+
+    # ── Google Translate fallback ──────────────────────────────────────────
+    from deep_translator import GoogleTranslator
+    if engine == "deepl":
+        print("     ! DeepL key missing, falling back to Google Translate.", flush=True)
+    translator = GoogleTranslator(source=src, target=target)
     translated = []
     for i, seg in enumerate(segments):
         text = (seg.get("text") or "").strip()
@@ -2246,6 +2344,16 @@ def generate_tts_xtts(
                         speaker_wav=spk_ref,
                         language=xtts_lang,
                         file_path=out,
+                        # Tuning anti-hallucination:
+                        #   repetition_penalty alto scoraggia loop di parole
+                        #   temperature bassa riduce output randomici
+                        #   enable_text_splitting gestisce meglio frasi lunghe
+                        temperature=0.65,
+                        repetition_penalty=5.0,
+                        length_penalty=1.0,
+                        top_k=50,
+                        top_p=0.85,
+                        enable_text_splitting=True,
                     )
                 except Exception as e:
                     print(f"     ! XTTS seg {i}: {e}", flush=True)
@@ -2263,6 +2371,27 @@ def generate_tts_xtts(
 
     print("     → XTTS done                   ", flush=True)
     return files
+
+
+def _build_atempo_chain(ratio: float) -> str:
+    """Costruisce una catena di filtri atempo per ffmpeg.
+    atempo accetta 0.5–2.0 in un singolo filtro; per ratio fuori range si concatenano istanze.
+    Esempio: ratio=3.0 → 'atempo=2.0,atempo=1.5'
+    """
+    if not math.isfinite(ratio) or ratio <= 0:
+        return "atempo=1.0"
+    # Clamp per evitare loop patologici con ratio estremi
+    ratio = max(0.01, min(ratio, 100.0))
+    parts = []
+    r = ratio
+    while r > 2.0:
+        parts.append("atempo=2.0")
+        r /= 2.0
+    while r < 0.5:
+        parts.append("atempo=0.5")
+        r /= 0.5
+    parts.append(f"atempo={r:.3f}")
+    return ",".join(parts)
 
 
 def build_dubbed_track(
@@ -2293,17 +2422,24 @@ def build_dubbed_track(
         start_ms = int(seg["start"] * 1000)
         end_ms   = int(seg["end"] * 1000)
         slot_ms  = max(end_ms - start_ms, 1)
-        if len(tts_audio) > slot_ms:
-            ratio = min(len(tts_audio) / slot_ms, 1.5)
+        # Time-fit: comprimi il TTS se eccede lo slot, con margine 50ms per evitare overlap
+        # atempo accetta 0.5–100; per ratio >2 si concatenano filtri (es. 2.5x → atempo=2,atempo=1.25)
+        if len(tts_audio) > slot_ms + 50:
+            ratio = len(tts_audio) / slot_ms
+            ratio = max(1.0, min(ratio, 4.0))  # cap massimo 4x per evitare artefatti
+            chain = _build_atempo_chain(ratio)
             sped  = os.path.join(tmp_dir, f"seg_{i:04d}_sped.mp3")
             try:
                 _run_ffmpeg([
                     "ffmpeg", "-y", "-i", tts_file,
-                    "-filter:a", f"atempo={ratio:.3f}", sped
+                    "-filter:a", chain, sped
                 ], step=f"atempo seg {i}")
                 tts_audio = AudioSegment.from_file(sped)
             except Exception as e:
                 print(f"     ! atempo failed seg {i}: {e}", flush=True)
+            # Se dopo lo speed-up è ancora troppo lungo, tronco dolcemente con fade
+            if len(tts_audio) > slot_ms:
+                tts_audio = tts_audio[:slot_ms].fade_out(max(1, min(80, slot_ms // 4)))
         dubbed = dubbed.overlay(tts_audio, position=start_ms)
 
     if bg_path and os.path.exists(bg_path):
@@ -2719,6 +2855,12 @@ def translate_video(
                 except Exception as e:
                     print(f"     ! Diarization failed ({e.__class__.__name__}: {e}), continuing without speaker info.", flush=True)
                     diar_segments = []
+            # Merge dei segmenti troppo brevi (< 1.5s) per ridurre hallucinations XTTS
+            # e produrre frasi più naturali per la traduzione
+            pre_merge = len(raw_segs)
+            raw_segs = _merge_short_segments(raw_segs)
+            if len(raw_segs) < pre_merge:
+                print(f"     → Merged short segments: {pre_merge} → {len(raw_segs)}", flush=True)
             segments = translate_segments(raw_segs, effective_src, lang_target, engine=translation_engine, deepl_key=deepl_key)
 
         if not no_subs:
