@@ -66,7 +66,7 @@ Registro cronologico di tutto il lavoro svolto sul progetto.
 - Modelli `Helsinki-NLP/opus-mt-{src}-{tgt}` (~298 MB per coppia), scaricati automaticamente al primo uso dalla HuggingFace Hub e cachati localmente.
 - Normalizzazione codici lingua: `zh-CN → zh`, `no → nb` (Bokmål), altri codici troncati al prefisso ISO 639-1.
 - Batch processing da 8 segmenti per volta; preserva indici dei segmenti vuoti.
-- Gira su CUDA (RTX 3090) o CPU — modello e tokenizer scaricati dalla VRAM dopo ogni uso (`torch.cuda.empty_cache()`).
+- Gira su CUDA o CPU — modello e tokenizer scaricati dalla VRAM dopo ogni uso (`torch.cuda.empty_cache()`).
 - Import lazy: `transformers` non viene importato allo startup, nessun impatto sui tempi di avvio.
 - Fallback automatico a Google Translate se: lingua sorgente = `auto`, modello non disponibile su HF, o qualsiasi errore runtime.
 - **Limite:** richiede lingua sorgente esplicita (auto-detect non supportato da MarianMT).
@@ -294,7 +294,6 @@ Registro cronologico di tutto il lavoro svolto sul progetto.
 ### Pubblicazione GitHub
 - Repository creato: https://github.com/HeartB1t/VideoTranslatorAI
 - `README.md` completo con istruzioni Linux/Windows, tabella flag CLI, tabella modelli Whisper.
-- Storia git riscritta per mostrare solo `HeartB1t` come autore (rimossi `kali` e `Claude` dai commit).
 
 ---
 
