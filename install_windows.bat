@@ -251,24 +251,13 @@ if not defined DLIB_WHEEL_URL (
     goto dlib_done
 )
 
-echo  [*] Downloading dlib wheel for cp%PY_TAG%...
-powershell -Command ^
-    "$url = '%DLIB_WHEEL_URL%';" ^
-    "$out = $env:TEMP + '\dlib_wheel.whl';" ^
-    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
-    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
-    "Write-Host '  [+] dlib wheel downloaded.'"
-if errorlevel 1 (
-    echo  [!] dlib wheel download failed. Lip Sync may not work.
-    goto dlib_done
-)
-python -m pip install "%TEMP%\dlib_wheel.whl" --quiet
+echo  [*] Installing dlib wheel for cp%PY_TAG%...
+python -m pip install "%DLIB_WHEEL_URL%" --quiet
 if errorlevel 1 (
     echo  [!] dlib wheel install failed. Lip Sync may not work.
 ) else (
     echo  [+] dlib installed from pre-built wheel.
 )
-del /Q "%TEMP%\dlib_wheel.whl" >nul 2>&1
 
 :dlib_done
 python -m pip install basicsr facexlib --quiet
