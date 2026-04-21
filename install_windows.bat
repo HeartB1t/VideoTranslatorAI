@@ -5,27 +5,91 @@ setlocal enabledelayedexpansion
 title Video Translator AI - Installer
 color 0A
 
-:: -- Check Administrator privileges -------------------------------------------
+:: -- Check administrator privileges -------------------------------------------
 net session >nul 2>&1
-if errorlevel 1 (
-    color 0C
-    echo.
-    echo  ============================================
-    echo    ERROR: Run as Administrator!
-    echo  ============================================
-    echo.
-    echo  Right-click on install_windows.bat and select
-    echo  "Run as administrator", then try again.
-    echo.
-    pause
-    exit /b 1
-)
+if not errorlevel 1 goto admin_ok
+color 0C
+echo.
+echo  ============================================
+echo    ERROR: Run as Administrator!
+echo  ============================================
+echo.
+echo  Right-click on install_windows.bat and select
+echo  "Run as administrator", then try again.
+echo.
+pause
+exit /b 1
+:admin_ok
 
 echo.
 echo  ============================================
 echo    Video Translator AI - Windows Installer
 echo  ============================================
 echo.
+
+:: -- Preflight checks (architecture, disk space, internet) ---------------
+:: Can be bypassed for testing with: set VTAI_SKIP_PREFLIGHT=1
+
+:: CPU architecture (x64 required for Python/PyTorch CUDA/dlib/ffmpeg wheels)
+if /i "%VTAI_SKIP_PREFLIGHT%"=="1" goto arch_ok
+set "VTAI_ARCH=%PROCESSOR_ARCHITECTURE%"
+if defined PROCESSOR_ARCHITEW6432 set "VTAI_ARCH=%PROCESSOR_ARCHITEW6432%"
+if /i "%VTAI_ARCH%"=="AMD64" goto arch_ok
+color 0C
+echo.
+echo  ============================================
+echo    ERROR: Unsupported architecture (%VTAI_ARCH%)
+echo  ============================================
+echo.
+echo  This installer requires Windows x64 (AMD64).
+echo.
+echo  ARM64 and 32-bit x86 are not supported: the downloaded
+echo  Python, PyTorch CUDA, dlib and ffmpeg binaries are x64 only.
+echo.
+pause
+exit /b 1
+:arch_ok
+
+:: Free disk space on install drive (at least 20 GB required)
+if /i "%VTAI_SKIP_PREFLIGHT%"=="1" goto disk_ok
+set "INSTALL_DRIVE=%USERPROFILE:~0,1%"
+set "FREE_GB=0"
+for /f %%i in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%INSTALL_DRIVE%').Free/1GB)"') do set "FREE_GB=%%i"
+if %FREE_GB% GEQ 20 goto disk_ok
+color 0C
+echo.
+echo  ============================================
+echo    ERROR: Insufficient disk space
+echo  ============================================
+echo.
+echo  Found %FREE_GB% GB free on %INSTALL_DRIVE%:, but at least 20 GB is required.
+echo.
+echo  The full install (PyTorch CUDA, Whisper large-v3, XTTS, Wav2Lip) needs ~15 GB.
+echo.
+pause
+exit /b 1
+:disk_ok
+
+:: Internet connection (HEAD to github.com, 5s timeout)
+if /i "%VTAI_SKIP_PREFLIGHT%"=="1" goto net_ok
+echo  [*] Checking Internet connection...
+powershell -NoProfile -Command "try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $r=[Net.WebRequest]::Create('https://github.com'); $r.Method='HEAD'; $r.Timeout=5000; $r.GetResponse().Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+if not errorlevel 1 goto net_ok
+color 0C
+echo.
+echo  ============================================
+echo    ERROR: No Internet connection
+echo  ============================================
+echo.
+echo  Cannot reach https://github.com (HTTPS/443).
+echo.
+echo  The installer needs to download Python, PyTorch, ffmpeg, Git and AI models (several GB).
+echo.
+echo  Check network / proxy / firewall and try again.
+echo.
+pause
+exit /b 1
+:net_ok
 
 :: -- Installation directory ------------------------------------------------
 set "INSTALL_DIR=%USERPROFILE%\VideoTranslatorAI"
