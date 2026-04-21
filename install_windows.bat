@@ -126,7 +126,11 @@ if errorlevel 1 (
 )
 
 :: Reload PATH so python is available in current session
-for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\") + \";\" + [Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i"
+:: Use a temp file to avoid the 8191-char buffer limit of for /f on long PATHs
+powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User') | Out-File -Encoding UTF8 -Width 32768 -FilePath $env:TEMP\vtai_path.txt"
+set "PATH="
+for /f "usebackq delims=" %%i in ("%TEMP%\vtai_path.txt") do set "PATH=!PATH!%%i"
+del /Q "%TEMP%\vtai_path.txt" >nul 2>&1
 
 :python_found
 for /f "tokens=*" %%i in ('python --version 2^>^&1') do set "PY_VER=%%i"
@@ -189,6 +193,14 @@ if errorlevel 1 (
     echo  [!] Error installing Python packages.
     pause
     exit /b 1
+)
+
+:: Verify PyTorch CUDA wasn't downgraded by a dependency (e.g. pyannote.audio)
+python -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
+    python -m pip install --upgrade --force-reinstall --no-deps torch torchaudio --index-url https://download.pytorch.org/whl/cu124 --quiet
+    if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
 )
 
 :: Install transformers with upper bound <5 (isin_mps_friendly removed in 5.x breaks coqui-tts)
@@ -361,7 +373,11 @@ if errorlevel 1 (
 )
 
 :: Reload PATH so git is visible in the current session
-for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\") + \";\" + [Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i"
+:: Use a temp file to avoid the 8191-char buffer limit of for /f on long PATHs
+powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User') | Out-File -Encoding UTF8 -Width 32768 -FilePath $env:TEMP\vtai_path.txt"
+set "PATH="
+for /f "usebackq delims=" %%i in ("%TEMP%\vtai_path.txt") do set "PATH=!PATH!%%i"
+del /Q "%TEMP%\vtai_path.txt" >nul 2>&1
 
 :: Give the installer a moment to finalize registry/PATH writes
 timeout /t 2 /nobreak >nul
@@ -398,7 +414,25 @@ powershell -Command ^
 if errorlevel 1 (
     echo  [!] Wav2Lip model download failed. Lip Sync disabled.
     if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+    goto wav2lip_model_done
 )
+
+:: Optional SHA256 integrity check. Populate WAV2LIP_SHA256 from upstream release
+:: page to enable verification; when empty, a warning is printed instead.
+set "WAV2LIP_SHA256="
+if not defined WAV2LIP_SHA256 goto wav2lip_sha_skip
+set "GOT_SHA256="
+for /f %%h in ('powershell -NoProfile -Command "(Get-FileHash '%WAV2LIP_MODEL%' -Algorithm SHA256).Hash.ToLower()"') do set "GOT_SHA256=%%h"
+if /i "!GOT_SHA256!"=="!WAV2LIP_SHA256!" goto wav2lip_sha_ok
+echo  [!] Wav2Lip model SHA256 mismatch. Expected !WAV2LIP_SHA256!, got !GOT_SHA256!.
+del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+goto wav2lip_model_done
+:wav2lip_sha_ok
+echo  [+] Wav2Lip model SHA256 verified.
+goto wav2lip_model_done
+:wav2lip_sha_skip
+echo  [!] WAV2LIP_SHA256 not set - skipping integrity check.
+goto wav2lip_model_done
 
 :wav2lip_model_done
 
@@ -480,10 +514,9 @@ powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
     "$s = $ws.CreateShortcut('%SHORTCUT%');" ^
     "$s.TargetPath = '%PYTHONW%';" ^
-    "$s.Arguments = '\"%INSTALL_DIR%\video_translator_gui.py\"';" ^
+    "$s.Arguments = [char]34 + '%INSTALL_DIR%\video_translator_gui.py' + [char]34;" ^
     "$s.WorkingDirectory = '%INSTALL_DIR%';" ^
     "$s.Description = 'Video Translator AI';" ^
-    "$env:Path = '%FFMPEG_DIR%;' + $env:Path;" ^
     "$s.Save();"
 
 if exist "%SHORTCUT%" (
