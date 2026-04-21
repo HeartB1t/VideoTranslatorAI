@@ -1842,8 +1842,11 @@ UI_LANG_OPTIONS = [
 # ═══════════════════════════════════════════════════════════
 
 def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
-    enc = "utf-8" if sys.platform != "win32" else locale.getpreferredencoding(False)
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding=enc, errors="replace")
+    # ffmpeg moderno emette UTF-8 su tutte le piattaforme (incluso Windows).
+    # Usiamo errors="replace" per degradare gracefully su eventuali byte non-UTF8
+    # (es. path locali con encoding legacy) invece di crashare con UnicodeDecodeError.
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         err = (proc.stderr or "").strip().splitlines()[-10:]
         raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
@@ -2038,9 +2041,13 @@ def _merge_short_segments(
         gap = seg["start"] - prev["end"]
         same_speaker = prev.get("speaker") == seg.get("speaker")
         new_dur = seg["end"] - prev["start"]
+        # Guard: se i segmenti sono significativamente sovrapposti (diarization con
+        # overlap) `gap` è molto negativo; in tal caso non fondere per evitare di
+        # inglobare un turno di altro speaker o un overlap spurio.
         if (
             prev_dur < min_duration
             and gap <= max_gap
+            and gap >= -0.5
             and same_speaker
             and new_dur <= max_merged_duration
         ):
@@ -2373,15 +2380,22 @@ def generate_tts_xtts(
     return files
 
 
-def _build_atempo_chain(ratio: float) -> str:
+def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
     """Costruisce una catena di filtri atempo per ffmpeg.
     atempo accetta 0.5–2.0 in un singolo filtro; per ratio fuori range si concatenano istanze.
     Esempio: ratio=3.0 → 'atempo=2.0,atempo=1.5'
+
+    Parametri:
+      ratio     : rapporto di time-stretch desiderato.
+      max_ratio : cap massimo applicato al ratio per evitare artefatti audio.
+                  Default 4.0 (coerente col chiamante build_dubbed_track).
+                  Il chiamante può passare un valore diverso se lo desidera.
     """
     if not math.isfinite(ratio) or ratio <= 0:
         return "atempo=1.0"
-    # Clamp per evitare loop patologici con ratio estremi
-    ratio = max(0.01, min(ratio, 100.0))
+    # Clamp simmetrico: il reciproco del max per slow-down estremi.
+    lo = 1.0 / max_ratio if max_ratio > 0 else 0.25
+    ratio = max(lo, min(ratio, max_ratio))
     parts = []
     r = ratio
     while r > 2.0:
@@ -2678,17 +2692,20 @@ def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
     """Run pyannote speaker-diarization-3.1. Returns [{start,end,speaker}, ...]."""
     from pyannote.audio import Pipeline
     print("[3b] Running speaker diarization (pyannote)...", flush=True)
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1",
-        use_auth_token=hf_token,
-    )
+    # Inizializza pipeline a None prima del try così il finally non crasha
+    # con NameError se from_pretrained solleva.
+    pipeline = None
     try:
-        import torch
-        if torch.cuda.is_available():
-            pipeline.to(torch.device("cuda"))
-    except Exception:
-        pass
-    try:
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            use_auth_token=hf_token,
+        )
+        try:
+            import torch
+            if torch.cuda.is_available():
+                pipeline.to(torch.device("cuda"))
+        except Exception:
+            pass
         diarization = pipeline(audio_path)
         segments: list[dict] = []
         for turn, _, speaker in diarization.itertracks(yield_label=True):
@@ -2698,8 +2715,9 @@ def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
         return segments
     finally:
         with contextlib.suppress(Exception):
+            if pipeline is not None:
+                del pipeline
             import torch
-            del pipeline
             torch.cuda.empty_cache()
 
 
@@ -2988,6 +3006,9 @@ class _TkStreamRedirect(io.TextIOBase):
             try:
                 self._root.after(0, self._on_write, "".join(buf))
             except RuntimeError:
+                # main thread already in destroy(): Tk unavailable
+                pass
+            except Exception:
                 pass
 
 
@@ -3189,36 +3210,40 @@ class App(tk.Tk):
                 # Step 1: update package cache
                 update = prefix + update_cmd
                 self.after(0, self._log_write, f"    Running: {' '.join(update)}\n")
-                proc = subprocess.Popen(
+                with subprocess.Popen(
                     update, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     stdin=subprocess.DEVNULL, text=True,
-                )
-                try:
-                    for line in proc.stdout:
-                        line = line.rstrip()
-                        if line:
-                            self.after(0, self._log_write, f"    {line}\n")
-                    proc.wait()
-                except Exception:
-                    proc.kill(); proc.wait()
-                if proc.returncode != 0:
-                    continue  # try next prefix
+                    encoding="utf-8", errors="replace",
+                ) as proc:
+                    try:
+                        for line in proc.stdout:
+                            line = line.rstrip()
+                            if line:
+                                self.after(0, self._log_write, f"    {line}\n")
+                        proc.wait()
+                    except Exception:
+                        proc.kill(); proc.wait()
+                    rc_update = proc.returncode
+                if rc_update != 0:
+                    continue  # try next prefix (stdout already closed by context manager)
                 # Step 2: install ffmpeg
                 full_cmd = prefix + install_cmd
                 self.after(0, self._log_write, f"    Running: {' '.join(full_cmd)}\n")
-                proc = subprocess.Popen(
+                with subprocess.Popen(
                     full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     stdin=subprocess.DEVNULL, text=True,
-                )
-                try:
-                    for line in proc.stdout:
-                        line = line.rstrip()
-                        if line:
-                            self.after(0, self._log_write, f"    {line}\n")
-                    proc.wait()
-                except Exception:
-                    proc.kill(); proc.wait()
-                if proc.returncode == 0:
+                    encoding="utf-8", errors="replace",
+                ) as proc:
+                    try:
+                        for line in proc.stdout:
+                            line = line.rstrip()
+                            if line:
+                                self.after(0, self._log_write, f"    {line}\n")
+                        proc.wait()
+                    except Exception:
+                        proc.kill(); proc.wait()
+                    rc_install = proc.returncode
+                if rc_install == 0:
                     return True
         return False
 
@@ -3243,6 +3268,7 @@ class App(tk.Tk):
                 for member in z.namelist():
                     if member.endswith(("ffmpeg.exe", "ffprobe.exe")):
                         # Guard against zip slip
+                        # NOTE: Path.is_relative_to() requires Python 3.9+
                         member_resolved = (install_dir / member).resolve()
                         if not member_resolved.is_relative_to(install_dir_resolved):
                             continue
@@ -3330,7 +3356,20 @@ class App(tk.Tk):
         self.after(300, self._check_optional_deps)
 
     def _upgrade_ytdlp_in_background(self):
-        """Silently upgrade yt-dlp in a daemon thread; logs only if a new version is installed."""
+        """Silently upgrade yt-dlp in a daemon thread; logs only if a new version is installed.
+
+        Rispetta il flag `yt_dlp_auto_upgrade` in config (default True). Se l'utente
+        lo imposta a False (es. su sistemi PEP 668 dove non vuole che l'env venga
+        modificato), l'upgrade è skippato silenziosamente.
+        """
+        # Check user consent via config flag (default: enabled for backwards compat)
+        try:
+            _cfg = load_config()
+        except Exception:
+            _cfg = {}
+        if not _cfg.get("yt_dlp_auto_upgrade", True):
+            return  # user opted out
+
         import re as _re
 
         def do():
@@ -3343,7 +3382,8 @@ class App(tk.Tk):
                 )
                 for line in (result.stdout or "").splitlines():
                     if "Successfully installed" in line:
-                        m = _re.search(r"yt[-_]dlp-([\d.]+)", line)
+                        # m3: regex che evita trailing dot (es. "yt-dlp-2024.10.")
+                        m = _re.search(r"yt[-_]dlp-([0-9]+(?:\.[0-9]+)+)", line)
                         if m and not self._destroying:
                             self.after(0, self._log_write,
                                        f"[✓] yt-dlp aggiornato a {m.group(1)}\n")
