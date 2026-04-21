@@ -82,16 +82,15 @@ echo [2/5] Preparing installation folder...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 echo  [+] Folder: %INSTALL_DIR%
 
-:: Copy Python scripts to installation folder
-echo  [*] Copying scripts...
-copy /Y "%SCRIPT_DIR%video_translator.py"     "%INSTALL_DIR%\video_translator.py"     >nul
+:: Copy Python script to installation folder (single-file pipeline since v1.0)
+echo  [*] Copying script...
 copy /Y "%SCRIPT_DIR%video_translator_gui.py" "%INSTALL_DIR%\video_translator_gui.py" >nul
 if errorlevel 1 (
-    echo  [!] Error copying scripts. Make sure the .py files are in the same folder as this .bat
+    echo  [!] Error copying script. Make sure video_translator_gui.py is in the same folder as this .bat
     pause
     exit /b 1
 )
-echo  [+] Scripts copied.
+echo  [+] Script copied.
 
 :: -- 3. Install Python dependencies ----------------------------------------
 echo.
