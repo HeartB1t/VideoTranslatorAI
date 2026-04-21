@@ -302,6 +302,11 @@ for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVar
 :: Give the installer a moment to finalize registry/PATH writes
 timeout /t 2 /nobreak >nul
 
+:: Probe common install locations (system-wide + per-user) and prepend to PATH
+if exist "%ProgramFiles%\Git\cmd\git.exe" set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
+if exist "%ProgramFiles(x86)%\Git\cmd\git.exe" set "PATH=%ProgramFiles(x86)%\Git\cmd;%PATH%"
+if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "PATH=%LOCALAPPDATA%\Programs\Git\cmd;%PATH%"
+
 where git >nul 2>&1
 if errorlevel 1 (
     echo  [!] git still not found after install. Lip Sync disabled.
@@ -317,18 +322,21 @@ if errorlevel 1 echo  [!] Wav2Lip clone failed. Lip Sync disabled.
 
 if exist "%WAV2LIP_MODEL%" (
     echo  [+] Wav2Lip GAN model already present.
-) else (
-    echo  [*] Downloading Wav2Lip GAN model (~416MB)...
-    powershell -Command ^
-        "$url = 'https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth';" ^
-        "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
-        "Invoke-WebRequest -Uri $url -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing;" ^
-        "Write-Host '  [+] Wav2Lip model downloaded.'"
-    if errorlevel 1 (
-        echo  [!] Wav2Lip model download failed. Lip Sync disabled.
-        if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
-    )
+    goto wav2lip_model_done
 )
+
+echo  [*] Downloading Wav2Lip GAN model ^(~416MB^)...
+powershell -Command ^
+    "$url = 'https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing;" ^
+    "Write-Host '  [+] Wav2Lip model downloaded.'"
+if errorlevel 1 (
+    echo  [!] Wav2Lip model download failed. Lip Sync disabled.
+    if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+)
+
+:wav2lip_model_done
 
 echo  [+] Python packages installed.
 
