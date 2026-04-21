@@ -274,17 +274,46 @@ set "WAV2LIP_REPO=%WAV2LIP_DIR%\Wav2Lip"
 
 if not exist "%WAV2LIP_DIR%" mkdir "%WAV2LIP_DIR%"
 
-if exist "%WAV2LIP_REPO%\inference.py" (
-    echo  [+] Wav2Lip repo already present.
-) else (
-    where git >nul 2>&1
-    if errorlevel 1 (
-        echo  [!] git not found. Install Git for Windows to enable Lip Sync.
-    ) else (
-        echo  [*] Cloning Wav2Lip repo...
-        git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git "%WAV2LIP_REPO%"
-    )
+if exist "%WAV2LIP_REPO%\inference.py" goto wav2lip_repo_done
+
+:: Check for git; auto-install Git for Windows if missing
+where git >nul 2>&1
+if not errorlevel 1 goto wav2lip_clone
+
+echo  [!] git not found. Downloading and installing Git for Windows silently...
+powershell -Command ^
+    "$url = 'https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe';" ^
+    "$out = $env:TEMP + '\git_installer.exe';" ^
+    "Write-Host '     Downloading Git for Windows 2.47.1...';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
+    "Write-Host '     Installing silently (this may take a minute)...';" ^
+    "Start-Process -FilePath $out -ArgumentList '/VERYSILENT','/NORESTART','/NOCANCEL','/SP-','/SUPPRESSMSGBOXES','/COMPONENTS=icons,ext\reg\shellhere,assoc,assoc_sh' -Wait;" ^
+    "Remove-Item $out -Force;" ^
+    "Write-Host '  [+] Git for Windows installed.'"
+if errorlevel 1 (
+    echo  [!] Git auto-install failed. Install manually from https://git-scm.com/download/win
+    goto wav2lip_repo_done
 )
+
+:: Reload PATH so git is visible in the current session
+for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\") + \";\" + [Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i"
+
+:: Give the installer a moment to finalize registry/PATH writes
+timeout /t 2 /nobreak >nul
+
+where git >nul 2>&1
+if errorlevel 1 (
+    echo  [!] git still not found after install. Lip Sync disabled.
+    goto wav2lip_repo_done
+)
+
+:wav2lip_clone
+echo  [*] Cloning Wav2Lip repo...
+git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git "%WAV2LIP_REPO%"
+if errorlevel 1 echo  [!] Wav2Lip clone failed. Lip Sync disabled.
+
+:wav2lip_repo_done
 
 if exist "%WAV2LIP_MODEL%" (
     echo  [+] Wav2Lip GAN model already present.
