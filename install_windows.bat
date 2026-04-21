@@ -5,7 +5,7 @@ setlocal enabledelayedexpansion
 title Video Translator AI - Installer
 color 0A
 
-:: ── Check Administrator privileges ───────────────────────────────────────────
+:: -- Check Administrator privileges -------------------------------------------
 net session >nul 2>&1
 if errorlevel 1 (
     color 0C
@@ -27,12 +27,12 @@ echo    Video Translator AI - Windows Installer
 echo  ============================================
 echo.
 
-:: ── Installation directory ────────────────────────────────────────────────
+:: -- Installation directory ------------------------------------------------
 set "INSTALL_DIR=%USERPROFILE%\VideoTranslatorAI"
 set "FFMPEG_DIR=%INSTALL_DIR%\ffmpeg"
 set "SCRIPT_DIR=%~dp0"
 
-:: ── 1. Check / Auto-install Python ───────────────────────────────────────
+:: -- 1. Check / Auto-install Python ---------------------------------------
 echo [1/5] Checking Python...
 python --version >nul 2>&1
 if not errorlevel 1 goto python_found
@@ -76,7 +76,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: ── 2. Create installation folder ─────────────────────────────────────────
+:: -- 2. Create installation folder -----------------------------------------
 echo.
 echo [2/5] Preparing installation folder...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
@@ -93,7 +93,7 @@ if errorlevel 1 (
 )
 echo  [+] Scripts copied.
 
-:: ── 3. Install Python dependencies ────────────────────────────────────────
+:: -- 3. Install Python dependencies ----------------------------------------
 echo.
 echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
@@ -221,7 +221,7 @@ echo  [+] Coqui TTS installed successfully.
 
 :tts_end
 
-:: ── 3b. Install Wav2Lip dependencies (Lip Sync) ──────────────────────────
+:: -- 3b. Install Wav2Lip dependencies (Lip Sync) --------------------------
 echo.
 echo  [*] Installing Wav2Lip dependencies (basicsr, facexlib, dlib)...
 
@@ -310,7 +310,7 @@ if exist "%WAV2LIP_MODEL%" (
 
 echo  [+] Python packages installed.
 
-:: ── 4. Download and install ffmpeg ────────────────────────────────────────
+:: -- 4. Download and install ffmpeg ----------------------------------------
 echo.
 echo [4/5] Installing ffmpeg...
 
@@ -372,7 +372,7 @@ echo  [!] ffmpeg not installed - translation will not work without it.
 
 :ffmpeg_end
 
-:: ── 5. Create Desktop shortcut ────────────────────────────────────────────
+:: -- 5. Create Desktop shortcut --------------------------------------------
 echo.
 echo [5/5] Creating Desktop shortcut...
 
@@ -381,7 +381,7 @@ set "SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
 :: Resolve full path to pythonw.exe (avoids PATH lookup issues from desktop)
 for /f "tokens=*" %%i in ('python -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
 
-:: Create the .lnk shortcut via PowerShell — no CMD window, no admin required
+:: Create the .lnk shortcut via PowerShell - no CMD window, no admin required
 powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
     "$s = $ws.CreateShortcut('%SHORTCUT%');" ^
@@ -399,7 +399,7 @@ if exist "%SHORTCUT%" (
     echo      python "%INSTALL_DIR%\video_translator_gui.py"
 )
 
-:: ── Done ─────────────────────────────────────────────────────────────────
+:: -- Done -----------------------------------------------------------------
 echo.
 echo  ============================================
 echo    Installation complete!
@@ -415,7 +415,7 @@ echo.
 pause
 exit /b 0
 
-:: ── Subroutine: find and activate MSVC compiler environment ──────────────────
+:: -- Subroutine: find and activate MSVC compiler environment ------------------
 :find_vcvarsall
 set "VCVARSALL="
 :: Check default VS 2022 BuildTools path (our silent install uses C:\BuildTools)
