@@ -128,7 +128,7 @@ if errorlevel 1 (
 )
 
 :: Install transformers with upper bound <5 (isin_mps_friendly removed in 5.x breaks coqui-tts)
-echo  [*] Installing transformers (>=4.40.0,^<5)...
+echo  [*] Installing transformers ^(^>=4.40.0,^<5^)...
 python -m pip install "transformers>=4.40.0,<5" --quiet
 if errorlevel 1 (
     echo  [!] transformers install failed.
