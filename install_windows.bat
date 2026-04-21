@@ -166,7 +166,7 @@ echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses pyannote.audio torchcodec
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses "pyannote.audio<4.0" torchcodec
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -176,11 +176,11 @@ if not errorlevel 1 (
 
 :: Install PyTorch with CUDA 12.4 (compatible with modern NVIDIA drivers)
 echo  [*] Installing PyTorch cu124 + torchaudio...
-python -m pip install torch torchaudio --quiet ^
+python -m pip install "torch==2.6.0" "torchaudio==2.6.0" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo  [!] PyTorch cu124 failed, trying CPU version...
-    python -m pip install torch torchaudio --quiet
+    python -m pip install "torch==2.6.0" "torchaudio==2.6.0" --quiet
 )
 
 :: Install ctranslate2 explicitly first (faster-whisper dependency, Windows-sensitive)
@@ -199,7 +199,7 @@ if errorlevel 1 (
 python -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
     echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
-    python -m pip install --upgrade --force-reinstall --no-deps torch torchaudio --index-url https://download.pytorch.org/whl/cu124 --quiet
+    python -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
 )
 
@@ -406,20 +406,65 @@ if exist "%WAV2LIP_MODEL%" (
 )
 
 echo  [*] Downloading Wav2Lip GAN model ^(~416MB^)...
-powershell -Command ^
-    "$url = 'https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth';" ^
-    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
-    "Invoke-WebRequest -Uri $url -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing;" ^
-    "Write-Host '  [+] Wav2Lip model downloaded.'"
-if errorlevel 1 (
-    echo  [!] Wav2Lip model download failed. Lip Sync disabled.
-    if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
-    goto wav2lip_model_done
-)
 
-:: Optional SHA256 integrity check. Populate WAV2LIP_SHA256 from upstream release
-:: page to enable verification; when empty, a warning is printed instead.
-set "WAV2LIP_SHA256="
+:wav2lip_model_try1
+echo  [*] Trying primary mirror (Non-playing-Character)...
+powershell -Command ^
+    "try {" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri 'https://huggingface.co/Non-playing-Character/Wave2lip/resolve/main/wav2lip_gan.pth' -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing -ErrorAction Stop;" ^
+    "exit 0" ^
+    "} catch { exit 1 }"
+if errorlevel 1 goto wav2lip_model_try1_fail
+powershell -NoProfile -Command "if ((Get-Item '%WAV2LIP_MODEL%').Length -lt 100MB) { exit 1 } else { exit 0 }"
+if not errorlevel 1 goto wav2lip_model_verify
+:wav2lip_model_try1_fail
+echo  [!] Primary mirror failed.
+if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+
+:wav2lip_model_try2
+echo  [*] Trying fallback mirror 1 (Nekochu)...
+powershell -Command ^
+    "try {" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri 'https://huggingface.co/Nekochu/Wav2Lip/resolve/main/wav2lip_gan.pth' -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing -ErrorAction Stop;" ^
+    "exit 0" ^
+    "} catch { exit 1 }"
+if errorlevel 1 goto wav2lip_model_try2_fail
+powershell -NoProfile -Command "if ((Get-Item '%WAV2LIP_MODEL%').Length -lt 100MB) { exit 1 } else { exit 0 }"
+if not errorlevel 1 goto wav2lip_model_verify
+:wav2lip_model_try2_fail
+echo  [!] Fallback mirror 1 failed.
+if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+
+:wav2lip_model_try3
+echo  [*] Trying fallback mirror 2 (rippertnt)...
+powershell -Command ^
+    "try {" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri 'https://huggingface.co/rippertnt/wav2lip/resolve/main/wav2lip_gan.pth' -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing -ErrorAction Stop;" ^
+    "exit 0" ^
+    "} catch { exit 1 }"
+if errorlevel 1 goto wav2lip_model_try3_fail
+powershell -NoProfile -Command "if ((Get-Item '%WAV2LIP_MODEL%').Length -lt 100MB) { exit 1 } else { exit 0 }"
+if not errorlevel 1 goto wav2lip_model_verify
+:wav2lip_model_try3_fail
+echo  [!] Fallback mirror 2 failed.
+if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
+goto wav2lip_model_failed
+
+:wav2lip_model_verify
+echo  [+] Wav2Lip model downloaded.
+goto wav2lip_model_sha
+
+:wav2lip_model_failed
+echo  [!] All Wav2Lip model mirrors failed. Lip Sync disabled.
+echo  [!] Rest of the installation will continue normally.
+goto wav2lip_model_done
+
+:wav2lip_model_sha
+:: SHA256 integrity check for the known wav2lip_gan.pth file.
+set "WAV2LIP_SHA256=ca9ab7b7b812c0e80a6e70a5977c545a1e8a365a6c49d5e533023c034d7ac3d8"
 if not defined WAV2LIP_SHA256 goto wav2lip_sha_skip
 set "GOT_SHA256="
 for /f %%h in ('powershell -NoProfile -Command "(Get-FileHash '%WAV2LIP_MODEL%' -Algorithm SHA256).Hash.ToLower()"') do set "GOT_SHA256=%%h"
