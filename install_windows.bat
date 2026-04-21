@@ -65,7 +65,7 @@ if errorlevel 1 (
 for /f "tokens=*" %%i in ('powershell -Command "[Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\") + \";\" + [Environment]::GetEnvironmentVariable(\"PATH\",\"User\")"') do set "PATH=%%i"
 
 :python_found
-for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PY_VER=%%i
+for /f "tokens=*" %%i in ('python --version 2^>^&1') do set "PY_VER=%%i"
 echo  [+] Found: %PY_VER%
 
 :: Require Python 3.9+
@@ -188,16 +188,21 @@ if errorlevel 1 (
 call :find_vcvarsall
 
 :: Retry TTS with compiler now active (branch again on Python version)
+:: Flattened to avoid cmd's parse-time errorlevel evaluation inside if/else blocks
 python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >nul 2>&1
-if not errorlevel 1 (
-    python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
-    if not errorlevel 1 goto tts_ok
-) else (
-    python -m pip install TTS --no-build-isolation --quiet 2>nul
-    if not errorlevel 1 goto tts_ok
-    python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
-    if not errorlevel 1 goto tts_ok
-)
+if not errorlevel 1 goto retry_py312
+goto retry_legacy
+
+:retry_py312
+python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+goto tts_failed
+
+:retry_legacy
+python -m pip install TTS --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
 
 :tts_failed
 echo.
