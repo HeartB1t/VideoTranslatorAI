@@ -1,4 +1,6 @@
 @echo off
+:: Use UTF-8 codepage for non-ASCII paths/usernames
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 title Video Translator AI - Installer
 color 0A
@@ -35,6 +37,10 @@ echo [1/5] Checking Python...
 python --version >nul 2>&1
 if not errorlevel 1 goto python_found
 
+REM Python 3.11 is the recommended target:
+REM   - dlib wheels (z-mahmud22) cover 3.9-3.13
+REM   - TTS original package supports up to 3.11
+REM   - For Python 3.12+, coqui-tts fork is installed automatically (see below)
 echo  [!] Python not found. Downloading and installing Python 3.11 silently...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
@@ -93,7 +99,7 @@ echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm transformers sentencepiece sacremoses pyannote.audio
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses pyannote.audio torchcodec
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -122,8 +128,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: Install transformers with upper bound <5 (isin_mps_friendly removed in 5.x breaks coqui-tts)
+echo  [*] Installing transformers (>=4.40.0,^<5)...
+python -m pip install "transformers>=4.40.0,<5" --quiet
+if errorlevel 1 (
+    echo  [!] transformers install failed.
+    pause
+    exit /b 1
+)
+
 :: Install Coqui TTS separately (requires C++ Build Tools on Windows)
-echo  [*] Installing Coqui TTS (voice cloning)...
 python -m pip install Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
@@ -131,6 +145,11 @@ set PYTHONIOENCODING=utf-8
 :: Helper: activate MSVC compiler environment if vcvarsall.bat is available
 call :find_vcvarsall
 
+:: Branch: Python 3.12+ uses the coqui-tts community fork, older Pythons use original TTS
+python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >nul 2>&1
+if not errorlevel 1 goto tts_py312
+
+echo  [*] Installing Coqui TTS (voice cloning)...
 :: Attempt 1: no-build-isolation (works if VS Build Tools already present)
 python -m pip install TTS --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
@@ -138,7 +157,16 @@ if not errorlevel 1 goto tts_ok
 :: Attempt 2: older stable version
 python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
+goto tts_need_buildtools
 
+:tts_py312
+echo  [*] Installing coqui-tts fork (Python 3.12+)...
+:: Attempt 1: coqui-tts fork with transformers<5 pin
+python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
+if not errorlevel 1 goto tts_ok
+goto tts_need_buildtools
+
+:tts_need_buildtools
 :: Attempt 3: auto-install VS C++ Build Tools, then activate env and retry
 echo  [*] VS C++ Build Tools not found - downloading and installing silently...
 echo      (this may take 5-10 minutes, please wait)
@@ -160,12 +188,17 @@ if errorlevel 1 (
 :: Activate MSVC compiler environment (makes cl.exe visible in current session)
 call :find_vcvarsall
 
-:: Retry TTS with compiler now active
-python -m pip install TTS --no-build-isolation --quiet 2>nul
-if not errorlevel 1 goto tts_ok
-
-python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
-if not errorlevel 1 goto tts_ok
+:: Retry TTS with compiler now active (branch again on Python version)
+python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >nul 2>&1
+if not errorlevel 1 (
+    python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
+    if not errorlevel 1 goto tts_ok
+) else (
+    python -m pip install TTS --no-build-isolation --quiet 2>nul
+    if not errorlevel 1 goto tts_ok
+    python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
+    if not errorlevel 1 goto tts_ok
+)
 
 :tts_failed
 echo.
