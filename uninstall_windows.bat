@@ -2,7 +2,8 @@
 :: Use UTF-8 codepage for non-ASCII paths/usernames
 chcp 65001 >nul
 setlocal enabledelayedexpansion
-title Video Translator AI - Uninstaller
+set "SCRIPT_VERSION=1.1.0"
+title Video Translator AI - Uninstaller v%SCRIPT_VERSION%
 color 0E
 
 :: -- Paths (must match install_windows.bat) --------------------------------
@@ -27,7 +28,7 @@ if not errorlevel 1 set "IS_ADMIN=1"
 cls
 echo.
 echo  ============================================
-echo    Video Translator AI - Uninstaller
+echo    Video Translator AI - Uninstaller v%SCRIPT_VERSION%
 echo  ============================================
 echo.
 if "%IS_ADMIN%"=="1" (
