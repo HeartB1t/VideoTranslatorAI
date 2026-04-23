@@ -1862,7 +1862,9 @@ def download_youtube(url: str, out_dir: str) -> str:
 
     out_template = os.path.join(out_dir, "%(title).80s.%(ext)s")
     ydl_opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        # Rimosso filtro ext=mp4: forzava h264 e YouTube cappa 1080p a VP9/AV1.
+        # ffmpeg fa il merge in mp4 grazie a merge_output_format.
+        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
         "outtmpl": out_template,
         "quiet": True,
         "no_warnings": True,
@@ -1921,9 +1923,21 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
     waveform = waveform.to(device)
 
     sources = None
+    # Chunking: segment=7s è lo standard della CLI demucs, overlap=0.25 copre il
+    # taglio delle maschere. Evita OOM VRAM su video lunghi (>30 min / 8 GB GPU).
+    apply_kwargs = {"device": device}
+    try:
+        import inspect
+        sig = inspect.signature(apply_model)
+        if "segment" in sig.parameters:
+            apply_kwargs["segment"] = 7.0
+        if "overlap" in sig.parameters:
+            apply_kwargs["overlap"] = 0.25
+    except (TypeError, ValueError):
+        pass
     try:
         with torch.no_grad():
-            sources = apply_model(model, waveform.unsqueeze(0), device=device)[0]
+            sources = apply_model(model, waveform.unsqueeze(0), **apply_kwargs)[0]
         # htdemucs order: [drums, bass, other, vocals]
         vocals = sources[3].mean(0, keepdim=True).cpu()
         background = sources[:3].sum(0).mean(0, keepdim=True).cpu()
@@ -2017,6 +2031,90 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
     detected = info.language or lang_source
     print(f"     → {len(result)} segments | detected language: {detected}", flush=True)
     return result, detected
+
+
+def _split_on_punctuation(
+    segments: list[dict],
+    min_duration: float = 1.0,
+) -> list[dict]:
+    """Re-splits each Whisper segment su punteggiatura forte (. ? ! ;) seguita da
+    spazio e lettera maiuscola. Timestamps riproporzionati sul numero di caratteri.
+    Non splitta sulle virgole. Non produce sotto-segmenti di durata <min_duration.
+    Preserva 'speaker' se presente.
+    Riduce hallucinations XTTS dando frasi complete invece di tagli mid-sentence.
+    """
+    import re as _re
+    # Match . ? ! ; (ripetuti) + whitespace + (quote/parentesi)* + uppercase/digit.
+    # Unicode-aware: \p manca in re stdlib → uso \s + check manuale sulla classe char.
+    pattern = _re.compile(r"([\.\?!;]+)(\s+)(?=[^\s])")
+
+    out: list[dict] = []
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        start = float(seg["start"])
+        end = float(seg["end"])
+        duration = max(end - start, 1e-6)
+        if not text or duration < 2 * min_duration:
+            out.append(seg)
+            continue
+
+        # Costruisce lista di candidate cut positions.
+        cuts: list[int] = []
+        for m in pattern.finditer(text):
+            next_idx = m.end()
+            if next_idx < len(text):
+                next_ch = text[next_idx]
+                if next_ch.isupper() or next_ch.isdigit():
+                    cuts.append(next_idx)
+        if not cuts:
+            out.append(seg)
+            continue
+
+        # Costruisce sotto-frasi e timestamp proporzionali ai caratteri.
+        pieces: list[tuple[str, int]] = []  # (piece_text, char_end_abs)
+        prev = 0
+        for c in cuts:
+            piece = text[prev:c].strip()
+            if piece:
+                pieces.append((piece, c))
+            prev = c
+        tail = text[prev:].strip()
+        if tail:
+            pieces.append((tail, len(text)))
+
+        if len(pieces) <= 1:
+            out.append(seg)
+            continue
+
+        total_chars = len(text)
+        sub_segments: list[dict] = []
+        prev_char = 0
+        for piece_text, char_end in pieces:
+            sub_start = start + duration * (prev_char / total_chars)
+            sub_end = start + duration * (char_end / total_chars)
+            if sub_end - sub_start < min_duration:
+                # Invece di creare un micro-segment inutile, merge col precedente
+                # (se esiste) o ritorna al segmento originale se nessuno split ha senso.
+                if sub_segments:
+                    sub_segments[-1]["end"] = sub_end
+                    sub_segments[-1]["text"] = (sub_segments[-1]["text"] + " " + piece_text).strip()
+                    prev_char = char_end
+                    continue
+                else:
+                    sub_segments = []
+                    break
+            new_seg = {"start": sub_start, "end": sub_end, "text": piece_text}
+            if "speaker" in seg:
+                new_seg["speaker"] = seg["speaker"]
+            sub_segments.append(new_seg)
+            prev_char = char_end
+
+        if sub_segments and len(sub_segments) > 1:
+            out.extend(sub_segments)
+        else:
+            out.append(seg)
+
+    return out
 
 
 def _merge_short_segments(
@@ -2176,6 +2274,13 @@ def translate_segments(
                 payload = [("target_lang", deepl_target)]
                 if deepl_source:
                     payload.append(("source_lang", deepl_source))
+                # `context` (DeepL v2) nudges the model toward concise spoken-register
+                # output, reducing overrun vs. source duration for dubbing.
+                payload.append((
+                    "context",
+                    "Keep the translation concise and natural for dubbing. "
+                    "Prefer spoken register over formal register.",
+                ))
                 for j in chunk_idx:
                     payload.append(("text", texts[j]))
                 for attempt in range(MAX_RETRIES):
@@ -2265,21 +2370,29 @@ async def _tts_segment(text: str, voice: str, out_path: str, rate: str = "+0%", 
 
 
 async def _tts_all(segments: list[dict], voice: str, tmp_dir: str, rate: str) -> list[str]:
-    files = []
+    # Edge-TTS è HTTP puro → parallelizzazione safe con un semaphore per non
+    # saturare il servizio. Rate-limit Azure si assesta sui 3-5 req/s: 4 concorrenti
+    # è più conservativo di 8 e riduce i 429/timeout senza penalizzare il throughput.
     total = len(segments)
-    failed = 0
-    for i, seg in enumerate(segments):
-        out = os.path.join(tmp_dir, f"seg_{i:04d}.mp3")
-        text = (seg.get("text_tgt") or "").strip()
-        if text:
-            await _tts_segment(text, voice, out, rate=rate)
-            if not os.path.exists(out):
-                failed += 1
-        files.append(out)
-        if i % 10 == 0:
-            print(f"     {i+1}/{total}...", end="\r", flush=True)
-    if failed:
-        print(f"     ! Warning: {failed}/{total} TTS segments failed and will be silent.", flush=True)
+    files = [os.path.join(tmp_dir, f"seg_{i:04d}.mp3") for i in range(total)]
+    sem = asyncio.Semaphore(4)
+    done_counter = {"n": 0, "failed": 0}
+
+    async def _run(i: int):
+        text = (segments[i].get("text_tgt") or "").strip()
+        if not text:
+            return
+        async with sem:
+            await _tts_segment(text, voice, files[i], rate=rate)
+        if not os.path.exists(files[i]):
+            done_counter["failed"] += 1
+        done_counter["n"] += 1
+        if done_counter["n"] % 10 == 0 or done_counter["n"] == total:
+            print(f"     {done_counter['n']}/{total}...", end="\r", flush=True)
+
+    await asyncio.gather(*(_run(i) for i in range(total)))
+    if done_counter["failed"]:
+        print(f"     ! Warning: {done_counter['failed']}/{total} TTS segments failed and will be silent.", flush=True)
     return files
 
 
@@ -2290,16 +2403,114 @@ def generate_tts(segments: list[dict], voice: str, tmp_dir: str, rate: str = "+0
     return files
 
 
+def _build_vad_reference(
+    src_audio: str,
+    out_wav: str,
+    target_seconds: float = 12.0,
+    min_seconds: float = 3.0,
+    max_gap_ms: int = 300,
+    sample_rate: int = 22050,
+) -> str | None:
+    """Estrae una reference vocale pulita da src_audio usando silero-vad.
+    Strategia: sceglie il segmento di parlato continuo più lungo (gap fra sub-chunk
+    VAD ≤ max_gap_ms); se è <target_seconds, concatena i segmenti più lunghi fino
+    a raggiungere target_seconds. Scrive un WAV mono 22050 Hz in out_wav.
+    Ritorna out_wav o None in caso di errore/parlato insufficiente.
+    """
+    try:
+        import numpy as np
+        import soundfile as sf
+        from silero_vad import load_silero_vad, get_speech_timestamps, read_audio
+    except ImportError as e:
+        print(f"     ! silero-vad not available ({e}), using raw reference.", flush=True)
+        return None
+
+    try:
+        model = load_silero_vad()
+        # silero-vad opera a 16 kHz
+        wav_16k = read_audio(src_audio, sampling_rate=16000)
+        timestamps = get_speech_timestamps(
+            wav_16k, model, sampling_rate=16000, return_seconds=True,
+        )
+        if not timestamps:
+            print("     ! VAD: no speech detected, using raw reference.", flush=True)
+            return None
+
+        # Fonde sub-segmenti separati da pause brevi nel "continuous speech block".
+        max_gap_s = max_gap_ms / 1000.0
+        merged: list[tuple[float, float]] = []
+        for t in timestamps:
+            s, e = float(t["start"]), float(t["end"])
+            if merged and s - merged[-1][1] <= max_gap_s:
+                merged[-1] = (merged[-1][0], e)
+            else:
+                merged.append((s, e))
+
+        merged.sort(key=lambda se: se[1] - se[0], reverse=True)
+        longest = merged[0]
+        longest_dur = longest[1] - longest[0]
+
+        if longest_dur >= target_seconds:
+            selected = [longest]
+        else:
+            # Top-N segmenti fino a target_seconds (ordine cronologico per naturalezza).
+            picked: list[tuple[float, float]] = []
+            total = 0.0
+            for s, e in merged:
+                picked.append((s, e))
+                total += e - s
+                if total >= target_seconds:
+                    break
+            if total < min_seconds:
+                print(f"     ! VAD: only {total:.1f}s speech (<{min_seconds}s), using raw reference.", flush=True)
+                return None
+            picked.sort(key=lambda se: se[0])
+            selected = picked
+
+        # Carica a sample_rate target, slicing diretto in array numpy.
+        audio_hq, sr_hq = sf.read(src_audio, always_2d=False)
+        if audio_hq.ndim > 1:
+            audio_hq = audio_hq.mean(axis=1)
+        # Resample a sample_rate se necessario (lineare è sufficiente per reference).
+        if sr_hq != sample_rate:
+            import math as _m
+            n_out = int(_m.ceil(len(audio_hq) * sample_rate / sr_hq))
+            x_old = np.linspace(0, 1, num=len(audio_hq), endpoint=False)
+            x_new = np.linspace(0, 1, num=n_out, endpoint=False)
+            audio_hq = np.interp(x_new, x_old, audio_hq).astype(np.float32)
+            sr_hq = sample_rate
+
+        pieces = []
+        for s, e in selected:
+            i0 = max(0, int(s * sr_hq))
+            i1 = min(len(audio_hq), int(e * sr_hq))
+            if i1 > i0:
+                pieces.append(audio_hq[i0:i1])
+        if not pieces:
+            return None
+        out = np.concatenate(pieces)
+        sf.write(out_wav, out, sr_hq, subtype="PCM_16")
+        print(f"     → VAD reference: {len(out)/sr_hq:.1f}s speech (from {len(merged)} chunks)", flush=True)
+        return out_wav
+    except Exception as e:
+        print(f"     ! VAD reference failed ({e.__class__.__name__}: {e}), using raw reference.", flush=True)
+        return None
+
+
 def generate_tts_xtts(
     segments: list[dict],
     reference_audio: str,
     lang_target: str,
     tmp_dir: str,
     diar_segments: list[dict] | None = None,
+    speed: float = 1.1,
 ) -> list[str]:
     """Voice cloning TTS via Coqui XTTS v2. Uses reference_audio to clone speaker voice.
     If diar_segments is provided, extracts per-speaker reference clips and uses the
     correct one for each segment (based on seg['speaker']).
+    `speed` is clamped to XTTS v2 accepted range (0.5–2.0) and applied natively by
+    the model: genera audio target più vicino alla durata source, riducendo il
+    post-atempo in build_dubbed_track (meno artefatti).
     """
     import torch
     os.environ.setdefault("COQUI_TOS_AGREED", "1")
@@ -2311,18 +2522,22 @@ def generate_tts_xtts(
         return None  # caller will fall back to edge-tts
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device})...", flush=True)
+    # XTTS v2 range officially supported: 0.5–2.0
+    speed = max(0.5, min(float(speed), 2.0))
+    print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device}, speed={speed:.2f})...", flush=True)
     print(f"     Reference audio: {Path(reference_audio).name}", flush=True)
 
-    # Global (fallback) 30s reference clip
+    # Global (fallback) reference clip — preferisco VAD per evitare silenzi/rumore.
     ref_clip = os.path.join(tmp_dir, "xtts_ref.wav")
-    try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", reference_audio,
-            "-t", "30", "-ar", "22050", "-ac", "1", ref_clip
-        ], capture_output=True, check=True)
-    except subprocess.CalledProcessError:
-        shutil.copy(reference_audio, ref_clip)
+    vad_ref = _build_vad_reference(reference_audio, ref_clip)
+    if not vad_ref:
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", reference_audio,
+                "-t", "30", "-ar", "22050", "-ac", "1", ref_clip
+            ], capture_output=True, check=True)
+        except subprocess.CalledProcessError:
+            shutil.copy(reference_audio, ref_clip)
 
     # Per-speaker references when diarization is available
     speaker_refs: dict[str, str] = {}
@@ -2332,27 +2547,44 @@ def generate_tts_xtts(
         for spk in unique_speakers:
             ref = _extract_speaker_reference(reference_audio, diar_segments, spk, tmp_dir)
             if ref:
+                # Refina la reference per-speaker con VAD per eliminare pause/rumore
+                # residui nei turni selezionati.
+                refined = os.path.join(tmp_dir, f"{Path(ref).stem}_vad.wav")
+                if _build_vad_reference(ref, refined):
+                    ref = refined
                 speaker_refs[spk] = ref
             else:
                 print(f"     ! No reference for {spk}, will use global reference.", flush=True)
 
     tts_model = None
+    # Lock around the model call: XTTS non è thread-safe (single GPU context).
+    # Il ThreadPool permette di sovrapporre tokenization (CPU) e save WAV (disco)
+    # mentre un altro worker tiene occupata la GPU.
+    from concurrent.futures import ThreadPoolExecutor
+    tts_lock = threading.Lock()
     try:
         tts_model = CoquiTTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-        files = []
         total = len(segments)
-        for i, seg in enumerate(segments):
-            out = os.path.join(tmp_dir, f"seg_{i:04d}.wav")
+        files: list[str] = [os.path.join(tmp_dir, f"seg_{i:04d}.wav") for i in range(total)]
+        done_counter = {"n": 0}
+        counter_lock = threading.Lock()
+
+        def _gen_one(i: int):
+            seg = segments[i]
+            out = files[i]
             text = (seg.get("text_tgt") or "").strip()
-            if text:
-                spk = seg.get("speaker")
-                spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
-                try:
+            if not text:
+                return None
+            spk = seg.get("speaker")
+            spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
+            try:
+                with tts_lock:
                     tts_model.tts_to_file(
                         text=text,
                         speaker_wav=spk_ref,
                         language=xtts_lang,
                         file_path=out,
+                        speed=speed,
                         # Tuning anti-hallucination:
                         #   repetition_penalty alto scoraggia loop di parole
                         #   temperature bassa riduce output randomici
@@ -2364,11 +2596,20 @@ def generate_tts_xtts(
                         top_p=0.85,
                         enable_text_splitting=True,
                     )
-                except Exception as e:
-                    print(f"     ! XTTS seg {i}: {e}", flush=True)
-            files.append(out)
-            if i % 10 == 0:
-                print(f"     {i+1}/{total}...", end="\r", flush=True)
+            except Exception as e:
+                print(f"     ! XTTS seg {i}: {e}", flush=True)
+            with counter_lock:
+                done_counter["n"] += 1
+                n = done_counter["n"]
+                # Print sotto lock per evitare output frammentato fra thread.
+                if n % 10 == 0 or n == total:
+                    print(f"     {n}/{total}...", end="\r", flush=True)
+            return None
+
+        # max_workers=4: GPU resta serializzata dal lock, ma I/O e pre/post si
+        # sovrappongono. Valore più alto produce contention inutile sul lock.
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            list(ex.map(_gen_one, range(total)))
     finally:
         del tts_model
         if device == "cuda":
@@ -2410,6 +2651,36 @@ def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
     return ",".join(parts)
 
 
+def _probe_duration_ms(path: str) -> int:
+    """Ritorna la durata in millisecondi di un file audio.
+    Prova prima soundfile.info (veloce, no subprocess). Su libsndfile datati
+    (< 1.1) sf.info può fallire su MP3 generati da Edge-TTS → fallback ffprobe.
+    Se entrambi falliscono, logga un warning e ritorna 0.
+    """
+    try:
+        import soundfile as sf
+        info = sf.info(path)
+        if info.samplerate:
+            return int(info.frames * 1000 / info.samplerate)
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-show_entries", "format=duration",
+                "-of", "csv=p=0", path,
+            ],
+            capture_output=True, text=True, check=False,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return int(float(r.stdout.strip()) * 1000)
+    except Exception as e:
+        print(f"     ! ffprobe duration fallback failed for {path}: {e}", flush=True)
+    print(f"     ! Could not probe duration for {path} (sf.info + ffprobe failed)", flush=True)
+    return 0
+
+
 def build_dubbed_track(
     segments: list[dict],
     tts_files: list[str],
@@ -2419,68 +2690,172 @@ def build_dubbed_track(
     bg_volume: float = 0.15,
     label: str = "[6/6] Assembling dubbed track...",
 ) -> str:
-    from pydub import AudioSegment
+    """Assembla la traccia doppiata in streaming via numpy memmap.
+    Evita di accumulare AudioSegment in RAM (~600 MB per video 1h+): il mix avviene
+    in-place su un file PCM 16-bit 44.1 kHz stereo che coincide 1:1 con il formato
+    di output storico.
+    """
+    import numpy as np
+    import soundfile as sf
 
     print(label, flush=True)
-    total_ms = int(total_duration * 1000)
-    dubbed = AudioSegment.silent(duration=total_ms)
+    SR = 44100
+    CH = 2
+    total_frames = int(total_duration * SR)
+    out = os.path.join(tmp_dir, "track_dubbed.wav")
+
+    # Raw PCM int32 in memmap: serve headroom per sommare senza saturare durante
+    # gli overlay, si clampa a int16 alla fine.
+    raw_path = os.path.join(tmp_dir, "_track_mix.raw")
+    mix = np.memmap(raw_path, dtype=np.int32, mode="w+", shape=(total_frames, CH))
+    # Azzera esplicitamente (memmap 'w+' lo fa, ma su alcuni FS conviene forzare).
+    mix[:] = 0
+
+    def _overlay(pcm: np.ndarray, start_frame: int):
+        end_frame = min(start_frame + pcm.shape[0], total_frames)
+        length = end_frame - start_frame
+        if length <= 0:
+            return
+        # Somma int32: i sample TTS sono int16 (±32k), gli int32 hanno ±2G.
+        mix[start_frame:end_frame] += pcm[:length].astype(np.int32)
+
+    def _read_segment_to_pcm(path: str) -> np.ndarray | None:
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            return None
+        try:
+            data, sr = sf.read(path, dtype="int16", always_2d=True)
+        except Exception as e:
+            print(f"     ! Cannot read {path}: {e}", flush=True)
+            return None
+        if data.size == 0:
+            return None
+        # Resample/reformat a 44.1 kHz stereo via ffmpeg se necessario (fast path
+        # quando matcha già il target).
+        if sr == SR and data.shape[1] == CH:
+            return data
+        conv = os.path.join(tmp_dir, Path(path).stem + "_pcm.wav")
+        try:
+            _run_ffmpeg([
+                "ffmpeg", "-y", "-i", path,
+                "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", conv,
+            ], step=f"pcm conv {Path(path).name}")
+            return sf.read(conv, dtype="int16", always_2d=True)[0]
+        except Exception as e:
+            print(f"     ! PCM conv failed {path}: {e}", flush=True)
+            return None
 
     for i, (seg, tts_file) in enumerate(zip(segments, tts_files)):
-        if not os.path.exists(tts_file) or os.path.getsize(tts_file) == 0:
-            continue
-        try:
-            tts_audio = AudioSegment.from_file(tts_file)
-        except Exception as e:
-            print(f"     ! Cannot read {tts_file}: {e}", flush=True)
-            continue
-        if len(tts_audio) == 0:
-            continue
         start_ms = int(seg["start"] * 1000)
-        end_ms   = int(seg["end"] * 1000)
-        slot_ms  = max(end_ms - start_ms, 1)
-        # Time-fit: comprimi il TTS se eccede lo slot, con margine 50ms per evitare overlap
-        # atempo accetta 0.5–100; per ratio >2 si concatenano filtri (es. 2.5x → atempo=2,atempo=1.25)
-        if len(tts_audio) > slot_ms + 50:
-            ratio = len(tts_audio) / slot_ms
-            ratio = max(1.0, min(ratio, 4.0))  # cap massimo 4x per evitare artefatti
-            chain = _build_atempo_chain(ratio)
-            sped  = os.path.join(tmp_dir, f"seg_{i:04d}_sped.mp3")
-            try:
-                _run_ffmpeg([
-                    "ffmpeg", "-y", "-i", tts_file,
-                    "-filter:a", chain, sped
-                ], step=f"atempo seg {i}")
-                tts_audio = AudioSegment.from_file(sped)
-            except Exception as e:
-                print(f"     ! atempo failed seg {i}: {e}", flush=True)
-            # Se dopo lo speed-up è ancora troppo lungo, tronco dolcemente con fade
-            if len(tts_audio) > slot_ms:
-                tts_audio = tts_audio[:slot_ms].fade_out(max(1, min(80, slot_ms // 4)))
-        dubbed = dubbed.overlay(tts_audio, position=start_ms)
+        end_ms = int(seg["end"] * 1000)
+        slot_ms = max(end_ms - start_ms, 1)
 
-    if bg_path and os.path.exists(bg_path):
-        bg = AudioSegment.from_file(bg_path)
-        if len(bg) < total_ms:
-            bg = bg + AudioSegment.silent(duration=total_ms - len(bg))
-        bg = bg[:total_ms]
-        if bg_volume <= 0:
-            bg = AudioSegment.silent(duration=total_ms)
-        elif bg_volume < 1.0:
-            bg = bg + (20 * math.log10(bg_volume))
-        dubbed = bg.overlay(dubbed)
+        # Se il TTS eccede lo slot (più 50 ms di margine), applica atempo via ffmpeg.
+        src_path = tts_file
+        if os.path.exists(tts_file) and os.path.getsize(tts_file) > 0:
+            tts_ms = _probe_duration_ms(tts_file)
+            if tts_ms > slot_ms + 50:
+                ratio = tts_ms / slot_ms
+                ratio = max(1.0, min(ratio, 4.0))
+                chain = _build_atempo_chain(ratio)
+                sped = os.path.join(tmp_dir, f"seg_{i:04d}_sped.wav")
+                try:
+                    _run_ffmpeg([
+                        "ffmpeg", "-y", "-i", tts_file,
+                        "-filter:a", chain,
+                        "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", sped,
+                    ], step=f"atempo seg {i}")
+                    src_path = sped
+                except Exception as e:
+                    print(f"     ! atempo failed seg {i}: {e}", flush=True)
 
-    out = os.path.join(tmp_dir, "track_dubbed.wav")
-    dubbed.export(out, format="wav")
+        pcm = _read_segment_to_pcm(src_path)
+        if pcm is None:
+            continue
 
-    # Normalize to -23 LUFS (EBU R128 broadcast standard)
+        # Hard-truncate con fade-out se ancora troppo lungo dopo atempo.
+        slot_frames = int(slot_ms * SR / 1000)
+        if pcm.shape[0] > slot_frames:
+            pcm = pcm[:slot_frames].copy()
+            fade_len = max(1, min(int(0.08 * SR), pcm.shape[0] // 4))
+            # Fade lineare su int16 → calcolato in float32 poi riconvertito.
+            ramp = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+            tail = pcm[-fade_len:].astype(np.float32) * ramp[:, None]
+            pcm[-fade_len:] = tail.astype(np.int16)
+
+        start_frame = int(start_ms * SR / 1000)
+        _overlay(pcm, start_frame)
+
+    # Mix background se disponibile (stessa semantica storica: bg_volume in ampiezza).
+    if bg_path and os.path.exists(bg_path) and bg_volume > 0:
+        bg_conv = os.path.join(tmp_dir, "_bg_pcm.wav")
+        try:
+            _run_ffmpeg([
+                "ffmpeg", "-y", "-i", bg_path,
+                "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", bg_conv,
+            ], step="bg pcm conv")
+            # Streaming read/write per tenere il background fuori dalla RAM.
+            CHUNK = SR * 10  # 10s
+            with sf.SoundFile(bg_conv, "r") as bgf:
+                # Scala su int32 in-place. Ampiezza lineare: 1.0 = unity,
+                # >1.0 amplifica (coerente con semantica storica pydub+dB).
+                scale = float(bg_volume)
+                pos = 0
+                while pos < total_frames:
+                    want = min(CHUNK, total_frames - pos)
+                    block = bgf.read(want, dtype="int16", always_2d=True)
+                    if block.shape[0] == 0:
+                        break
+                    if scale != 1.0:
+                        scaled = (block.astype(np.float32) * scale).astype(np.int32)
+                    else:
+                        scaled = block.astype(np.int32)
+                    end_pos = pos + scaled.shape[0]
+                    mix[pos:end_pos] += scaled
+                    pos = end_pos
+        except Exception as e:
+            print(f"     ! Background mix failed: {e}", flush=True)
+
+    # Clamp int32 → int16 e serializza in WAV.
+    with sf.SoundFile(out, "w", samplerate=SR, channels=CH, subtype="PCM_16") as outf:
+        CHUNK = SR * 10
+        pos = 0
+        while pos < total_frames:
+            end = min(pos + CHUNK, total_frames)
+            block = mix[pos:end]
+            clipped = np.clip(block, -32768, 32767).astype(np.int16)
+            outf.write(clipped)
+            pos = end
+
+    # Libera la memmap prima di unlink per evitare warning su Windows.
+    del mix
     try:
-        import numpy as np
-        import soundfile as sf
+        os.remove(raw_path)
+    except OSError:
+        pass
+
+    # Normalize to -23 LUFS (EBU R128 broadcast standard).
+    # Leggiamo in float32 (dimezza la RAM rispetto al default float64).
+    # Per video molto lunghi (>30 min o >1.5 GB) logghiamo un warning: l'intero
+    # buffer resta comunque in memoria perché pyln.normalize.loudness richiede
+    # l'array completo, ma almeno con float32 siamo gestibili (~1.2 GB per 1h).
+    try:
         import pyloudnorm as pyln
-        data, rate = sf.read(out)
+        try:
+            track_bytes = os.path.getsize(out)
+        except OSError:
+            track_bytes = 0
+        long_track = (total_duration > 1800.0) or (track_bytes > 1_500_000_000)
+        if long_track:
+            print(
+                f"     ! Long track detected (duration={total_duration:.0f}s, "
+                f"size={track_bytes/1e6:.0f} MB): LUFS normalization will use "
+                f"float32 in-memory buffer.",
+                flush=True,
+            )
+        data, rate = sf.read(out, dtype="float32")
         meter = pyln.Meter(rate)
         loudness = meter.integrated_loudness(data)
-        if loudness > -70:  # skip if signal too quiet (silence)
+        if loudness > -70:
             normalized = pyln.normalize.loudness(data, loudness, -23.0)
             sf.write(out, normalized, rate)
             print(f"     → Normalized: {loudness:.1f} LUFS → -23.0 LUFS", flush=True)
@@ -2662,6 +3037,9 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
 
 
 CONFIG_PATH = Path.home() / ".videotranslatorai_config.json"
+KEYRING_SERVICE = "VideoTranslatorAI"
+KEYRING_USERNAME = "hf_token"
+_KEYRING_MIGRATED = False
 
 
 def load_config() -> dict:
@@ -2674,20 +3052,106 @@ def load_config() -> dict:
     return {}
 
 
+def _write_config_raw(cfg: dict) -> None:
+    """Scrive il dict cfg (intero, non in merge) con permessi 0600 atomicamente.
+    Usare questa quando serve rimuovere chiavi; save_config fa merge e non
+    cancellerebbe nulla.
+    """
+    tmp = Path(str(CONFIG_PATH) + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    tmp.replace(CONFIG_PATH)
+
+
 def save_config(data: dict) -> None:
     try:
         existing = load_config()
         existing.update(data)
-        tmp = Path(str(CONFIG_PATH) + ".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=2)
-        try:
-            os.chmod(tmp, 0o600)
-        except Exception:
-            pass
-        tmp.replace(CONFIG_PATH)
+        _write_config_raw(existing)
     except Exception as e:
         print(f"     ! Could not save config: {e}", flush=True)
+
+
+def _keyring_available():
+    """Ritorna il modulo keyring se disponibile, altrimenti None."""
+    try:
+        import keyring as _kr
+        # Verifica che il backend sia usabile (es. Linux headless senza Secret Service).
+        _ = _kr.get_keyring()
+        return _kr
+    except Exception:
+        return None
+
+
+def load_hf_token() -> str:
+    """Legge il token HF: prima dal keyring, poi (migrazione) dal JSON legacy."""
+    global _KEYRING_MIGRATED
+    kr = _keyring_available()
+    if kr is not None:
+        try:
+            tok = kr.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
+            if tok:
+                # Migra una volta sola rimuovendo il campo dal JSON se presente.
+                if not _KEYRING_MIGRATED:
+                    cfg = load_config()
+                    if "hf_token" in cfg:
+                        cfg.pop("hf_token", None)
+                        try:
+                            _write_config_raw(cfg)
+                            print("[i] HF token cleared from JSON (already in keyring).", flush=True)
+                        except Exception:
+                            pass
+                    _KEYRING_MIGRATED = True
+                return tok
+            # Token non in keyring ma forse in JSON legacy → migra.
+            legacy = load_config().get("hf_token", "")
+            if legacy:
+                try:
+                    kr.set_password(KEYRING_SERVICE, KEYRING_USERNAME, legacy)
+                    cfg = load_config()
+                    cfg.pop("hf_token", None)
+                    _write_config_raw(cfg)
+                    _KEYRING_MIGRATED = True
+                    print("[i] HF token migrated to system keyring.", flush=True)
+                except Exception as e:
+                    print(f"     ! keyring migration failed: {e}", flush=True)
+                return legacy
+            return ""
+        except Exception:
+            pass
+    # Fallback: JSON legacy.
+    return load_config().get("hf_token", "")
+
+
+def save_hf_token(token: str) -> None:
+    """Salva il token HF nel system keyring. Fallback JSON se keyring manca."""
+    token = (token or "").strip()
+    if not token:
+        return
+    kr = _keyring_available()
+    if kr is not None:
+        try:
+            kr.set_password(KEYRING_SERVICE, KEYRING_USERNAME, token)
+            # Pulisci eventuale copia in chiaro nel JSON.
+            cfg = load_config()
+            if "hf_token" in cfg:
+                cfg.pop("hf_token", None)
+                try:
+                    _write_config_raw(cfg)
+                except Exception:
+                    pass
+            return
+        except Exception as e:
+            print(f"     ! keyring backend unavailable ({e}), "
+                  f"storing HF token in plaintext at {CONFIG_PATH}", flush=True)
+    else:
+        print(f"     ! keyring backend unavailable, "
+              f"storing HF token in plaintext at {CONFIG_PATH}", flush=True)
+    save_config({"hf_token": token})
 
 
 def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
@@ -2807,6 +3271,7 @@ def translate_video(
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
+    xtts_speed: float = 1.1,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -2867,6 +3332,12 @@ def translate_video(
         else:
             raw_segs, detected_lang = transcribe(vocals_path, model, lang_source)
             effective_src = detected_lang if lang_source == "auto" else lang_source
+            # Re-split su punteggiatura forte: dà a XTTS frasi complete invece di
+            # cut mid-sentence di Whisper. Riduce hallucinations.
+            pre_split = len(raw_segs)
+            raw_segs = _split_on_punctuation(raw_segs)
+            if len(raw_segs) > pre_split:
+                print(f"     → Split on punctuation: {pre_split} → {len(raw_segs)}", flush=True)
             # Speaker diarization (before translation so speaker info propagates)
             if use_diarization and hf_token.strip():
                 try:
@@ -2897,6 +3368,7 @@ def translate_video(
                 tts_files = generate_tts_xtts(
                     segments, vocals_path, lang_target, tmp_dir,
                     diar_segments=diar_segments,
+                    speed=xtts_speed,
                 )
             except Exception as e:
                 print(f"     ! XTTS failed ({e}), falling back to Edge-TTS.", flush=True)
@@ -3117,6 +3589,7 @@ class App(tk.Tk):
         self.title("Video Translator AI")
         self.resizable(True, True)
         self.configure(bg=BG)
+        self._set_window_icon()
 
         self._ui_lang   = tk.StringVar(value="it")
         self._model     = tk.StringVar(value="small")
@@ -3133,10 +3606,10 @@ class App(tk.Tk):
         # Translation engine: "google" | "deepl" | "marian"
         self._translation_engine = tk.StringVar(value="google")
         self._deepl_key_var      = tk.StringVar()
-        # Diarization
-        _cfg = load_config()
+        # Diarization: il token HF è persistito nel system keyring (con migrazione
+        # automatica dal vecchio JSON legacy).
         self._use_diarization = tk.BooleanVar(value=False)
-        self._hf_token_var    = tk.StringVar(value=_cfg.get("hf_token", ""))
+        self._hf_token_var    = tk.StringVar(value=load_hf_token())
         self._running    = False
         self._destroying = False
         self._batch_files: list[str] = []
@@ -3153,6 +3626,41 @@ class App(tk.Tk):
         # Install global redirect once — routes print() to per-thread GUI log
         sys.stdout = _GlobalRedirect(sys.stdout)
         sys.stderr = _GlobalRedirect(sys.stderr)
+
+    def _set_window_icon(self) -> None:
+        """Set the window icon from the bundled assets folder.
+
+        Gracefully falls back to the default Tk icon if assets/ is missing or
+        the image cannot be loaded — common e.g. when the GUI is launched
+        from a source checkout without the assets committed yet.
+        """
+        here = Path(__file__).resolve().parent
+        candidates_ico = [here / "assets" / "icon.ico", here / "icon.ico"]
+        candidates_png = [here / "assets" / "icon.png",
+                          here / "assets" / "icon_256.png",
+                          here / "icon.png"]
+
+        # Windows honours .ico best via iconbitmap
+        if sys.platform.startswith("win"):
+            for p in candidates_ico:
+                if p.exists():
+                    try:
+                        self.iconbitmap(default=str(p))
+                        return
+                    except tk.TclError:
+                        pass
+
+        # Cross-platform fallback: iconphoto with a PNG (requires PhotoImage)
+        for p in candidates_png:
+            if p.exists():
+                try:
+                    img = tk.PhotoImage(file=str(p))
+                    self.iconphoto(True, img)
+                    # Keep a reference to prevent GC
+                    self._icon_img = img
+                    return
+                except tk.TclError:
+                    continue
 
     def _fit_to_screen(self):
         self.update_idletasks()
@@ -3904,6 +4412,7 @@ class App(tk.Tk):
                             use_diarization=p["use_diarization"],
                             hf_token=p["hf_token"],
                             use_lipsync=p["use_lipsync"],
+                            xtts_speed=p["xtts_speed"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -3968,6 +4477,11 @@ class App(tk.Tk):
             rate = int(round(self._tts_rate.get()))
         except (ValueError, tk.TclError):
             rate = 0
+        cfg = load_config()
+        try:
+            xtts_speed = float(cfg.get("xtts_speed", 1.1))
+        except (TypeError, ValueError):
+            xtts_speed = 1.1
         snap = {
             "model":      self._model.get(),
             "lang_src":   self._lang_src.get(),
@@ -3984,10 +4498,11 @@ class App(tk.Tk):
             "use_diarization":    self._use_diarization.get(),
             "hf_token":           self._hf_token_var.get().strip(),
             "use_lipsync":        self._use_lipsync.get(),
+            "xtts_speed":         xtts_speed,
         }
         # Persist HF token for next launch
         if snap["hf_token"] and snap["use_diarization"]:
-            save_config({"hf_token": snap["hf_token"]})
+            save_hf_token(snap["hf_token"])
         return snap
 
     def _start_with_editor(self, video_path: str):
@@ -4013,6 +4528,7 @@ class App(tk.Tk):
                     deepl_key=p["deepl_key"],
                     use_diarization=p["use_diarization"],
                     hf_token=p["hf_token"],
+                    xtts_speed=p["xtts_speed"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
@@ -4065,6 +4581,7 @@ class App(tk.Tk):
                     use_diarization=p["use_diarization"],
                     hf_token=p["hf_token"],
                     use_lipsync=p["use_lipsync"],
+                    xtts_speed=p["xtts_speed"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -4112,6 +4629,7 @@ class App(tk.Tk):
                             use_diarization=p["use_diarization"],
                             hf_token=p["hf_token"],
                             use_lipsync=p["use_lipsync"],
+                            xtts_speed=p["xtts_speed"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -4191,6 +4709,8 @@ def _cli():
                         help="HuggingFace token (falls back to ~/.videotranslatorai_config.json)")
     parser.add_argument("--lipsync", action="store_true",
                         help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
+    parser.add_argument("--xtts-speed", type=float, default=None,
+                        help="XTTS v2 native speed factor (0.5–2.0, default 1.1)")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -4199,7 +4719,15 @@ def _cli():
         parser.print_help()
         sys.exit(0)
 
-    hf_token_cli = args.hf_token or load_config().get("hf_token", "")
+    cfg_cli = load_config()
+    hf_token_cli = args.hf_token or load_hf_token() or cfg_cli.get("hf_token", "")
+    if args.xtts_speed is not None:
+        xtts_speed_cli = args.xtts_speed
+    else:
+        try:
+            xtts_speed_cli = float(cfg_cli.get("xtts_speed", 1.1))
+        except (TypeError, ValueError):
+            xtts_speed_cli = 1.1
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
@@ -4220,6 +4748,7 @@ def _cli():
             use_diarization=args.diarize,
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,
+            xtts_speed=xtts_speed_cli,
         )
 
 

@@ -174,13 +174,22 @@ if errorlevel 1 (
 )
 echo  [+] Script copied.
 
+:: Copy bundled assets (launcher icon + any other asset)
+if exist "%SCRIPT_DIR%assets" (
+    if not exist "%INSTALL_DIR%\assets" mkdir "%INSTALL_DIR%\assets"
+    copy /Y "%SCRIPT_DIR%assets\icon.ico" "%INSTALL_DIR%\assets\icon.ico" >nul 2>&1
+    copy /Y "%SCRIPT_DIR%assets\icon.png" "%INSTALL_DIR%\assets\icon.png" >nul 2>&1
+    copy /Y "%SCRIPT_DIR%assets\icon_256.png" "%INSTALL_DIR%\assets\icon_256.png" >nul 2>&1
+    echo  [+] Assets copied.
+)
+
 :: -- 3. Install Python dependencies ----------------------------------------
 echo.
 echo [3/5] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses "pyannote.audio<4.0" torchcodec
+set PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses "pyannote.audio<4.0" torchcodec silero-vad keyring
 
 :: Python 3.13+ requires audioop-lts
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -558,6 +567,7 @@ set "SHORTCUT=%PUBLIC%\Desktop\Video Translator AI.lnk"
 for /f "tokens=*" %%i in ('python -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
 
 :: Create the .lnk shortcut via PowerShell - no CMD window, no admin required
+set "ICON_PATH=%INSTALL_DIR%\assets\icon.ico"
 powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
     "$s = $ws.CreateShortcut('%SHORTCUT%');" ^
@@ -565,6 +575,7 @@ powershell -Command ^
     "$s.Arguments = [char]34 + '%INSTALL_DIR%\video_translator_gui.py' + [char]34;" ^
     "$s.WorkingDirectory = '%INSTALL_DIR%';" ^
     "$s.Description = 'Video Translator AI';" ^
+    "if (Test-Path '%ICON_PATH%') { $s.IconLocation = '%ICON_PATH%' };" ^
     "$s.Save();"
 
 if exist "%SHORTCUT%" (
