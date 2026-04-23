@@ -81,8 +81,8 @@ echo  - All users' VTAI config (HF token)
 echo  - All legacy per-user installs
 echo  - All Python AI packages (coqui-tts, torch, demucs, ...)
 echo.
-echo  NOT removed: Python itself, Git for Windows, VS Build Tools.
-echo  Uninstall them from "Apps and features" if desired.
+echo  OPTIONAL (asked below): Python 3.11 and Git for Windows.
+echo  NOT removed automatically: VS C++ Build Tools (use "Apps and features").
 echo.
 set /p "CONFIRM=Type YES (uppercase) to confirm: "
 if not "%CONFIRM%"=="YES" (
@@ -91,6 +91,13 @@ if not "%CONFIRM%"=="YES" (
     goto menu
 )
 echo.
+echo  --- Optional: also uninstall Python 3.11 and Git for Windows? ---
+echo  These were installed by install_windows.bat but you may use them for
+echo  other projects. Remove them only if you are sure.
+echo.
+set /p "Q_PY_FULL=Uninstall Python 3.11 ? [Y/N]: "
+set /p "Q_GIT_FULL=Uninstall Git for Windows ? [Y/N]: "
+echo.
 call :remove_app
 call :remove_shortcut_public
 call :remove_ffmpeg_path
@@ -98,6 +105,8 @@ call :remove_legacy_all_users
 call :remove_user_configs_all
 call :remove_user_caches_all
 call :remove_python_packages_all
+if /i "%Q_PY_FULL%"=="Y" call :remove_python
+if /i "%Q_GIT_FULL%"=="Y" call :remove_git
 goto done
 
 
@@ -206,6 +215,18 @@ if /i "!Q_PYA!"=="Y" python -m pip uninstall -y pyannote.audio
 set /p "Q_MIS=Remove pipeline utilities (yt-dlp, edge-tts, deep-translator, pydub, pyloudnorm, soundfile, sacremoses, sentencepiece) ? [Y/N]: "
 if /i "!Q_MIS!"=="Y" python -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
 
+:: -- System tools (Admin, must be last) ------------------------------------
+if "%IS_ADMIN%"=="1" (
+    echo.
+    echo  --- System-wide tools installed by install_windows.bat ---
+    echo  ( remove only if you do not use them for other projects )
+    set /p "Q_PY=[ADMIN] Uninstall Python 3.11 ? [Y/N]: "
+    if /i "!Q_PY!"=="Y" call :remove_python
+
+    set /p "Q_GIT=[ADMIN] Uninstall Git for Windows ? [Y/N]: "
+    if /i "!Q_GIT!"=="Y" call :remove_git
+)
+
 goto done
 
 
@@ -218,9 +239,10 @@ echo  ============================================
 echo    Uninstall complete
 echo  ============================================
 echo.
-echo  NOTE: orphaned pip dependencies may remain (pip does not auto-remove
-echo  them). If you want a clean Python environment, consider reinstalling
-echo  Python or using ^"pip-autoremove^".
+echo  If anything was skipped or you want to double-check, open
+echo  "Apps and features" (Windows Settings) - entries like
+echo  "Python 3.11.9", "Git" or "Visual Studio Build Tools"
+echo  can be removed from there manually.
 echo.
 pause
 goto end
@@ -362,4 +384,37 @@ python -m pip uninstall -y ^
     pyannote.audio ^
     yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
 echo  [+] Done.
+exit /b 0
+
+:remove_python
+:: Silent uninstall of Python 3.11 via registry QuietUninstallString.
+:: Handles both per-user and system-wide installs.
+echo  [*] Uninstalling Python 3.11 ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
+    "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Python 3\.11' -and ($_.QuietUninstallString -or $_.UninstallString) } } };" ^
+    "if (-not $found) { Write-Host '  [-] Python 3.11 not found in uninstall registry.'; exit 0 };" ^
+    "foreach ($u in $found) {" ^
+    "    Write-Host ('  [*] ' + $u.DisplayName);" ^
+    "    $cmd = if ($u.QuietUninstallString) { $u.QuietUninstallString } else { $u.UninstallString + ' /quiet' };" ^
+    "    try { Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmd -Wait -NoNewWindow; Write-Host '  [+] Done.' }" ^
+    "    catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
+    "}"
+exit /b 0
+
+:remove_git
+:: Silent uninstall of Git for Windows (Inno Setup) via registry UninstallString.
+echo  [*] Uninstalling Git for Windows ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
+    "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Git( |$)' -and $_.DisplayName -notmatch 'LFS|Extensions' -and $_.UninstallString } } };" ^
+    "if (-not $found) { Write-Host '  [-] Git for Windows not found.'; exit 0 };" ^
+    "foreach ($u in $found) {" ^
+    "    Write-Host ('  [*] ' + $u.DisplayName);" ^
+    "    $exe = ($u.UninstallString -replace '\"','').Trim();" ^
+    "    if (Test-Path $exe) {" ^
+    "        try { Start-Process -FilePath $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait; Write-Host '  [+] Done.' }" ^
+    "        catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
+    "    } else { Write-Host ('  [!] Uninstaller not found at ' + $exe) }" ^
+    "}"
 exit /b 0
