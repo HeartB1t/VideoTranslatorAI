@@ -100,8 +100,10 @@ if sys.version_info >= (3, 13):
 
 # Pacchetti opzionali: migliorano la qualità ma non bloccano l'avvio.
 # chiave = modulo Python, valore = (lista pip requirements, descrizione UI)
-# coqui-tts richiede transformers<5 (isin_mps_friendly rimossa in transformers 5.x)
-_TTS_PKGS = ["coqui-tts", "transformers<5"] if sys.version_info >= (3, 12) else ["TTS"]
+# Fork mantenuto (Idiap): pure-Python wheel universale per Py ≥3.10, evita il
+# setup.py rotto del pacchetto originale `TTS` su Windows. Pin transformers<5.1
+# (5.x rimuove isin_mps_friendly; 5.1 rompe coqui-tts — issue #558).
+_TTS_PKGS = ["coqui-tts", "transformers<5.1"]
 OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "sacremoses":    (["sacremoses"],    "MarianMT tokenizer (traduzione offline)"),
     "sentencepiece": (["sentencepiece"], "MarianMT tokenizer (traduzione offline)"),

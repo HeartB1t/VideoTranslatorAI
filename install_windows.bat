@@ -103,8 +103,7 @@ if not errorlevel 1 goto python_found
 
 REM Python 3.11 is the recommended target:
 REM   - dlib wheels (z-mahmud22) cover 3.9-3.13
-REM   - TTS original package supports up to 3.11
-REM   - For Python 3.12+, coqui-tts fork is installed automatically (see below)
+REM   - coqui-tts fork (maintained) is installed for all versions (see below)
 echo  [!] Python not found. Downloading and installing Python 3.11 silently...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
@@ -203,9 +202,9 @@ if errorlevel 1 (
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
 )
 
-:: Install transformers with upper bound <5 (isin_mps_friendly removed in 5.x breaks coqui-tts)
-echo  [*] Installing transformers ^(^>=4.40.0,^<5^)...
-python -m pip install "transformers>=4.40.0,<5" --quiet
+:: Pin transformers<5.1 (5.x rimuove isin_mps_friendly; coqui-tts issue #558 con 5.1+)
+echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
+python -m pip install "transformers>=4.40.0,<5.1" --quiet
 if errorlevel 1 (
     echo  [!] transformers install failed.
     pause
@@ -220,24 +219,15 @@ set PYTHONIOENCODING=utf-8
 :: Helper: activate MSVC compiler environment if vcvarsall.bat is available
 call :find_vcvarsall
 
-:: Branch: Python 3.12+ uses the coqui-tts community fork, older Pythons use original TTS
-python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >nul 2>&1
-if not errorlevel 1 goto tts_py312
-
-echo  [*] Installing Coqui TTS (voice cloning)...
-:: Attempt 1: no-build-isolation (works if VS Build Tools already present)
-python -m pip install TTS --no-build-isolation --quiet 2>nul
+:: Fork coqui-tts (Idiap) — mantenuto, wheel prebuildati Py 3.9+, evita il
+:: setup.py rotto del pacchetto originale TTS su Windows.
+echo  [*] Installing coqui-tts fork (voice cloning)...
+:: Attempt 1: wheel prebuildato, niente build isolation
+python -m pip install coqui-tts "transformers<5.1" --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
-:: Attempt 2: older stable version
-python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
-if not errorlevel 1 goto tts_ok
-goto tts_need_buildtools
-
-:tts_py312
-echo  [*] Installing coqui-tts fork (Python 3.12+)...
-:: Attempt 1: coqui-tts fork with transformers<5 pin
-python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
+:: Attempt 2: no-build-isolation (se servisse compilazione locale)
+python -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 goto tts_need_buildtools
 
@@ -263,21 +253,8 @@ if errorlevel 1 (
 :: Activate MSVC compiler environment (makes cl.exe visible in current session)
 call :find_vcvarsall
 
-:: Retry TTS with compiler now active (branch again on Python version)
-:: Flattened to avoid cmd's parse-time errorlevel evaluation inside if/else blocks
-python -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" >nul 2>&1
-if not errorlevel 1 goto retry_py312
-goto retry_legacy
-
-:retry_py312
-python -m pip install coqui-tts "transformers<5" --no-build-isolation --quiet 2>nul
-if not errorlevel 1 goto tts_ok
-goto tts_failed
-
-:retry_legacy
-python -m pip install TTS --no-build-isolation --quiet 2>nul
-if not errorlevel 1 goto tts_ok
-python -m pip install "TTS==0.17.6" --no-build-isolation --quiet 2>nul
+:: Retry coqui-tts with compiler now active
+python -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto tts_ok
 
 :tts_failed
@@ -291,7 +268,7 @@ echo  ^|  1. Install Visual Studio Build Tools 2022:          ^|
 echo  ^|     https://aka.ms/vs/17/release/vs_BuildTools.exe   ^|
 echo  ^|     Select: "Desktop development with C++"           ^|
 echo  ^|  2. Reopen this terminal and run:                    ^|
-echo  ^|     pip install TTS --no-build-isolation             ^|
+echo  ^|     pip install coqui-tts "transformers<5.1"            ^|
 echo  +------------------------------------------------------+
 echo.
 goto tts_end

@@ -6,8 +6,8 @@ edge-tts
 deep-translator
 pydub
 pyloudnorm
-TTS>=0.22.0
-transformers>=4.40.0,<5
+coqui-tts>=0.27.5
+transformers>=4.40.0,<5.1
 sentencepiece>=0.2.0
 sacremoses>=0.1.1
 pyannote.audio>=3.1
