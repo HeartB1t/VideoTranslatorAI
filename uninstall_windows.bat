@@ -411,7 +411,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "if (-not $found) { Write-Host '  [-] Git for Windows not found.'; exit 0 };" ^
     "foreach ($u in $found) {" ^
     "    Write-Host ('  [*] ' + $u.DisplayName);" ^
-    "    $exe = ($u.UninstallString -replace '\"','').Trim();" ^
+    "    $exe = $u.UninstallString.Trim([char]34).Trim();" ^
     "    if (Test-Path $exe) {" ^
     "        try { Start-Process -FilePath $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait; Write-Host '  [+] Done.' }" ^
     "        catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
