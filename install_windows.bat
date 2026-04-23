@@ -52,7 +52,7 @@ exit /b 1
 
 :: Free disk space on install drive (at least 20 GB required)
 if /i "%VTAI_SKIP_PREFLIGHT%"=="1" goto disk_ok
-set "INSTALL_DRIVE=%USERPROFILE:~0,1%"
+set "INSTALL_DRIVE=%ProgramFiles:~0,1%"
 set "FREE_GB=0"
 for /f %%i in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%INSTALL_DRIVE%').Free/1GB)"') do set "FREE_GB=%%i"
 if %FREE_GB% GEQ 20 goto disk_ok
@@ -91,10 +91,25 @@ pause
 exit /b 1
 :net_ok
 
-:: -- Installation directory ------------------------------------------------
-set "INSTALL_DIR=%USERPROFILE%\VideoTranslatorAI"
+:: -- Installation directory (system-wide, multi-user) --------------------
+:: Tutti gli asset in %ProgramFiles% → accessibili a qualsiasi utente Windows
+set "INSTALL_DIR=%ProgramFiles%\VideoTranslatorAI"
 set "FFMPEG_DIR=%INSTALL_DIR%\ffmpeg"
 set "SCRIPT_DIR=%~dp0"
+
+:: -- Legacy cleanup: rimuovi vecchia install per-utente (versioni pre-multiuser)
+set "LEGACY_DIR=%USERPROFILE%\VideoTranslatorAI"
+set "LEGACY_WAV2LIP=%USERPROFILE%\.local\share\wav2lip"
+set "LEGACY_SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
+if exist "%LEGACY_DIR%" (
+    echo  [*] Rimozione vecchia installazione per-utente: %LEGACY_DIR%
+    rmdir /S /Q "%LEGACY_DIR%" 2>nul
+)
+if exist "%LEGACY_WAV2LIP%" (
+    echo  [*] Rimozione vecchi modelli Wav2Lip per-utente...
+    rmdir /S /Q "%LEGACY_WAV2LIP%" 2>nul
+)
+if exist "%LEGACY_SHORTCUT%" del /Q "%LEGACY_SHORTCUT%" 2>nul
 
 :: -- 1. Check / Auto-install Python ---------------------------------------
 echo [1/5] Checking Python...
@@ -322,8 +337,8 @@ if errorlevel 1 (
     echo  [+] basicsr and facexlib installed.
 )
 
-:: Download Wav2Lip GAN model (~416MB) and clone repo
-set "WAV2LIP_DIR=%USERPROFILE%\.local\share\wav2lip"
+:: Download Wav2Lip GAN model (~416MB) and clone repo (system-wide)
+set "WAV2LIP_DIR=%INSTALL_DIR%\wav2lip"
 set "WAV2LIP_MODEL=%WAV2LIP_DIR%\wav2lip_gan.pth"
 set "WAV2LIP_REPO=%WAV2LIP_DIR%\Wav2Lip"
 
@@ -510,13 +525,21 @@ if errorlevel 1 (
 :: Add ffmpeg to PATH for the current session
 set "PATH=%FFMPEG_DIR%;%PATH%"
 
-:: Add ffmpeg to the user PATH permanently
+:: Add ffmpeg to the machine PATH permanently (multi-user, requires admin)
+powershell -Command ^
+    "$p = [Environment]::GetEnvironmentVariable('PATH','Machine');" ^
+    "if ($p -notlike '*%FFMPEG_DIR%*') {" ^
+    "  [Environment]::SetEnvironmentVariable('PATH', $p + ';%FFMPEG_DIR%', 'Machine')" ^
+    "}"
+echo  [+] ffmpeg added to machine PATH.
+
+:: Rimuovi eventuale entry ffmpeg nel vecchio user PATH (cleanup post-legacy)
 powershell -Command ^
     "$p = [Environment]::GetEnvironmentVariable('PATH','User');" ^
-    "if ($p -notlike '*%FFMPEG_DIR%*') {" ^
-    "  [Environment]::SetEnvironmentVariable('PATH', $p + ';%FFMPEG_DIR%', 'User')" ^
+    "if ($p -and $p -like '*%USERPROFILE%\VideoTranslatorAI\ffmpeg*') {" ^
+    "  $new = ($p -split ';' | Where-Object { $_ -notlike '*%USERPROFILE%\VideoTranslatorAI\ffmpeg*' }) -join ';';" ^
+    "  [Environment]::SetEnvironmentVariable('PATH', $new, 'User')" ^
     "}"
-echo  [+] ffmpeg added to user PATH.
 goto ffmpeg_end
 
 :ffmpeg_skip
@@ -528,7 +551,8 @@ echo  [!] ffmpeg not installed - translation will not work without it.
 echo.
 echo [5/5] Creating Desktop shortcut...
 
-set "SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
+:: Public Desktop → shortcut visibile a tutti gli utenti del PC
+set "SHORTCUT=%PUBLIC%\Desktop\Video Translator AI.lnk"
 
 :: Resolve full path to pythonw.exe (avoids PATH lookup issues from desktop)
 for /f "tokens=*" %%i in ('python -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
