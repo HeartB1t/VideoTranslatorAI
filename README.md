@@ -77,10 +77,32 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 
 ## Requirements
 
-- Python 3.9+
-- NVIDIA GPU recommended (CUDA 12.4) — CPU works but is slower
+- Python 3.10+ (the Windows installer provisions 3.11.9 automatically)
+- Windows 10 / 11 (x64), Linux, or macOS
+- **NVIDIA GPU strongly recommended** — see GPU table below
+- 20 GB free disk space for a full install (PyTorch CUDA, Whisper large-v3, XTTS, Wav2Lip)
 
 > **ffmpeg and all Python packages are installed automatically** on first launch if missing. No manual setup required.
+
+### GPU support
+
+The pipeline uses five GPU-accelerated components (faster-whisper, Demucs, XTTS, Wav2Lip, pyannote). GPU coverage is not uniform across vendors:
+
+| GPU | Windows | Linux | Notes |
+|-----|---------|-------|-------|
+| **NVIDIA** (RTX 20xx or newer, CUDA 12.4 driver) | ✅ full acceleration | ✅ full acceleration | **Recommended.** All 5 components run on GPU. |
+| **AMD** (Radeon) | ⚠️ incomplete (DirectML does not support XTTS and faster-whisper) | ⚠️ partial (ROCm works for Demucs/XTTS/pyannote but faster-whisper only supports CUDA) | Works but Whisper transcription stays on CPU and dominates the total time. |
+| **Intel Arc** | ⚠️ immature PyTorch XPU support | ⚠️ same | Not tested. |
+| **None (CPU only)** | ✅ works | ✅ works | Expect **10-20× slower** than realtime. A 5-minute clip may take 50+ minutes just to transcribe with Whisper large-v3. |
+
+**Recommended NVIDIA VRAM:**
+
+| VRAM | Typical cards | Experience |
+|------|---------------|-----------|
+| 6 GB | GTX 1660, RTX 2060 | Usable, can't run XTTS + Wav2Lip concurrently |
+| 8 GB | RTX 3060 Ti, 4060 | Full pipeline, no margin |
+| **12 GB+** | **RTX 3060 12GB, 4070, 4080** | **Recommended — comfortable** |
+| 24 GB | RTX 3090, 4090 | Headroom for large batches |
 
 ## Installation
 
@@ -89,11 +111,13 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 1. Clone or download this repository
 2. Right-click `install_windows.bat` → **Run as administrator**
 3. The installer automatically:
-   - Installs Python 3.11 if not present
-   - Installs all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, etc.)
-   - Installs VS C++ Build Tools (required for Coqui TTS voice cloning)
+   - Installs Python 3.11 if not present (system-wide)
+   - Installs Git for Windows if not present
+   - Installs all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, etc.)
    - Downloads and installs ffmpeg
-   - Creates a Desktop shortcut
+   - Creates a **Public Desktop shortcut** (visible to every Windows account on the PC)
+
+> The installer is **multi-user**: everything is installed system-wide under `%ProgramFiles%\VideoTranslatorAI` and any Windows user on the machine finds the shortcut ready to go. VS C++ Build Tools are **no longer required** — the maintained `coqui-tts` fork ships pre-built wheels.
 
 ### Linux / macOS
 
@@ -110,6 +134,38 @@ python video_translator_gui.py
 ```
 
 > On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows).
+
+## Uninstall
+
+### Windows
+
+Run `uninstall_windows.bat` (right-click → **Run as administrator** for modes 1 and 3). Three interactive modes are offered:
+
+| Mode | Admin required | Scope |
+|------|----------------|-------|
+| **[1] Full uninstall — one click** | ✅ | Removes the app folder, Public Desktop shortcut, ffmpeg from machine PATH, every user's HF model cache (Whisper/XTTS) and config (`HF token`), and all Python AI packages installed by the installer. At the end it also asks (opt-in) whether to silently uninstall **Python 3.11** and **Git for Windows** via their registry quiet-uninstall strings. |
+| **[2] Current user only** | ❌ | Removes only the running user's VTAI config, HF/XTTS cache, and legacy per-user install. **Leaves the system-wide installation intact** so other Windows accounts on the PC can keep using the app. |
+| **[3] Custom — granular** | ✅ for system items, ❌ for user items | Y/N prompt for each category: app folder, shortcut, machine PATH, per-user legacy installs, per-user configs/caches, then grouped Python packages (TTS, PyTorch stack, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, pipeline utilities), and finally optional Python 3.11 and Git. |
+
+**Never removed automatically:** Visual Studio C++ Build Tools (if present from older runs). Use *Apps and features* in Windows Settings to remove them manually if desired.
+
+### Linux / macOS
+
+No dedicated uninstaller — remove manually:
+
+```bash
+# Python packages installed by the GUI's auto-installer
+pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub \
+    yt-dlp pyloudnorm sentencepiece sacremoses pyannote.audio torchcodec \
+    coqui-tts transformers torch torchaudio torchvision basicsr facexlib dlib ctranslate2
+
+# User data and model caches
+rm -rf ~/.cache/huggingface/hub/models--*whisper*
+rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
+rm -rf ~/.cache/huggingface/hub/models--*pyannote*
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -f  ~/.videotranslatorai_config.json
+```
 
 ## Usage
 
