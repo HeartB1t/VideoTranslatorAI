@@ -174,12 +174,14 @@ if not errorlevel 1 (
 )
 
 :: Install PyTorch with CUDA 12.4 (compatible with modern NVIDIA drivers)
-echo  [*] Installing PyTorch cu124 + torchaudio...
-python -m pip install "torch==2.6.0" "torchaudio==2.6.0" --quiet ^
+:: torchvision pinned to 0.21.0 (matched to torch 2.6.0) to prevent transitive
+:: deps (basicsr/facexlib) from pulling torchvision 0.26+ which requires torch 2.11.
+echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
+python -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo  [!] PyTorch cu124 failed, trying CPU version...
-    python -m pip install "torch==2.6.0" "torchaudio==2.6.0" --quiet
+    python -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet
 )
 
 :: Install ctranslate2 explicitly first (faster-whisper dependency, Windows-sensitive)
@@ -198,7 +200,7 @@ if errorlevel 1 (
 python -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
     echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
-    python -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
+    python -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
 )
 
