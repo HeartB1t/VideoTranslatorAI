@@ -2959,14 +2959,101 @@ def mux_video(video_input: str, audio_track: str, output_path: str):
 #  LIP SYNC (Wav2Lip)
 # ═══════════════════════════════════════════════════════════
 
-WAV2LIP_DIR     = Path.home() / ".local" / "share" / "wav2lip"
+def _resolve_wav2lip_dir() -> Path:
+    """Return the directory that should host Wav2Lip repo + model.
+
+    Priority (cross-platform unified path):
+      1. system-wide install dir populated by the Windows/Linux installer
+         (%ProgramFiles%\\VideoTranslatorAI\\wav2lip on Windows,
+          /opt/VideoTranslatorAI/wav2lip on Linux) if it already contains
+         the cloned repo or the model weights;
+      2. per-user fallback: ~/.local/share/wav2lip (legacy path, still used
+         when the installer has not pre-seeded the system-wide copy).
+
+    The system-wide branch prevents a double 416 MB download on Windows when
+    ``install_windows.bat`` has already placed the assets under ProgramFiles.
+    """
+    candidates: list[Path] = []
+    if sys.platform.startswith("win"):
+        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+        candidates.append(Path(program_files) / "VideoTranslatorAI" / "wav2lip")
+    else:
+        candidates.append(Path("/opt/VideoTranslatorAI/wav2lip"))
+    for cand in candidates:
+        # Consider it "populated" if either the repo clone or the weights
+        # are already present — lets us reuse partial installer state.
+        if (cand / "Wav2Lip" / "inference.py").exists() or (cand / "wav2lip_gan.pth").exists():
+            return cand
+    return Path.home() / ".local" / "share" / "wav2lip"
+
+
+WAV2LIP_DIR     = _resolve_wav2lip_dir()
 WAV2LIP_REPO    = WAV2LIP_DIR / "Wav2Lip"
 WAV2LIP_MODEL   = WAV2LIP_DIR / "wav2lip_gan.pth"
 WAV2LIP_REPO_URL  = "https://github.com/Rudrabha/Wav2Lip.git"
 WAV2LIP_MODEL_URL = "https://huggingface.co/numz/wav2lip_studio/resolve/main/Wav2lip/wav2lip_gan.pth"
 WAV2LIP_TIMEOUT = 3600  # seconds before Wav2Lip subprocess is forcibly killed
 
+# Base deps needed by Wav2Lip on all platforms; dlib + face-detection extras
+# are handled separately below (different install strategy per OS).
+WAV2LIP_BASE_PKGS = ["opencv-python", "librosa", "tqdm"]
+# Face-detection stack required by Wav2Lip's inference.py. On Windows the
+# installer ships pre-built dlib wheels; on Linux dlib must compile from
+# source (needs cmake + a C++ toolchain), so we attempt it best-effort and
+# surface a clear message on failure instead of crashing mid-pipeline.
+WAV2LIP_FACE_PKGS = ["basicsr", "facexlib"]
+
 _active_subprocesses: set[subprocess.Popen] = set()
+_active_subprocesses_lock = threading.Lock()
+
+
+def _install_wav2lip_face_stack_linux() -> None:
+    """Install dlib + basicsr + facexlib on Linux with a cmake pre-check.
+
+    dlib has no official PyPI wheels for Linux; pip must compile from source
+    via cmake + libboost. We pre-check for cmake and emit an actionable error
+    instead of letting pip dump a long traceback. basicsr/facexlib are pure
+    Python and install cleanly regardless.
+    """
+    # basicsr + facexlib are cheap (pure python), install them first so lipsync
+    # can at least attempt to run even if dlib is missing.
+    res = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--quiet",
+         "--break-system-packages"] + WAV2LIP_FACE_PKGS,
+        check=False,
+    )
+    if res.returncode != 0:
+        print("     ! basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
+
+    # dlib: short-circuit if already importable (system package or prior install).
+    try:
+        import dlib  # noqa: F401
+        print("     [+] dlib already available.", flush=True)
+        return
+    except ImportError:
+        pass
+
+    if not shutil.which("cmake"):
+        print(
+            "     ! dlib not installed: cmake is required to build dlib from source.\n"
+            "       Install it with:  sudo apt install cmake build-essential libboost-all-dev\n"
+            "       Then rerun this tool — Wav2Lip lipsync will be retried automatically.",
+            flush=True,
+        )
+        return
+
+    print("     Installing dlib (compiling from source, may take a few minutes)...", flush=True)
+    res = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--break-system-packages", "dlib"],
+        check=False,
+    )
+    if res.returncode != 0:
+        print(
+            "     ! dlib build failed. Ensure a C++ toolchain is present:\n"
+            "       sudo apt install build-essential cmake libboost-all-dev\n"
+            "       Lipsync will be unavailable until dlib installs cleanly.",
+            flush=True,
+        )
 
 
 def _ensure_wav2lip_assets():
@@ -2983,15 +3070,21 @@ def _ensure_wav2lip_assets():
         )
         # Install only the packages Wav2Lip needs that aren't already present
         # (skip the repo's requirements.txt — it pins ancient versions incompatible with Python 3.13+)
-        wav2lip_pkgs = ["opencv-python", "librosa", "tqdm"]
-        print(f"     Installing Wav2Lip dependencies: {', '.join(wav2lip_pkgs)}", flush=True)
+        print(f"     Installing Wav2Lip base deps: {', '.join(WAV2LIP_BASE_PKGS)}", flush=True)
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--quiet",
-             "--break-system-packages"] + wav2lip_pkgs,
+             "--break-system-packages"] + WAV2LIP_BASE_PKGS,
             check=False,
         )
         if result.returncode != 0:
-            print("     ! Some Wav2Lip dependencies failed to install — lipsync may not work.", flush=True)
+            print("     ! Some Wav2Lip base deps failed to install — lipsync may not work.", flush=True)
+
+        # Face-detection stack (dlib + basicsr + facexlib). On Windows we rely
+        # on install_windows.bat to ship pre-built dlib wheels; here on Linux
+        # we install them at first use.
+        if not sys.platform.startswith("win"):
+            _install_wav2lip_face_stack_linux()
+
         # Patch audio.py: librosa>=0.9 changed filters.mel() to keyword-only args
         audio_py = WAV2LIP_REPO / "audio.py"
         if audio_py.exists():
