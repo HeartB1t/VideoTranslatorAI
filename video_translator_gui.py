@@ -3199,6 +3199,28 @@ _active_subprocesses: set[subprocess.Popen] = set()
 _active_subprocesses_lock = threading.Lock()
 
 
+def _register_subprocess(proc: subprocess.Popen) -> None:
+    """Add a running subprocess to the global registry under a lock."""
+    with _active_subprocesses_lock:
+        _active_subprocesses.add(proc)
+
+
+def _unregister_subprocess(proc: subprocess.Popen) -> None:
+    """Remove a subprocess from the global registry under a lock."""
+    with _active_subprocesses_lock:
+        _active_subprocesses.discard(proc)
+
+
+def _snapshot_active_subprocesses() -> list[subprocess.Popen]:
+    """Return a list copy of the registry while holding the lock.
+
+    Iteration / .terminate() happens outside the lock so we never block
+    worker threads trying to register a new subprocess on a slow kill.
+    """
+    with _active_subprocesses_lock:
+        return list(_active_subprocesses)
+
+
 def _install_wav2lip_face_stack_linux() -> None:
     """Install dlib + basicsr + facexlib on Linux with a cmake pre-check.
 
@@ -3343,7 +3365,7 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
     )
-    _active_subprocesses.add(proc)
+    _register_subprocess(proc)
     # Watchdog: kill Wav2Lip if it hangs beyond timeout
     _watchdog = threading.Timer(WAV2LIP_TIMEOUT, proc.kill)
     _watchdog.start()
@@ -3359,7 +3381,7 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
         raise
     finally:
         _watchdog.cancel()
-        _active_subprocesses.discard(proc)
+        _unregister_subprocess(proc)
         # Clean up Wav2Lip temp/ to avoid disk accumulation
         wav2lip_tmp = WAV2LIP_REPO / "temp"
         if wav2lip_tmp.exists():
@@ -4104,11 +4126,25 @@ class App(tk.Tk):
 
         self.after(0, self._log_write, "    Downloading ffmpeg (~60 MB)...\n")
         try:
-            def _progress(block, block_size, total):
-                if total > 0:
-                    pct = min(100, block * block_size * 100 // total)
-                    self.after(0, self._log_write, f"\r    Downloading... {pct}%")
-            urllib.request.urlretrieve(ffmpeg_url, zip_path, reporthook=_progress)
+            # Stream download via urlopen + copyfileobj so we can enforce a
+            # per-read timeout. urlretrieve has no timeout knob and will hang
+            # indefinitely on a slow/stalled mirror. Pattern mirrors
+            # _ensure_wav2lip_assets which downloads the Wav2Lip model.
+            from urllib.request import Request, urlopen
+            req = Request(ffmpeg_url, headers={"User-Agent": "VideoTranslatorAI/1.0"})
+            downloaded = 0
+            with urlopen(req, timeout=120) as r, open(zip_path, "wb") as out:
+                total = int(r.headers.get("Content-Length") or 0)
+                chunk = 64 * 1024
+                while True:
+                    buf = r.read(chunk)
+                    if not buf:
+                        break
+                    out.write(buf)
+                    downloaded += len(buf)
+                    if total > 0:
+                        pct = min(100, downloaded * 100 // total)
+                        self.after(0, self._log_write, f"\r    Downloading... {pct}%")
             self.after(0, self._log_write, "\n    Extracting...\n")
             install_dir_resolved = install_dir.resolve()
             with zipfile.ZipFile(zip_path, "r") as z:
@@ -4175,18 +4211,34 @@ class App(tk.Tk):
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             )
+            _register_subprocess(proc)
             ok = True
+            # 10-minute ceiling: covers large Torch wheels on slow mirrors
+            # without letting the GUI freeze forever if pip stalls.
+            PIP_TIMEOUT = 600
             try:
                 for line in proc.stdout:
                     line = line.rstrip()
                     if line:
                         self.after(0, self._log_write, f"    {line}\n")
-                proc.wait()
-                ok = proc.returncode == 0
+                try:
+                    proc.wait(timeout=PIP_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    self.after(0, self._log_write,
+                               f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
+                    proc.kill()
+                    with contextlib.suppress(Exception):
+                        proc.wait(timeout=30)
+                    ok = False
+                else:
+                    ok = proc.returncode == 0
             except Exception:
                 proc.kill()
-                proc.wait()
+                with contextlib.suppress(Exception):
+                    proc.wait(timeout=30)
                 ok = False
+            finally:
+                _unregister_subprocess(proc)
             self.after(0, self._install_done, ok, packages)
 
         threading.Thread(target=do, daemon=True).start()
@@ -5008,7 +5060,10 @@ class App(tk.Tk):
             if not messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
                 return
         self._destroying = True
-        for p in list(_active_subprocesses):
+        # Snapshot under lock, then terminate outside the lock so worker
+        # threads calling _register_subprocess/_unregister_subprocess on
+        # another subprocess are not blocked while a slow kill is in flight.
+        for p in _snapshot_active_subprocesses():
             with contextlib.suppress(Exception):
                 p.terminate()
         self.destroy()
