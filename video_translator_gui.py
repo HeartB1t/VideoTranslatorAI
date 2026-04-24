@@ -86,6 +86,81 @@ XTTS_LANGS = {
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 DEFAULT_LANG = "it"
 
+# Expansion ratio rispetto all'inglese (≈1.0). Valori >1 = la lingua usa più
+# caratteri/sillabe/secondi di EN per esprimere lo stesso contenuto; <1 il
+# contrario. Fonti: corpora multilingual (UN Parallel, TED, Europarl, OPUS),
+# approssimazioni usate per autotune XTTS speed su coppie asimmetriche.
+LANG_EXPANSION: dict[str, float] = {
+    "en": 1.00,
+    "zh-CN": 0.70, "zh": 0.70, "ja": 0.85, "ko": 0.90,
+    "it": 1.25, "es": 1.25, "pt": 1.22, "fr": 1.27, "de": 1.20,
+    "nl": 1.18, "sv": 1.15, "da": 1.12, "no": 1.12, "fi": 1.10,
+    "ru": 1.15, "uk": 1.15, "pl": 1.15, "cs": 1.10, "hu": 1.20,
+    "ar": 1.08, "hi": 1.10, "tr": 1.10, "el": 1.20, "ro": 1.20,
+    "vi": 1.15, "id": 1.10,
+}
+
+
+def _suggest_xtts_speed(
+    lang_source: str,
+    lang_target: str,
+    user_override: float | None = None,
+) -> tuple[float, float, bool]:
+    """Autotune dello speed XTTS v2 in funzione dell'asimmetria fra lingue.
+
+    Ritorna (speed, ratio, auto) dove:
+    - speed: valore da passare a `generate_tts_xtts`, nel range [1.10, 1.40];
+    - ratio: expansion del target rispetto alla source (target/source);
+    - auto: True se il valore è stato calcolato, False se è un override utente.
+
+    Se `user_override` è fornito (da CLI --xtts-speed o config JSON con chiave
+    esplicita), viene rispettato senza modifiche — ci fidiamo che l'utente sappia
+    cosa sta facendo. Con `user_override=None` l'euristica sceglie uno speed più
+    alto quando il target è significativamente più lungo del source (caso EN→IT,
+    EN→FR…) per dare a XTTS più margine e ridurre l'atempo post-processing.
+    Source "auto" o sconosciuta viene trattata come EN (ratio base 1.0).
+    """
+    def _norm(code: str) -> str:
+        c = (code or "").strip()
+        if not c or c.lower() == "auto":
+            return "en"
+        # cinese: mappa tutte le varianti su "zh" della tabella
+        if c.lower().startswith("zh"):
+            # Accetta sia "zh" sia "zh-CN" (entrambi in tabella)
+            return c if c in LANG_EXPANSION else "zh"
+        return c
+
+    src = _norm(lang_source)
+    tgt = _norm(lang_target)
+    src_exp = LANG_EXPANSION.get(src, 1.0)
+    tgt_exp = LANG_EXPANSION.get(tgt, 1.0)
+    # Guard: se una delle due è 0 (non dovrebbe succedere) evita div/0
+    ratio = (tgt_exp / src_exp) if src_exp > 0 else 1.0
+
+    if user_override is not None:
+        # Rispetta sempre la scelta esplicita, ma restituisci comunque il ratio
+        # per log/debug del chiamante.
+        return float(user_override), ratio, False
+
+    if ratio >= 1.20:
+        speed = 1.35   # target molto più lungo (es. EN→IT, EN→FR)
+    elif ratio >= 1.10:
+        speed = 1.30   # target moderatamente più lungo
+    elif ratio <= 0.75:
+        # target decisamente più corto (es. EN→ZH 0.70). Soglia 0.75 (non 0.90
+        # come prima stesura) per NON toccare IT→EN (ratio 0.80) che il tuning
+        # empirico v1.4 ha già fissato a 1.25. Con 0.90 avremmo retrocesso IT→EN
+        # a 1.15, violando il vincolo "non rompere nulla che funziona".
+        speed = 1.15
+    else:
+        speed = 1.25   # caso simmetrico / quasi (es. IT→EN 0.80, IT→ES, EN→JA 0.85)
+
+    # Cap di sicurezza nel range utile (sotto 1.10 XTTS suona lento, sopra 1.40
+    # inizia a perdere prosodia anche nativamente).
+    speed = max(1.10, min(speed, 1.40))
+    return speed, ratio, True
+
+
 REQUIRED_PACKAGES = {
     "faster_whisper": "faster-whisper",
     "edge_tts":       "edge-tts",
@@ -2449,6 +2524,7 @@ def _merge_short_segments(
     min_duration: float = 3.0,
     max_gap: float = 1.0,
     max_merged_duration: float = 20.0,
+    aggressive: bool = False,
 ) -> list[dict]:
     """Unisce segmenti consecutivi brevi (<min_duration) con il successivo se:
     - gap tra fine precedente e inizio successivo < max_gap
@@ -2458,7 +2534,19 @@ def _merge_short_segments(
     TTS inglese più lungo → meno atempo > 1.5 udibili).
     Parametri tarati 2026-04-24 dopo diagnostic su video IT→EN: 60% segmenti
     avevano ratio > 1.30 con i vecchi default (1.5/0.4/12.0).
+
+    `aggressive=True` alza i bound (min 4.0, gap 1.5, max 30.0) per dare più
+    spazio al TTS quando il target è molto più lungo del source (es. EN→IT):
+    segmenti più lunghi hanno margine maggiore per assorbire l'espansione della
+    lingua. Trade-off: picchi massimi più alti, compensati dallo speed XTTS
+    auto-tuned più aggressivo.
     """
+    if aggressive:
+        # Override forzato dei parametri: il chiamante può anche essere passato
+        # i default (quando non sa che è un caso espanso). Qui bumpa sempre.
+        min_duration = max(min_duration, 4.0)
+        max_gap = max(max_gap, 1.5)
+        max_merged_duration = max(max_merged_duration, 30.0)
     if not segments:
         return segments
     merged: list[dict] = []
@@ -2736,7 +2824,7 @@ def generate_tts(segments: list[dict], voice: str, tmp_dir: str, rate: str = "+0
 def _build_vad_reference(
     src_audio: str,
     out_wav: str,
-    target_seconds: float = 12.0,
+    target_seconds: float = 18.0,
     min_seconds: float = 3.0,
     max_gap_ms: int = 300,
     sample_rate: int = 22050,
@@ -2746,6 +2834,11 @@ def _build_vad_reference(
     VAD ≤ max_gap_ms); se è <target_seconds, concatena i segmenti più lunghi fino
     a raggiungere target_seconds. Scrive un WAV mono 22050 Hz in out_wav.
     Ritorna out_wav o None in caso di errore/parlato insufficiente.
+
+    `target_seconds` default 18.0 (prima 12.0): XTTS clona meglio con ~15-20s di
+    materiale pulito. Su audio lunghi (>1 min) il VAD trova tipicamente 80+
+    secondi di parlato, quindi il target 18 è raggiungibile. Se non lo è, il
+    chiamante può ritentare con target minori (fallback 18→15→12→10).
     """
     try:
         import numpy as np
@@ -2827,6 +2920,31 @@ def _build_vad_reference(
         return None
 
 
+def _build_vad_reference_tiered(
+    src_audio: str,
+    out_wav: str,
+    targets: tuple[float, ...] = (18.0, 15.0, 12.0, 10.0),
+) -> str | None:
+    """Wrapper che tenta `_build_vad_reference` con target decrescenti.
+
+    XTTS v2 clona meglio la voce con ~15-20s di parlato pulito, quindi partiamo
+    da 18s. Se il VAD non trova abbastanza materiale (o la funzione ritorna None
+    per qualsiasi motivo), riduciamo progressivamente: 18 → 15 → 12 → 10.
+    Se tutti i tentativi falliscono, ritorna None e il chiamante farà fallback
+    sul comportamento legacy (ffmpeg -t 30 / copia raw).
+    """
+    for i, target in enumerate(targets):
+        result = _build_vad_reference(src_audio, out_wav, target_seconds=target)
+        if result:
+            if i > 0:
+                # Log esplicito: l'utente deve capire che abbiamo ripiegato a
+                # un target più basso (meno materiale = clone potenzialmente
+                # meno fedele, ma comunque migliore di una reference raw).
+                print(f"     → VAD reference built at fallback target {target:.0f}s (primary {targets[0]:.0f}s not reachable)", flush=True)
+            return result
+    return None
+
+
 def generate_tts_xtts(
     segments: list[dict],
     reference_audio: str,
@@ -2859,7 +2977,7 @@ def generate_tts_xtts(
 
     # Global (fallback) reference clip — preferisco VAD per evitare silenzi/rumore.
     ref_clip = os.path.join(tmp_dir, "xtts_ref.wav")
-    vad_ref = _build_vad_reference(reference_audio, ref_clip)
+    vad_ref = _build_vad_reference_tiered(reference_audio, ref_clip)
     if not vad_ref:
         try:
             subprocess.run([
@@ -2880,7 +2998,7 @@ def generate_tts_xtts(
                 # Refina la reference per-speaker con VAD per eliminare pause/rumore
                 # residui nei turni selezionati.
                 refined = os.path.join(tmp_dir, f"{Path(ref).stem}_vad.wav")
-                if _build_vad_reference(ref, refined):
+                if _build_vad_reference_tiered(ref, refined):
                     ref = refined
                 speaker_refs[spk] = ref
             else:
@@ -3789,16 +3907,37 @@ def translate_video(
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
-    xtts_speed: float = 1.25,
+    xtts_speed: float | None = None,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
     segments_override: skip transcription+translation and use these segments (GUI editor).
+
+    `xtts_speed`: se None (default) viene calcolato via `_suggest_xtts_speed`
+    in base alla coppia (lang_source, lang_target). Se fornito esplicitamente
+    (config JSON con chiave presente / CLI --xtts-speed / parametro GUI futuro)
+    viene rispettato senza modifiche. Questa è la leva principale per ridurre
+    l'atempo post-processing su coppie asimmetriche tipo EN→IT.
     """
     if lang_target not in LANGUAGES:
         raise ValueError(f"Unsupported target language: {lang_target}")
     if not os.path.exists(video_in):
         raise FileNotFoundError(f"Video not found: {video_in}")
+
+    # Autotune dello speed XTTS in base alla coppia di lingue. Rispetta sempre
+    # un override esplicito (xtts_speed non-None). Calcolato qui, una sola volta
+    # per chiamata, così sia il log iniziale sia l'invocazione di generate_tts_xtts
+    # usano lo stesso valore.
+    effective_xtts_speed, lang_ratio, speed_auto = _suggest_xtts_speed(
+        lang_source, lang_target, xtts_speed,
+    )
+    # Caso "target molto più lungo del source" (ratio >= 1.20): oltre allo speed
+    # auto-tuned, rendiamo anche il merge dei segmenti più aggressivo, così
+    # l'italiano/francese tradotto ha slot più capienti da riempire. Il
+    # gate `speed_auto` assicura che un utente v1.4 con `xtts_speed` pinnato
+    # in config non veda cambiare silenziosamente anche il merge (i due dial
+    # si muovono insieme: o entrambi auto, o entrambi a default).
+    merge_aggressive = speed_auto and lang_ratio >= 1.20
 
     voice = voice or LANGUAGES[lang_target]["voices"][0]
     stem  = Path(video_in).stem
@@ -3819,6 +3958,14 @@ def translate_video(
     output_base = str(Path(output).with_suffix(""))
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
+    if tts_engine == "xtts":
+        # Log esplicito di cosa ha deciso l'autotune. Utile in bug report / debug
+        # di atempo artifacts.
+        if speed_auto:
+            _ratio_note = f"auto-tuned for {lang_source}→{lang_target}, ratio={lang_ratio:.2f}"
+        else:
+            _ratio_note = f"user override (ratio={lang_ratio:.2f})"
+        print(f"[i] XTTS speed={effective_xtts_speed:.2f} ({_ratio_note}){' [aggressive merge]' if merge_aggressive else ''}", flush=True)
 
     with tempfile.TemporaryDirectory(prefix="vidtrans_") as tmp_dir:
         audio_raw = os.path.join(tmp_dir, "audio_raw.wav")
@@ -3864,12 +4011,15 @@ def translate_video(
                 except Exception as e:
                     print(f"     ! Diarization failed ({e.__class__.__name__}: {e}), continuing without speaker info.", flush=True)
                     diar_segments = []
-            # Merge dei segmenti troppo brevi (< 1.5s) per ridurre hallucinations XTTS
-            # e produrre frasi più naturali per la traduzione
+            # Merge dei segmenti troppo brevi per ridurre hallucinations XTTS
+            # e produrre frasi più naturali per la traduzione. Su coppie con
+            # target molto più lungo della source (ratio >= 1.20, es. EN→IT)
+            # usiamo bound più generosi per dare al TTS slot più capienti.
             pre_merge = len(raw_segs)
-            raw_segs = _merge_short_segments(raw_segs)
+            raw_segs = _merge_short_segments(raw_segs, aggressive=merge_aggressive)
             if len(raw_segs) < pre_merge:
-                print(f"     → Merged short segments: {pre_merge} → {len(raw_segs)}", flush=True)
+                _note = " (aggressive)" if merge_aggressive else ""
+                print(f"     → Merged short segments{_note}: {pre_merge} → {len(raw_segs)}", flush=True)
             segments = translate_segments(raw_segs, effective_src, lang_target, engine=translation_engine, deepl_key=deepl_key)
 
         if not no_subs:
@@ -3886,7 +4036,7 @@ def translate_video(
                 tts_files = generate_tts_xtts(
                     segments, vocals_path, lang_target, tmp_dir,
                     diar_segments=diar_segments,
-                    speed=xtts_speed,
+                    speed=effective_xtts_speed,
                 )
             except Exception as e:
                 print(f"     ! XTTS failed ({e}), falling back to Edge-TTS.", flush=True)
@@ -5059,10 +5209,16 @@ class App(tk.Tk):
         except (ValueError, tk.TclError):
             rate = 0
         cfg = load_config()
-        try:
-            xtts_speed = float(cfg.get("xtts_speed", 1.25))
-        except (TypeError, ValueError):
-            xtts_speed = 1.25
+        # xtts_speed: se la chiave esiste nel config JSON è un override utente
+        # esplicito; se è assente passiamo None per lasciare che l'autotune
+        # scelga in base alla coppia di lingue.
+        if "xtts_speed" in cfg:
+            try:
+                xtts_speed = float(cfg["xtts_speed"])
+            except (TypeError, ValueError):
+                xtts_speed = None
+        else:
+            xtts_speed = None
         snap = {
             "model":      self._model.get(),
             "lang_src":   self._lang_src.get(),
@@ -5294,7 +5450,9 @@ def _cli():
     parser.add_argument("--lipsync", action="store_true",
                         help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
     parser.add_argument("--xtts-speed", type=float, default=None,
-                        help="XTTS v2 native speed factor (0.5–2.0, default 1.1)")
+                        help="XTTS v2 native speed factor (0.5–2.0). "
+                             "If omitted, auto-tuned per language pair "
+                             "(e.g. EN→IT=1.35, IT→EN=1.25).")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -5305,13 +5463,17 @@ def _cli():
 
     cfg_cli = load_config()
     hf_token_cli = args.hf_token or load_hf_token() or cfg_cli.get("hf_token", "")
+    # CLI ha la priorità, poi config JSON (se la chiave esiste), altrimenti None
+    # → autotune kicks-in dentro translate_video().
     if args.xtts_speed is not None:
-        xtts_speed_cli = args.xtts_speed
-    else:
+        xtts_speed_cli: float | None = args.xtts_speed
+    elif "xtts_speed" in cfg_cli:
         try:
-            xtts_speed_cli = float(cfg_cli.get("xtts_speed", 1.25))
+            xtts_speed_cli = float(cfg_cli["xtts_speed"])
         except (TypeError, ValueError):
-            xtts_speed_cli = 1.25
+            xtts_speed_cli = None
+    else:
+        xtts_speed_cli = None
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
