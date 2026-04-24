@@ -4,6 +4,9 @@ demucs
 soundfile
 edge-tts
 deep-translator
+# requests: usato sia da DeepL sia dal nuovo engine LLM Ollama (v2.0). È
+# dipendenza transitiva di deep-translator ma lo esplicitiamo per chiarezza.
+requests
 pydub
 pyloudnorm
 coqui-tts>=0.27.5

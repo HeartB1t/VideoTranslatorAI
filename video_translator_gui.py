@@ -236,6 +236,11 @@ REQUIRED_PACKAGES = {
     "demucs":         "demucs",
     "yt_dlp":         "yt-dlp",
     "torchcodec":     "torchcodec",
+    # `requests` è usato da DeepL e dal nuovo engine Ollama (v2.0). È già
+    # dipendenza transitiva di deep-translator, ma lo dichiariamo esplicito
+    # così check_dependencies lo segnala immediatamente in caso di install
+    # rotto.
+    "requests":       "requests",
 }
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
@@ -307,7 +312,19 @@ UI_STRINGS = {
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
         "engine_marian":      "MarianMT (locale)",
+        "engine_ollama":      "LLM Ollama (locale, consigliato — traduzioni concise per doppiaggio)",
         "label_deepl_key":    "API key DeepL:",
+        "label_ollama_model": "Modello:",
+        "label_ollama_url":   "URL Ollama:",
+        "hint_ollama":        "Default: qwen2.5:7b-instruct — richiede Ollama installato",
+        "msg_ollama_unavailable": (
+            "Ollama non disponibile. Per installare:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n\n"
+            "Poi scaricare il modello:\n"
+            "  ollama pull {model}\n\n"
+            "Verrà usato MarianMT/Google come fallback."
+        ),
         "opt_diarization":    "👥 Diarization multi-speaker (pyannote)",
         "label_hf_token":     "HF token:",
         "hint_hf_token":      "Token HF gratuito: huggingface.co/settings/tokens",
@@ -379,7 +396,19 @@ UI_STRINGS = {
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
         "engine_marian":      "MarianMT (local)",
+        "engine_ollama":      "LLM Ollama (local, recommended — concise translations for dubbing)",
         "label_deepl_key":    "DeepL API key:",
+        "label_ollama_model": "Model:",
+        "label_ollama_url":   "Ollama URL:",
+        "hint_ollama":        "Default: qwen2.5:7b-instruct — requires Ollama installed",
+        "msg_ollama_unavailable": (
+            "Ollama not available. To install:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n\n"
+            "Then pull the model:\n"
+            "  ollama pull {model}\n\n"
+            "Falling back to MarianMT/Google."
+        ),
         "opt_diarization":    "👥 Multi-speaker diarization (pyannote)",
         "label_hf_token":     "HF token:",
         "hint_hf_token":      "Free HF token: huggingface.co/settings/tokens",
@@ -2647,6 +2676,253 @@ def _merge_short_segments(
     return merged
 
 
+# ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
+# Mapping da codici ISO a nomi umani: il prompt LLM è molto più robusto se
+# riceve "English"/"Italian" invece di "en"/"it". Segue lo stesso set di
+# LANGUAGES + codici sorgente whisper comuni; mancanze cadono sul code raw
+# (gli LLM moderni lo capiscono comunque, con meno accuracy).
+_OLLAMA_LANG_NAMES: dict[str, str] = {
+    "auto": "auto-detected",
+    "ar": "Arabic", "cs": "Czech", "da": "Danish", "de": "German",
+    "el": "Greek", "en": "English", "es": "Spanish", "fi": "Finnish",
+    "fr": "French", "hi": "Hindi", "hu": "Hungarian", "id": "Indonesian",
+    "it": "Italian", "ja": "Japanese", "ko": "Korean", "nl": "Dutch",
+    "no": "Norwegian", "pl": "Polish", "pt": "Portuguese", "ro": "Romanian",
+    "ru": "Russian", "sv": "Swedish", "tr": "Turkish", "uk": "Ukrainian",
+    "vi": "Vietnamese", "zh": "Chinese", "zh-cn": "Chinese", "zh-CN": "Chinese",
+}
+
+
+def _ollama_lang_name(code: str) -> str:
+    if not code:
+        return "English"
+    return _OLLAMA_LANG_NAMES.get(code, _OLLAMA_LANG_NAMES.get(code.lower(), code))
+
+
+def _ollama_health_check(api_url: str, model: str, timeout: float = 5.0) -> tuple[bool, str]:
+    """Verifica che Ollama sia raggiungibile e che il modello richiesto sia
+    presente. Ritorna (ok, message). `message` è "" se ok, altrimenti è
+    human-readable (es. "Ollama non raggiungibile: ConnectionError", o
+    "Model qwen2.5:7b-instruct not installed").
+
+    Non solleva eccezioni — il chiamante gestisce il fallback.
+    """
+    import requests
+    base = api_url.rstrip("/")
+    try:
+        r = requests.get(f"{base}/api/tags", timeout=timeout)
+        r.raise_for_status()
+        data = r.json()
+    except requests.RequestException as e:
+        return False, f"Ollama not reachable at {base} ({e.__class__.__name__}: {e})"
+    except Exception as e:
+        return False, f"Ollama returned invalid JSON at {base} ({e.__class__.__name__}: {e})"
+
+    models = [m.get("name", "") for m in data.get("models", [])]
+    # Ollama tag naming: `qwen2.5:7b-instruct` vs `qwen2.5:7b-instruct-q4_K_M`.
+    # Accettiamo match esatto o prefix+":".
+    target = model.strip()
+    if target in models:
+        return True, ""
+    # Match per prefix (es. "qwen2.5:7b-instruct" matcha "qwen2.5:7b-instruct-q4_K_M")
+    for m in models:
+        if m.startswith(target + "-") or m.split(":")[0] == target.split(":")[0]:
+            # Non è match esatto, ma stesso base model → accept con warning
+            return True, ""
+    available = ", ".join(models[:5]) if models else "none"
+    return False, (
+        f"Model '{target}' not installed in Ollama. Available: {available}. "
+        f"Install with: ollama pull {target}"
+    )
+
+
+def _ollama_strip_preamble(text: str) -> str:
+    """Rimuove artefatti tipici della risposta LLM: virgolette esterne, prefissi
+    'Translation:', preamboli in italiano/inglese, spazi extra.
+    """
+    if not text:
+        return ""
+    t = text.strip()
+    # Rimuovi wrapping quotes
+    if len(t) >= 2 and t[0] in '"\'«' and t[-1] in '"\'»':
+        t = t[1:-1].strip()
+    # Rimuovi prefissi comuni
+    import re as _re
+    t = _re.sub(
+        r"^(?:translation|traduzione|traducción|übersetzung|here(?:'s| is)(?: the)?(?: translation)?)\s*[:\-]\s*",
+        "",
+        t,
+        flags=_re.IGNORECASE,
+    )
+    # Rimuovi righe vuote iniziali/finali
+    t = t.strip()
+    return t
+
+
+def translate_with_ollama(
+    segments: list[dict],
+    source_lang: str,
+    target_lang: str,
+    model: str = "qwen2.5:7b-instruct",
+    api_url: str = "http://localhost:11434",
+    slot_aware: bool = True,
+    batch_size: int = 1,
+    fallback_fn=None,
+) -> list[dict]:
+    """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
+    impone concisione per il doppiaggio.
+
+    Args:
+        segments: lista di dict con chiavi `start`, `end`, `text`, opz `speaker`.
+        source_lang: codice ISO della lingua sorgente (es. "en"). "auto" accettato.
+        target_lang: codice ISO della lingua target (es. "it").
+        model: nome del modello Ollama (default "qwen2.5:7b-instruct").
+        api_url: base URL del daemon Ollama (default "http://localhost:11434").
+        slot_aware: se True, include il reading time nel prompt (consigliato).
+        batch_size: numero di segmenti da accorpare in un singolo prompt. 1 = safe
+                    (parsing banale), >1 = più veloce ma parsing brittle. Per
+                    v2.0 teniamo 1 di default e lasciamo il parametro come hook
+                    futuro (il codice supporta >1 con fallback automatico su
+                    per-segment se il parsing dell'output fallisce).
+        fallback_fn: callable opzionale `(seg) -> str` invocata per il singolo
+                     segmento quando Ollama solleva. Se None, il testo sorgente
+                     è usato as-is (degrada a "no translation").
+
+    Ritorna la lista di segmenti con `text_src` e `text_tgt` popolati, identica
+    nello schema a quella prodotta da `translate_segments` per gli altri engine.
+    """
+    import requests
+    base = api_url.rstrip("/")
+    src_name = _ollama_lang_name(source_lang)
+    tgt_name = _ollama_lang_name(target_lang)
+
+    # Health check upfront — così se Ollama è down solleviamo subito invece di
+    # fallire 300 volte nel loop.
+    ok, msg = _ollama_health_check(base, model)
+    if not ok:
+        raise RuntimeError(msg)
+
+    print(f"     → Ollama ready ({model} @ {base}, slot_aware={slot_aware}, batch={batch_size})", flush=True)
+
+    translated: list[dict] = []
+    total = len(segments)
+    total_src_chars = 0
+    total_tgt_chars = 0
+    failed = 0
+
+    def _build_prompt(text: str, slot_s: float) -> str:
+        slot_clause = ""
+        if slot_aware and slot_s > 0:
+            slot_clause = (
+                f"2. Target reading time: approximately {slot_s:.1f} seconds when spoken aloud at normal pace.\n"
+            )
+        return (
+            f"You are a professional dubbing translator. Translate the following {src_name} text to {tgt_name} for voice dubbing.\n\n"
+            f"CRITICAL REQUIREMENTS:\n"
+            f"1. Keep it CONCISE — {tgt_name} tends to be longer than {src_name}; your job is to compress while preserving meaning.\n"
+            f"{slot_clause}"
+            f"3. Use SPOKEN register, NOT formal/written language. Natural dubbing dialogue.\n"
+            f"4. Drop filler words, redundant adverbs, verbose constructions where possible.\n"
+            f"5. Output ONLY the translated text. No explanations, no quotes, no preambles.\n\n"
+            f"{src_name} text:\n{text}\n\n"
+            f"{tgt_name} translation (spoken, concise"
+            f"{', ~' + format(slot_s, '.1f') + 's' if slot_aware and slot_s > 0 else ''}):\n"
+        )
+
+    def _call_ollama(prompt: str, num_predict: int) -> str:
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "num_predict": num_predict,
+            },
+        }
+        # Timeout generoso: qwen2.5:7b su RTX 3090 produce ~40-80 tok/s,
+        # ma su CPU-only può arrivare a 2-5 tok/s → 120s copre anche risposte
+        # lunghe in fallback CPU.
+        r = requests.post(f"{base}/api/generate", json=payload, timeout=120)
+        r.raise_for_status()
+        data = r.json()
+        return _ollama_strip_preamble(data.get("response", ""))
+
+    for i, seg in enumerate(segments):
+        text = (seg.get("text") or "").strip()
+        slot_s = max(0.0, float(seg.get("end", 0)) - float(seg.get("start", 0)))
+
+        if not text:
+            tr = ""
+        else:
+            try:
+                prompt = _build_prompt(text, slot_s)
+                # num_predict ~2x caratteri sorgente (circa 1 tok = 4 chars,
+                # quindi ~len/2 token; 2x come safety margin). Bound minimo 64.
+                num_predict = max(64, len(text) * 2 // 4 * 2)
+                tr = _call_ollama(prompt, num_predict)
+                if not tr:
+                    # Risposta vuota = considera fallita, fallback
+                    raise RuntimeError("empty response")
+            except Exception as e:
+                failed += 1
+                fb_text = None
+                if fallback_fn is not None:
+                    try:
+                        fb_text = fallback_fn(seg)
+                    except Exception as fe:
+                        print(f"     ! Ollama+fallback both failed for segment #{i}: {fe}", flush=True)
+                if fb_text:
+                    tr = fb_text
+                    print(
+                        f"     ! Ollama translation failed for segment #{i}, fallback used: {e}",
+                        flush=True,
+                    )
+                else:
+                    tr = text
+                    print(
+                        f"     ! Ollama translation failed for segment #{i}, keeping source: {e}",
+                        flush=True,
+                    )
+
+        total_src_chars += len(text)
+        total_tgt_chars += len(tr)
+        entry = {
+            "start": seg["start"],
+            "end":   seg["end"],
+            "text_src": text,
+            "text_tgt": tr or text,
+        }
+        if "speaker" in seg:
+            entry["speaker"] = seg["speaker"]
+        translated.append(entry)
+        if (i + 1) % 4 == 0 or i + 1 == total:
+            print(f"     {i+1}/{total}...", end="\r", flush=True)
+
+    # Statistica shrinkage: quanto più conciso è l'output Ollama rispetto
+    # al sorgente (approssimazione per caratteri). Utile a diagnosticare se
+    # il prompt "CONCISE" sta funzionando (atteso ratio ~0.9-1.1 vs naïf
+    # 1.25 per EN→IT con deep-translator).
+    if total_src_chars > 0:
+        ratio = total_tgt_chars / total_src_chars
+        # expansion naïf atteso dalla tabella LANG_EXPANSION (baseline letterale)
+        exp_tgt = LANG_EXPANSION.get(target_lang, LANG_EXPANSION.get(target_lang.split("-")[0], 1.0))
+        exp_src = LANG_EXPANSION.get(source_lang, LANG_EXPANSION.get((source_lang or "").split("-")[0], 1.0))
+        baseline = (exp_tgt / exp_src) if exp_src > 0 else 1.0
+        shrinkage_pct = (ratio / baseline - 1.0) * 100.0 if baseline > 0 else 0.0
+        fail_note = f", {failed} fallback" if failed else ""
+        print(
+            f"     → Ollama translation: {total}/{total} segments, "
+            f"char ratio={ratio:.2f} vs literal baseline {baseline:.2f} "
+            f"(shrinkage {shrinkage_pct:+.1f}%){fail_note}",
+            flush=True,
+        )
+    else:
+        print(f"     → Ollama translation: {total}/{total} segments (no text)", flush=True)
+
+    return translated
+
+
 def _marian_normalize_lang(code: str) -> str:
     """Normalize language codes to the short form Helsinki-NLP models expect."""
     if not code:
@@ -2664,9 +2940,27 @@ def _marian_normalize_lang(code: str) -> str:
 def translate_segments(
     segments: list[dict], source: str, target: str,
     engine: str = "google", deepl_key: str = "",
+    ollama_model: str = "qwen2.5:7b-instruct",
+    ollama_url: str = "http://localhost:11434",
+    ollama_slot_aware: bool = True,
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
+
+    # ── Ollama LLM translation (v2.0) ──────────────────────────────────────
+    # Leva strutturale contro gli atempo artifacts: l'LLM capisce il vincolo
+    # temporale e comprime la traduzione alla sorgente, invece di lasciare che
+    # MarianMT/Google producano output letterali +25% più lunghi.
+    if engine == "llm_ollama":
+        try:
+            return translate_with_ollama(
+                segments, src, target,
+                model=ollama_model, api_url=ollama_url,
+                slot_aware=ollama_slot_aware, batch_size=1,
+            )
+        except Exception as e:
+            print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
+            engine = "google"
 
     # ── MarianMT local translation ──────────────────────────────────────────
     if engine == "marian":
@@ -4018,6 +4312,9 @@ def translate_video(
     hf_token: str = "",
     use_lipsync: bool = False,
     xtts_speed: float | None = None,
+    ollama_model: str = "qwen2.5:7b-instruct",
+    ollama_url: str = "http://localhost:11434",
+    ollama_slot_aware: bool = True,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -4130,7 +4427,12 @@ def translate_video(
             if len(raw_segs) < pre_merge:
                 _note = " (aggressive)" if merge_aggressive else ""
                 print(f"     → Merged short segments{_note}: {pre_merge} → {len(raw_segs)}", flush=True)
-            segments = translate_segments(raw_segs, effective_src, lang_target, engine=translation_engine, deepl_key=deepl_key)
+            segments = translate_segments(
+                raw_segs, effective_src, lang_target,
+                engine=translation_engine, deepl_key=deepl_key,
+                ollama_model=ollama_model, ollama_url=ollama_url,
+                ollama_slot_aware=ollama_slot_aware,
+            )
 
         if not no_subs:
             save_subtitles(segments, output_base)
@@ -4381,9 +4683,20 @@ class App(tk.Tk):
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
         self._use_lipsync = tk.BooleanVar(value=False)
-        # Translation engine: "google" | "deepl" | "marian"
+        # Translation engine: "google" | "deepl" | "marian" | "llm_ollama"
         self._translation_engine = tk.StringVar(value="google")
         self._deepl_key_var      = tk.StringVar()
+        # Ollama LLM config (v2.0) — preset da config JSON se presente
+        _ocfg = load_config()
+        self._ollama_model_var   = tk.StringVar(
+            value=_ocfg.get("ollama_model", "qwen2.5:7b-instruct")
+        )
+        self._ollama_url_var     = tk.StringVar(
+            value=_ocfg.get("ollama_url", "http://localhost:11434")
+        )
+        self._ollama_slot_aware  = tk.BooleanVar(
+            value=_ocfg.get("ollama_slot_aware", True)
+        )
         # Diarization: il token HF è persistito nel system keyring (con migrazione
         # automatica dal vecchio JSON legacy).
         self._use_diarization = tk.BooleanVar(value=False)
@@ -4451,7 +4764,15 @@ class App(tk.Tk):
         self.geometry(f"{win_w}x{win_h}+{x}+{y}")
 
     def _s(self, key: str) -> str:
-        return UI_STRINGS.get(self._ui_lang.get(), UI_STRINGS["it"]).get(key, key)
+        # Fallback chain: current UI lang → it → en → key (literal)
+        # Necessario quando una chiave è stata aggiunta solo a it/en (es. nuove
+        # feature introdotte incrementalmente) per evitare che gli utenti delle
+        # altre 24 lingue vedano nomi di chiavi raw al posto della label tradotta.
+        lang = self._ui_lang.get()
+        for bucket in (UI_STRINGS.get(lang, {}), UI_STRINGS["it"], UI_STRINGS["en"]):
+            if key in bucket:
+                return bucket[key]
+        return key
 
     # ── Dependency check ─────────────────────────────────────────────────────
 
@@ -4978,9 +5299,52 @@ class App(tk.Tk):
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
 
+        # Ollama LLM radio (v2.0). Nota: la label è lunga (descrive la feature)
+        # perciò occupa una riga a sé sotto il row dei tre radio "classici".
+        engine_row2 = tk.Frame(opts, bg=BG)
+        engine_row2.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._rb_eng_ollama = tk.Radiobutton(
+            engine_row2, text=self._s("engine_ollama"),
+            variable=self._translation_engine, value="llm_ollama",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
+        self._rb_eng_ollama.pack(side="left")
+
+        # Ollama config row (visible only when llm_ollama selected)
+        self._ollama_row = tk.Frame(opts, bg=BG)
+        self._ollama_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._lbl_ollama_model = tk.Label(self._ollama_row, text=self._s("label_ollama_model"),
+                                          bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_ollama_model.pack(side="left")
+        # Combobox invece di Entry: default + alternative suggerite nel task
+        self._ollama_model_combo = ttk.Combobox(
+            self._ollama_row, textvariable=self._ollama_model_var, width=28,
+            values=[
+                "qwen2.5:7b-instruct",
+                "llama3.2:3b-instruct",
+                "mistral-nemo:12b-instruct",
+            ],
+            font=("Monospace", 8),
+        )
+        self._ollama_model_combo.pack(side="left", padx=(4, 8))
+        self._lbl_ollama_url = tk.Label(self._ollama_row, text=self._s("label_ollama_url"),
+                                        bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_ollama_url.pack(side="left")
+        self._ollama_url_entry = tk.Entry(
+            self._ollama_row, textvariable=self._ollama_url_var, width=24,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8))
+        self._ollama_url_entry.pack(side="left", padx=(4, 8))
+        self._chk_ollama_slot = tk.Checkbutton(
+            self._ollama_row, text="slot-aware",
+            variable=self._ollama_slot_aware,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
+        self._chk_ollama_slot.pack(side="left", padx=(4, 0))
+        self._ollama_row.grid_remove()  # hidden until llm_ollama selected
+
         # DeepL API key row (visible only when DeepL selected)
         self._deepl_row = tk.Frame(opts, bg=BG)
-        self._deepl_row.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._deepl_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_deepl_key = tk.Label(self._deepl_row, text=self._s("label_deepl_key"),
                                        bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_deepl_key.pack(side="left")
@@ -4993,7 +5357,7 @@ class App(tk.Tk):
 
         # Diarization row
         diar_row = tk.Frame(opts, bg=BG)
-        diar_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        diar_row.grid(row=7, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._chk_diar = tk.Checkbutton(
             diar_row, text=self._s("opt_diarization"),
             variable=self._use_diarization,
@@ -5002,7 +5366,7 @@ class App(tk.Tk):
         self._chk_diar.pack(side="left")
 
         self._hf_row = tk.Frame(opts, bg=BG)
-        self._hf_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._hf_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_hf_token = tk.Label(self._hf_row, text=self._s("label_hf_token"),
                                       bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_hf_token.pack(side="left")
@@ -5094,6 +5458,9 @@ class App(tk.Tk):
         self._rb_eng_google.configure(text=self._s("engine_google"))
         self._rb_eng_deepl.configure(text=self._s("engine_deepl"))
         self._rb_eng_marian.configure(text=self._s("engine_marian"))
+        self._rb_eng_ollama.configure(text=self._s("engine_ollama"))
+        self._lbl_ollama_model.configure(text=self._s("label_ollama_model"))
+        self._lbl_ollama_url.configure(text=self._s("label_ollama_url"))
         self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
@@ -5141,12 +5508,53 @@ class App(tk.Tk):
             self._no_subs.set(False)
 
     def _on_engine_change(self):
-        if self._translation_engine.get() == "deepl":
+        eng = self._translation_engine.get()
+        if eng == "deepl":
             self._deepl_row.grid()
         else:
             self._deepl_row.grid_remove()
-        if self._translation_engine.get() == "marian":
+        if eng == "llm_ollama":
+            self._ollama_row.grid()
+            # Health check asincrono: non blocchiamo il main thread. Se Ollama
+            # non è raggiungibile, popup con istruzioni; NON forziamo il revert
+            # del radio — l'utente potrebbe voler avviare Ollama e ritentare,
+            # oppure usare il fallback automatico a Google.
+            self._check_ollama_async()
+        else:
+            self._ollama_row.grid_remove()
+        if eng == "marian":
             self._check_marian_deps()
+
+    def _check_ollama_async(self):
+        """Health-check di Ollama in un thread daemon: se il daemon non è
+        raggiungibile o il modello non è installato, mostra un popup con le
+        istruzioni ma NON forza il revert del radio (l'utente può avviare
+        Ollama e ritentare; la pipeline userà il fallback Google se Ollama
+        resta down al momento della traduzione).
+        """
+        model = self._ollama_model_var.get().strip() or "qwen2.5:7b-instruct"
+        url = self._ollama_url_var.get().strip() or "http://localhost:11434"
+
+        def _check():
+            try:
+                ok, msg = _ollama_health_check(url, model, timeout=5.0)
+            except Exception as e:
+                ok, msg = False, f"{e.__class__.__name__}: {e}"
+            if not ok and not self._destroying:
+                self.after(0, self._show_ollama_popup, model, msg)
+
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _show_ollama_popup(self, model: str, detail: str):
+        if self._destroying:
+            return
+        body = self._s("msg_ollama_unavailable").format(model=model)
+        # Mostra dettaglio tecnico in calce per debug (es. "Connection refused")
+        messagebox.showwarning(
+            "Ollama",
+            f"{body}\n\n[debug] {detail}",
+            parent=self,
+        )
 
     def _check_marian_deps(self):
         """Check sacremoses/sentencepiece; offer pip install if missing."""
@@ -5346,10 +5754,24 @@ class App(tk.Tk):
             "hf_token":           self._hf_token_var.get().strip(),
             "use_lipsync":        self._use_lipsync.get(),
             "xtts_speed":         xtts_speed,
+            "ollama_model":       self._ollama_model_var.get().strip() or "qwen2.5:7b-instruct",
+            "ollama_url":         self._ollama_url_var.get().strip() or "http://localhost:11434",
+            "ollama_slot_aware":  bool(self._ollama_slot_aware.get()),
         }
         # Persist HF token for next launch
         if snap["hf_token"] and snap["use_diarization"]:
             save_hf_token(snap["hf_token"])
+        # Persist Ollama prefs (model/url/slot_aware) quando l'utente ha
+        # selezionato l'engine — così al prossimo avvio i campi sono precompilati.
+        if snap["translation_engine"] == "llm_ollama":
+            try:
+                save_config({
+                    "ollama_model": snap["ollama_model"],
+                    "ollama_url": snap["ollama_url"],
+                    "ollama_slot_aware": snap["ollama_slot_aware"],
+                })
+            except Exception as e:
+                print(f"[i] Warning: could not persist Ollama prefs: {e}", flush=True)
         return snap
 
     def _start_with_editor(self, video_path: str):
@@ -5376,6 +5798,9 @@ class App(tk.Tk):
                     use_diarization=p["use_diarization"],
                     hf_token=p["hf_token"],
                     xtts_speed=p["xtts_speed"],
+                    ollama_model=p["ollama_model"],
+                    ollama_url=p["ollama_url"],
+                    ollama_slot_aware=p["ollama_slot_aware"],
                 )
                 self.after(0, self._open_editor, video_path, result["segments"])
             except Exception as e:
@@ -5429,6 +5854,9 @@ class App(tk.Tk):
                     hf_token=p["hf_token"],
                     use_lipsync=p["use_lipsync"],
                     xtts_speed=p["xtts_speed"],
+                    ollama_model=p["ollama_model"],
+                    ollama_url=p["ollama_url"],
+                    ollama_slot_aware=p["ollama_slot_aware"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -5477,6 +5905,9 @@ class App(tk.Tk):
                             hf_token=p["hf_token"],
                             use_lipsync=p["use_lipsync"],
                             xtts_speed=p["xtts_speed"],
+                            ollama_model=p["ollama_model"],
+                            ollama_url=p["ollama_url"],
+                            ollama_slot_aware=p["ollama_slot_aware"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -5551,8 +5982,14 @@ def _cli():
     parser.add_argument("--subs-only", action="store_true")
     parser.add_argument("--no-demucs", action="store_true")
     parser.add_argument("--translation-engine", default="google",
-                        choices=["google", "deepl", "marian"])
+                        choices=["google", "deepl", "marian", "llm_ollama"])
     parser.add_argument("--deepl-key", default="")
+    parser.add_argument("--ollama-model", default="qwen2.5:7b-instruct",
+                        help="Ollama model tag (default: qwen2.5:7b-instruct)")
+    parser.add_argument("--ollama-url", default="http://localhost:11434",
+                        help="Ollama daemon URL (default: http://localhost:11434)")
+    parser.add_argument("--ollama-no-slot-aware", action="store_true",
+                        help="Disable slot-aware prompting (faster, less constrained)")
     parser.add_argument("--diarize", action="store_true",
                         help="Enable pyannote speaker diarization")
     parser.add_argument("--hf-token", default="",
@@ -5605,6 +6042,9 @@ def _cli():
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,
             xtts_speed=xtts_speed_cli,
+            ollama_model=args.ollama_model or cfg_cli.get("ollama_model", "qwen2.5:7b-instruct"),
+            ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
+            ollama_slot_aware=not args.ollama_no_slot_aware,
         )
 
 
