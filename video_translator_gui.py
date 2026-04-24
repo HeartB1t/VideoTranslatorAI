@@ -108,6 +108,13 @@ OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "sacremoses":    (["sacremoses"],    "MarianMT tokenizer (traduzione offline)"),
     "sentencepiece": (["sentencepiece"], "MarianMT tokenizer (traduzione offline)"),
     "TTS":           (_TTS_PKGS,         "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
+    # chiave "pyannote" (namespace parent) invece di "pyannote.audio": find_spec
+    # su un dotted-name solleva ModuleNotFoundError se il parent non è installato
+    # invece di ritornare None, rompendo _check_optional_deps. Il namespace parent
+    # esiste solo se pyannote.audio è installato.
+    "pyannote":      (["pyannote.audio>=3.1"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
+    "silero_vad":    (["silero-vad"],    "VAD per reference XTTS (selezione speech continuo)"),
+    "keyring":       (["keyring"],       "Storage sicuro HF token (Credential Manager / Keychain / Secret Service)"),
 }
 # Alias per moduli che possono avere nomi diversi a seconda della versione installata
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
