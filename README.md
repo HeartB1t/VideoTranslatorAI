@@ -55,6 +55,8 @@ When enabled, the app extracts the speaker's voice from the original video and u
 - Supported languages: AR, ZH, CS, DE, EN, ES, FR, HI, HU, IT, JA, KO, NL, PL, PT, RU, TR (17/26)
 - For the remaining 9 languages, Edge-TTS is used automatically as fallback
 - Model (~1.8 GB) downloaded automatically on first use to `~/.local/share/tts/`
+- **VAD-filtered reference** (v1.4): 10–15 s of continuous speech selected from the original audio via [silero-vad](https://github.com/snakers4/silero-vad) for better voice cloning quality
+- **Generation speed** configurable (`xtts_speed`, default `1.25`): higher values reduce post-processing audio compression artifacts when the translated text is longer than the source slot. Tune via `~/.config/videotranslatorai/config.json` or CLI `--xtts-speed`
 - Runs on CUDA or CPU
 
 ## Speaker Diarization (pyannote-audio)
@@ -62,7 +64,7 @@ When enabled, the app extracts the speaker's voice from the original video and u
 When enabled, the app identifies who is speaking in each segment. Combined with Voice Cloning, each speaker's voice is cloned separately — ideal for interviews, podcasts, and multi-person videos.
 
 - Requires a free [HuggingFace token](https://huggingface.co/settings/tokens) (one-time registration)
-- Token is saved locally and reused on subsequent runs
+- **Token stored securely** (v1.4) via the OS keyring: Windows Credential Manager, macOS Keychain, Linux Secret Service. Automatic migration from previous plaintext JSON storage
 - After the first download, works fully offline
 - Model: `pyannote/speaker-diarization-3.1`
 
