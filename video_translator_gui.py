@@ -2737,26 +2737,110 @@ def _ollama_health_check(api_url: str, model: str, timeout: float = 5.0) -> tupl
 
 
 def _ollama_strip_preamble(text: str) -> str:
-    """Rimuove artefatti tipici della risposta LLM: virgolette esterne, prefissi
-    'Translation:', preamboli in italiano/inglese, spazi extra.
+    """Rimuove artefatti tipici della risposta LLM per evitare che XTTS
+    sintetizzi preamboli/disclaimer/note come audio (causa outlier atempo).
+
+    Pipeline di pulizia (ordine critico):
+      1. Blocchi markdown code ```...``` (alcuni modelli wrappano l'output).
+      2. Marcatori grassetto/corsivo **x** *x* ***x***.
+      3. Preamble multi-lingua ("Ecco la traduzione:", "Here's the translation:",
+         "Sure!", 好的/这是/翻译, ecc.) — case-insensitive, multiline.
+      4. Commentary note tra parentesi tonde con parole chiave tipiche di
+         self-commentary del modello (kept natural, fits within, ho mantenuto…).
+         Parentesi legittime del testo originale NON sono toccate.
+      5. Note tra parentesi quadre [note: ...], [spoken, ...].
+      6. Righe "Note: ...", "Nota: ...", "N.B. ..." su riga isolata.
+      7. Virgolette esterne "..." '...' «...» „…” “…”.
+      8. Collasso whitespace/newline multipli → singolo spazio (evita pause
+         lunghe durante la sintesi XTTS).
     """
     if not text:
         return ""
-    t = text.strip()
-    # Rimuovi wrapping quotes
-    if len(t) >= 2 and t[0] in '"\'«' and t[-1] in '"\'»':
-        t = t[1:-1].strip()
-    # Rimuovi prefissi comuni
     import re as _re
-    t = _re.sub(
-        r"^(?:translation|traduzione|traducción|übersetzung|here(?:'s| is)(?: the)?(?: translation)?)\s*[:\-]\s*",
-        "",
-        t,
+    t = text.strip()
+
+    # 1. Unwrap blocchi markdown code ```...``` conservando il contenuto.
+    #    Alcuni modelli wrappano il testo tradotto in un code fence.
+    t = _re.sub(r"```[a-zA-Z0-9]*\n?([\s\S]*?)```", r"\1", t)
+    # 2. Rimuovi marcatori markdown grassetto/corsivo (conserva il contenuto)
+    t = _re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", t)
+    # 3. Preamble multi-lingua (IT, EN, FR, ES, DE, ZH). Applichiamo i pattern
+    #    in loop fixed-point (max 6 passate) così prefissi concatenati come
+    #    "Sure! Here's the translation:" o "好的这是翻译：" vengono mangiati in
+    #    sequenza. Ogni pattern termina con `\s*` / `:?\s*` per attaccarsi al
+    #    successivo senza spazi residui.
+    PREAMBLE_PATTERNS = [
+        # EN/IT "Here's the translation:" — con varianti "concisa", "tradotta"
+        r"^(?:here'?s?|this is|the|la|le|il)\s+(?:the\s+)?(?:concise\s+)?translation(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
+        # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:"
+        r"^ecco(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
+        # Singolo token "Traduzione:" / "Translation:" / "Übersetzung:" / "Traducción:"
+        r"^(?:traduzione|translated|translation|übersetzung|traducción|traduction)\s*[:.\-]?\s*",
+        # Acknowledgment: "Ok,", "Sure!", "Certainly.", "Certo!", "Bien sûr,"
+        r"^(?:ok|sure|certainly|of course|certo|bien sûr)\s*[,.!]?\s*",
+        # Cinese: "好的" (OK), "这是" (this is), "翻译：" (translation:)
+        r"^好的\s*[，,:：]?\s*",
+        r"^这是\s*[，,:：]?\s*",
+        r"^翻译\s*[：:]\s*",
+        # "Per favore" (acknowledgment) — NOTA: "N.B.", "Note:", "Nota bene:",
+        # "Please note:" sono gestiti al step 6 come riga intera (mangiano
+        # tutta la frase di disclaimer, non solo il prefisso).
+        r"^per favore\s*[,:.\-]?\s*",
+    ]
+    for _ in range(6):
+        prev = t
+        for pat in PREAMBLE_PATTERNS:
+            t = _re.sub(pat, "", t, count=1, flags=_re.IGNORECASE | _re.MULTILINE)
+        if t == prev:
+            break
+    # 4. Note/disclaimer tra parentesi tonde con keyword di commentary.
+    #    Volutamente conservativo: evitiamo false positive su parentesi di
+    #    contenuto (es. "(2020)", "(diretto da Nolan)"). Match non-greedy.
+    COMMENTARY_RE = _re.compile(
+        r"\(\s*(?:note|n\.?\s*b\.?|nota|hint|tip|keeping|"
+        r"kept|fits?\s+(?:well\s+)?within|target\s+reading|"
+        r"natural|spoken|concise|shortened|translated|nota\s+bene|"
+        r"ho\s+mantenuto|mantenendo|per\s+rimanere)"
+        r"[^)]*?\)",
         flags=_re.IGNORECASE,
     )
-    # Rimuovi righe vuote iniziali/finali
-    t = t.strip()
-    return t
+    t = COMMENTARY_RE.sub("", t)
+    # 5. Note tra parentesi quadre [note:...], [spoken, natural], ecc.
+    BRACKET_NOTE_RE = _re.compile(
+        r"\[\s*(?:note|nota|comment|spoken|dubbing)[^\]]*?\]",
+        flags=_re.IGNORECASE,
+    )
+    t = BRACKET_NOTE_RE.sub("", t)
+    # 6. Riga isolata "Note: ..." / "Nota: ..." / "Disclaimer: ..." / "N.B. ..."
+    #    Mangia anche il newline precedente per non lasciare doppi spazi dopo
+    #    il whitespace collapse (step 8).
+    FINAL_NOTE_LINE_RE = _re.compile(
+        r"(?:^|\n)[ \t]*"
+        r"(?:note|nota|nota\s+bene|n\.?\s*b\.?|please\s+note|disclaimer|observation)"
+        r"\s*[:\-]\s*[^\n]*",
+        flags=_re.IGNORECASE,
+    )
+    t = FINAL_NOTE_LINE_RE.sub("", t)
+    # 7. Virgolette esterne a coppie (open/close). Prima applicazione: un loop
+    #    perché potremmo avere layer multipli tipo "\"«testo»\"".
+    QUOTE_PAIRS = [
+        ("\"", "\""), ("'", "'"),
+        ("«", "»"), ("“", "”"), ("„", "”"), ("„", "“"),
+    ]
+    for _ in range(3):
+        t = t.strip()
+        peeled = False
+        for open_q, close_q in QUOTE_PAIRS:
+            if len(t) > len(open_q) + len(close_q) and t.startswith(open_q) and t.endswith(close_q):
+                t = t[len(open_q):-len(close_q)]
+                peeled = True
+                break
+        if not peeled:
+            break
+    # 8. Collassa whitespace multipli e newline → spazio singolo (evita pause
+    #    lunghe durante la sintesi XTTS)
+    t = _re.sub(r"\s+", " ", t)
+    return t.strip()
 
 
 # ── Ollama auto-setup (v2.0.1) ─────────────────────────────────────────────
@@ -3185,6 +3269,7 @@ def translate_with_ollama(
     Ritorna la lista di segmenti con `text_src` e `text_tgt` popolati, identica
     nello schema a quella prodotta da `translate_segments` per gli altri engine.
     """
+    import re as _re
     import requests
     base = api_url.rstrip("/")
     src_name = _ollama_lang_name(source_lang)
@@ -3198,11 +3283,26 @@ def translate_with_ollama(
 
     print(f"     → Ollama ready ({model} @ {base}, slot_aware={slot_aware}, batch={batch_size})", flush=True)
 
+    # Debug opt-in: se settato, logga sorgente + output finale per ogni segmento.
+    # Utile per indagare residui di preamble/commentary senza re-runnare pipeline.
+    _ollama_debug = os.environ.get("VIDEOTRANSLATORAI_OLLAMA_DEBUG") == "1"
+
+    # Length safeguard: calcoliamo una volta sola il fattore expansion atteso
+    # (target/source) dalla tabella LANG_EXPANSION. Usato per stimare la
+    # lunghezza massima plausibile per ogni segmento. Cap 1.8× = margine
+    # permissivo per LLM verbose ma catturante per outlier da commentary.
+    _src_key = (source_lang or "").split("-")[0] if source_lang != "auto" else ""
+    _tgt_key = target_lang.split("-")[0] if target_lang else ""
+    _exp_tgt = LANG_EXPANSION.get(target_lang, LANG_EXPANSION.get(_tgt_key, 1.0))
+    _exp_src = LANG_EXPANSION.get(source_lang, LANG_EXPANSION.get(_src_key, 1.0)) or 1.0
+    _expansion_factor = _exp_tgt / _exp_src if _exp_src > 0 else 1.0
+
     translated: list[dict] = []
     total = len(segments)
     total_src_chars = 0
     total_tgt_chars = 0
     failed = 0
+    truncated_count = 0
 
     def _build_prompt(text: str, slot_s: float) -> str:
         slot_clause = ""
@@ -3258,6 +3358,35 @@ def translate_with_ollama(
                 if not tr:
                     # Risposta vuota = considera fallita, fallback
                     raise RuntimeError("empty response")
+                # ── Length safeguard ────────────────────────────────────
+                # Se l'output residuo dopo strip_preamble è >> del sorgente
+                # rispetto all'expansion atteso, il modello ha quasi
+                # certamente incluso commentary non-catturato. Tronchiamo
+                # alla prima frase completa (o a char cap con word-boundary)
+                # per evitare che XTTS sintetizzi 20+ secondi di disclaimer.
+                max_reasonable_chars = max(
+                    50, int(len(text) * _expansion_factor * 1.8)
+                )
+                if len(tr) > max_reasonable_chars:
+                    print(
+                        f"     ! Ollama output sospetto (segment {i}): "
+                        f"{len(tr)} chars vs max atteso {max_reasonable_chars}. "
+                        f"Attivo safety truncation.",
+                        flush=True,
+                    )
+                    # Strategia: prima frase completa (.?!。？！ seguito da
+                    # spazio/fine). Fallback: cap con word-boundary.
+                    m = _re.search(r"^(.+?[.?!。？！])(?:\s|$)", tr)
+                    if m and len(m.group(1)) <= max_reasonable_chars * 1.1:
+                        tr = m.group(1)
+                    else:
+                        tr = tr[:max_reasonable_chars].rsplit(" ", 1)[0] + "..."
+                    truncated_count += 1
+                if _ollama_debug:
+                    print(
+                        f"     [ollama-debug] seg#{i} src={text!r} → tgt={tr!r}",
+                        flush=True,
+                    )
             except Exception as e:
                 failed += 1
                 fb_text = None
@@ -3311,6 +3440,12 @@ def translate_with_ollama(
             f"(shrinkage {shrinkage_pct:+.1f}%){fail_note}",
             flush=True,
         )
+        if truncated_count > 0:
+            print(
+                f"     → Safety-truncated for length: {truncated_count} segments "
+                f"(see log above for context)",
+                flush=True,
+            )
     else:
         print(f"     → Ollama translation: {total}/{total} segments (no text)", flush=True)
 
