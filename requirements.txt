@@ -10,11 +10,18 @@ coqui-tts>=0.27.5
 transformers>=4.40.0,<5.1
 sentencepiece>=0.2.0
 sacremoses>=0.1.1
-pyannote.audio>=3.1
+# pyannote: upper bound <4.0 — pyannote 4.x require torch>=2.8, ma pinniamo
+# torch a 2.6 per compatibilità con CUDA 12.4 / driver NVIDIA ≤550.
+pyannote.audio>=3.1,<4.0
 silero-vad
 keyring
 audioop-lts; python_version >= "3.13"
-torch>=2.6.0
+# torch: pinnato <2.8 per prevenire upgrade transitivi (pyannote, altri) che
+# romperebbero l'ambiente CUDA 12.4. Serie 2.6.x / 2.7.x compatibili. Usare
+# --index-url https://download.pytorch.org/whl/cu124 per GPU Linux.
+torch>=2.6.0,<2.8
 torchaudio==2.6.0
 torchvision==0.21.0
 torchcodec
+# numpy: numba (dep di librosa / coqui-tts) richiede numpy<=2.3 al momento.
+numpy>=2.0,<2.4

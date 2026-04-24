@@ -112,7 +112,10 @@ OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     # su un dotted-name solleva ModuleNotFoundError se il parent non è installato
     # invece di ritornare None, rompendo _check_optional_deps. Il namespace parent
     # esiste solo se pyannote.audio è installato.
-    "pyannote":      (["pyannote.audio>=3.1"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
+    # Upper bound <4.0 allineato a install_windows.bat: pyannote 4.x richiede
+    # torch>=2.8 (CUDA 13), incompatibile con il pin torch 2.6 del progetto
+    # (testato: senza upper bound, pip installa 4.x e rompe l'ambiente CUDA).
+    "pyannote":      (["pyannote.audio>=3.1,<4.0"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
     "silero_vad":    (["silero-vad"],    "VAD per reference XTTS (selezione speech continuo)"),
     "keyring":       (["keyring"],       "Storage sicuro HF token (Credential Manager / Keychain / Secret Service)"),
 }
