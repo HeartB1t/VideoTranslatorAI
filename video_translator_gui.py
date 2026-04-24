@@ -2759,6 +2759,400 @@ def _ollama_strip_preamble(text: str) -> str:
     return t
 
 
+# ── Ollama auto-setup (v2.0.1) ─────────────────────────────────────────────
+# Obiettivo: zero manual setup per l'utente finale. Stessa strategia già usata
+# per ffmpeg (download on-demand) e Git for Windows (installer auto). Le
+# funzioni qui sotto sono puri helper — nessun Tk, nessuno stato globale:
+# accettano un log_cb opzionale per streamare output alla GUI, e registrano
+# i subprocess nel registry globale così `_on_close` li può terminare.
+
+def _ollama_find_binary() -> str | None:
+    """Ritorna il path all'eseguibile `ollama` se trovato, altrimenti None.
+
+    Linux/macOS: `shutil.which`. Windows: `shutil.which` + fallback sui path
+    di default dell'installer ufficiale (`%LOCALAPPDATA%\\Programs\\Ollama` e
+    `%ProgramFiles%\\Ollama`). Necessario perché su Windows subito dopo
+    un'install silent il PATH del processo corrente non è ancora aggiornato.
+    """
+    p = shutil.which("ollama")
+    if p:
+        return p
+    if sys.platform.startswith("win"):
+        candidates = [
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe",
+            Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Ollama" / "ollama.exe",
+            Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "Ollama" / "ollama.exe",
+        ]
+        for c in candidates:
+            try:
+                if c.is_file():
+                    return str(c)
+            except OSError:
+                continue
+    return None
+
+
+def _ollama_is_daemon_running(api_url: str, timeout: float = 2.0) -> bool:
+    """Probe `/api/tags` con timeout corto. True se il daemon risponde 2xx."""
+    import requests
+    base = api_url.rstrip("/")
+    try:
+        r = requests.get(f"{base}/api/tags", timeout=timeout)
+        return r.status_code < 400
+    except Exception:
+        return False
+
+
+def _ollama_start_daemon(
+    binary: str,
+    api_url: str = "http://localhost:11434",
+    wait_seconds: float = 15.0,
+    log_cb=None,
+) -> tuple[bool, str]:
+    """Avvia `ollama serve` detached e aspetta che `/api/tags` risponda.
+
+    Ritorna (ok, message). `message` è il path al log tempfile su fallimento,
+    stringa vuota su successo. Il subprocess è registrato in
+    `_active_subprocesses` per permettere a `_on_close` di terminarlo.
+    """
+    log = log_cb or (lambda s: None)
+
+    # Log file per debug: su Windows senza console, altrimenti perdiamo lo
+    # stderr del daemon se parte e poi crasha.
+    log_file = tempfile.NamedTemporaryFile(
+        prefix="ollama-serve-", suffix=".log", delete=False, mode="w",
+        encoding="utf-8",
+    )
+    log_path = log_file.name
+    log_file.close()
+    fh = open(log_path, "w", encoding="utf-8")
+
+    # start_new_session/CREATE_NEW_PROCESS_GROUP: detach dal main process
+    # così la chiusura della GUI non killa il daemon (a meno che _on_close
+    # lo faccia esplicitamente via registry).
+    kwargs = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": fh,
+        "stderr": subprocess.STDOUT,
+    }
+    if sys.platform.startswith("win"):
+        # CREATE_NEW_PROCESS_GROUP = 0x00000200. Su Windows non esiste
+        # start_new_session; usiamo il flag creationflags.
+        kwargs["creationflags"] = 0x00000200
+    else:
+        kwargs["start_new_session"] = True
+
+    try:
+        proc = subprocess.Popen([binary, "serve"], **kwargs)
+    except Exception as e:
+        fh.close()
+        return False, f"Failed to spawn `ollama serve`: {e} (log: {log_path})"
+
+    _register_subprocess(proc)
+
+    # Polling: aspetta wait_seconds al massimo. Exit-code check: se il daemon
+    # muore subito (porta già occupata, config rotta), smettiamo di attendere.
+    import time
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            # Daemon morto prima di rispondere
+            fh.close()
+            _unregister_subprocess(proc)
+            try:
+                tail = Path(log_path).read_text(encoding="utf-8", errors="replace")[-500:]
+            except Exception:
+                tail = "(log unreadable)"
+            log(f"     ! ollama serve exited early (rc={proc.returncode}): {tail}\n")
+            return False, f"ollama serve exited (rc={proc.returncode}). Log: {log_path}"
+        if _ollama_is_daemon_running(api_url, timeout=1.5):
+            log(f"     [+] Ollama daemon attivo su {api_url}\n")
+            # NB: il fh resta aperto intenzionalmente — il daemon scrive
+            # lì per tutta la sessione. Sarà chiuso quando proc termina.
+            return True, ""
+        time.sleep(0.5)
+
+    # Timeout
+    log(f"     ! Ollama daemon non ha risposto entro {wait_seconds:.0f}s (log: {log_path})\n")
+    return False, f"Daemon did not become ready within {wait_seconds:.0f}s. Log: {log_path}"
+
+
+def _ollama_install_linux(log_cb=None, timeout_s: int = 300) -> tuple[bool, str]:
+    """Installa Ollama via lo script ufficiale `curl -fsSL … | sh`.
+
+    Richiede sudo per scrivere in /usr/local/bin. Se sudo non è presente,
+    ritorna messaggio actionable invece di appendere a silenzio.
+    """
+    log = log_cb or (lambda s: None)
+
+    if not shutil.which("curl"):
+        return False, (
+            "curl non trovato. Installa curl (es. `sudo apt install curl`) "
+            "e riprova, oppure installa Ollama manualmente da https://ollama.com/download"
+        )
+
+    # Lo script ufficiale richiede privilegi root. Usiamo pkexec o sudo.
+    prefixes: list[list[str]] = []
+    if shutil.which("pkexec"):
+        prefixes.append(["pkexec", "sh", "-c"])
+    if shutil.which("sudo"):
+        prefixes.append(["sudo", "sh", "-c"])
+    prefixes.append(["sh", "-c"])  # root-less fallback (funzionerà solo se root)
+
+    install_cmd = "curl -fsSL https://ollama.com/install.sh | sh"
+    last_err = ""
+    for prefix in prefixes:
+        cmd = prefix + [install_cmd]
+        log(f"     Running: {' '.join(prefix)} <install.sh>\n")
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL, text=True,
+                encoding="utf-8", errors="replace",
+            )
+        except FileNotFoundError as e:
+            last_err = f"{e.__class__.__name__}: {e}"
+            continue
+
+        _register_subprocess(proc)
+        watchdog = threading.Timer(timeout_s, proc.kill)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    log(f"     {line}\n")
+            proc.wait(timeout=30)
+        except Exception:
+            with contextlib.suppress(Exception):
+                proc.kill(); proc.wait(timeout=10)
+        finally:
+            watchdog.cancel()
+            _unregister_subprocess(proc)
+
+        if proc.returncode == 0:
+            return True, ""
+        last_err = f"exit {proc.returncode} (prefix={prefix[0]})"
+
+    return False, (
+        f"Ollama install script failed ({last_err}). "
+        f"Installa manualmente: curl -fsSL https://ollama.com/install.sh | sh"
+    )
+
+
+def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]:
+    """Scarica OllamaSetup.exe e lo lancia in modalità completamente silent.
+
+    L'installer di Ollama è basato su Inno Setup. Usiamo il set di flag
+    `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`:
+      - `/VERYSILENT`: niente wizard, niente progress UI (`/SILENT` da solo
+        mostrerebbe ancora una progress bar che può richiedere input);
+      - `/SUPPRESSMSGBOXES`: sopprime le message box di default;
+      - `/NORESTART`: non riavviare la macchina a fine install;
+      - `/NOCANCEL`: l'utente non può abortire via tasto.
+    Senza questo set completo il subprocess può bloccarsi sull'attesa di
+    input utente fino allo scadere del timeout.
+
+    Post-install, aggiorniamo il PATH del processo corrente aggiungendo il
+    path di default dell'installer, così `_ollama_find_binary` funziona
+    senza dover riavviare la GUI.
+    """
+    log = log_cb or (lambda s: None)
+    url = "https://ollama.com/download/OllamaSetup.exe"
+    setup_path = Path(tempfile.gettempdir()) / "OllamaSetup.exe"
+
+    log(f"     Scaricando Ollama (~1 GB) da {url}...\n")
+    try:
+        from urllib.request import Request, urlopen
+        req = Request(url, headers={"User-Agent": "VideoTranslatorAI/2.0"})
+        downloaded = 0
+        last_pct = -1
+        with urlopen(req, timeout=120) as r, open(setup_path, "wb") as out:
+            total = int(r.headers.get("Content-Length") or 0)
+            chunk = 256 * 1024
+            while True:
+                buf = r.read(chunk)
+                if not buf:
+                    break
+                out.write(buf)
+                downloaded += len(buf)
+                if total > 0:
+                    pct = min(100, downloaded * 100 // total)
+                    # Log ogni 5% per non inondare la GUI
+                    if pct // 5 != last_pct // 5:
+                        log(f"     Download... {pct}%\n")
+                        last_pct = pct
+    except Exception as e:
+        with contextlib.suppress(Exception):
+            setup_path.unlink(missing_ok=True)
+        return False, f"Download fallito: {e}"
+
+    log("     Avvio installer silent (richiede UAC)...\n")
+    # Inno Setup silent install
+    try:
+        proc = subprocess.Popen(
+            [str(setup_path),
+             "/VERYSILENT", "/SUPPRESSMSGBOXES",
+             "/NORESTART", "/NOCANCEL"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
+        )
+    except Exception as e:
+        return False, f"Impossibile lanciare installer: {e}"
+
+    _register_subprocess(proc)
+    watchdog = threading.Timer(timeout_s, proc.kill)
+    watchdog.daemon = True
+    watchdog.start()
+    try:
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line:
+                log(f"     {line}\n")
+        proc.wait(timeout=30)
+    except Exception:
+        with contextlib.suppress(Exception):
+            proc.kill(); proc.wait(timeout=10)
+    finally:
+        watchdog.cancel()
+        _unregister_subprocess(proc)
+        with contextlib.suppress(Exception):
+            setup_path.unlink(missing_ok=True)
+
+    if proc.returncode != 0:
+        return False, (
+            f"Installer exit rc={proc.returncode}. "
+            f"Scarica e installa manualmente da https://ollama.com/download"
+        )
+
+    # Post-install: aggiorniamo PATH del processo corrente col path di default
+    # dell'installer Ollama. Questo evita di dover riavviare la GUI.
+    default_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama"
+    if default_dir.is_dir():
+        cur_path = os.environ.get("PATH", "")
+        if str(default_dir) not in cur_path:
+            os.environ["PATH"] = cur_path + os.pathsep + str(default_dir)
+    return True, ""
+
+
+def _ollama_install_macos(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]:
+    """Prova `brew install ollama` se Homebrew è presente, altrimenti messaggio
+    manuale con link al .dmg. Non scarichiamo automaticamente il .dmg perché
+    richiede interazione utente per il drag-and-drop.
+    """
+    log = log_cb or (lambda s: None)
+    if shutil.which("brew"):
+        log("     Installazione via Homebrew: brew install ollama\n")
+        try:
+            proc = subprocess.Popen(
+                ["brew", "install", "ollama"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+            )
+        except Exception as e:
+            return False, f"brew install fallito: {e}"
+        _register_subprocess(proc)
+        watchdog = threading.Timer(timeout_s, proc.kill)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    log(f"     {line}\n")
+            proc.wait(timeout=30)
+        except Exception:
+            with contextlib.suppress(Exception):
+                proc.kill(); proc.wait(timeout=10)
+        finally:
+            watchdog.cancel()
+            _unregister_subprocess(proc)
+        if proc.returncode == 0:
+            return True, ""
+        return False, f"brew exit rc={proc.returncode}"
+
+    return False, (
+        "Homebrew non trovato. Installa Ollama manualmente scaricando il .dmg "
+        "da https://ollama.com/download, poi riprova."
+    )
+
+
+def _ollama_install(log_cb=None) -> tuple[bool, str]:
+    """Dispatch cross-platform dell'installazione di Ollama."""
+    if sys.platform.startswith("win"):
+        return _ollama_install_windows(log_cb=log_cb)
+    if sys.platform == "darwin":
+        return _ollama_install_macos(log_cb=log_cb)
+    # Linux + altri Unix
+    return _ollama_install_linux(log_cb=log_cb)
+
+
+def _ollama_pull_model(
+    model: str,
+    binary: str | None = None,
+    log_cb=None,
+    timeout_s: int = 1200,
+) -> tuple[bool, str]:
+    """Esegue `ollama pull <model>` streamando l'output alla GUI.
+
+    `timeout_s` è generoso (20 min default) perché i modelli sono grossi
+    (~4 GB) e le connessioni possono essere lente. Il subprocess è registrato
+    nel registry globale per la pulizia su _on_close.
+    """
+    log = log_cb or (lambda s: None)
+    ollama_bin = binary or _ollama_find_binary()
+    if not ollama_bin:
+        return False, "ollama binary non trovato"
+
+    log(f"     Scaricando modello {model} (può richiedere diversi minuti)...\n")
+    try:
+        proc = subprocess.Popen(
+            [ollama_bin, "pull", model],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
+        )
+    except Exception as e:
+        return False, f"Failed to spawn `ollama pull`: {e}"
+
+    _register_subprocess(proc)
+    watchdog = threading.Timer(timeout_s, proc.kill)
+    watchdog.daemon = True
+    watchdog.start()
+    # Rate-limit del log: `ollama pull` usa carriage-return per aggiornare la
+    # stessa riga di progress ~10 volte al secondo; scrivere tutto nella Text
+    # widget Tk inonda il main thread. Logghiamo solo transizioni significative.
+    last_logged = ""
+    try:
+        for line in proc.stdout:
+            # `ollama pull` mescola \r e \n. Splittiamo su \r per catturare
+            # i progress step senza spammare.
+            for fragment in line.replace("\r", "\n").split("\n"):
+                fragment = fragment.strip()
+                if not fragment:
+                    continue
+                # Dedup riga identica consecutiva (progress tick stesso stato)
+                if fragment == last_logged:
+                    continue
+                log(f"     {fragment}\n")
+                last_logged = fragment
+        proc.wait(timeout=30)
+    except Exception:
+        with contextlib.suppress(Exception):
+            proc.kill(); proc.wait(timeout=10)
+    finally:
+        watchdog.cancel()
+        _unregister_subprocess(proc)
+
+    if proc.returncode != 0:
+        return False, f"ollama pull {model} failed (rc={proc.returncode})"
+    return True, ""
+
+
 def translate_with_ollama(
     segments: list[dict],
     source_lang: str,
@@ -4703,6 +5097,11 @@ class App(tk.Tk):
         self._hf_token_var    = tk.StringVar(value=load_hf_token())
         self._running    = False
         self._destroying = False
+        # Guard re-entrancy: durante il setup async di Ollama (detect / install
+        # / start daemon / pull model) blocchiamo doppi trigger da Start /
+        # Download. Non usiamo `_running` perché quello scatta solo quando
+        # parte la pipeline vera, non durante il pre-flight.
+        self._ollama_setup_in_flight = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
         self._pending_pkgs_after_ffmpeg: list[str] = []
@@ -5515,46 +5914,159 @@ class App(tk.Tk):
             self._deepl_row.grid_remove()
         if eng == "llm_ollama":
             self._ollama_row.grid()
-            # Health check asincrono: non blocchiamo il main thread. Se Ollama
-            # non è raggiungibile, popup con istruzioni; NON forziamo il revert
-            # del radio — l'utente potrebbe voler avviare Ollama e ritentare,
-            # oppure usare il fallback automatico a Google.
-            self._check_ollama_async()
+            # Auto-setup: binary detection → install → daemon → model pull.
+            # Tutto in thread daemon, popup via self.after per thread safety.
+            # Respect `ollama_auto_install` config flag (default True).
+            self._ensure_ollama_ready_async(on_ready=None)
         else:
             self._ollama_row.grid_remove()
         if eng == "marian":
             self._check_marian_deps()
 
-    def _check_ollama_async(self):
-        """Health-check di Ollama in un thread daemon: se il daemon non è
-        raggiungibile o il modello non è installato, mostra un popup con le
-        istruzioni ma NON forza il revert del radio (l'utente può avviare
-        Ollama e ritentare; la pipeline userà il fallback Google se Ollama
-        resta down al momento della traduzione).
+    # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
+    #
+    # Flusso (tutto off-thread, UI sempre responsive):
+    #   1. Binary → se manca: popup [Sì/No] → _ollama_install
+    #   2. Daemon → se down: start in background, wait fino a 15s
+    #   3. Modello → se manca: popup [Sì/No/Cambia modello] → ollama pull
+    #   4. Ready
+    # Edge: se config `ollama_auto_install=false`, salta install/pull e
+    # cade sul fallback Google senza popup.
+    #
+    # `on_ready` è un callback opzionale invocato su main thread quando
+    # Ollama è pronto (utile per chainare la pipeline di traduzione).
+    # Se Ollama non è pronto al termine, `on_ready(False)` viene chiamato.
+
+    def _ensure_ollama_ready_async(self, on_ready=None):
+        """Entry point: spawn il worker di setup in thread daemon.
+
+        `on_ready`: callback(bool) invocato su main thread; True se Ollama è
+        pronto (daemon up + modello disponibile), False altrimenti. Se None,
+        la funzione serve solo a "warm up" Ollama (caso radio select).
         """
         model = self._ollama_model_var.get().strip() or "qwen2.5:7b-instruct"
         url = self._ollama_url_var.get().strip() or "http://localhost:11434"
+        cfg = load_config()
+        auto_install = cfg.get("ollama_auto_install", True)
 
-        def _check():
-            try:
-                ok, msg = _ollama_health_check(url, model, timeout=5.0)
-            except Exception as e:
-                ok, msg = False, f"{e.__class__.__name__}: {e}"
-            if not ok and not self._destroying:
-                self.after(0, self._show_ollama_popup, model, msg)
+        def _setup():
+            ok = self._ollama_setup_worker(model, url, auto_install)
+            if on_ready is not None and not self._destroying:
+                self.after(0, on_ready, ok)
 
-        threading.Thread(target=_check, daemon=True).start()
+        threading.Thread(target=_setup, daemon=True).start()
 
-    def _show_ollama_popup(self, model: str, detail: str):
+    def _log_async(self, text: str) -> None:
+        """Thread-safe helper: schedula log_write sul main thread."""
+        if not self._destroying:
+            self.after(0, self._log_write, text)
+
+    def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
+        """Worker thread: esegue gli step 1-4. Ritorna True se Ollama è pronto.
+
+        Questo è il cuore del flusso — ogni step ha un early-exit puntuale
+        così da non accumulare state, e ogni popup è inoltrato al main
+        thread tramite `_ask_yes_no_sync` (blocca il worker finché l'utente
+        risponde, ma la GUI resta fluida).
+        """
+        # Step 1: binary detection
+        binary = _ollama_find_binary()
+        if not binary:
+            self._log_async("[*] Ollama non trovato sul sistema.\n")
+            if not auto_install:
+                self._log_async(
+                    "[i] ollama_auto_install=false → fallback Google se userai llm_ollama.\n"
+                )
+                return False
+            if not self._ask_yes_no_sync(
+                "Ollama",
+                "Ollama non è installato. Installare automaticamente?\n\n"
+                "Download ~1 GB. Su Linux servirà la password sudo.",
+            ):
+                self._log_async("[i] Install rifiutato. Fallback Google attivo.\n")
+                return False
+            self._log_async("[*] Installazione Ollama in corso...\n")
+            ok, msg = _ollama_install(log_cb=self._log_async)
+            if not ok:
+                self._log_async(f"[x] Installazione fallita: {msg}\n")
+                return False
+            binary = _ollama_find_binary()
+            if not binary:
+                self._log_async(
+                    "[x] Ollama installato ma binary non trovato nel PATH. "
+                    "Riavvia la GUI per forzare il reload del PATH.\n"
+                )
+                return False
+            self._log_async(f"[+] Ollama installato: {binary}\n")
+        else:
+            self._log_async(f"[+] Ollama trovato: {binary}\n")
+
+        # Step 2: daemon running?
+        if _ollama_is_daemon_running(url, timeout=2.0):
+            self._log_async(f"[+] Ollama daemon gia' attivo su {url}\n")
+        else:
+            self._log_async("[*] Avvio daemon Ollama (ollama serve)...\n")
+            ok, msg = _ollama_start_daemon(
+                binary, api_url=url, wait_seconds=15.0, log_cb=self._log_async
+            )
+            if not ok:
+                self._log_async(f"[x] Daemon non avviato: {msg}\n")
+                return False
+
+        # Step 3: model available?
+        health_ok, health_msg = _ollama_health_check(url, model, timeout=5.0)
+        if not health_ok:
+            # Heuristic: è un problema di "modello mancante" o di "daemon giù"?
+            # _ollama_health_check ritorna "not reachable" se è il secondo caso.
+            if "not reachable" in (health_msg or "").lower():
+                self._log_async(f"[x] Ollama non raggiungibile: {health_msg}\n")
+                return False
+            # Modello mancante → chiedi pull
+            if not auto_install:
+                self._log_async(
+                    f"[i] Modello '{model}' mancante e ollama_auto_install=false.\n"
+                )
+                return False
+            if not self._ask_yes_no_sync(
+                "Ollama",
+                f"Il modello '{model}' non e' stato scaricato.\n\n"
+                f"Dimensione tipica: 4-5 GB. Scaricarlo ora?\n\n"
+                f"(Scegli No per usare il fallback Google)",
+            ):
+                self._log_async(f"[i] Pull rifiutato per {model}. Fallback Google.\n")
+                return False
+            ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async)
+            if not ok:
+                self._log_async(f"[x] ollama pull fallito: {msg}\n")
+                return False
+            # Verifica finale
+            health_ok, health_msg = _ollama_health_check(url, model, timeout=5.0)
+            if not health_ok:
+                self._log_async(f"[x] Verifica post-pull fallita: {health_msg}\n")
+                return False
+
+        self._log_async(f"[+] Ollama pronto: {model} @ {url}\n")
+        return True
+
+    def _ask_yes_no_sync(self, title: str, message: str) -> bool:
+        """Chiama messagebox.askyesno sul main thread e blocca il worker
+        finché l'utente risponde. Usa un Event per il rendezvous.
+        """
         if self._destroying:
-            return
-        body = self._s("msg_ollama_unavailable").format(model=model)
-        # Mostra dettaglio tecnico in calce per debug (es. "Connection refused")
-        messagebox.showwarning(
-            "Ollama",
-            f"{body}\n\n[debug] {detail}",
-            parent=self,
-        )
+            return False
+        result: dict[str, bool] = {"v": False}
+        done = threading.Event()
+
+        def _prompt():
+            try:
+                result["v"] = bool(messagebox.askyesno(title, message, parent=self))
+            finally:
+                done.set()
+
+        self.after(0, _prompt)
+        # Attendi max 5 minuti — oltre significa che il dialogo è stato perso.
+        done.wait(timeout=300)
+        return result["v"]
 
     def _check_marian_deps(self):
         """Check sacremoses/sentencepiece; offer pip install if missing."""
@@ -5611,12 +6123,46 @@ class App(tk.Tk):
         return [u.strip() for u in raw.splitlines() if u.strip()]
 
     def _start_download(self):
-        if self._running:
+        if self._running or self._ollama_setup_in_flight:
             return
         urls = self._get_urls()
         if not urls:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_url"))
             return
+        # Ollama auto-setup prima del download (stessa logica di _start)
+        if self._translation_engine.get() == "llm_ollama":
+            self._ollama_setup_in_flight = True
+            self._btn.configure(state="disabled")
+            self._btn_download.configure(state="disabled",
+                                         text=self._s("btn_installing"))
+            self._log.configure(state="normal")
+            self._log.delete("1.0", "end")
+            self._log.configure(state="disabled")
+            self._log_write("[*] Verifica Ollama in corso...\n")
+            self._ensure_ollama_ready_async(
+                on_ready=lambda ok: self._start_download_after_ollama(ok, urls)
+            )
+            return
+        self._dispatch_download(urls)
+
+    def _start_download_after_ollama(self, ok: bool, urls: list[str]) -> None:
+        # Rilasciamo il guard pre-flight sia se procediamo (dispatch lo
+        # riabiliterà a fine pipeline) sia se torniamo in idle.
+        self._ollama_setup_in_flight = False
+        if self._destroying or self._running:
+            # GUI chiusa o pipeline già avviata altrove → ripristina stato UI.
+            try:
+                self._btn.configure(state="normal", text=self._s("btn_start"))
+                self._btn_download.configure(state="normal",
+                                             text=self._s("btn_download"))
+            except tk.TclError:
+                pass
+            return
+        if not ok:
+            self._log_write("[i] Ollama non pronto: la pipeline usera' il fallback Google.\n")
+        self._dispatch_download(urls)
+
+    def _dispatch_download(self, urls: list[str]) -> None:
         self._running = True
         self._btn.configure(state="disabled")
         self._btn_download.configure(state="disabled", text=self._s("msg_downloading"))
@@ -5662,6 +6208,9 @@ class App(tk.Tk):
                             hf_token=p["hf_token"],
                             use_lipsync=p["use_lipsync"],
                             xtts_speed=p["xtts_speed"],
+                            ollama_model=p["ollama_model"],
+                            ollama_url=p["ollama_url"],
+                            ollama_slot_aware=p["ollama_slot_aware"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -5710,11 +6259,47 @@ class App(tk.Tk):
     # ── Translation start ─────────────────────────────────────────────────────
 
     def _start(self):
-        if self._running:
+        if self._running or self._ollama_setup_in_flight:
             return
         if not self._batch_files:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_video"))
             return
+        # Se engine = llm_ollama, esegui il setup prima di partire con la
+        # pipeline vera. In caso di fallimento (utente rifiuta install,
+        # download abortito, daemon non avviabile) translate_segments cade
+        # automaticamente su Google — quindi procediamo comunque.
+        if self._translation_engine.get() == "llm_ollama":
+            self._ollama_setup_in_flight = True
+            self._btn.configure(state="disabled", text=self._s("btn_installing"))
+            self._btn_download.configure(state="disabled")
+            self._log.configure(state="normal")
+            self._log.delete("1.0", "end")
+            self._log.configure(state="disabled")
+            self._log_write("[*] Verifica Ollama in corso...\n")
+            self._ensure_ollama_ready_async(on_ready=lambda ok: self._start_after_ollama(ok))
+            return
+        self._dispatch_start()
+
+    def _start_after_ollama(self, ok: bool) -> None:
+        """Callback dopo il setup Ollama: procedi comunque (fallback Google
+        gestito nella pipeline). Se l'utente ha chiuso nel frattempo, skip.
+        """
+        self._ollama_setup_in_flight = False
+        if self._destroying or self._running:
+            try:
+                self._btn.configure(state="normal", text=self._s("btn_start"))
+                self._btn_download.configure(state="normal",
+                                             text=self._s("btn_download"))
+            except tk.TclError:
+                pass
+            return
+        if not ok:
+            self._log_write("[i] Ollama non pronto: la pipeline usera' il fallback Google.\n")
+        self._dispatch_start()
+
+    def _dispatch_start(self) -> None:
+        """Instrada verso editor o batch — parte comune a _start e
+        _start_after_ollama."""
         if self._edit_subs.get() and len(self._batch_files) == 1:
             self._start_with_editor(self._batch_files[0])
         else:
