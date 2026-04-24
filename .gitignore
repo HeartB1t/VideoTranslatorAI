@@ -37,3 +37,6 @@ video_translator_gui_v1.0_pre-wav2lip.bak
 
 # Dev/one-shot scripts (storia locale, non pushati)
 _dev/
+
+# Memoria Claude locale (note di lavoro, feedback, fix aperti)
+_memory/

@@ -2235,20 +2235,124 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
     return result, detected
 
 
+def _windows_known_videos_dir() -> Path | None:
+    """Resolve the real 'Videos' Known Folder on Windows via Shell32.
+
+    Returns the actual filesystem path even when the user has redirected
+    the Videos library to another drive (Properties → Location → Move).
+    ``Path.home() / "Videos"`` is wrong in that case because it always
+    points at ``%USERPROFILE%\\Videos`` regardless of the redirection.
+
+    Uses ctypes (stdlib) against ``SHGetKnownFolderPath`` with
+    ``FOLDERID_Videos = {18989B1D-99B5-455B-841C-AB7C74E4DDFC}`` — the
+    Shell32 API recommended since Windows Vista (SHGetFolderPath is
+    deprecated). No pywin32 dependency is added: pulling pywin32 just for
+    one Known Folder lookup would bloat the Windows installer by ~9 MB and
+    complicate multi-user system-wide installs, which is not justified
+    for an edge case (user-relocated Videos folder).
+
+    Returns None on any failure so the caller can fall back safely.
+    """
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        # FOLDERID_Videos = {18989B1D-99B5-455B-841C-AB7C74E4DDFC}
+        folderid_videos = _GUID(
+            0x18989B1D, 0x99B5, 0x455B,
+            (ctypes.c_ubyte * 8)(0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC),
+        )
+        SHGetKnownFolderPath = ctypes.windll.shell32.SHGetKnownFolderPath
+        SHGetKnownFolderPath.argtypes = [
+            ctypes.POINTER(_GUID), wintypes.DWORD, wintypes.HANDLE,
+            ctypes.POINTER(ctypes.c_wchar_p),
+        ]
+        SHGetKnownFolderPath.restype = ctypes.c_long  # HRESULT
+        out = ctypes.c_wchar_p()
+        hr = SHGetKnownFolderPath(ctypes.byref(folderid_videos), 0, None,
+                                  ctypes.byref(out))
+        if hr == 0 and out.value:
+            path_str = out.value
+            # CoTaskMemFree the buffer returned by SHGetKnownFolderPath
+            ctypes.windll.ole32.CoTaskMemFree(out)
+            return Path(path_str)
+    except Exception:
+        # ctypes failure, ancient Windows, sandboxed Python — all fall back.
+        return None
+    return None
+
+
+def _default_videos_dir() -> Path:
+    """User's preferred 'Videos' folder, honouring XDG / Known Folders.
+
+    - Linux: query ``xdg-user-dir VIDEOS`` so a localised system (``~/Video``
+      on Italian, ``~/视频`` on zh_CN, ``~/Filme`` on German, …) saves there
+      instead of a parallel English-named ``~/Videos`` directory.
+    - macOS: the canonical folder is ``~/Movies``; use it when present.
+    - Windows: use Shell32 ``SHGetKnownFolderPath(FOLDERID_Videos)`` so we
+      follow the real location even when the user has redirected the Videos
+      library to another drive (e.g. ``D:\\Media``). Fall back to
+      ``%USERPROFILE%\\Videos`` if the Shell32 call fails.
+    """
+    if sys.platform.startswith("linux"):
+        with contextlib.suppress(FileNotFoundError,
+                                 subprocess.CalledProcessError,
+                                 subprocess.TimeoutExpired):
+            out = subprocess.run(
+                ["xdg-user-dir", "VIDEOS"],
+                capture_output=True, text=True, check=True, timeout=2,
+            ).stdout.strip()
+            if out:
+                return Path(out)
+    if sys.platform == "darwin":
+        movies = Path.home() / "Movies"
+        if movies.exists():
+            return movies
+    if sys.platform.startswith("win"):
+        kf = _windows_known_videos_dir()
+        if kf is not None:
+            return kf
+    return Path.home() / "Videos"
+
+
+# Punteggiatura forte di fine-frase — ASCII + CJK full-width + interrogativo arabo.
+# Usata da _split_on_punctuation per riallineare i segmenti Whisper a confini
+# sintattici naturali, anche in cinese/giapponese/arabo.
+_END_PUNCT_CHARS = r".?!;。？！；؟"
+_END_PUNCT_SET = frozenset(_END_PUNCT_CHARS)
+
+
 def _split_on_punctuation(
     segments: list[dict],
     min_duration: float = 1.0,
 ) -> list[dict]:
-    """Re-splits each Whisper segment su punteggiatura forte (. ? ! ;) seguita da
-    spazio e lettera maiuscola. Timestamps riproporzionati sul numero di caratteri.
-    Non splitta sulle virgole. Non produce sotto-segmenti di durata <min_duration.
-    Preserva 'speaker' se presente.
+    """Re-splits each Whisper segment su punteggiatura forte (. ? ! ; 。 ？ ！ ； ؟),
+    opzionalmente seguita da whitespace. Timestamps riproporzionati sul numero
+    di caratteri. Non splitta sulle virgole. Non produce sotto-segmenti di
+    durata <min_duration. Preserva 'speaker' se presente.
+
+    Il lookahead è `\\S` (non spazio): così funziona anche per script che non
+    separano le frasi con uno spazio (cinese, giapponese). Per le lingue
+    latine il filtro "uppercase/digit" sul char successivo conserva il
+    comportamento precedente; per CJK/arabo qualunque char non-punct è
+    considerato un boundary valido (non hanno case distinction).
+
     Riduce hallucinations XTTS dando frasi complete invece di tagli mid-sentence.
     """
     import re as _re
-    # Match . ? ! ; (ripetuti) + whitespace + (quote/parentesi)* + uppercase/digit.
-    # Unicode-aware: \p manca in re stdlib → uso \s + check manuale sulla classe char.
-    pattern = _re.compile(r"([\.\?!;]+)(\s+)(?=[^\s])")
+    pattern = _re.compile(
+        rf"([{_re.escape(_END_PUNCT_CHARS)}]+)(\s*)(?=\S)"
+    )
 
     out: list[dict] = []
     for seg in segments:
@@ -2266,7 +2370,28 @@ def _split_on_punctuation(
             next_idx = m.end()
             if next_idx < len(text):
                 next_ch = text[next_idx]
-                if next_ch.isupper() or next_ch.isdigit():
+                ws_between = m.group(2)  # whitespace consumed between punct and next_ch
+                # Latin scripts: richiede (whitespace obbligatorio) AND
+                # (maiuscola/cifra) per non splittare su abbreviazioni
+                # ("U.S.", "e.g.", "p.m."), dove dopo il punto c'è zero
+                # whitespace prima della lettera successiva. Questo replica
+                # il vecchio comportamento `\\s+` per lo script latino.
+                # Non-latin (CJK, arabo, …): qualunque char non-punct va
+                # bene anche senza whitespace, perché queste lingue non
+                # hanno case distinction e spesso non separano frasi con
+                # spazio (giapponese, cinese).
+                is_latin = next_ch.isascii() and next_ch.isalpha()
+                # Gate non-latin su `not isascii()`: un digit/punct ASCII
+                # dopo un punto ASCII appartiene sempre a testo latino
+                # (decimali "3.14", quote chiuse "'yes.'") e non dev'essere
+                # un cut-point. Solo i veri caratteri non-ASCII (CJK, arabo,
+                # devanagari, ecc.) beneficiano del `\\s*` (whitespace
+                # opzionale), perché queste lingue non separano le frasi
+                # con spazio.
+                if is_latin:
+                    if ws_between and next_ch.isupper():
+                        cuts.append(next_idx)
+                elif not next_ch.isascii():
                     cuts.append(next_idx)
         if not cuts:
             out.append(seg)
@@ -3151,16 +3276,48 @@ def mux_video(video_input: str, audio_track: str, output_path: str):
 #  LIP SYNC (Wav2Lip)
 # ═══════════════════════════════════════════════════════════
 
+def _is_dir_user_writable(path: Path) -> bool:
+    """Return True only if the current user can actually create files in *path*.
+
+    ``os.access(..., os.W_OK)`` is unreliable on Windows: it only inspects the
+    read-only attribute and does NOT consult NTFS ACLs, so a standard (non-
+    elevated) user often sees ``W_OK=True`` on ``C:\\Program Files\\...`` even
+    though a real write would be denied by UAC/MIC. Probing with an actual
+    tempfile create+delete is the only portable way to get a truthful answer
+    on both Windows and POSIX without introducing pywin32.
+    """
+    if not path.exists() or not path.is_dir():
+        return False
+    try:
+        # delete=True removes the file as soon as the handle is closed.
+        with tempfile.NamedTemporaryFile(dir=str(path), prefix=".vtai_wtest_",
+                                         delete=True):
+            pass
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
 def _resolve_wav2lip_dir() -> Path:
     """Return the directory that should host Wav2Lip repo + model.
 
     Priority (cross-platform unified path):
       1. system-wide install dir populated by the Windows/Linux installer
          (%ProgramFiles%\\VideoTranslatorAI\\wav2lip on Windows,
-          /opt/VideoTranslatorAI/wav2lip on Linux) if it already contains
-         the cloned repo or the model weights;
-      2. per-user fallback: ~/.local/share/wav2lip (legacy path, still used
-         when the installer has not pre-seeded the system-wide copy).
+          /opt/VideoTranslatorAI/wav2lip on Linux), adopted only when it is
+         **fully populated** (repo clone AND model weights) **and actually
+         writable** by the current user — otherwise a later mkdir/git clone
+         under ProgramFiles or /opt would raise PermissionError without
+         falling back to the user-level path.
+
+         Writability is checked with a real tempfile probe
+         (``_is_dir_user_writable``) instead of ``os.access(..., os.W_OK)``
+         because on Windows the latter ignores NTFS ACLs / UAC virtualisation
+         and routinely reports ``True`` for Program Files directories that
+         would in fact reject writes from a non-elevated process.
+      2. per-user fallback: ~/.local/share/wav2lip (legacy path, always
+         writable, used when the installer has not pre-seeded a complete
+         system-wide copy).
 
     The system-wide branch prevents a double 416 MB download on Windows when
     ``install_windows.bat`` has already placed the assets under ProgramFiles.
@@ -3172,9 +3329,11 @@ def _resolve_wav2lip_dir() -> Path:
     else:
         candidates.append(Path("/opt/VideoTranslatorAI/wav2lip"))
     for cand in candidates:
-        # Consider it "populated" if either the repo clone or the weights
-        # are already present — lets us reuse partial installer state.
-        if (cand / "Wav2Lip" / "inference.py").exists() or (cand / "wav2lip_gan.pth").exists():
+        # AND (not OR): both repo and weights must be present, otherwise the
+        # caller will try to mkdir/clone under a read-only system path.
+        repo_ok   = (cand / "Wav2Lip" / "inference.py").exists()
+        model_ok  = (cand / "wav2lip_gan.pth").exists()
+        if repo_ok and model_ok and _is_dir_user_writable(cand):
             return cand
     return Path.home() / ".local" / "share" / "wav2lip"
 
@@ -3652,8 +3811,8 @@ def translate_video(
         except ValueError:
             is_tmp = False
         if is_tmp:
-            videos_dir = Path.home() / "Videos"
-            videos_dir.mkdir(exist_ok=True)
+            videos_dir = _default_videos_dir()
+            videos_dir.mkdir(parents=True, exist_ok=True)
             output = str(videos_dir / f"{stem}_{lang_target}.mp4")
         else:
             output = str(input_dir / f"{stem}_{lang_target}.mp4")
@@ -4208,36 +4367,69 @@ class App(tk.Tk):
         def do():
             cmd = [sys.executable, "-m", "pip", "install",
                    "--break-system-packages", "--no-color"] + packages
+            # encoding="utf-8" + errors="replace" is critical on Windows:
+            # without it, text=True falls back to locale.getpreferredencoding()
+            # (cp1252 on Italian/English installs) and pip's tqdm progress bars
+            # or non-ASCII package URLs trigger UnicodeDecodeError mid-install.
+            # stdin=DEVNULL avoids inheriting a None stdin from pythonw.exe
+            # on Windows (the GUI launcher has no console).
             proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL, text=True,
+                encoding="utf-8", errors="replace",
             )
             _register_subprocess(proc)
             ok = True
             # 10-minute ceiling: covers large Torch wheels on slow mirrors
             # without letting the GUI freeze forever if pip stalls.
+            # NB: proc.wait(timeout=…) non scatta se pip si blocca senza
+            # chiudere stdout, perché il for-loop su proc.stdout si ferma lì.
+            # Un Timer che killa il processo garantisce lo sblocco (l'iteratore
+            # su stdout solleva o ritorna EOF appena il processo muore).
             PIP_TIMEOUT = 600
+            timed_out = {"fired": False}
+
+            def _on_timeout():
+                timed_out["fired"] = True
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                # On Windows, TerminateProcess does not always unblock a
+                # pending read on the child's stdout pipe immediately —
+                # close our end so the for-loop wakes up even if the OS
+                # is slow to tear down the pipe.
+                with contextlib.suppress(Exception):
+                    if proc.stdout is not None:
+                        proc.stdout.close()
+
+            watchdog = threading.Timer(PIP_TIMEOUT, _on_timeout)
+            watchdog.daemon = True
+            watchdog.start()
             try:
                 for line in proc.stdout:
                     line = line.rstrip()
                     if line:
                         self.after(0, self._log_write, f"    {line}\n")
-                try:
-                    proc.wait(timeout=PIP_TIMEOUT)
-                except subprocess.TimeoutExpired:
+                with contextlib.suppress(Exception):
+                    proc.wait(timeout=30)
+                if timed_out["fired"]:
                     self.after(0, self._log_write,
                                f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
-                    proc.kill()
-                    with contextlib.suppress(Exception):
-                        proc.wait(timeout=30)
                     ok = False
                 else:
                     ok = proc.returncode == 0
             except Exception:
-                proc.kill()
+                # Se il timeout watchdog ha chiuso stdout, l'iteratore qui
+                # solleva — stampiamo comunque il messaggio di timeout così
+                # l'utente vede la causa invece di un generico "Installation failed".
+                if timed_out["fired"]:
+                    self.after(0, self._log_write,
+                               f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
                 with contextlib.suppress(Exception):
+                    proc.kill()
                     proc.wait(timeout=30)
                 ok = False
             finally:
+                watchdog.cancel()
                 _unregister_subprocess(proc)
             self.after(0, self._install_done, ok, packages)
 
