@@ -161,6 +161,73 @@ def _suggest_xtts_speed(
     return speed, ratio, True
 
 
+# Chars/sec baseline per XTTS v2 a speed=1.0 (stima empirica aggregata su
+# segmenti reali v1.4-v1.6). Serve per calcolare il tempo che XTTS impiegherebbe
+# a pronunciare un testo senza time-stretch e decidere quanto speed nativo serve
+# per farlo stare in uno slot temporale. Lingue sillabiche/logografiche (ja/zh)
+# hanno chars/sec molto più bassi perché 1 carattere = 1 sillaba o concetto.
+_XTTS_CHARS_PER_SEC = {
+    "en": 16.0, "it": 15.0, "es": 15.5, "fr": 15.0, "de": 14.5,
+    "pt": 15.0, "nl": 15.0, "ja": 10.0, "zh-CN": 8.0, "zh": 8.0, "ko": 10.5,
+    "ru": 13.5, "ar": 13.0, "hi": 13.0, "tr": 14.0, "pl": 13.5,
+    "uk": 13.5, "cs": 14.0, "el": 13.0, "hu": 13.0, "fi": 13.5,
+    "sv": 14.5, "da": 14.5, "no": 14.5, "ro": 14.5, "vi": 13.0,
+    "id": 14.0,
+}
+
+
+def _estimate_tts_duration_s(text: str, lang: str) -> float:
+    """Stima durata (secondi) che XTTS impiegherebbe a pronunciare `text` in
+    `lang` a speed=1.0. Usa la tabella `_XTTS_CHARS_PER_SEC`; fallback a 14.0
+    chars/sec (media europea) per lingue fuori tabella. Minimo 0.5s per evitare
+    divisioni degeneri su testi molto corti.
+
+    Il lookup è **case-insensitive** perché la chiamante passa il codice nella
+    forma attesa da XTTS (`zh-cn` lowercase) mentre la tabella usa `zh-CN` con
+    variante breve `zh`. Senza normalizzazione il cinese cadrebbe al default
+    14.0 (media europea) sottostimando la durata di ~1.75x e annullando
+    l'adaptive speed proprio sulla lingua con gap chars/sec più estremo.
+    """
+    key = (lang or "").strip()
+    rate = _XTTS_CHARS_PER_SEC.get(key)
+    if rate is None:
+        rate = _XTTS_CHARS_PER_SEC.get(key.lower())
+    if rate is None:
+        # Strip region suffix (es. "zh-cn" → "zh", "pt-br" → "pt").
+        rate = _XTTS_CHARS_PER_SEC.get(key.split("-")[0].lower(), 14.0)
+    n = len((text or "").strip())
+    return max(0.5, n / rate)
+
+
+def _compute_segment_speed(
+    text: str,
+    slot_s: float,
+    lang_target: str,
+    ceiling: float = 1.40,
+) -> float:
+    """Calcola lo speed XTTS v2 adattivo per un singolo segmento.
+
+    Idea: se il testo ci sta già comodo nello slot a speed=1.0 lascia lo speed
+    basso (meno artefatti), se invece richiederebbe >40% di compressione alza
+    fino al `ceiling` per ridurre l'atempo post-processing che è l'origine
+    principale del suono "metallico".
+
+    Parametri:
+      text        : testo target da sintetizzare (può essere vuoto)
+      slot_s      : durata dello slot sorgente in secondi
+      lang_target : codice lingua per lookup in `_XTTS_CHARS_PER_SEC`
+      ceiling     : tetto superiore (tipicamente lo speed globale autotune)
+
+    Ritorno: speed nel range [1.05, min(1.40, ceiling)]. Guard su slot_s<=0.
+    """
+    hard_cap = min(1.40, max(1.05, ceiling))
+    if not text or slot_s <= 0:
+        return max(1.05, min(hard_cap, 1.25))
+    est = _estimate_tts_duration_s(text, lang_target)
+    required = est / slot_s
+    return max(1.05, min(required, hard_cap))
+
+
 REQUIRED_PACKAGES = {
     "faster_whisper": "faster-whisper",
     "edge_tts":       "edge-tts",
@@ -2970,9 +3037,12 @@ def generate_tts_xtts(
         return None  # caller will fall back to edge-tts
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # XTTS v2 range officially supported: 0.5–2.0
+    # XTTS v2 range officially supported: 0.5–2.0. `speed` qui è il CEILING per
+    # lo speed adattivo per-segmento (vedi _compute_segment_speed sotto): nessun
+    # segmento lo supera. Retrocompat: utenti con `xtts_speed` pinnato in config
+    # vedono il loro valore usato come tetto → comportamento ≤ vecchio fisso.
     speed = max(0.5, min(float(speed), 2.0))
-    print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device}, speed={speed:.2f})...", flush=True)
+    print(f"[5/6] Generating TTS with Coqui XTTS v2 (voice cloning, device={device}, speed<={speed:.2f} adaptive)...", flush=True)
     print(f"     Reference audio: {Path(reference_audio).name}", flush=True)
 
     # Global (fallback) reference clip — preferisco VAD per evitare silenzi/rumore.
@@ -3010,6 +3080,12 @@ def generate_tts_xtts(
     # mentre un altro worker tiene occupata la GPU.
     from concurrent.futures import ThreadPoolExecutor
     tts_lock = threading.Lock()
+    # Tolleranza float per il conteggio "at cap": segmenti il cui speed è
+    # clampato al ceiling (l'utente vede il parametro che in UI→tetto globale).
+    _CAP_EPS = 1e-3
+    # Statistiche speed adattivo (per log a fine loop). Protette dallo stesso
+    # counter_lock del progress counter per non aggiungere un terzo lock.
+    speed_stats = {"min": None, "max": None, "sum": 0.0, "n": 0, "at_cap": 0}
     try:
         tts_model = CoquiTTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         total = len(segments)
@@ -3020,11 +3096,19 @@ def generate_tts_xtts(
         def _gen_one(i: int):
             seg = segments[i]
             out = files[i]
-            text = (seg.get("text_tgt") or "").strip()
+            text = (seg.get("text_tgt") or seg.get("text") or "").strip()
             if not text:
                 return None
             spk = seg.get("speaker")
             spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
+            # Speed adattivo: `speed` (arg funzione) agisce da ceiling.
+            # slot_s calcolato dallo start/end Whisper; se mancano, fallback a
+            # 0 → _compute_segment_speed ritorna min(ceiling, 1.25).
+            try:
+                slot_s = float(seg.get("end", 0)) - float(seg.get("start", 0))
+            except Exception:
+                slot_s = 0.0
+            seg_speed = _compute_segment_speed(text, slot_s, xtts_lang, ceiling=speed)
             try:
                 with tts_lock:
                     tts_model.tts_to_file(
@@ -3032,7 +3116,7 @@ def generate_tts_xtts(
                         speaker_wav=spk_ref,
                         language=xtts_lang,
                         file_path=out,
-                        speed=speed,
+                        speed=seg_speed,
                         # Tuning anti-hallucination:
                         #   repetition_penalty alto scoraggia loop di parole
                         #   temperature bassa riduce output randomici
@@ -3047,6 +3131,15 @@ def generate_tts_xtts(
             except Exception as e:
                 print(f"     ! XTTS seg {i}: {e}", flush=True)
             with counter_lock:
+                # Aggiorna stats speed adattivo
+                if speed_stats["min"] is None or seg_speed < speed_stats["min"]:
+                    speed_stats["min"] = seg_speed
+                if speed_stats["max"] is None or seg_speed > speed_stats["max"]:
+                    speed_stats["max"] = seg_speed
+                speed_stats["sum"] += seg_speed
+                speed_stats["n"] += 1
+                if seg_speed >= speed - _CAP_EPS:
+                    speed_stats["at_cap"] += 1
                 done_counter["n"] += 1
                 n = done_counter["n"]
                 # Print sotto lock per evitare output frammentato fra thread.
@@ -3068,6 +3161,23 @@ def generate_tts_xtts(
                 pass
 
     print("     → XTTS done                   ", flush=True)
+    # Log distribuzione speed adattivo. Skippa se nessun segmento ha testo.
+    n_stats = speed_stats["n"]
+    if n_stats > 0:
+        s_min = speed_stats["min"] or 0.0
+        s_max = speed_stats["max"] or 0.0
+        s_mean = speed_stats["sum"] / n_stats
+        at_cap = speed_stats["at_cap"]
+        pct = (at_cap / n_stats) * 100.0
+        print(
+            f"     → XTTS adaptive speed: min={s_min:.2f}, mean={s_mean:.2f}, "
+            f"max={s_max:.2f} over {n_stats} segments",
+            flush=True,
+        )
+        print(
+            f"     → Segments at speed cap ({speed:.2f}): {at_cap}/{n_stats} ({pct:.1f}%)",
+            flush=True,
+        )
     return files
 
 
