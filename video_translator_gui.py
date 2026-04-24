@@ -2129,15 +2129,18 @@ def _split_on_punctuation(
 
 def _merge_short_segments(
     segments: list[dict],
-    min_duration: float = 1.5,
-    max_gap: float = 0.4,
-    max_merged_duration: float = 12.0,
+    min_duration: float = 3.0,
+    max_gap: float = 1.0,
+    max_merged_duration: float = 20.0,
 ) -> list[dict]:
-    """Unisce segmenti consecutivi molto brevi (<min_duration) con il successivo se:
+    """Unisce segmenti consecutivi brevi (<min_duration) con il successivo se:
     - gap tra fine precedente e inizio successivo < max_gap
     - lo stesso speaker (se presente l'informazione)
     - la durata risultante non supera max_merged_duration
-    Riduce le hallucinations di XTTS e migliora la fluidità della traduzione.
+    Riduce hallucinations di XTTS e compressione atempo (meno slot piccoli con
+    TTS inglese più lungo → meno atempo > 1.5 udibili).
+    Parametri tarati 2026-04-24 dopo diagnostic su video IT→EN: 60% segmenti
+    avevano ratio > 1.30 con i vecchi default (1.5/0.4/12.0).
     """
     if not segments:
         return segments
@@ -2714,6 +2717,11 @@ def build_dubbed_track(
     total_frames = int(total_duration * SR)
     out = os.path.join(tmp_dir, "track_dubbed.wav")
 
+    # DIAGNOSTIC: traccia atempo ratio per segmento — fornisce sempre un report
+    # aggregato (distribuzione bucket + top 10 worst) utile per valutare la
+    # qualità percepita del doppiaggio (ratio alti → voce "velocizzata" udibile).
+    _atempo_stats: list[tuple[int, float, int, int, float, bool]] = []
+
     # Raw PCM int32 in memmap: serve headroom per sommare senza saturare durante
     # gli overlay, si clampa a int16 alla fine.
     raw_path = os.path.join(tmp_dir, "_track_mix.raw")
@@ -2761,11 +2769,14 @@ def build_dubbed_track(
 
         # Se il TTS eccede lo slot (più 50 ms di margine), applica atempo via ffmpeg.
         src_path = tts_file
+        tts_ms_probed = 0
+        ratio_raw = 1.0
         if os.path.exists(tts_file) and os.path.getsize(tts_file) > 0:
-            tts_ms = _probe_duration_ms(tts_file)
-            if tts_ms > slot_ms + 50:
-                ratio = tts_ms / slot_ms
-                ratio = max(1.0, min(ratio, 4.0))
+            tts_ms_probed = _probe_duration_ms(tts_file)
+            if slot_ms > 0:
+                ratio_raw = tts_ms_probed / slot_ms
+            if tts_ms_probed > slot_ms + 50:
+                ratio = max(1.0, min(ratio_raw, 4.0))
                 chain = _build_atempo_chain(ratio)
                 sped = os.path.join(tmp_dir, f"seg_{i:04d}_sped.wav")
                 try:
@@ -2784,7 +2795,8 @@ def build_dubbed_track(
 
         # Hard-truncate con fade-out se ancora troppo lungo dopo atempo.
         slot_frames = int(slot_ms * SR / 1000)
-        if pcm.shape[0] > slot_frames:
+        truncated = pcm.shape[0] > slot_frames
+        if truncated:
             pcm = pcm[:slot_frames].copy()
             fade_len = max(1, min(int(0.08 * SR), pcm.shape[0] // 4))
             # Fade lineare su int16 → calcolato in float32 poi riconvertito.
@@ -2792,8 +2804,38 @@ def build_dubbed_track(
             tail = pcm[-fade_len:].astype(np.float32) * ramp[:, None]
             pcm[-fade_len:] = tail.astype(np.int16)
 
+        # Diagnostic: registra sempre (anche i segmenti "fit", ratio <=1.0).
+        _atempo_stats.append((i, seg["start"], slot_ms, tts_ms_probed, ratio_raw, truncated))
+
         start_frame = int(start_ms * SR / 1000)
         _overlay(pcm, start_frame)
+
+    # DIAGNOSTIC: stampa distribuzione atempo (attivo sempre, output sintetico).
+    if _atempo_stats:
+        _buckets = [
+            ("ratio <= 1.00  (no atempo needed):  ", lambda r: r <= 1.00),
+            ("1.00 < ratio <= 1.10 (imperceptible):", lambda r: 1.00 < r <= 1.10),
+            ("1.10 < ratio <= 1.30 (mild):         ", lambda r: 1.10 < r <= 1.30),
+            ("1.30 < ratio <= 1.50 (noticeable):   ", lambda r: 1.30 < r <= 1.50),
+            ("1.50 < ratio <= 2.00 (strong):       ", lambda r: 1.50 < r <= 2.00),
+            ("ratio > 2.00   (severe):             ", lambda r: r > 2.00),
+        ]
+        total = len(_atempo_stats)
+        trunc_count = sum(1 for _, _, _, _, _, t in _atempo_stats if t)
+        print(f"     --- ATEMPO DIAGNOSTIC: {total} segments ---", flush=True)
+        for label_b, pred in _buckets:
+            n = sum(1 for _, _, _, _, r, _ in _atempo_stats if pred(r))
+            pct = 100.0 * n / total if total else 0.0
+            print(f"       {label_b} {n:>4d}  ({pct:5.1f}%)", flush=True)
+        print(f"       truncated after atempo:              {trunc_count:>4d}  ({100.0*trunc_count/total:.1f}%)", flush=True)
+        # Top 10 worst per ratio
+        worst = sorted(_atempo_stats, key=lambda t: -t[4])[:10]
+        print(f"     --- Top 10 worst segments (highest ratio) ---", flush=True)
+        for idx, start_s, slot_ms_v, tts_ms_v, ratio_v, trunc_v in worst:
+            mm, ss = divmod(int(start_s), 60)
+            t_mark = "TRUNC" if trunc_v else "     "
+            print(f"       #{idx:04d} @ {mm:02d}:{ss:02d}  slot={slot_ms_v:>5d}ms  tts={tts_ms_v:>5d}ms  ratio={ratio_v:5.2f}  {t_mark}", flush=True)
+        print(f"     --- end diagnostic ---", flush=True)
 
     # Mix background se disponibile (stessa semantica storica: bg_volume in ampiezza).
     if bg_path and os.path.exists(bg_path) and bg_volume > 0:
@@ -3281,7 +3323,7 @@ def translate_video(
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
-    xtts_speed: float = 1.1,
+    xtts_speed: float = 1.25,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -4489,9 +4531,9 @@ class App(tk.Tk):
             rate = 0
         cfg = load_config()
         try:
-            xtts_speed = float(cfg.get("xtts_speed", 1.1))
+            xtts_speed = float(cfg.get("xtts_speed", 1.25))
         except (TypeError, ValueError):
-            xtts_speed = 1.1
+            xtts_speed = 1.25
         snap = {
             "model":      self._model.get(),
             "lang_src":   self._lang_src.get(),
@@ -4735,9 +4777,9 @@ def _cli():
         xtts_speed_cli = args.xtts_speed
     else:
         try:
-            xtts_speed_cli = float(cfg_cli.get("xtts_speed", 1.1))
+            xtts_speed_cli = float(cfg_cli.get("xtts_speed", 1.25))
         except (TypeError, ValueError):
-            xtts_speed_cli = 1.1
+            xtts_speed_cli = 1.25
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
