@@ -635,6 +635,14 @@ echo  [+] Found: !PY_VER! at !PYTHON_EXE!
 if not errorlevel 1 goto step_python_ok
 
 echo  [X] Detected !PY_VER! is incompatible (need Python 3.10-3.13).
+:: Short-circuit: if a previous run already installed Python 3.11.9
+:: alongside at the standard ProgramFiles location, reuse it instead of
+:: re-downloading 25 MB. Saves ~30s on every retry / re-install.
+if exist "%ProgramFiles%\Python311\python.exe" (
+    echo  [+] Python 3.11.9 already installed alongside at "%ProgramFiles%\Python311\python.exe", reusing.
+    set "PYTHON_EXE=%ProgramFiles%\Python311\python.exe"
+    goto step_python_post_install
+)
 echo  [*] Installing Python 3.11.9 alongside (without altering PATH)...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
@@ -657,6 +665,8 @@ if not exist "%PYTHON_EXE%" (
     echo  [!] Bundled Python 3.11.9 not found at "%PYTHON_EXE%" after install. Aborting.
     exit /b 1
 )
+
+:step_python_post_install
 for /f "tokens=*" %%i in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%i"
 echo  [+] Using bundled !PY_VER! at !PYTHON_EXE!
 
