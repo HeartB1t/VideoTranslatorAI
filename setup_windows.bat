@@ -634,8 +634,8 @@ echo  [+] Found: !PY_VER! at !PYTHON_EXE!
 "%PYTHON_EXE%" -c "import sys; sys.exit(0 if (3,10) <= sys.version_info[:2] <= (3,13) else 1)" >nul 2>&1
 if not errorlevel 1 goto step_python_ok
 
-echo  [!] Detected !PY_VER! is incompatible (need Python 3.10-3.13).
-echo  [!] Installing Python 3.11.9 alongside (without altering PATH)...
+echo  [X] Detected !PY_VER! is incompatible (need Python 3.10-3.13).
+echo  [*] Installing Python 3.11.9 alongside (without altering PATH)...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
     "$out = $env:TEMP + '\python_installer.exe';" ^
@@ -813,7 +813,14 @@ echo            of basicsr 1.4.2 -- original is abandoned and KeyError '__versio
 echo            on Python 3.13 (PEP 667 broke its setup.py exec/locals pattern).
 echo            new-basicsr installs the same 'basicsr' module (drop-in import).
 
-for /f "tokens=*" %%i in ('"%PYTHON_EXE%" -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"') do set "PY_TAG=%%i"
+:: Use a temp file instead of `for /f` because cmd's `for /f ('cmd')` parsing
+:: chokes when PYTHON_EXE contains spaces (C:\Program Files\...) AND the
+:: inner Python code uses single quotes (f-strings). Live install on Win 10
+:: showed `"C:\Program" non e' riconosciuto` followed by silent script exit.
+"%PYTHON_EXE%" -c "import sys; print(str(sys.version_info.major)+str(sys.version_info.minor))" > "%TEMP%\vtai_pytag.txt" 2>nul
+set "PY_TAG="
+set /p "PY_TAG=" < "%TEMP%\vtai_pytag.txt"
+del "%TEMP%\vtai_pytag.txt" >nul 2>&1
 echo  [*] Python tag detected: cp%PY_TAG%
 
 set "DLIB_WHEEL_URL="
@@ -1025,8 +1032,12 @@ exit /b 0
 echo.
 echo [%~1] Creating Desktop shortcut...
 
+:: Same temp-file trick as :step_wav2lip -- `for /f` chokes on PYTHON_EXE
+:: with spaces + inner single quotes ('pythonw.exe').
+"%PYTHON_EXE%" -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable), 'pythonw.exe'))" > "%TEMP%\vtai_pythonw.txt" 2>nul
 set "PYTHONW="
-for /f "tokens=*" %%i in ('"%PYTHON_EXE%" -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
+set /p "PYTHONW=" < "%TEMP%\vtai_pythonw.txt"
+del "%TEMP%\vtai_pythonw.txt" >nul 2>&1
 
 powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
