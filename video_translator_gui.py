@@ -316,7 +316,11 @@ UI_STRINGS = {
         "label_deepl_key":    "API key DeepL:",
         "label_ollama_model": "Modello:",
         "label_ollama_url":   "URL Ollama:",
-        "hint_ollama":        "Default: qwen2.5:7b-instruct — richiede Ollama installato",
+        "hint_ollama":        (
+            "Default: qwen3:8b (raccomandato) — qwen3:4b leggero (~3 GB), "
+            "qwen3:14b qualità superiore (~9 GB), qwen2.5:7b-instruct retrocompat. "
+            "Richiede Ollama installato"
+        ),
         "msg_ollama_unavailable": (
             "Ollama non disponibile. Per installare:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -400,7 +404,11 @@ UI_STRINGS = {
         "label_deepl_key":    "DeepL API key:",
         "label_ollama_model": "Model:",
         "label_ollama_url":   "Ollama URL:",
-        "hint_ollama":        "Default: qwen2.5:7b-instruct — requires Ollama installed",
+        "hint_ollama":        (
+            "Default: qwen3:8b (recommended) — qwen3:4b lightweight (~3 GB), "
+            "qwen3:14b higher quality (~9 GB), qwen2.5:7b-instruct legacy. "
+            "Requires Ollama installed"
+        ),
         "msg_ollama_unavailable": (
             "Ollama not available. To install:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2703,7 +2711,7 @@ def _ollama_health_check(api_url: str, model: str, timeout: float = 5.0) -> tupl
     """Verifica che Ollama sia raggiungibile e che il modello richiesto sia
     presente. Ritorna (ok, message). `message` è "" se ok, altrimenti è
     human-readable (es. "Ollama non raggiungibile: ConnectionError", o
-    "Model qwen2.5:7b-instruct not installed").
+    "Model qwen3:8b not installed").
 
     Non solleva eccezioni — il chiamante gestisce il fallback.
     """
@@ -2741,6 +2749,10 @@ def _ollama_strip_preamble(text: str) -> str:
     sintetizzi preamboli/disclaimer/note come audio (causa outlier atempo).
 
     Pipeline di pulizia (ordine critico):
+      0. Qwen3 chain-of-thought: blocchi <think>/<thinking>/<reasoning> chiusi
+         o orfani (output troncato). Devono morire PRIMA di tutto: contengono
+         sintassi LLM-specifica che potrebbe matchare i pattern dei passi
+         successivi e generare residui sporchi.
       1. Blocchi markdown code ```...``` (alcuni modelli wrappano l'output).
       2. Marcatori grassetto/corsivo **x** *x* ***x***.
       3. Preamble multi-lingua ("Ecco la traduzione:", "Here's the translation:",
@@ -2758,6 +2770,27 @@ def _ollama_strip_preamble(text: str) -> str:
         return ""
     import re as _re
     t = text.strip()
+
+    # 0. Qwen3 chain-of-thought: rimuovi blocchi <think>...</think> che
+    #    possono arrivare se /no_think è stato ignorato (es. fine-tuning
+    #    Qwen3 che bypassa il toggle, o versione vecchia di Ollama che
+    #    ignora `think:false`). Cattura sia tag standard che varianti
+    #    comuni (<thinking>, <reasoning>) usate da derivati Qwen3.
+    THINK_BLOCK_RE = _re.compile(
+        r"<\s*(think|thinking|reasoning)\s*>[\s\S]*?<\s*/\s*\1\s*>",
+        flags=_re.IGNORECASE,
+    )
+    t = THINK_BLOCK_RE.sub("", t)
+    # 0b. Tag aperti senza chiusura (output troncato per num_predict raggiunto):
+    #     se trovi <think> senza </think>, taglia tutto fino al doppio newline
+    #     o a fine stringa. Evita di consegnare a XTTS un blocco di reasoning
+    #     a metà.
+    ORPHAN_THINK_RE = _re.compile(
+        r"<\s*(think|thinking|reasoning)\s*>[\s\S]*?(?=\n\n|$)",
+        flags=_re.IGNORECASE,
+    )
+    t = ORPHAN_THINK_RE.sub("", t)
+    t = t.strip()
 
     # 1. Unwrap blocchi markdown code ```...``` conservando il contenuto.
     #    Alcuni modelli wrappano il testo tradotto in un code fence.
@@ -3241,7 +3274,7 @@ def translate_with_ollama(
     segments: list[dict],
     source_lang: str,
     target_lang: str,
-    model: str = "qwen2.5:7b-instruct",
+    model: str = "qwen3:8b",
     api_url: str = "http://localhost:11434",
     slot_aware: bool = True,
     batch_size: int = 1,
@@ -3254,7 +3287,10 @@ def translate_with_ollama(
         segments: lista di dict con chiavi `start`, `end`, `text`, opz `speaker`.
         source_lang: codice ISO della lingua sorgente (es. "en"). "auto" accettato.
         target_lang: codice ISO della lingua target (es. "it").
-        model: nome del modello Ollama (default "qwen2.5:7b-instruct").
+        model: nome del modello Ollama (default "qwen3:8b"). Per Qwen3 il
+               thinking mode viene disabilitato automaticamente (think=False
+               + suffisso /no_think) per evitare blocchi <think>...</think>
+               che XTTS pronuncerebbe come outlier.
         api_url: base URL del daemon Ollama (default "http://localhost:11434").
         slot_aware: se True, include il reading time nel prompt (consigliato).
         batch_size: numero di segmenti da accorpare in un singolo prompt. 1 = safe
@@ -3283,6 +3319,19 @@ def translate_with_ollama(
 
     print(f"     → Ollama ready ({model} @ {base}, slot_aware={slot_aware}, batch={batch_size})", flush=True)
 
+    # Detect Qwen3 family — needs thinking mode disabled to avoid <think>
+    # blocks in output that XTTS would pronounce as audible chain-of-thought.
+    # Sampling parameters tuned per Qwen team's official recommendations:
+    #   - Qwen3 non-thinking: T=0.7, TopP=0.8, TopK=20 (avoids endless loops)
+    #   - Qwen2.x and others: stricter T=0.3, TopP=0.9 for translation
+    # Doppia protezione: payload `think:false` (Ollama API ≥2025) +
+    # suffix `/no_think` nel prompt (vince anche su versioni vecchie).
+    is_qwen3 = model.lower().startswith("qwen3")
+    print(
+        f"     → Mode: {'Qwen3 non-thinking (think=False)' if is_qwen3 else 'standard'}",
+        flush=True,
+    )
+
     # Debug opt-in: se settato, logga sorgente + output finale per ogni segmento.
     # Utile per indagare residui di preamble/commentary senza re-runnare pipeline.
     _ollama_debug = os.environ.get("VIDEOTRANSLATORAI_OLLAMA_DEBUG") == "1"
@@ -3310,7 +3359,7 @@ def translate_with_ollama(
             slot_clause = (
                 f"2. Target reading time: approximately {slot_s:.1f} seconds when spoken aloud at normal pace.\n"
             )
-        return (
+        prompt = (
             f"You are a professional dubbing translator. Translate the following {src_name} text to {tgt_name} for voice dubbing.\n\n"
             f"CRITICAL REQUIREMENTS:\n"
             f"1. Keep it CONCISE — {tgt_name} tends to be longer than {src_name}; your job is to compress while preserving meaning.\n"
@@ -3322,21 +3371,41 @@ def translate_with_ollama(
             f"{tgt_name} translation (spoken, concise"
             f"{', ~' + format(slot_s, '.1f') + 's' if slot_aware and slot_s > 0 else ''}):\n"
         )
+        # Doppia safety: se l'API Ollama non interpreta `think:false` (versioni
+        # pre-2025), il suffisso `/no_think` nel prompt è il toggle ufficiale
+        # documentato da Qwen e vince comunque.
+        if is_qwen3:
+            prompt = prompt.rstrip() + "\n\n/no_think"
+        return prompt
 
     def _call_ollama(prompt: str, num_predict: int) -> str:
+        if is_qwen3:
+            options = {
+                "temperature": 0.7,
+                "top_p": 0.8,
+                "top_k": 20,
+                "num_predict": num_predict,
+            }
+        else:
+            options = {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "num_predict": num_predict,
+            }
         payload = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": 0.3,
-                "top_p": 0.9,
-                "num_predict": num_predict,
-            },
+            "options": options,
         }
-        # Timeout generoso: qwen2.5:7b su RTX 3090 produce ~40-80 tok/s,
-        # ma su CPU-only può arrivare a 2-5 tok/s → 120s copre anche risposte
-        # lunghe in fallback CPU.
+        # Disabilita esplicitamente il thinking mode su Qwen3 via flag API
+        # nativa (Ollama supporta `think` dal 2025+). Se l'API ignora il flag
+        # su versioni vecchie, il suffisso `/no_think` nel prompt fa da safety.
+        if is_qwen3:
+            payload["think"] = False
+        # Timeout generoso: qwen3:8b / qwen2.5:7b su RTX 3090 produce
+        # ~40-80 tok/s, ma su CPU-only può arrivare a 2-5 tok/s → 120s
+        # copre anche risposte lunghe in fallback CPU.
         r = requests.post(f"{base}/api/generate", json=payload, timeout=120)
         r.raise_for_status()
         data = r.json()
@@ -3469,7 +3538,7 @@ def _marian_normalize_lang(code: str) -> str:
 def translate_segments(
     segments: list[dict], source: str, target: str,
     engine: str = "google", deepl_key: str = "",
-    ollama_model: str = "qwen2.5:7b-instruct",
+    ollama_model: str = "qwen3:8b",
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
 ) -> list[dict]:
@@ -4841,7 +4910,7 @@ def translate_video(
     hf_token: str = "",
     use_lipsync: bool = False,
     xtts_speed: float | None = None,
-    ollama_model: str = "qwen2.5:7b-instruct",
+    ollama_model: str = "qwen3:8b",
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
 ) -> dict:
@@ -5218,7 +5287,7 @@ class App(tk.Tk):
         # Ollama LLM config (v2.0) — preset da config JSON se presente
         _ocfg = load_config()
         self._ollama_model_var   = tk.StringVar(
-            value=_ocfg.get("ollama_model", "qwen2.5:7b-instruct")
+            value=_ocfg.get("ollama_model", "qwen3:8b")
         )
         self._ollama_url_var     = tk.StringVar(
             value=_ocfg.get("ollama_url", "http://localhost:11434")
@@ -5854,9 +5923,12 @@ class App(tk.Tk):
         self._ollama_model_combo = ttk.Combobox(
             self._ollama_row, textvariable=self._ollama_model_var, width=28,
             values=[
-                "qwen2.5:7b-instruct",
-                "llama3.2:3b-instruct",
-                "mistral-nemo:12b-instruct",
+                "qwen3:8b",                  # Default raccomandato (Qwen3, 5.2 GB)
+                "qwen3:4b",                  # Leggero (Qwen3, ~3 GB)
+                "qwen3:14b",                 # Qualità superiore (~9 GB)
+                "qwen2.5:7b-instruct",       # Fallback compat (Qwen2.5)
+                "llama3.2:3b-instruct",      # Esistente
+                "mistral-nemo:12b-instruct", # Esistente
             ],
             font=("Monospace", 8),
         )
@@ -6079,7 +6151,7 @@ class App(tk.Tk):
         pronto (daemon up + modello disponibile), False altrimenti. Se None,
         la funzione serve solo a "warm up" Ollama (caso radio select).
         """
-        model = self._ollama_model_var.get().strip() or "qwen2.5:7b-instruct"
+        model = self._ollama_model_var.get().strip() or "qwen3:8b"
         url = self._ollama_url_var.get().strip() or "http://localhost:11434"
         cfg = load_config()
         auto_install = cfg.get("ollama_auto_install", True)
@@ -6474,7 +6546,7 @@ class App(tk.Tk):
             "hf_token":           self._hf_token_var.get().strip(),
             "use_lipsync":        self._use_lipsync.get(),
             "xtts_speed":         xtts_speed,
-            "ollama_model":       self._ollama_model_var.get().strip() or "qwen2.5:7b-instruct",
+            "ollama_model":       self._ollama_model_var.get().strip() or "qwen3:8b",
             "ollama_url":         self._ollama_url_var.get().strip() or "http://localhost:11434",
             "ollama_slot_aware":  bool(self._ollama_slot_aware.get()),
         }
@@ -6704,8 +6776,10 @@ def _cli():
     parser.add_argument("--translation-engine", default="google",
                         choices=["google", "deepl", "marian", "llm_ollama"])
     parser.add_argument("--deepl-key", default="")
-    parser.add_argument("--ollama-model", default="qwen2.5:7b-instruct",
-                        help="Ollama model tag (default: qwen2.5:7b-instruct)")
+    parser.add_argument("--ollama-model", default="qwen3:8b",
+                        help="Ollama model tag (default: qwen3:8b — Qwen3 with thinking mode "
+                             "auto-disabled to avoid <think> blocks. Use qwen2.5:7b-instruct "
+                             "for legacy behaviour)")
     parser.add_argument("--ollama-url", default="http://localhost:11434",
                         help="Ollama daemon URL (default: http://localhost:11434)")
     parser.add_argument("--ollama-no-slot-aware", action="store_true",
@@ -6762,7 +6836,7 @@ def _cli():
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,
             xtts_speed=xtts_speed_cli,
-            ollama_model=args.ollama_model or cfg_cli.get("ollama_model", "qwen2.5:7b-instruct"),
+            ollama_model=args.ollama_model or cfg_cli.get("ollama_model", "qwen3:8b"),
             ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
             ollama_slot_aware=not args.ollama_no_slot_aware,
         )
