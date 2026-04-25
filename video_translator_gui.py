@@ -4110,13 +4110,19 @@ def _ollama_pull_model(
         return False, "ollama binary non trovato"
 
     log(f"     Scaricando modello {model} (può richiedere diversi minuti)...\n")
+    # CREATE_NO_WINDOW (0x08000000) prevents Windows from popping a visible
+    # console window for the ollama.exe child process (Go binary, console
+    # subsystem). Without this the user sees a black cmd window pop up over
+    # the GUI for the entire 5+ GB download. Linux/macOS ignore the flag.
+    popen_kwargs = dict(
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
+    )
+    if sys.platform.startswith("win"):
+        popen_kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
     try:
-        proc = subprocess.Popen(
-            [ollama_bin, "pull", model],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace",
-        )
+        proc = subprocess.Popen([ollama_bin, "pull", model], **popen_kwargs)
     except Exception as e:
         return False, f"Failed to spawn `ollama pull`: {e}"
 
@@ -4124,50 +4130,64 @@ def _ollama_pull_model(
     watchdog = threading.Timer(timeout_s, proc.kill)
     watchdog.daemon = True
     watchdog.start()
-    # `ollama pull` uses \r to redraw progress 10x/sec + spinner chars
-    # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) for unbounded ops like sha256 verify. Naive line capture
-    # produced thousands of duplicate log entries that filled the GUI's
-    # 5000-line cap during one pull. Filter to one line per "logical state"
-    # (spinner char stripped, % progress throttled).
+    # `ollama pull` uses \r to redraw progress 10x/sec, mixes spinner chars
+    # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) for unbounded ops like sha256 verify, AND emits ANSI
+    # cursor-control escape sequences. Naive line capture produced thousands
+    # of duplicate log entries. We need a STABLE key per logical state
+    # (e.g. "pulling a3de86cd1c13:") that ignores the changing %/bytes,
+    # otherwise consecutive progress ticks always look "different".
     import re
     import time as _time
     _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _ANSI_RE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
     _PCT_RE = re.compile(r"(\d{1,3})%")
+    # Stable-key extractors: collapse all variable parts (digits, units,
+    # progress bar fill, etc.) so "pulling X: 5% ... 250 MB" and
+    # "pulling X: 6% ... 300 MB" map to the same key.
+    _STABLE_PREFIX = re.compile(
+        r'^(pulling\s+[\w.\-]+:|verifying\s+[\w.\-]+\s+[\w.\-]+|'
+        r'writing\s+manifest|pulling\s+manifest|success|removing\s+\w+)',
+        re.IGNORECASE,
+    )
+
+    def _stable_key(s: str) -> str:
+        m = _STABLE_PREFIX.match(s)
+        return m.group(1).lower() if m else s
+
     last_key = ""
     last_pct_seen = -1
     last_log_t = 0.0
     try:
         for line in proc.stdout:
+            # Strip ANSI escape codes that Ollama emits for cursor control.
+            line = _ANSI_RE.sub('', line)
             # Ollama mixes \r and \n. Split on both to recover individual frames.
             for fragment in line.replace("\r", "\n").split("\n"):
-                fragment = fragment.strip()
+                # Strip spinner chars + whitespace
+                fragment = "".join(c for c in fragment if c not in _SPINNER).strip()
                 if not fragment:
                     continue
-                # Strip spinner char(s) so identical states don't spam the log.
-                key = "".join(c for c in fragment if c not in _SPINNER).strip()
-                if not key:
-                    continue
+                key = _stable_key(fragment)
+                now = _time.monotonic()
                 if key == last_key:
-                    # Same logical state — but if it's a progress line, throttle
-                    # to a new log entry every 5% delta OR every 2s.
+                    # Same logical state — throttle progress ticks to one
+                    # log entry every 5% delta OR every 2 seconds OR at 100%.
                     m = _PCT_RE.search(fragment)
-                    now = _time.monotonic()
                     if m:
                         pct = int(m.group(1))
-                        if pct - last_pct_seen >= 5 or now - last_log_t >= 2.0 or pct == 100:
+                        is_complete = pct == 100 and last_pct_seen != 100
+                        if pct - last_pct_seen >= 5 or now - last_log_t >= 2.0 or is_complete:
                             log(f"     {fragment}\n")
                             last_pct_seen = pct
                             last_log_t = now
-                    # else: pure spinner or duplicate, drop silently
+                    # else: pure spinner or post-100 duplicate, drop silently.
                     continue
                 # New logical state → always log.
                 log(f"     {fragment}\n")
                 last_key = key
-                last_pct_seen = -1
-                last_log_t = _time.monotonic()
+                last_log_t = now
                 m = _PCT_RE.search(fragment)
-                if m:
-                    last_pct_seen = int(m.group(1))
+                last_pct_seen = int(m.group(1)) if m else -1
         proc.wait(timeout=30)
     except Exception:
         with contextlib.suppress(Exception):
