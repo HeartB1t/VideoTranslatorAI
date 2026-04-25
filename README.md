@@ -115,7 +115,7 @@ The pipeline uses five GPU-accelerated components (faster-whisper, Demucs, XTTS,
 ### Windows
 
 1. Clone or download this repository
-2. Right-click `install_windows.bat` → **Run as administrator**
+2. Right-click `setup_windows.bat` → **Run as administrator** → menu shows `[1] Install`
 3. The installer automatically:
    - Installs Python 3.11 if not present (system-wide)
    - Installs Git for Windows if not present
@@ -145,7 +145,7 @@ python video_translator_gui.py
 
 ### Windows
 
-Run `uninstall_windows.bat` (right-click → **Run as administrator** for modes 1 and 3). Three interactive modes are offered:
+Run `setup_windows.bat` (right-click → **Run as administrator**) and pick `[3] Uninstall` from the menu. Three uninstall sub-modes are offered:
 
 | Mode | Admin required | Scope |
 |------|----------------|-------|
