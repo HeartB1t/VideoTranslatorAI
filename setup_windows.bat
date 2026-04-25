@@ -703,7 +703,11 @@ exit /b 0
 echo.
 echo [%~1] Installing Python dependencies...
 echo  [*] Upgrading pip...
-"%PYTHON_EXE%" -m pip install --upgrade pip --quiet
+:: 2>nul suppresses the cosmetic "Impossibile trovare il file specificato."
+:: that pip on Windows emits when cleaning up its own .exe during self-update
+:: (file-lock workaround leaves a .deleteme that vanishes before the cleanup).
+:: The upgrade itself succeeds; only the trailing cleanup whisper is hidden.
+"%PYTHON_EXE%" -m pip install --upgrade pip --quiet 2>nul
 
 :: NB: pyannote.audio<4.0 kept in its OWN variable, NOT echoed expanded.
 :: cmd.exe parses '<' as input redirection BEFORE quote handling on `echo`,
