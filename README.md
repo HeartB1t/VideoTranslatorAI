@@ -6,7 +6,7 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 
 1. **Transcription** — [faster-Whisper](https://github.com/SYSTRAN/faster-whisper) transcribes the audio (GPU accelerated)
 2. **Voice/music separation** — [Demucs](https://github.com/facebookresearch/demucs) isolates vocals from background music
-3. **Translation** — MarianMT (local, offline) or Google Translate or DeepL Free
+3. **Translation** — MarianMT (local, offline), Google Translate, DeepL Free, or **Ollama LLM** (Qwen3, slot-aware concise translations)
 4. **Speaker diarization** *(optional)* — [pyannote-audio](https://github.com/pyannote/pyannote-audio) identifies who is speaking in each segment
 5. **Dubbing** — [Edge-TTS](https://github.com/rany2/edge-tts) (400+ voices) or [Coqui XTTS v2](https://github.com/coqui-ai/TTS) (voice cloning, per-speaker)
 6. **Mixing** — dubbed voice mixed back with original background music
@@ -21,7 +21,8 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🎬 **YouTube & URL support** — paste any YouTube link and translate directly (powered by yt-dlp)
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - 🧠 **MarianMT** — fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
-- 🎙️ **Voice cloning** — Coqui XTTS v2 clones the original speaker's voice in the target language (~1.8 GB model)
+- 🤖 **Ollama LLM translation** *(new in v2.0)* — local LLM (Qwen3, Llama, Mistral) producing slot-aware concise translations for natural dubbing — auto-detects/installs/starts/pulls model on first use
+- 🎙️ **Voice cloning** — Coqui XTTS v2 clones the original speaker's voice in the target language (~1.8 GB model), with per-segment adaptive speed and multi-seed retry on hallucinations
 - 👥 **Speaker diarization** — pyannote-audio 3.1 identifies multiple speakers; XTTS clones each voice separately
 - 💋 **Lip Sync** — Wav2Lip GAN synchronizes mouth movements to the dubbed audio (~416 MB model)
 - 🔊 **Audio normalization** — automatic -23 LUFS loudness normalization (EBU R128)
@@ -43,10 +44,13 @@ Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
 | Engine | Setup | Limits | Quality |
 |--------|-------|--------|---------|
 | **Google Translate** *(default)* | None | Unofficial scraping — may be throttled on large videos | ★★★★ |
-| **MarianMT** *(recommended for heavy use)* | None — downloads ~298 MB per language pair on first use | None — fully offline after download | ★★★★ |
+| **MarianMT** | None — downloads ~298 MB per language pair on first use | None — fully offline after download | ★★★★ |
 | **DeepL Free** | Free API key at [deepl.com](https://www.deepl.com/pro-api) | 500k chars/month | ★★★★★ |
+| **Ollama LLM** *(recommended for dubbing — new in v2.0)* | Auto-installed on first use (~1 GB Ollama + 5 GB model) | None — fully local | ★★★★★ |
 
 > **MarianMT** uses [Helsinki-NLP/opus-mt](https://huggingface.co/Helsinki-NLP) models, cached locally after the first download. Requires explicit source language (auto-detect not supported — select source language manually). Required Python packages (`sacremoses`, `sentencepiece`) are installed automatically on first selection if missing.
+
+> **Ollama LLM** *(new in v2.0)* is the recommended engine for dubbing because it produces translations aware of the target time slot. Where MarianMT translates literally and produces Italian / Spanish / French ~25% longer than English (forcing audible audio compression on the TTS), the LLM is prompted to keep each segment concise and natural for spoken delivery, achieving a typical char-ratio of 0.85-0.95 vs source. The default model is `qwen3:8b` (5.2 GB on disk, ~6 GB VRAM); `qwen3:4b` (~3 GB) is the lightweight option, `qwen3:14b` the higher-quality one. The pipeline auto-detects the Ollama binary, auto-installs it via the official installer on first use (with consent popup), starts the daemon and pulls the chosen model — no manual setup required. Falls back gracefully to Google Translate if anything is missing.
 
 ## Voice Cloning (XTTS v2)
 
