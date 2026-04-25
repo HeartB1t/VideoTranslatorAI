@@ -3776,6 +3776,24 @@ def _ollama_is_daemon_running(api_url: str, timeout: float = 2.0) -> bool:
         return False
 
 
+def _ollama_wait_for_daemon(api_url: str, wait_seconds: float = 12.0,
+                            poll_interval: float = 1.0) -> bool:
+    """Polla `_ollama_is_daemon_running` per `wait_seconds`. True se risponde.
+
+    Usato dopo l'install di Ollama Desktop su Windows: l'installer avvia il
+    proprio daemon embedded ma con 5-10s di delay rispetto al completamento
+    dell'install stesso. Senza questa attesa il nostro fallback `ollama serve`
+    parte e fallisce con port-already-in-use.
+    """
+    import time
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        if _ollama_is_daemon_running(api_url, timeout=1.5):
+            return True
+        time.sleep(poll_interval)
+    return False
+
+
 def _ollama_start_daemon(
     binary: str,
     api_url: str = "http://localhost:11434",
@@ -8145,16 +8163,45 @@ class App(tk.Tk):
             self._log_async(f"[+] Ollama trovato: {binary}\n")
 
         # Step 2: daemon running?
+        # Quick check first (cheap when daemon is already up — common on second runs).
         if _ollama_is_daemon_running(url, timeout=2.0):
             self._log_async(f"[+] Ollama daemon gia' attivo su {url}\n")
         else:
-            self._log_async("[*] Avvio daemon Ollama (ollama serve)...\n")
-            ok, msg = _ollama_start_daemon(
-                binary, api_url=url, wait_seconds=15.0, log_cb=self._log_async
+            # If we just installed Ollama, the desktop app on Windows starts its
+            # embedded daemon with a 5-10s delay. Wait for it before falling back
+            # to `ollama serve` (which would EADDRINUSE-fail against the desktop daemon).
+            self._log_async(
+                "[*] Daemon non ancora attivo, attesa fino a 12s "
+                "(Ollama Desktop puo' avviare il proprio daemon in background)...\n"
             )
-            if not ok:
-                self._log_async(f"[x] Daemon non avviato: {msg}\n")
-                return False
+            if _ollama_wait_for_daemon(url, wait_seconds=12.0):
+                self._log_async(f"[+] Ollama daemon attivo su {url} (avviato dall'app desktop)\n")
+            else:
+                self._log_async("[*] Avvio daemon Ollama (ollama serve)...\n")
+                ok, msg = _ollama_start_daemon(
+                    binary, api_url=url, wait_seconds=15.0, log_cb=self._log_async
+                )
+                if not ok:
+                    # Port-conflict fallback: if `ollama serve` failed because
+                    # something else (Ollama Desktop, prior daemon) bound 11434,
+                    # the existing daemon is fine — verify and use it.
+                    msg_lower = (msg or "").lower()
+                    port_conflict = any(s in msg_lower for s in (
+                        "address already in use",
+                        "bind:",
+                        "in use",
+                        "consentito un solo utilizzo",   # Italian Windows
+                        "una sola utilizzazione",
+                        "only one usage of each socket",  # English Windows
+                    ))
+                    if port_conflict and _ollama_is_daemon_running(url, timeout=3.0):
+                        self._log_async(
+                            f"[+] Port 11434 occupata da un altro daemon Ollama gia' attivo — "
+                            f"riutilizzo quello.\n"
+                        )
+                    else:
+                        self._log_async(f"[x] Daemon non avviato: {msg}\n")
+                        return False
 
         # Step 3: model available?
         health_ok, health_msg = _ollama_health_check(url, model, timeout=5.0)
