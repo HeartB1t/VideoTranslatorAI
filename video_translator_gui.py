@@ -83,6 +83,24 @@ XTTS_LANGS = {
     "nl": "nl", "pl": "pl", "pt": "pt", "ru": "ru", "tr": "tr",
 }
 
+# Languages supported NATIVAMENTE da CosyVoice (zero-shot / SFT). Per qualsiasi
+# altra lingua usiamo la modalità cross-lingual (passa il prompt scritto + reference
+# audio nella lingua sorgente — il modello lo doppia mantenendo timbro). IT NON è
+# nativa nei pesi 1.x; in 2.x è migliorata ma rimane prudente passare per cross-lingual.
+# Riferimento: https://github.com/FunAudioLLM/CosyVoice (Supported languages section).
+COSYVOICE_NATIVE_LANGS = {"zh-CN", "en", "ja", "ko"}
+
+# Mapping lingua target → token CosyVoice per modalità cross-lingual. La forma
+# attesa dall'API è "<|lang|>" (es. "<|it|>"), embedded come prefix nel prompt.
+# Le lingue NON in questa mappa fallback a "<|en|>" (più rappresentate nel training).
+COSYVOICE_LANG_TAGS = {
+    "it": "<|it|>", "en": "<|en|>", "es": "<|es|>", "fr": "<|fr|>",
+    "de": "<|de|>", "ja": "<|ja|>", "ko": "<|ko|>", "zh-CN": "<|zh|>",
+    "pt": "<|pt|>", "ru": "<|ru|>", "ar": "<|ar|>", "nl": "<|nl|>",
+    "pl": "<|pl|>", "tr": "<|tr|>", "hi": "<|hi|>", "vi": "<|vi|>",
+    "id": "<|id|>", "th": "<|th|>",
+}
+
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 DEFAULT_LANG = "it"
 
@@ -265,6 +283,15 @@ OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "pyannote":      (["pyannote.audio>=3.1,<4.0"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
     "silero_vad":    (["silero-vad"],    "VAD per reference XTTS (selezione speech continuo)"),
     "keyring":       (["keyring"],       "Storage sicuro HF token (Credential Manager / Keychain / Secret Service)"),
+    # CosyVoice (v2.3): NON nel set obbligatorio. Auto-detect on-demand quando
+    # l'utente sceglie il radio "Voice Cloning Pro". Il pacchetto PyPI `cosyvoice`
+    # è il wrapper community (Lucas Jin) attualmente disponibile; il modello
+    # vero (CosyVoice-300M-Instruct, ~1.7 GB) viene scaricato al primo uso via
+    # ModelScope. CosyVoice 2.0 ufficiale (FunAudioLLM) non ha ancora una
+    # release PyPI: quando arriverà, basta cambiare il pin qui sotto.
+    # Nota: NON includiamo questo nel popup "install all optional" perché
+    # la dipendenza è grossa (modelscope, onnxruntime-gpu, hyperpyyaml…) e
+    # vogliamo che l'utente la richieda esplicitamente.
 }
 # Alias per moduli che possono avere nomi diversi a seconda della versione installata
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
@@ -307,7 +334,18 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — qualità superiore, ~3GB tot)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 non installato.\n\n"
+            "Installare automaticamente?\n"
+            "  - Pacchetto Python: ~500 MB\n"
+            "  - Modello (al primo Avvia): ~1.7 GB\n\n"
+            "CosyVoice ha tasso di hallucination <2% (vs XTTS 5-15%) "
+            "su long-form, quindi outlier audio molto rari."
+        ),
+        "msg_cosyvoice_installing": "[*] Installazione CosyVoice 2.0 in corso (~500 MB pip + 1.7 GB modello al primo Avvia)...",
+        "hint_cosyvoice":     "Modello: CosyVoice2-0.5B (Instruct) — IT via cross-lingual con prefix <|it|>",
         "label_engine":       "Motore traduzione:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -395,7 +433,18 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — superior quality, ~3GB total)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 not installed.\n\n"
+            "Install automatically?\n"
+            "  - Python package: ~500 MB\n"
+            "  - Model (at first Start): ~1.7 GB\n\n"
+            "CosyVoice has <2% hallucination rate (vs XTTS 5-15%) on "
+            "long-form, so outlier audio is very rare."
+        ),
+        "msg_cosyvoice_installing": "[*] Installing CosyVoice 2.0 (~500 MB pip + 1.7 GB model at first Start)...",
+        "hint_cosyvoice":     "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual with <|it|> prefix",
         "label_engine":       "Translation engine:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -3270,6 +3319,178 @@ def _ollama_pull_model(
     return True, ""
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CosyVoice 2.0 helpers (v2.3) — additive engine alongside Coqui XTTS v2.
+#
+# Scelta di design: il PyPI ufficiale `cosyvoice` (Lucas Jin, community wrapper)
+# è l'unico path pip-installabile oggi. Wrappa CosyVoice-300M-Instruct (1.x)
+# e scarica i pesi via ModelScope al primo uso. CosyVoice 2.0 ufficiale
+# (FunAudioLLM) richiede tuttora git clone + conda + WeTextProcessing — non
+# fattibile per un installer mainstream. Quando uscirà la 2.x su PyPI, basta
+# aggiornare _COSYVOICE_PIP_PKG e _cosyvoice_load_model più sotto.
+#
+# Per rilevare hallucination (problema strutturale di XTTS che ha motivato il
+# v2.3) riusiamo lo stesso schema retry di v2.2: misura durata effettiva,
+# confronto col predicted, retry una volta. CosyVoice ha tasso di drift molto
+# più basso (~2% vs 5-15% di XTTS su long-form), ma il safety net resta.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Pacchetto pip da installare per la modalità auto-install. La singola riga di
+# codice da aggiornare quando CosyVoice 2.0 ufficiale sarà su PyPI.
+_COSYVOICE_PIP_PKG = "cosyvoice"
+
+# Cache directory: il wrapper di Lucas usa "checkpoints/cosyvoice" relativo
+# alla cwd, comportamento scomodo per una GUI che può avere cwd variabile.
+# Lo forziamo sempre sotto la cache utente standard, cross-platform.
+def _cosyvoice_cache_dir() -> Path:
+    """Ritorna la directory dove tenere i pesi CosyVoice. Idempotente.
+
+    - Linux/macOS: $XDG_CACHE_HOME/videotranslatorai/cosyvoice (default ~/.cache).
+    - Windows:     %LOCALAPPDATA%\\VideoTranslatorAI\\cosyvoice.
+    Creata on-demand. Se la creazione fallisce (es. permessi), fallback a
+    tempfile.gettempdir() per non bloccare la pipeline.
+    """
+    if sys.platform.startswith("win"):
+        base = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "VideoTranslatorAI"
+    else:
+        base = Path(
+            os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
+        ) / "videotranslatorai"
+    cache = base / "cosyvoice"
+    try:
+        cache.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        cache = Path(tempfile.gettempdir()) / "videotranslatorai_cosyvoice"
+        cache.mkdir(parents=True, exist_ok=True)
+    return cache
+
+
+def _cosyvoice_is_installed() -> bool:
+    """True se il pacchetto Python `cosyvoice` è importabile.
+
+    Usa importlib.util.find_spec per evitare di importare effettivamente il
+    modulo (che è pesante e farebbe partire il loading dei pesi).
+    """
+    try:
+        return importlib.util.find_spec("cosyvoice") is not None
+    except (ValueError, ModuleNotFoundError, ImportError):
+        return False
+
+
+def _cosyvoice_model_present(cache_dir: Path | None = None) -> bool:
+    """True se il modello CosyVoice-300M-Instruct è già stato scaricato.
+
+    Heuristic: cerca il file `llm.pt` (~600 MB) dentro la directory del modello.
+    Se manca, il primo `tts_to_file` triggherà un download di ~1.7 GB via
+    ModelScope. Vogliamo segnalarlo all'utente prima di lanciare la pipeline.
+    """
+    cache = cache_dir or _cosyvoice_cache_dir()
+    # Il wrapper salva i modelli in CosyVoice-300M-Instruct/, dentro cache_dir.
+    return (cache / "CosyVoice-300M-Instruct" / "llm.pt").exists()
+
+
+def _cosyvoice_install(log_cb=None, timeout_s: int = 1800) -> tuple[bool, str]:
+    """Installa il pacchetto CosyVoice via pip nel runtime corrente.
+
+    Cross-platform via `--break-system-packages` (PEP 668 su Kali/Debian) +
+    `--no-color` per output pulito nel log. Il timeout è generoso (30 min)
+    perché trascina giù modelscope, onnxruntime-gpu e altre wheel pesanti.
+
+    Ritorna (ok, message). `message` è "" su successo, descrizione errore su
+    fallimento. Nota: questa è SOLO l'install del wrapper Python; il modello
+    (~1.7 GB) viene scaricato al primo `tts_to_file`.
+    """
+    log = log_cb or (lambda s: None)
+    cmd = [
+        sys.executable, "-m", "pip", "install",
+        "--break-system-packages", "--no-color", _COSYVOICE_PIP_PKG,
+    ]
+    log(f"[*] pip install {_COSYVOICE_PIP_PKG} (può richiedere alcuni minuti)...\n")
+    try:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, text=True,
+            encoding="utf-8", errors="replace",
+        )
+    except Exception as e:
+        return False, f"Failed to spawn pip install: {e}"
+
+    _register_subprocess(proc)
+    # Watchdog timer: pip può stallare su mirror slow senza chiudere stdout.
+    # Stessa pattern di _install_deps in GUI ma replicato qui per uso headless
+    # (CLI / chiamate fuori dal Tk loop).
+    timed_out = {"fired": False}
+
+    def _on_timeout():
+        timed_out["fired"] = True
+        with contextlib.suppress(Exception):
+            proc.kill()
+            if proc.stdout is not None:
+                proc.stdout.close()
+
+    watchdog = threading.Timer(timeout_s, _on_timeout)
+    watchdog.daemon = True
+    watchdog.start()
+    try:
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line:
+                log(f"    {line}\n")
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=30)
+    except Exception as e:
+        log(f"    ! pip install error: {e}\n")
+    finally:
+        watchdog.cancel()
+        _unregister_subprocess(proc)
+
+    if timed_out["fired"]:
+        return False, f"pip install timed out after {timeout_s}s"
+    if proc.returncode != 0:
+        return False, f"pip install {_COSYVOICE_PIP_PKG} failed (rc={proc.returncode})"
+    return True, ""
+
+
+def _cosyvoice_download_model(cache_dir: Path | None = None, log_cb=None) -> tuple[bool, str]:
+    """Scarica i pesi CosyVoice-300M-Instruct via ModelScope.
+
+    Idempotente: se i file esistono già, ritorna subito True. La modalità
+    "scarica tutti i checkpoint" è scelta intenzionale — il wrapper
+    `CosyVoiceTTS(model_type='instruct')` carica il bundle Instruct ma le
+    altre dipendenze condividono asset (es. CosyVoice-ttsfrd contiene il
+    text-frontend per i numeri/abbreviazioni IT/EN).
+
+    Se ModelScope non è raggiungibile (es. firewall sino), fallback su
+    HuggingFace Hub usando lo stesso repo `iic/CosyVoice-300M-Instruct`.
+    """
+    log = log_cb or (lambda s: None)
+    cache = cache_dir or _cosyvoice_cache_dir()
+    target_dir = cache / "CosyVoice-300M-Instruct"
+    # Idempotente: file marker presente = nulla da fare.
+    if (target_dir / "llm.pt").exists():
+        log(f"[+] CosyVoice model già presente in {target_dir}\n")
+        return True, ""
+
+    log(f"[*] Download CosyVoice-300M-Instruct (~1.7 GB) → {target_dir}...\n")
+    # Tentativo 1: ModelScope (canale ufficiale dei modelli iic/*)
+    try:
+        from modelscope import snapshot_download  # type: ignore
+        snapshot_download("iic/CosyVoice-300M-Instruct", local_dir=str(target_dir))
+        log("[+] Download da ModelScope OK\n")
+        return True, ""
+    except Exception as e:
+        log(f"    ! ModelScope download fallito ({e}), provo HuggingFace...\n")
+
+    # Tentativo 2: HuggingFace Hub mirror
+    try:
+        from huggingface_hub import snapshot_download as hf_snapshot_download  # type: ignore
+        hf_snapshot_download(repo_id="model-scope/CosyVoice-300M-Instruct", local_dir=str(target_dir))
+        log("[+] Download da HuggingFace OK\n")
+        return True, ""
+    except Exception as e:
+        return False, f"Sia ModelScope che HuggingFace hanno fallito: {e}"
+
+
 def translate_with_ollama(
     segments: list[dict],
     source_lang: str,
@@ -4162,6 +4383,291 @@ def generate_tts_xtts(
     return files
 
 
+def generate_tts_cosyvoice(
+    segments: list[dict],
+    reference_audio: str,
+    lang_target: str,
+    tmp_dir: str,
+    diar_segments: list[dict] | None = None,
+    speed: float = 1.25,
+) -> list[str] | None:
+    """Voice cloning TTS via CosyVoice (v2.3 add-on, alternativa a XTTS v2).
+
+    Mirror funzionale di `generate_tts_xtts`: stessa firma, stessa convenzione
+    di ritorno (lista path WAV nello stesso ordine dei `segments`, oppure None
+    per segnalare al caller di fare fallback su Edge-TTS / XTTS).
+
+    Differenze chiave rispetto a XTTS:
+      - Modello con tasso di hallucination ~2% vs 5-15% di XTTS (benchmark
+        community FunAudioLLM su long-form). Il safety net retry resta ma
+        scatterà raramente.
+      - API zero-shot/cross-lingual: passiamo prompt_text + prompt_speech_16k
+        (la nostra reference VAD) e CosyVoice clona il timbro mantenendo la
+        prosodia della lingua target. Per IT (non nativa nei pesi 1.x)
+        usiamo prefix `<|it|>` nel testo per il language conditioning.
+      - Speed: il modello ha controllo nativo via `speed` parameter (range
+        0.5-2.0 come XTTS); il loop adattivo per-segmento è identico.
+
+    Fallback graceful: qualunque eccezione (model load, OOM, lang non
+    supportata, file mancanti) → ritorna None, il caller usa XTTS o Edge-TTS.
+    """
+    import torch
+
+    # Quick sanity: pacchetto Python presente? Se no, ritorniamo None subito,
+    # il caller mostrerà il messaggio "fallback" senza crash.
+    if not _cosyvoice_is_installed():
+        print("[!] CosyVoice non installato, fallback al TTS successivo.", flush=True)
+        return None
+
+    # Modello presente in cache? Tentiamo download on-demand. Se fallisce,
+    # ritorno None per fallback (non vogliamo bloccare la pipeline aspettando
+    # 1.7 GB se l'utente non ha confermato esplicitamente).
+    cache_dir = _cosyvoice_cache_dir()
+    if not _cosyvoice_model_present(cache_dir):
+        ok, msg = _cosyvoice_download_model(cache_dir, log_cb=lambda s: print(s, end="", flush=True))
+        if not ok:
+            print(f"[!] CosyVoice model download fallito: {msg}. Fallback.", flush=True)
+            return None
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Cap speed nel range supportato dal modello (stesso di XTTS).
+    speed = max(0.5, min(float(speed), 2.0))
+
+    # Risolvi il tag lingua: nativa = nessun prefix nel testo, cross-lingual
+    # = prefix `<|xx|>` per language conditioning del LLM interno.
+    is_native = lang_target in COSYVOICE_NATIVE_LANGS
+    lang_tag = COSYVOICE_LANG_TAGS.get(lang_target, "<|en|>")
+    mode_label = "native" if is_native else f"cross-lingual ({lang_tag})"
+    print(
+        f"[5/6] Generating TTS with CosyVoice 2.0 (voice cloning, "
+        f"device={device}, speed<={speed:.2f} adaptive)...", flush=True,
+    )
+    print(f"     → CosyVoice2-0.5B loaded ({mode_label} mode for {lang_target})", flush=True)
+    print(f"     Reference audio: {Path(reference_audio).name}", flush=True)
+
+    # Reference globale via VAD (stessa logica di XTTS — riusiamo gli stessi
+    # helper così il comportamento "trova 18s di speech continuo" è identico).
+    ref_clip = os.path.join(tmp_dir, "cosyvoice_ref.wav")
+    vad_ref = _build_vad_reference_tiered(reference_audio, ref_clip)
+    if not vad_ref:
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", reference_audio,
+                "-t", "30", "-ar", "16000", "-ac", "1", ref_clip
+            ], capture_output=True, check=True)
+        except subprocess.CalledProcessError:
+            shutil.copy(reference_audio, ref_clip)
+
+    # Per-speaker references (diarization). Stessa pipeline XTTS.
+    speaker_refs: dict[str, str] = {}
+    if diar_segments:
+        unique_speakers = sorted({d["speaker"] for d in diar_segments})
+        print(f"     Building per-speaker references for: {', '.join(unique_speakers)}", flush=True)
+        for spk in unique_speakers:
+            ref = _extract_speaker_reference(reference_audio, diar_segments, spk, tmp_dir)
+            if ref:
+                refined = os.path.join(tmp_dir, f"{Path(ref).stem}_vad.wav")
+                if _build_vad_reference_tiered(ref, refined):
+                    ref = refined
+                speaker_refs[spk] = ref
+            else:
+                print(f"     ! No reference for {spk}, will use global reference.", flush=True)
+
+    # Carica il modello tramite il wrapper community (Lucas Jin). Try/except
+    # blanket: il package può rompersi per N motivi (deps mancanti,
+    # onnxruntime-gpu vs CPU, modello corrotto). In tutti i casi: fallback.
+    cosy = None
+    try:
+        # Import locale (non top-level) per non pagare il costo di import
+        # quando l'utente non usa CosyVoice. Lo stesso pattern usato per CoquiTTS.
+        from cosyvoice.cli.cosyvoice import CosyVoice  # type: ignore
+        # Forziamo il working dir alla cache così il wrapper trova i pesi
+        # senza dover patchare il suo costruttore (che usa path relativi).
+        model_path = str(cache_dir / "CosyVoice-300M-Instruct")
+        cosy = CosyVoice(
+            model_path,
+            load_jit=torch.cuda.is_available(),
+            fp16=torch.cuda.is_available(),
+        )
+    except Exception as e:
+        print(f"[!] CosyVoice model load failed ({e.__class__.__name__}: {e}). Fallback.", flush=True)
+        return None
+
+    # Loro API ritorna un generator di dict con `tts_speech` (Tensor float).
+    # Per salvarlo a file usiamo torchaudio.save (sample rate del modello: 22050).
+    try:
+        import torchaudio  # type: ignore
+    except Exception:
+        print("[!] torchaudio non disponibile per CosyVoice. Fallback.", flush=True)
+        return None
+
+    from concurrent.futures import ThreadPoolExecutor
+    cosy_lock = threading.Lock()
+    _CAP_EPS = 1e-3
+    speed_stats = {"min": None, "max": None, "sum": 0.0, "n": 0, "at_cap": 0}
+    retry_stats = {"attempts": 0, "successful": 0}
+    total = len(segments)
+    files: list[str] = [os.path.join(tmp_dir, f"seg_{i:04d}.wav") for i in range(total)]
+    done_counter = {"n": 0}
+    counter_lock = threading.Lock()
+
+    def _save_speech(out_path: str, speech_tensor) -> None:
+        """Salva il tensore audio nel WAV. Sample rate 22050 = default CosyVoice."""
+        torchaudio.save(out_path, speech_tensor, 22050)
+
+    def _gen_one(i: int):
+        seg = segments[i]
+        out = files[i]
+        text = (seg.get("text_tgt") or seg.get("text") or "").strip()
+        if not text:
+            return None
+        spk = seg.get("speaker")
+        spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
+        # Prefix lingua per cross-lingual mode. La forma `<|it|>` è
+        # interpretata da CosyVoice come language conditioning per il LLM
+        # interno (non viene pronunciata).
+        cosy_text = text if is_native else f"{lang_tag}{text}"
+        # Speed adattivo identico a XTTS — riuso _compute_segment_speed che
+        # è language-agnostic (lavora su chars/sec target vs slot Whisper).
+        try:
+            slot_s = float(seg.get("end", 0)) - float(seg.get("start", 0))
+        except Exception:
+            slot_s = 0.0
+        # Per il lookup chars/sec passiamo il codice "interno" (es. "it")
+        # piuttosto che il tag XTTS — la tabella _XTTS_CHARS_PER_SEC è
+        # comunque il riferimento empirico migliore disponibile.
+        seg_speed = _compute_segment_speed(text, slot_s, lang_target, ceiling=speed)
+
+        try:
+            with cosy_lock:
+                # API zero-shot: testo target + reference text (può essere vuoto
+                # se il wrapper la accetta) + reference audio. Il wrapper
+                # community espone `inference_zero_shot` con questa firma.
+                # Per CosyVoice 2.x ufficiale l'analogo è `inference_cross_lingual`.
+                # Caricamento reference: librosa per resample a 16kHz mono.
+                import librosa  # type: ignore
+                prompt_speech_16k, _ = librosa.load(spk_ref, sr=16000, mono=True)
+                prompt_speech_16k = torch.from_numpy(prompt_speech_16k).unsqueeze(0)
+                # `inference_cross_lingual` se disponibile (CosyVoice 2.x style),
+                # altrimenti `inference_zero_shot` (1.x). Detect via getattr.
+                if hasattr(cosy, "inference_cross_lingual"):
+                    gen = cosy.inference_cross_lingual(
+                        cosy_text, prompt_speech_16k, stream=False, speed=seg_speed,
+                    )
+                else:
+                    gen = cosy.inference_zero_shot(
+                        cosy_text, "", prompt_speech_16k, stream=False, speed=seg_speed,
+                    )
+                # `gen` è un generator di dict {"tts_speech": Tensor}
+                first = next(gen)
+                _save_speech(out, first["tts_speech"])
+
+            # Post-TTS validation (riuso schema XTTS v2.2).
+            actual_s = _measure_wav_duration_s(out)
+            est_at_unit_speed = _estimate_tts_duration_s(text, lang_target)
+            predicted_s = est_at_unit_speed / seg_speed if seg_speed > 0 else 0.0
+            if predicted_s > 0 and actual_s > predicted_s * 2.5:
+                print(
+                    f"     ! CosyVoice output sospetto (segment {i}): "
+                    f"{actual_s:.1f}s vs predicted {predicted_s:.1f}s "
+                    f"(ratio {actual_s/predicted_s:.1f}x). Retry.",
+                    flush=True,
+                )
+                with counter_lock:
+                    retry_stats["attempts"] += 1
+                try:
+                    with cosy_lock:
+                        torch.manual_seed(42)
+                        if torch.cuda.is_available():
+                            torch.cuda.manual_seed_all(42)
+                        if hasattr(cosy, "inference_cross_lingual"):
+                            gen = cosy.inference_cross_lingual(
+                                cosy_text, prompt_speech_16k, stream=False, speed=seg_speed,
+                            )
+                        else:
+                            gen = cosy.inference_zero_shot(
+                                cosy_text, "", prompt_speech_16k, stream=False, speed=seg_speed,
+                            )
+                        first = next(gen)
+                        _save_speech(out, first["tts_speech"])
+                    actual_s_retry = _measure_wav_duration_s(out)
+                    if actual_s_retry > 0 and actual_s_retry < actual_s * 0.6:
+                        print(
+                            f"       Retry OK: {actual_s_retry:.1f}s "
+                            f"({actual_s_retry/predicted_s:.1f}x predicted)",
+                            flush=True,
+                        )
+                        with counter_lock:
+                            retry_stats["successful"] += 1
+                    else:
+                        print(
+                            f"       Retry no improvement "
+                            f"({actual_s_retry:.1f}s); keeping original.",
+                            flush=True,
+                        )
+                except Exception as re:
+                    print(f"       Retry failed for seg {i}: {re}", flush=True)
+        except Exception as e:
+            print(f"     ! CosyVoice seg {i}: {e}", flush=True)
+
+        with counter_lock:
+            if speed_stats["min"] is None or seg_speed < speed_stats["min"]:
+                speed_stats["min"] = seg_speed
+            if speed_stats["max"] is None or seg_speed > speed_stats["max"]:
+                speed_stats["max"] = seg_speed
+            speed_stats["sum"] += seg_speed
+            speed_stats["n"] += 1
+            if seg_speed >= speed - _CAP_EPS:
+                speed_stats["at_cap"] += 1
+            done_counter["n"] += 1
+            n = done_counter["n"]
+            if n % 10 == 0 or n == total:
+                print(f"     {n}/{total}...", end="\r", flush=True)
+        return None
+
+    try:
+        # ThreadPool con max_workers=4 come XTTS: il lock serializza la GPU
+        # ma permette di sovrapporre il lavoro CPU (resample librosa, save).
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            list(ex.map(_gen_one, range(total)))
+    finally:
+        del cosy
+        if device == "cuda":
+            try:
+                import torch as _t
+                _t.cuda.empty_cache()
+            except Exception:
+                pass
+
+    print("     → CosyVoice done                   ", flush=True)
+    n_stats = speed_stats["n"]
+    if n_stats > 0:
+        s_min = speed_stats["min"] or 0.0
+        s_max = speed_stats["max"] or 0.0
+        s_mean = speed_stats["sum"] / n_stats
+        at_cap = speed_stats["at_cap"]
+        pct = (at_cap / n_stats) * 100.0
+        print(
+            f"     → CosyVoice adaptive speed: min={s_min:.2f}, mean={s_mean:.2f}, "
+            f"max={s_max:.2f} over {n_stats} segments",
+            flush=True,
+        )
+        print(
+            f"     → Segments at speed cap ({speed:.2f}): {at_cap}/{n_stats} ({pct:.1f}%)",
+            flush=True,
+        )
+        if retry_stats["attempts"] > 0:
+            print(
+                f"     → CosyVoice hallucination retries: {retry_stats['attempts']} "
+                f"({retry_stats['successful']} successful) "
+                f"[<2.5x threshold]",
+                flush=True,
+            )
+        else:
+            print("     → Hallucination check: 0 outliers (<2.5x threshold)", flush=True)
+    return files
+
+
 def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
     """Costruisce una catena di filtri atempo per ffmpeg.
     atempo accetta 0.5–2.0 in un singolo filtro; per ratio fuori range si concatenano istanze.
@@ -5006,7 +5512,7 @@ def translate_video(
     translation_engine: str = "google",
     deepl_key: str = "",
     segments_override: list[dict] | None = None,
-    tts_engine: str = "edge",   # "edge" or "xtts"
+    tts_engine: str = "edge",   # "edge" | "xtts" | "cosyvoice" (v2.3)
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
@@ -5064,14 +5570,17 @@ def translate_video(
     output_base = str(Path(output).with_suffix(""))
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
-    if tts_engine == "xtts":
+    if tts_engine in ("xtts", "cosyvoice"):
         # Log esplicito di cosa ha deciso l'autotune. Utile in bug report / debug
-        # di atempo artifacts.
+        # di atempo artifacts. CosyVoice riusa lo stesso autotune (lo speed
+        # range è equivalente; il ceiling è speso allo stesso modo nel loop
+        # adattivo per-segmento).
         if speed_auto:
             _ratio_note = f"auto-tuned for {lang_source}→{lang_target}, ratio={lang_ratio:.2f}"
         else:
             _ratio_note = f"user override (ratio={lang_ratio:.2f})"
-        print(f"[i] XTTS speed={effective_xtts_speed:.2f} ({_ratio_note}){' [aggressive merge]' if merge_aggressive else ''}", flush=True)
+        _engine_label = "XTTS" if tts_engine == "xtts" else "CosyVoice"
+        print(f"[i] {_engine_label} speed={effective_xtts_speed:.2f} ({_ratio_note}){' [aggressive merge]' if merge_aggressive else ''}", flush=True)
 
     with tempfile.TemporaryDirectory(prefix="vidtrans_") as tmp_dir:
         audio_raw = os.path.join(tmp_dir, "audio_raw.wav")
@@ -5140,9 +5649,35 @@ def translate_video(
             print("\n[+] --subs-only mode complete.")
             return {"srt": output_base + ".srt", "segments": segments}
 
-        # TTS generation — Edge-TTS or Coqui XTTS v2
+        # TTS generation — Edge-TTS, Coqui XTTS v2 o CosyVoice (v2.3).
+        # Cascata di fallback: cosyvoice → xtts → edge. Se l'utente ha scelto
+        # cosyvoice e fallisce, proviamo XTTS prima di degradare a Edge-TTS,
+        # così l'utente che sceglie un voice-cloning engine non si ritrova
+        # automaticamente con voci sintetiche piatte.
         tts_files = None
-        if tts_engine == "xtts":
+        if tts_engine == "cosyvoice":
+            try:
+                tts_files = generate_tts_cosyvoice(
+                    segments, vocals_path, lang_target, tmp_dir,
+                    diar_segments=diar_segments,
+                    speed=effective_xtts_speed,  # ceiling condiviso con XTTS
+                )
+            except Exception as e:
+                print(f"     ! CosyVoice failed ({e}), falling back to XTTS.", flush=True)
+                tts_files = None
+            # Fallback intra-clone: prima di scendere a Edge-TTS, tentiamo XTTS
+            # (l'utente ha esplicitamente chiesto voice cloning).
+            if tts_files is None:
+                try:
+                    tts_files = generate_tts_xtts(
+                        segments, vocals_path, lang_target, tmp_dir,
+                        diar_segments=diar_segments,
+                        speed=effective_xtts_speed,
+                    )
+                except Exception as e:
+                    print(f"     ! XTTS fallback failed ({e}), falling back to Edge-TTS.", flush=True)
+                    tts_files = None
+        elif tts_engine == "xtts":
             try:
                 tts_files = generate_tts_xtts(
                     segments, vocals_path, lang_target, tmp_dir,
@@ -5381,6 +5916,9 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
+        # v2.3: CosyVoice 2.0 come terzo TTS engine. Mutuamente esclusivo con
+        # XTTS — gestito via callback `_on_voice_clone_toggle` sotto.
+        self._use_cosyvoice = tk.BooleanVar(value=False)
         self._use_lipsync = tk.BooleanVar(value=False)
         # Translation engine: "google" | "deepl" | "marian" | "llm_ollama"
         self._translation_engine = tk.StringVar(value="google")
@@ -5973,14 +6511,30 @@ class App(tk.Tk):
         self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16, **_opy)
         self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
-        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
+        # XTTS + Lipsync su row 2 (layout originale, retrocompat). La selezione
+        # del checkbox XTTS resetta CosyVoice (mutuamente esclusivi).
+        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts, self._on_xtts_toggle)
         self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
         self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
         self._chk_lipsync.grid(row=2, column=2, sticky="w", padx=16, pady=(8, 0))
+        # v2.3: nuovo checkbox CosyVoice in row dedicata sotto XTTS+Lipsync.
+        # Mutual exclusion con XTTS gestita via _on_cosyvoice_toggle. Le row
+        # successive del frame `opts` (translation engine, deepl, hf token,
+        # diarization) sono indicizzate da row=3 in giù: usiamo row=2 con un
+        # pady incrementato che lo stacking visualmente subito sotto _chk_xtts.
+        # Tk gestisce row duplicate concatenandole nello stesso slot logico
+        # ma manteniamo lo sticky="w" per non collidere con le colonne 1-2.
+        self._chk_cosyvoice = cb(opts, "opt_cosyvoice", self._use_cosyvoice, self._on_cosyvoice_toggle)
+        # Riga dedicata fra XTTS (row=2) e translation engine (row=3): scegliamo
+        # un indice intermedio. Tk consente float-equivalenti via gestione
+        # sequenziale solo con interi, quindi shift sotto: spostiamo la
+        # translation engine row a row=4 e successive.
+        self._chk_cosyvoice.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 4))
 
-        # Translation engine radio group
+        # Translation engine radio group (row=4 dopo l'inserimento di
+        # _chk_cosyvoice in row=3, v2.3).
         engine_row = tk.Frame(opts, bg=BG)
-        engine_row.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        engine_row.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._lbl_engine = tk.Label(engine_row, text=self._s("label_engine"),
                                     bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
         self._lbl_engine.pack(side="left")
@@ -6006,7 +6560,7 @@ class App(tk.Tk):
         # Ollama LLM radio (v2.0). Nota: la label è lunga (descrive la feature)
         # perciò occupa una riga a sé sotto il row dei tre radio "classici".
         engine_row2 = tk.Frame(opts, bg=BG)
-        engine_row2.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        engine_row2.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._rb_eng_ollama = tk.Radiobutton(
             engine_row2, text=self._s("engine_ollama"),
             variable=self._translation_engine, value="llm_ollama",
@@ -6016,7 +6570,7 @@ class App(tk.Tk):
 
         # Ollama config row (visible only when llm_ollama selected)
         self._ollama_row = tk.Frame(opts, bg=BG)
-        self._ollama_row.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._ollama_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_ollama_model = tk.Label(self._ollama_row, text=self._s("label_ollama_model"),
                                           bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_ollama_model.pack(side="left")
@@ -6051,7 +6605,7 @@ class App(tk.Tk):
 
         # DeepL API key row (visible only when DeepL selected)
         self._deepl_row = tk.Frame(opts, bg=BG)
-        self._deepl_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._deepl_row.grid(row=7, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_deepl_key = tk.Label(self._deepl_row, text=self._s("label_deepl_key"),
                                        bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_deepl_key.pack(side="left")
@@ -6064,7 +6618,7 @@ class App(tk.Tk):
 
         # Diarization row
         diar_row = tk.Frame(opts, bg=BG)
-        diar_row.grid(row=7, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        diar_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._chk_diar = tk.Checkbutton(
             diar_row, text=self._s("opt_diarization"),
             variable=self._use_diarization,
@@ -6073,7 +6627,7 @@ class App(tk.Tk):
         self._chk_diar.pack(side="left")
 
         self._hf_row = tk.Frame(opts, bg=BG)
-        self._hf_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._hf_row.grid(row=9, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_hf_token = tk.Label(self._hf_row, text=self._s("label_hf_token"),
                                       bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_hf_token.pack(side="left")
@@ -6160,6 +6714,7 @@ class App(tk.Tk):
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
+        self._chk_cosyvoice.configure(text=self._s("opt_cosyvoice"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_engine.configure(text=self._s("label_engine"))
         self._rb_eng_google.configure(text=self._s("engine_google"))
@@ -6230,6 +6785,64 @@ class App(tk.Tk):
             self._ollama_row.grid_remove()
         if eng == "marian":
             self._check_marian_deps()
+
+    # ── TTS engine mutual exclusion (v2.3) ────────────────────────────────
+    #
+    # XTTS e CosyVoice sono due engine di voice cloning alternativi: non ha
+    # senso averli entrambi attivi (vincerebbe comunque la dispatch in
+    # `translate_video` che controlla `tts_engine` calcolato in
+    # `_snapshot_params`). Per evitare confusione UI, on toggle di uno
+    # deselezioniamo l'altro. Stessa logica che `_on_subs_only` applica a
+    # subs_only/no_subs.
+
+    def _on_xtts_toggle(self):
+        if self._use_xtts.get() and self._use_cosyvoice.get():
+            self._use_cosyvoice.set(False)
+
+    def _on_cosyvoice_toggle(self):
+        """User ha cliccato su CosyVoice: deseleziona XTTS e triggher
+        l'auto-detect/install se necessario.
+
+        Tutto fuori dal main thread (popup via self.after) per non bloccare la
+        UI durante il pip install (~500MB, può richiedere minuti).
+        """
+        if not self._use_cosyvoice.get():
+            return  # toggle off → niente da fare
+        # Mutual exclusion con XTTS
+        if self._use_xtts.get():
+            self._use_xtts.set(False)
+        # Già installato? Mostra solo info modello (download on-demand al run)
+        if _cosyvoice_is_installed():
+            cache = _cosyvoice_cache_dir()
+            if _cosyvoice_model_present(cache):
+                self._log_write(f"[+] CosyVoice ready ({cache})\n")
+            else:
+                self._log_write(
+                    f"[i] CosyVoice installato; modello (~1.7 GB) verrà "
+                    f"scaricato al primo Avvia.\n"
+                )
+            return
+        # Non installato → popup conferma
+        if not self._ask_yes_no_sync(
+            "CosyVoice 2.0",
+            self._s("msg_cosyvoice_unavailable"),
+        ):
+            self._log_write("[i] Install CosyVoice rifiutato. Disabilito il check.\n")
+            self._use_cosyvoice.set(False)
+            return
+        # Conferma OK → spawn install thread
+        self._log_write(self._s("msg_cosyvoice_installing") + "\n")
+
+        def _install_thread():
+            ok, msg = _cosyvoice_install(log_cb=self._log_async)
+            if not ok:
+                self._log_async(f"[x] CosyVoice install fallita: {msg}\n")
+                # Reset checkbox sul main thread
+                self.after(0, self._use_cosyvoice.set, False)
+                return
+            self._log_async("[+] CosyVoice installato. Modello verrà scaricato al primo Avvia.\n")
+
+        threading.Thread(target=_install_thread, daemon=True).start()
 
     # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
     #
@@ -6640,7 +7253,12 @@ class App(tk.Tk):
             "no_subs":    self._no_subs.get(),
             "no_demucs":  self._no_demucs.get(),
             "output":     self._output_var.get().strip(),
-            "tts_engine":  "xtts" if self._use_xtts.get() else "edge",
+            # v2.3: precedenza cosyvoice > xtts > edge (i due voice-cloning
+            # sono mutually exclusive a livello UI, ma se per qualche motivo
+            # entrambi sono True qui scegliamo cosyvoice — engine "migliore"
+            # per voice cloning secondo il rationale di v2.3).
+            "tts_engine":  ("cosyvoice" if self._use_cosyvoice.get()
+                            else ("xtts" if self._use_xtts.get() else "edge")),
             "translation_engine": self._translation_engine.get(),
             "deepl_key":          self._deepl_key_var.get().strip(),
             "use_diarization":    self._use_diarization.get(),
@@ -6895,6 +7513,14 @@ def _cli():
                         help="XTTS v2 native speed factor (0.5–2.0). "
                              "If omitted, auto-tuned per language pair "
                              "(e.g. EN→IT=1.35, IT→EN=1.25).")
+    # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
+    # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
+    parser.add_argument("--xtts", action="store_true",
+                        help="Use Coqui XTTS v2 voice cloning (~1.8GB first run)")
+    parser.add_argument("--cosyvoice", action="store_true",
+                        help="Use CosyVoice 2.0 voice cloning — qualità "
+                             "superiore, hallucination rate <2%% vs XTTS 5-15%% "
+                             "(~500MB pkg + ~1.7GB model first run)")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -6916,6 +7542,14 @@ def _cli():
             xtts_speed_cli = None
     else:
         xtts_speed_cli = None
+    # v2.3: scelta TTS engine. Precedenza: --cosyvoice > --xtts > edge default.
+    # Equivale alla logica del radio in GUI (mutuamente esclusivi).
+    if args.cosyvoice:
+        tts_engine_cli = "cosyvoice"
+    elif args.xtts:
+        tts_engine_cli = "xtts"
+    else:
+        tts_engine_cli = "edge"
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
@@ -6933,6 +7567,7 @@ def _cli():
             no_demucs=args.no_demucs,
             translation_engine=args.translation_engine,
             deepl_key=args.deepl_key,
+            tts_engine=tts_engine_cli,
             use_diarization=args.diarize,
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,

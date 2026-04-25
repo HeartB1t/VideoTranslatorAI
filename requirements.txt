@@ -28,3 +28,11 @@ torchvision==0.21.0
 torchcodec
 # numpy: numba (dep di librosa / coqui-tts) richiede numpy<=2.3 al momento.
 numpy>=2.0,<2.4
+# v2.3 (opzionale, on-demand) — CosyVoice 2.0 come terzo TTS engine.
+# NON installato di default: trascina giù modelscope, onnxruntime-gpu e wheel
+# pesanti (~500 MB pip + ~1.7 GB modello al primo uso). L'utente lo abilita
+# tramite il radio "Voice Cloning Pro" in GUI: il toggle triggera
+# `_cosyvoice_install` che esegue `pip install cosyvoice`. Quando CosyVoice 2.0
+# ufficiale (FunAudioLLM) sarà su PyPI, sostituire `cosyvoice` con quel nome
+# in `_COSYVOICE_PIP_PKG`.
+# cosyvoice  # uncomment per pre-installarlo
