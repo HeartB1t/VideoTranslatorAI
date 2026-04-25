@@ -247,7 +247,7 @@ echo  - All users' VTAI config (HF token)
 echo  - All legacy per-user installs
 echo  - All Python AI packages (coqui-tts, torch, demucs, ...)
 echo.
-echo  OPTIONAL (asked below): Python 3.11 and Git for Windows.
+echo  OPTIONAL (asked below): Python 3.11, Git for Windows, Ollama.
 echo  NOT removed automatically: VS C++ Build Tools (use "Apps and features").
 echo.
 set "CONFIRM="
@@ -258,11 +258,13 @@ if not "%CONFIRM%"=="YES" (
     goto uninst_menu
 )
 echo.
-echo  --- Optional: also uninstall Python 3.11 and Git for Windows? ---
+echo  --- Optional: also uninstall Python 3.11, Git, and Ollama? ---
 set "Q_PY_FULL="
 set "Q_GIT_FULL="
+set "Q_OLL_FULL="
 set /p "Q_PY_FULL=Uninstall Python 3.11 ? [Y/N]: "
 set /p "Q_GIT_FULL=Uninstall Git for Windows ? [Y/N]: "
+set /p "Q_OLL_FULL=Uninstall Ollama (also wipes downloaded models, can be GB) ? [Y/N]: "
 echo.
 call :remove_app
 call :remove_shortcut_public
@@ -273,6 +275,7 @@ call :remove_user_caches_all
 call :remove_python_packages_all
 if /i "%Q_PY_FULL%"=="Y" call :remove_python
 if /i "%Q_GIT_FULL%"=="Y" call :remove_git
+if /i "%Q_OLL_FULL%"=="Y" call :remove_ollama
 goto uninst_done
 
 
@@ -397,6 +400,10 @@ if /i "!Q_PY!"=="Y" call :remove_python
 set "Q_GIT="
 set /p "Q_GIT=Uninstall Git for Windows ? [Y/N]: "
 if /i "!Q_GIT!"=="Y" call :remove_git
+
+set "Q_OLL="
+set /p "Q_OLL=Uninstall Ollama (also wipes downloaded models, can be GB) ? [Y/N]: "
+if /i "!Q_OLL!"=="Y" call :remove_ollama
 
 goto uninst_done
 
@@ -1263,6 +1270,40 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "        catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
     "    } else { Write-Host ('  [!] Uninstaller not found at ' + $exe) }" ^
     "}"
+exit /b 0
+
+:remove_ollama
+echo  [*] Uninstalling Ollama ...
+:: Stop running daemon and tray app first so the uninstaller can replace files.
+:: Different Ollama Windows builds use different process names --try them all.
+taskkill /F /IM ollama.exe       >nul 2>&1
+taskkill /F /IM ollama_app.exe   >nul 2>&1
+taskkill /F /IM "Ollama.exe"     >nul 2>&1
+taskkill /F /IM "Ollama Helper.exe" >nul 2>&1
+:: Run the registered uninstaller silently. Ollama uses NSIS (silent flag /S).
+:: Per-user install lands in HKCU, so we scan HKLM + HKCU + WOW6432Node.
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
+    "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Ollama' -and $_.UninstallString } } };" ^
+    "if (-not $found) { Write-Host '  [-] Ollama not found in uninstall registry.' } else {" ^
+    "  foreach ($u in $found) {" ^
+    "    Write-Host ('  [*] ' + $u.DisplayName);" ^
+    "    $exe = $u.UninstallString.Trim([char]34).Trim();" ^
+    "    if (Test-Path $exe) {" ^
+    "      try { Start-Process -FilePath $exe -ArgumentList '/S' -Wait; Write-Host '  [+] Done.' }" ^
+    "      catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
+    "    } else { Write-Host ('  [!] Uninstaller not found at ' + $exe) }" ^
+    "  }" ^
+    "}"
+:: Force-remove leftover directories for every Windows user (binaries, model cache).
+:: The model cache (.ollama\models) is the bulk of disk usage --multi-GB per user.
+echo  [*] Removing Ollama leftover directories for all users ...
+for /f "delims=" %%U in ('dir /b /a:d "%SystemDrive%\Users" 2^>nul') do (
+    if exist "%SystemDrive%\Users\%%U\.ollama" rmdir /S /Q "%SystemDrive%\Users\%%U\.ollama" >nul 2>&1
+    if exist "%SystemDrive%\Users\%%U\AppData\Local\Programs\Ollama" rmdir /S /Q "%SystemDrive%\Users\%%U\AppData\Local\Programs\Ollama" >nul 2>&1
+    if exist "%SystemDrive%\Users\%%U\AppData\Local\Ollama" rmdir /S /Q "%SystemDrive%\Users\%%U\AppData\Local\Ollama" >nul 2>&1
+)
+echo  [+] Done.
 exit /b 0
 
 
