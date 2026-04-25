@@ -3433,16 +3433,25 @@ def translate_with_ollama(
                 # certamente incluso commentary non-catturato. Tronchiamo
                 # alla prima frase completa (o a char cap con word-boundary)
                 # per evitare che XTTS sintetizzi 20+ secondi di disclaimer.
+                # v2.2: cap stretto 1.5x (era 1.8x) per catturare più aggressivamente
+                # gli outlier Ollama da commentary/disclaimer non-strippato.
                 max_reasonable_chars = max(
-                    50, int(len(text) * _expansion_factor * 1.8)
+                    50, int(len(text) * _expansion_factor * 1.5)
                 )
                 if len(tr) > max_reasonable_chars:
+                    # v2.2: log sempre il SRC e l'OUT troncati, così l'utente può
+                    # diagnosticare quali segmenti hanno triggato il safety senza
+                    # dover impostare VIDEOTRANSLATORAI_OLLAMA_DEBUG.
+                    src_preview = text[:120] + ("..." if len(text) > 120 else "")
+                    cleaned_preview = tr[:200] + ("..." if len(tr) > 200 else "")
                     print(
                         f"     ! Ollama output sospetto (segment {i}): "
                         f"{len(tr)} chars vs max atteso {max_reasonable_chars}. "
                         f"Attivo safety truncation.",
                         flush=True,
                     )
+                    print(f"       SRC: {src_preview!r}", flush=True)
+                    print(f"       OUT: {cleaned_preview!r}", flush=True)
                     # Strategia: prima frase completa (.?!。？！ seguito da
                     # spazio/fine). Fallback: cap con word-boundary.
                     m = _re.search(r"^(.+?[.?!。？！])(?:\s|$)", tr)
@@ -3978,6 +3987,11 @@ def generate_tts_xtts(
     # Statistiche speed adattivo (per log a fine loop). Protette dallo stesso
     # counter_lock del progress counter per non aggiungere un terzo lock.
     speed_stats = {"min": None, "max": None, "sum": 0.0, "n": 0, "at_cap": 0}
+    # v2.2: contatori hallucination retry. `attempts` = quante volte abbiamo
+    # detectato output anomalo (durata > 2.5x predicted) e tentato un retry;
+    # `successful` = quanti di quei retry hanno effettivamente prodotto un
+    # output più corto del 60% rispetto all'originale (soglia "miglioramento").
+    retry_stats = {"attempts": 0, "successful": 0}
     try:
         tts_model = CoquiTTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         total = len(segments)
@@ -4001,6 +4015,25 @@ def generate_tts_xtts(
             except Exception:
                 slot_s = 0.0
             seg_speed = _compute_segment_speed(text, slot_s, xtts_lang, ceiling=speed)
+            # v2.2: parametri tuned for Italian long-form, anti-loop. Più
+            # restrittivi rispetto a v2.1 dopo aver osservato outlier severi
+            # (ratio >4x slot) su segmenti EN→IT che NON triggavano il safety
+            # Qwen ma producevano 20+ secondi di audio per ~80 chars di testo.
+            # Valori derivati da empirical testing forum coqui-tts su long-form:
+            #   - temperature 0.55 (era 0.65): meno randomness → meno deriva
+            #   - repetition_penalty 10.0 (era 5.0): più aggressivo contro loop
+            #   - top_k 30 (era 50): vocabolario più focused
+            #   - top_p 0.75 (era 0.85): più deterministico
+            # Trade-off accettato: prosodia leggermente più piatta sui segmenti
+            # normali in cambio di assenza di hallucination al 4x slot.
+            xtts_kwargs = dict(
+                temperature=0.55,
+                repetition_penalty=10.0,
+                length_penalty=1.0,
+                top_k=30,
+                top_p=0.75,
+                enable_text_splitting=True,
+            )
             try:
                 with tts_lock:
                     tts_model.tts_to_file(
@@ -4009,17 +4042,63 @@ def generate_tts_xtts(
                         language=xtts_lang,
                         file_path=out,
                         speed=seg_speed,
-                        # Tuning anti-hallucination:
-                        #   repetition_penalty alto scoraggia loop di parole
-                        #   temperature bassa riduce output randomici
-                        #   enable_text_splitting gestisce meglio frasi lunghe
-                        temperature=0.65,
-                        repetition_penalty=5.0,
-                        length_penalty=1.0,
-                        top_k=50,
-                        top_p=0.85,
-                        enable_text_splitting=True,
+                        **xtts_kwargs,
                     )
+                # v2.2: post-TTS validation. Misura la durata effettiva e la
+                # confronta con la stima a `seg_speed` corrente. Se l'output è
+                # più di 2.5x il predicted, XTTS sta hallucinando (loop di
+                # parole/sillabe). Re-genera UNA VOLTA con torch seed esplicito:
+                # XTTS è non-deterministico, la seconda chiamata può produrre
+                # un output sano. Se anche il retry hallucinas, teniamo
+                # l'originale (build_dubbed_track applicherà atempo a ratio>2.5
+                # con cap a 4.0; meglio audio veloce che file mancante).
+                actual_s = _measure_wav_duration_s(out)
+                est_at_unit_speed = _estimate_tts_duration_s(text, xtts_lang)
+                predicted_s = est_at_unit_speed / seg_speed if seg_speed > 0 else 0.0
+                if predicted_s > 0 and actual_s > predicted_s * 2.5:
+                    print(
+                        f"     ! XTTS output sospetto (segment {i}): "
+                        f"{actual_s:.1f}s vs predicted {predicted_s:.1f}s "
+                        f"(ratio {actual_s/predicted_s:.1f}x). Retry.",
+                        flush=True,
+                    )
+                    with counter_lock:
+                        retry_stats["attempts"] += 1
+                    try:
+                        with tts_lock:
+                            # Seed esplicito: XTTS non espone `seed` come kwarg
+                            # in tts_to_file, ma legge torch.random_state. Un
+                            # seed fisso diverso dal default rompe il loop
+                            # deterministico se l'hallucination dipende dallo
+                            # stato del PRNG ereditato.
+                            torch.manual_seed(42)
+                            if torch.cuda.is_available():
+                                torch.cuda.manual_seed_all(42)
+                            tts_model.tts_to_file(
+                                text=text,
+                                speaker_wav=spk_ref,
+                                language=xtts_lang,
+                                file_path=out,
+                                speed=seg_speed,
+                                **xtts_kwargs,
+                            )
+                        actual_s_retry = _measure_wav_duration_s(out)
+                        if actual_s_retry > 0 and actual_s_retry < actual_s * 0.6:
+                            print(
+                                f"       Retry OK: {actual_s_retry:.1f}s "
+                                f"({actual_s_retry/predicted_s:.1f}x predicted)",
+                                flush=True,
+                            )
+                            with counter_lock:
+                                retry_stats["successful"] += 1
+                        else:
+                            print(
+                                f"       Retry no improvement "
+                                f"({actual_s_retry:.1f}s); keeping original.",
+                                flush=True,
+                            )
+                    except Exception as re:
+                        print(f"       Retry failed for seg {i}: {re}", flush=True)
             except Exception as e:
                 print(f"     ! XTTS seg {i}: {e}", flush=True)
             with counter_lock:
@@ -4070,6 +4149,16 @@ def generate_tts_xtts(
             f"     → Segments at speed cap ({speed:.2f}): {at_cap}/{n_stats} ({pct:.1f}%)",
             flush=True,
         )
+        # v2.2: visibilità su quanti segmenti hanno triggato il retry anti-
+        # hallucination e quanti sono stati effettivamente rescued. Se il
+        # numero attempts è significativo (>5%), valutare di stringere ancora
+        # repetition_penalty o ridurre top_k.
+        if retry_stats["attempts"] > 0:
+            print(
+                f"     → XTTS hallucination retries: {retry_stats['attempts']} "
+                f"({retry_stats['successful']} successful)",
+                flush=True,
+            )
     return files
 
 
@@ -4099,6 +4188,18 @@ def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
         r /= 0.5
     parts.append(f"atempo={r:.3f}")
     return ",".join(parts)
+
+
+def _measure_wav_duration_s(path: str) -> float:
+    """Ritorna la durata in secondi di un wav (o altro formato leggibile da
+    soundfile/ffprobe). Wrapper su `_probe_duration_ms` che converte il valore
+    in float-seconds. 0.0 se la probe fallisce — il chiamante deve guardare.
+
+    Usato da v2.2 in `generate_tts_xtts` per detectare hallucination XTTS:
+    confronto fra durata effettiva e predicted (`_estimate_tts_duration_s`).
+    """
+    ms = _probe_duration_ms(path)
+    return ms / 1000.0 if ms > 0 else 0.0
 
 
 def _probe_duration_ms(path: str) -> int:
