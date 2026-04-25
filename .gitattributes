@@ -1,0 +1,35 @@
+# Force CRLF on Windows scripts so they execute correctly under cmd.exe.
+# Without this, git's autocrlf can normalise to LF and a Windows user gets
+# a broken script with errors like '"o" is not recognized as an internal
+# command' (cmd.exe miss-parses lines that lack \r).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Force LF on shell/text files (POSIX hygiene; not user-visible on Windows).
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+LICENSE text eol=lf
+
+# Binary files: never let git touch line endings or try diff.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.whl binary

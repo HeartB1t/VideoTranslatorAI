@@ -450,10 +450,10 @@ exit /b %~1
 :reload_path
 :: Reload PATH from registry into the current session.
 :: Uses a temp file to bypass the 8191-char buffer limit of `for /f`.
-:: NB: scriviamo via .NET WriteAllText con UTF8Encoding($false) per evitare
-:: il BOM che PowerShell 5.1 default (`Out-File -Encoding UTF8`) inserisce
-:: a inizio file. Il BOM finirebbe nella prima entry del PATH e romperebbe
-:: la prima ricerca `where` su quella entry.
+:: NB: write via .NET WriteAllText with UTF8Encoding($false) to avoid the BOM
+:: that PowerShell 5.1 default (Out-File -Encoding UTF8) prepends to the file.
+:: The BOM would end up in the first PATH entry and break the first
+:: `where` lookup on that entry.
 powershell -NoProfile -Command "$p = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); [System.IO.File]::WriteAllText($env:TEMP + '\vtai_path.txt', $p, (New-Object System.Text.UTF8Encoding($false)))"
 set "PATH="
 for /f "usebackq delims=" %%i in ("%TEMP%\vtai_path.txt") do set "PATH=!PATH!%%i"
@@ -490,9 +490,9 @@ if /i "%VTAI_SKIP_PREFLIGHT%"=="1" exit /b 0
 set "INSTALL_DRIVE=%ProgramFiles:~0,1%"
 set "FREE_GB=0"
 for /f %%i in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%INSTALL_DRIVE%').Free/1GB)"') do set "FREE_GB=%%i"
-:: Se PowerShell non è disponibile o ha fallito, FREE_GB resta a 0 → mostreremmo
-:: un errore fuorviante "Found 0 GB free". Meglio fingere abbastanza spazio e
-:: lasciare che eventuali errori reali emergano dalle operazioni I/O successive.
+:: If PowerShell is unavailable or failed, FREE_GB stays at 0 -> we would show
+:: a misleading "Found 0 GB free" error. Better to assume enough space and
+:: let any real errors surface from later I/O operations.
 if "%FREE_GB%"=="0" set "FREE_GB=999"
 if %FREE_GB% GEQ 20 exit /b 0
 color 0C
@@ -532,7 +532,7 @@ exit /b 1
 
 :legacy_cleanup_current
 if exist "%USER_LEGACY_DIR%" (
-    echo  [*] Rimozione vecchia installazione per-utente: %USER_LEGACY_DIR%
+    echo  [*] Removing legacy per-user install: %USER_LEGACY_DIR%
     rmdir /S /Q "%USER_LEGACY_DIR%" 2>nul
 )
 if exist "%USER_LEGACY_WAV2LIP%" (
@@ -615,7 +615,12 @@ echo [%~1] Installing Python dependencies...
 echo  [*] Upgrading pip...
 python -m pip install --upgrade pip --quiet
 
-set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses ""pyannote.audio<4.0"" torchcodec silero-vad keyring"
+:: NB: pyannote.audio<4.0 kept in its OWN variable, NOT echoed expanded.
+:: cmd.exe parses '<' as input redirection BEFORE quote handling on `echo`,
+:: so `echo !PACKAGES!` would syntax-error on the '<'. Splitting it out
+:: keeps the install line robust and the echo safe.
+set "PYANNOTE_PIN="pyannote.audio<4.0""
+set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses torchcodec silero-vad keyring"
 
 python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
 if not errorlevel 1 (
@@ -633,8 +638,8 @@ if errorlevel 1 (
 echo  [*] Installing ctranslate2...
 python -m pip install ctranslate2 --quiet
 
-echo  [*] Installing packages: !PACKAGES!
-python -m pip install !PACKAGES! --quiet
+echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)...
+python -m pip install %PYANNOTE_PIN% !PACKAGES! --quiet
 if errorlevel 1 (
     echo  [!] Error installing Python packages.
     exit /b 1
