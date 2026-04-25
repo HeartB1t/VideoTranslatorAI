@@ -605,10 +605,32 @@ goto :eof
 :: %~1 = step label e.g. "1/5"
 :step_python
 echo [%~1] Checking Python...
-python --version >nul 2>&1
-if not errorlevel 1 goto step_python_found
 
-echo  [!] Python not found. Downloading and installing Python 3.11 silently...
+:: Bug 1 fix: reject the Microsoft Store redirect stub
+:: (\WindowsApps\python.exe is a 0-byte placeholder that re-installs Python
+:: into a per-user sandbox -- contradicts the system-wide install we want
+:: and triggers dozens of "is not on PATH" warnings on every pip install).
+:: Strategy:
+::   1. Prefer the official `py -3.11` launcher (always a real install).
+::   2. Else walk `where python` candidates, skipping WindowsApps + 0-byte.
+::   3. Else fall through to "install fresh" (Python 3.11.9 system-wide).
+set "PYTHON_EXE="
+
+py -3.11 -c "import sys" >nul 2>&1
+if not errorlevel 1 (
+    for /f "tokens=*" %%i in ('py -3.11 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON_EXE=%%i"
+)
+
+if not defined PYTHON_EXE (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        if not defined PYTHON_EXE call :_python_consider "%%i"
+    )
+)
+
+if defined PYTHON_EXE goto step_python_found
+
+echo  [!] No usable Python found ^(Microsoft Store stub does not count^).
+echo      Downloading and installing Python 3.11.9 silently...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
     "$out = $env:TEMP + '\python_installer.exe';" ^
@@ -628,10 +650,15 @@ if errorlevel 1 (
 )
 call :reload_path
 
+:: After fresh install, point at the canonical install path explicitly so we
+:: never resolve back to a Store stub still earlier on PATH.
+if exist "%ProgramFiles%\Python311\python.exe" set "PYTHON_EXE=%ProgramFiles%\Python311\python.exe"
+
 :step_python_found
-set "PYTHON_EXE="
-for /f "tokens=*" %%i in ('where python 2^>nul') do (
-    if not defined PYTHON_EXE set "PYTHON_EXE=%%i"
+if not defined PYTHON_EXE (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        if not defined PYTHON_EXE call :_python_consider "%%i"
+    )
 )
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
 
@@ -678,6 +705,37 @@ for /f "tokens=*" %%i in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%i"
 echo  [+] Using bundled !PY_VER! at !PYTHON_EXE!
 
 :step_python_ok
+:: Bug 1 sanity: never proceed if PYTHON_EXE somehow still points at the
+:: WindowsApps redirect stub -- pip would silently reroute installs into a
+:: per-user sandbox and break system-wide setup.
+echo(!PYTHON_EXE! | findstr /I /C:"WindowsApps" >nul
+if not errorlevel 1 (
+    echo  [X] PYTHON_EXE resolves to the Microsoft Store redirect:
+    echo      !PYTHON_EXE!
+    echo      That stub is a 0-byte placeholder; pip would install into a
+    echo      per-user sandbox and emit "is not on PATH" warnings.
+    echo.
+    echo      To fix:
+    echo        - Settings -^> Apps -^> Advanced app settings -^>
+    echo          App execution aliases: disable "python.exe" + "python3.exe", OR
+    echo        - Install Python 3.11.9 manually from
+    echo          https://www.python.org/downloads/release/python-3119/
+    echo      then re-run this script.
+    exit /b 1
+)
+exit /b 0
+
+
+:: %~1 = candidate python.exe path. Sets PYTHON_EXE only if the candidate is a
+::       real interpreter (not the WindowsApps stub, not a 0-byte file).
+:: Used by :step_python to filter `where python` results -- see Bug 1.
+:_python_consider
+set "_CAND=%~1"
+echo(!_CAND! | findstr /I /C:"WindowsApps" >nul
+if not errorlevel 1 exit /b 0
+if not exist "!_CAND!" exit /b 0
+for %%S in ("!_CAND!") do if "%%~zS"=="0" exit /b 0
+set "PYTHON_EXE=!_CAND!"
 exit /b 0
 
 
@@ -844,12 +902,14 @@ set /p "PY_TAG=" < "%TEMP%\vtai_pytag.txt"
 del "%TEMP%\vtai_pytag.txt" >nul 2>&1
 echo  [*] Python tag detected: cp%PY_TAG%
 
+:: Bug 2 fix: the z-mahmud22 mirror does NOT publish a cp313 wheel
+:: (HTTP 404). We keep entries only for python tags the mirror actually
+:: ships, then fall back through PyPI -> dlib-bin -> "disabled" message.
 set "DLIB_WHEEL_URL="
 if "%PY_TAG%"=="39"  set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.22.99-cp39-cp39-win_amd64.whl"
 if "%PY_TAG%"=="310" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.22.99-cp310-cp310-win_amd64.whl"
 if "%PY_TAG%"=="311" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.1-cp311-cp311-win_amd64.whl"
 if "%PY_TAG%"=="312" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp312-cp312-win_amd64.whl"
-if "%PY_TAG%"=="313" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp313-cp313-win_amd64.whl"
 
 "%PYTHON_EXE%" -c "import dlib" >nul 2>&1
 if not errorlevel 1 (
@@ -857,17 +917,44 @@ if not errorlevel 1 (
     goto step_dlib_done
 )
 
-if not defined DLIB_WHEEL_URL (
-    echo  [!] No pre-built dlib wheel for cp%PY_TAG%. Lip Sync may not work.
-    goto step_dlib_done
+:: Cascade: mirror wheel -> PyPI sdist -> community dlib-bin -> disabled.
+:: Each step has to run as a separate `if errorlevel` chain instead of nested
+:: parens because the `set` inside ( ) wouldn't see the prior `errorlevel`.
+set "_DLIB_OK="
+
+if defined DLIB_WHEEL_URL (
+    echo  [*] Trying pre-built dlib wheel for cp%PY_TAG% ^(mirror^)...
+    "%PYTHON_EXE%" -m pip install "%DLIB_WHEEL_URL%" --quiet
+    if not errorlevel 1 set "_DLIB_OK=1"
 )
 
-echo  [*] Installing dlib wheel for cp%PY_TAG%...
-"%PYTHON_EXE%" -m pip install "%DLIB_WHEEL_URL%" --quiet
-if errorlevel 1 (
-    echo  [!] dlib wheel install failed. Lip Sync may not work.
+if not defined _DLIB_OK (
+    echo  [*] Mirror unavailable or absent. Trying official PyPI: pip install dlib ...
+    "%PYTHON_EXE%" -m pip install dlib --quiet
+    if not errorlevel 1 set "_DLIB_OK=1"
+)
+
+if not defined _DLIB_OK (
+    echo  [*] PyPI build failed. Trying community wheel: pip install dlib-bin ...
+    "%PYTHON_EXE%" -m pip install dlib-bin --quiet
+    if not errorlevel 1 set "_DLIB_OK=1"
+)
+
+if defined _DLIB_OK (
+    echo  [+] dlib installed.
 ) else (
-    echo  [+] dlib installed from pre-built wheel.
+    echo.
+    echo  +------------------------------------------------------+
+    echo  ^|  Lip Sync disabled - dlib could not be installed.    ^|
+    echo  ^|  Everything else works normally.                     ^|
+    echo  ^|                                                      ^|
+    echo  ^|  To enable Lip Sync manually, try one of:            ^|
+    echo  ^|    pip install dlib                                  ^|
+    echo  ^|    pip install dlib-bin                              ^|
+    echo  ^|  or grab a pre-built wheel for your Python from:     ^|
+    echo  ^|    github.com/z-mahmud22/Dlib_Windows_Python3.x      ^|
+    echo  +------------------------------------------------------+
+    echo.
 )
 
 :step_dlib_done
@@ -1231,29 +1318,57 @@ if not defined PYTHON_EXE (
     )
 )
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
+:: Bug C fix: silero-vad, keyring and dlib-bin are installed by
+:: :step_install_deps / :step_wav2lip but were missing here, leaving stale
+:: packages after a "Remove all Python AI packages" uninstall.
 "%PYTHON_EXE%" -m pip uninstall -y ^
     coqui-tts transformers ^
     torch torchaudio torchvision torchcodec ^
     faster-whisper ctranslate2 ^
     demucs ^
-    new-basicsr basicsr facexlib dlib ^
+    new-basicsr basicsr facexlib dlib dlib-bin ^
     pyannote.audio ^
+    silero-vad keyring ^
     yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
 echo  [+] Done.
 exit /b 0
 
 :remove_python
 echo  [*] Uninstalling Python 3.11 ...
+:: Bug B fix: when Python 3.11 was originally installed via the Microsoft
+:: Store stub (Bug 1), no entry exists in the Uninstall registry. The PS
+:: block now exits 2 in that case so we can fall back to winget, then to a
+:: forced rmdir of any leftover %ProgramFiles%\Python311.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Python 3\.11' -and ($_.QuietUninstallString -or $_.UninstallString) } } };" ^
-    "if (-not $found) { Write-Host '  [-] Python 3.11 not found in uninstall registry.'; exit 0 };" ^
+    "if (-not $found) { Write-Host '  [-] Python 3.11 not found in uninstall registry.'; exit 2 };" ^
     "foreach ($u in $found) {" ^
     "    Write-Host ('  [*] ' + $u.DisplayName);" ^
     "    $cmd = if ($u.QuietUninstallString) { $u.QuietUninstallString } else { $u.UninstallString + ' /quiet' };" ^
     "    try { Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmd -Wait -NoNewWindow; Write-Host '  [+] Done.' }" ^
     "    catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
     "}"
+
+if errorlevel 2 (
+    where winget >nul 2>&1
+    if not errorlevel 1 (
+        echo  [*] Trying winget fallback for Python 3.11 ...
+        winget uninstall --id Python.Python.3.11 --silent --accept-source-agreements
+    ) else (
+        echo  [-] winget unavailable, skipping winget fallback.
+    )
+)
+
+if exist "%ProgramFiles%\Python311" (
+    echo  [*] Removing leftover folder "%ProgramFiles%\Python311" ...
+    rmdir /S /Q "%ProgramFiles%\Python311" 2>nul
+    if exist "%ProgramFiles%\Python311" (
+        echo  [!] Could not remove leftover folder. Please remove it manually.
+    ) else (
+        echo  [+] Leftover folder removed.
+    )
+)
 exit /b 0
 
 :remove_git
@@ -1287,16 +1402,28 @@ taskkill /F /IM "Ollama Helper.exe" >nul 2>&1
 :: Per-user install lands in HKCU, so we scan HKLM + HKCU + WOW6432Node.
 :: Also kill any stray Update.exe so the new spawn isn't blocked.
 taskkill /F /IM Update.exe       >nul 2>&1
+:: Bug A fix: cmd.exe does NOT honour `\"` as an escape -- the `"` closes
+:: the cmd-level string, PowerShell receives a truncated command, and you
+:: get `MissingEndCurlyBrace`. Use [char]34 (assigned to $Q, same trick as
+:: :remove_git) and parse UninstallString character-by-character with
+:: StartsWith / IndexOf / Substring so no quote ever appears in the regex.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$Q = [char]34;" ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Ollama' -and $_.UninstallString } } };" ^
     "if (-not $found) { Write-Host '  [-] Ollama not found in uninstall registry.' } else {" ^
     "  foreach ($u in $found) {" ^
     "    Write-Host ('  [*] ' + $u.DisplayName);" ^
     "    $raw = $u.UninstallString.Trim();" ^
-    "    if ($raw -match '^\"([^\"]+)\"\s*(.*)$') { $exe = $matches[1]; $extra = $matches[2].Trim() }" ^
-    "    elseif ($raw -match '^(\S+)\s+(.*)$') { $exe = $matches[1]; $extra = $matches[2].Trim() }" ^
-    "    else { $exe = $raw; $extra = '' };" ^
+    "    if ($raw.StartsWith($Q)) {" ^
+    "      $end = $raw.IndexOf($Q, 1);" ^
+    "      if ($end -gt 0) { $exe = $raw.Substring(1, $end - 1); $extra = $raw.Substring($end + 1).Trim() }" ^
+    "      else { $exe = $raw.Trim($Q); $extra = '' }" ^
+    "    } else {" ^
+    "      $sp = $raw.IndexOf(' ');" ^
+    "      if ($sp -gt 0) { $exe = $raw.Substring(0, $sp); $extra = $raw.Substring($sp + 1).Trim() }" ^
+    "      else { $exe = $raw; $extra = '' }" ^
+    "    };" ^
     "    if (-not (Test-Path $exe)) { Write-Host ('  [!] Uninstaller not found at ' + $exe); continue };" ^
     "    if ($exe -match 'Update\.exe$') { $argsArr = @('--uninstall','-s') }" ^
     "    elseif ($extra -match '--uninstall') { $argsArr = ($extra -split '\s+') + @('-s') }" ^
