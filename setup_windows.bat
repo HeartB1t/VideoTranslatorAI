@@ -865,10 +865,12 @@ if errorlevel 1 (
 :: KeyError '__version__' (PEP 667 broke its setup.py exec/locals pattern).
 :: new-basicsr installs the SAME 'basicsr' module so all imports stay valid.
 "%PYTHON_EXE%" -m pip install new-basicsr facexlib --quiet
+:: NB: parens inside `echo` inside an `if () else ()` block prematurely
+:: close the else branch in cmd's parser. Use ^( ^) to escape, or drop them.
 if errorlevel 1 (
     echo  [!] new-basicsr/facexlib install failed. Lip Sync may not work.
 ) else (
-    echo  [+] new-basicsr (drop-in basicsr) and facexlib installed.
+    echo  [+] new-basicsr ^(drop-in basicsr^) and facexlib installed.
 )
 
 if not exist "%WAV2LIP_DIR%" mkdir "%WAV2LIP_DIR%"
