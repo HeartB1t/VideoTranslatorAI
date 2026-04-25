@@ -407,6 +407,12 @@ UI_STRINGS = {
         "log_downloading":    "Download: {}",
         "log_dl_done":        "Download completato → {}",
         "log_dl_error":       "Errore download: {}",
+        "label_log_panel":    "Log:",
+        "btn_log_show":       "▼ Mostra log",
+        "btn_log_hide":       "▲ Nascondi log",
+        "btn_log_copy":       "Copia",
+        "btn_log_save":       "Salva...",
+        "btn_log_clear":      "Pulisci",
     },
     "en": {
         "label_video":        "Video:",
@@ -506,6 +512,12 @@ UI_STRINGS = {
         "log_downloading":    "Downloading: {}",
         "log_dl_done":        "Download complete → {}",
         "log_dl_error":       "Download error: {}",
+        "label_log_panel":    "Log:",
+        "btn_log_show":       "▼ Show log",
+        "btn_log_hide":       "▲ Hide log",
+        "btn_log_copy":       "Copy",
+        "btn_log_save":       "Save...",
+        "btn_log_clear":      "Clear",
     },
     "ar": {
         "label_video": "فيديو:",
@@ -578,6 +590,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (محلي، موصى به — ترجمات موجزة للدبلجة)",
+        "label_ollama_model": "النموذج:",
+        "label_ollama_url": "عنوان Ollama:",
+        "hint_ollama": "افتراضي: qwen3:8b (موصى به) — qwen3:4b خفيف (~3 جيجابايت)، qwen3:14b جودة أعلى (~9 جيجابايت)، qwen2.5:7b-instruct قديم. يتطلب تثبيت Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama غير متاح. للتثبيت:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "ثم قم بسحب النموذج:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "سيتم استخدام MarianMT/Google كبديل."
+        ),
+        "opt_cosyvoice": "🎤 استنساخ صوت احترافي (CosyVoice 2.0 — تجريبي، إعداد يدوي)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 غير مثبت.\n"
+            "\n"
+            "هل تريد التثبيت تلقائيًا؟\n"
+            "  - حزمة Python: ~500 ميجابايت\n"
+            "  - النموذج (عند أول بدء): ~1.7 جيجابايت\n"
+            "\n"
+            "معدل هلوسة CosyVoice أقل من 2% (مقابل 5-15% لـ XTTS) في المحتوى الطويل، لذا فإن المخرجات الصوتية الشاذة نادرة جدًا."
+        ),
+        "msg_cosyvoice_installing": "[*] جاري تثبيت CosyVoice 2.0 (~500 ميجابايت pip + 1.7 جيجابايت نموذج عند أول بدء)...",
+        "hint_cosyvoice": "النموذج: CosyVoice2-0.5B (Instruct) — IT عبر متعدد اللغات مع البادئة <|it|>",
+        "label_log_panel": "السجل:",
+        "btn_log_show": "▼ إظهار السجل",
+        "btn_log_hide": "▲ إخفاء السجل",
+        "btn_log_copy": "نسخ",
+        "btn_log_save": "حفظ...",
+        "btn_log_clear": "مسح",
     },
     "zh": {
         "label_video": "视频：",
@@ -650,6 +694,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "Ollama LLM(本地,推荐 — 简洁的配音翻译)",
+        "label_ollama_model": "模型:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "默认: qwen3:8b(推荐) — qwen3:4b 轻量级(~3 GB), qwen3:14b 更高质量(~9 GB), qwen2.5:7b-instruct 旧版本。需要安装 Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama 不可用。安装方法:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "然后拉取模型:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "将回退到 MarianMT/Google。"
+        ),
+        "opt_cosyvoice": "🎤 专业语音克隆(CosyVoice 2.0 — 实验性,手动设置)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 未安装。\n"
+            "\n"
+            "是否自动安装?\n"
+            "  - Python 包: ~500 MB\n"
+            "  - 模型(首次启动时): ~1.7 GB\n"
+            "\n"
+            "CosyVoice 在长篇内容中的幻觉率低于 2%(对比 XTTS 的 5-15%),因此异常音频极为罕见。"
+        ),
+        "msg_cosyvoice_installing": "[*] 正在安装 CosyVoice 2.0(~500 MB pip + 首次启动时 1.7 GB 模型)...",
+        "hint_cosyvoice": "模型: CosyVoice2-0.5B (Instruct) — IT 通过跨语言带 <|it|> 前缀",
+        "label_log_panel": "日志:",
+        "btn_log_show": "▼ 显示日志",
+        "btn_log_hide": "▲ 隐藏日志",
+        "btn_log_copy": "复制",
+        "btn_log_save": "保存...",
+        "btn_log_clear": "清除",
     },
     "cs": {
         "label_video": "Video:",
@@ -722,6 +798,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokální, doporučeno — stručné překlady pro dabing)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Výchozí: qwen3:8b (doporučeno) — qwen3:4b odlehčený (~3 GB), qwen3:14b vyšší kvalita (~9 GB), qwen2.5:7b-instruct starší. Vyžaduje nainstalovaný Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama není k dispozici. Pro instalaci:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Poté stáhněte model:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Bude použit MarianMT/Google jako záloha."
+        ),
+        "opt_cosyvoice": "🎤 Pro klonování hlasu (CosyVoice 2.0 — experimentální, ruční instalace)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 není nainstalován.\n"
+            "\n"
+            "Nainstalovat automaticky?\n"
+            "  - Python balíček: ~500 MB\n"
+            "  - Model (při prvním Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice má míru halucinací <2 % (oproti XTTS 5-15 %) u dlouhých nahrávek, takže odlehlé výstupy jsou velmi vzácné."
+        ),
+        "msg_cosyvoice_installing": "[*] Instalace CosyVoice 2.0 probíhá (~500 MB pip + 1,7 GB model při prvním Start)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT přes cross-lingual s prefixem <|it|>",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Zobrazit log",
+        "btn_log_hide": "▲ Skrýt log",
+        "btn_log_copy": "Kopírovat",
+        "btn_log_save": "Uložit...",
+        "btn_log_clear": "Vymazat",
     },
     "da": {
         "label_video": "Video:",
@@ -794,6 +902,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokal, anbefalet — koncise oversættelser til dubbing)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "Standard: qwen3:8b (anbefalet) — qwen3:4b let (~3 GB), qwen3:14b højere kvalitet (~9 GB), qwen2.5:7b-instruct ældre. Kræver Ollama installeret",
+        "msg_ollama_unavailable": (
+            "Ollama ikke tilgængelig. For at installere:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Hent derefter modellen:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "MarianMT/Google bruges som fallback."
+        ),
+        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice 2.0 — eksperimentel, manuel opsætning)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 ikke installeret.\n"
+            "\n"
+            "Installer automatisk?\n"
+            "  - Python-pakke: ~500 MB\n"
+            "  - Model (ved første Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice har en hallucinationsrate på <2 % (mod XTTS 5-15 %) ved lange optagelser, så afvigende lyd er meget sjældent."
+        ),
+        "msg_cosyvoice_installing": "[*] Installerer CosyVoice 2.0 (~500 MB pip + 1,7 GB model ved første Start)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med <|it|>-præfiks",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Vis log",
+        "btn_log_hide": "▲ Skjul log",
+        "btn_log_copy": "Kopier",
+        "btn_log_save": "Gem...",
+        "btn_log_clear": "Ryd",
     },
     "nl": {
         "label_video": "Video:",
@@ -866,6 +1006,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokaal, aanbevolen — beknopte vertalingen voor nasynchronisatie)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "Ollama-URL:",
+        "hint_ollama": "Standaard: qwen3:8b (aanbevolen) — qwen3:4b licht (~3 GB), qwen3:14b hogere kwaliteit (~9 GB), qwen2.5:7b-instruct legacy. Vereist Ollama geïnstalleerd",
+        "msg_ollama_unavailable": (
+            "Ollama niet beschikbaar. Installeren:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Haal vervolgens het model op:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Terugvallen op MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — experimenteel, handmatige setup)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 niet geïnstalleerd.\n"
+            "\n"
+            "Automatisch installeren?\n"
+            "  - Python-pakket: ~500 MB\n"
+            "  - Model (bij eerste Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice heeft <2% hallucinatiepercentage (vs XTTS 5-15%) bij lange opnames, dus uitschieters zijn zeer zeldzaam."
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 wordt geïnstalleerd (~500 MB pip + 1,7 GB model bij eerste Start)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual met prefix <|it|>",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Log tonen",
+        "btn_log_hide": "▲ Log verbergen",
+        "btn_log_copy": "Kopiëren",
+        "btn_log_save": "Opslaan...",
+        "btn_log_clear": "Wissen",
     },
     "fi": {
         "label_video": "Video:",
@@ -938,6 +1110,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (paikallinen, suositeltu — tiiviit käännökset dubbaukseen)",
+        "label_ollama_model": "Malli:",
+        "label_ollama_url": "Ollaman URL:",
+        "hint_ollama": "Oletus: qwen3:8b (suositeltu) — qwen3:4b kevyt (~3 GB), qwen3:14b parempi laatu (~9 GB), qwen2.5:7b-instruct vanha. Vaatii Ollaman asennuksen",
+        "msg_ollama_unavailable": (
+            "Ollama ei käytettävissä. Asennus:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Hae sitten malli:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Käytetään MarianMT/Google varajärjestelmänä."
+        ),
+        "opt_cosyvoice": "🎤 Pro-äänikloonaus (CosyVoice 2.0 — kokeellinen, manuaalinen asennus)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 ei ole asennettu.\n"
+            "\n"
+            "Asennetaanko automaattisesti?\n"
+            "  - Python-paketti: ~500 MB\n"
+            "  - Malli (ensimmäisellä käynnistyksellä): ~1,7 GB\n"
+            "\n"
+            "CosyVoicen hallusinaatiosuhde on alle 2 % (vrt. XTTS 5-15 %) pitkissä äänitteissä, joten poikkeavat ääniraidat ovat hyvin harvinaisia."
+        ),
+        "msg_cosyvoice_installing": "[*] Asennetaan CosyVoice 2.0 (~500 MB pip + 1,7 GB malli ensimmäisellä käynnistyksellä)...",
+        "hint_cosyvoice": "Malli: CosyVoice2-0.5B (Instruct) — IT cross-lingual <|it|>-etuliitteellä",
+        "label_log_panel": "Loki:",
+        "btn_log_show": "▼ Näytä loki",
+        "btn_log_hide": "▲ Piilota loki",
+        "btn_log_copy": "Kopioi",
+        "btn_log_save": "Tallenna...",
+        "btn_log_clear": "Tyhjennä",
     },
     "fr": {
         "label_video": "Vidéo:",
@@ -1010,6 +1214,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (local, recommandé — traductions concises pour le doublage)",
+        "label_ollama_model": "Modèle :",
+        "label_ollama_url": "URL Ollama :",
+        "hint_ollama": "Par défaut : qwen3:8b (recommandé) — qwen3:4b léger (~3 Go), qwen3:14b qualité supérieure (~9 Go), qwen2.5:7b-instruct hérité. Nécessite Ollama installé",
+        "msg_ollama_unavailable": (
+            "Ollama indisponible. Pour installer :\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Puis récupérez le modèle :\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Repli vers MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — expérimental, installation manuelle)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 non installé.\n"
+            "\n"
+            "Installer automatiquement ?\n"
+            "  - Paquet Python : ~500 Mo\n"
+            "  - Modèle (au premier Démarrage) : ~1,7 Go\n"
+            "\n"
+            "CosyVoice a un taux d'hallucination <2 % (vs XTTS 5-15 %) sur les contenus longs, donc les sorties audio aberrantes sont très rares."
+        ),
+        "msg_cosyvoice_installing": "[*] Installation de CosyVoice 2.0 en cours (~500 Mo pip + 1,7 Go modèle au premier Démarrage)...",
+        "hint_cosyvoice": "Modèle : CosyVoice2-0.5B (Instruct) — IT via cross-lingual avec préfixe <|it|>",
+        "label_log_panel": "Journal :",
+        "btn_log_show": "▼ Afficher le journal",
+        "btn_log_hide": "▲ Masquer le journal",
+        "btn_log_copy": "Copier",
+        "btn_log_save": "Enregistrer...",
+        "btn_log_clear": "Effacer",
     },
     "de": {
         "label_video": "Video:",
@@ -1082,6 +1318,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokal, empfohlen — präzise Übersetzungen für Synchronisation)",
+        "label_ollama_model": "Modell:",
+        "label_ollama_url": "Ollama-URL:",
+        "hint_ollama": "Standard: qwen3:8b (empfohlen) — qwen3:4b leichtgewichtig (~3 GB), qwen3:14b höhere Qualität (~9 GB), qwen2.5:7b-instruct älter. Erfordert installiertes Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama nicht verfügbar. Installation:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Dann Modell laden:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Fallback auf MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimentell, manuelle Einrichtung)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 nicht installiert.\n"
+            "\n"
+            "Automatisch installieren?\n"
+            "  - Python-Paket: ~500 MB\n"
+            "  - Modell (beim ersten Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice hat eine Halluzinationsrate <2 % (gegenüber XTTS 5-15 %) bei langen Aufnahmen, sodass Ausreißer im Audio sehr selten sind."
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 wird installiert (~500 MB pip + 1,7 GB Modell beim ersten Start)...",
+        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual mit Präfix <|it|>",
+        "label_log_panel": "Protokoll:",
+        "btn_log_show": "▼ Protokoll anzeigen",
+        "btn_log_hide": "▲ Protokoll ausblenden",
+        "btn_log_copy": "Kopieren",
+        "btn_log_save": "Speichern...",
+        "btn_log_clear": "Löschen",
     },
     "el": {
         "label_video": "Βίντεο:",
@@ -1154,6 +1422,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (τοπικό, συνιστώμενο — συνοπτικές μεταφράσεις για μεταγλώττιση)",
+        "label_ollama_model": "Μοντέλο:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Προεπιλογή: qwen3:8b (συνιστάται) — qwen3:4b ελαφρύ (~3 GB), qwen3:14b υψηλότερη ποιότητα (~9 GB), qwen2.5:7b-instruct παλιό. Απαιτείται εγκατεστημένο Ollama",
+        "msg_ollama_unavailable": (
+            "Το Ollama δεν είναι διαθέσιμο. Εγκατάσταση:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Στη συνέχεια λάβετε το μοντέλο:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Επιστροφή σε MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Pro κλωνοποίηση φωνής (CosyVoice 2.0 — πειραματικό, χειροκίνητη εγκατάσταση)",
+        "msg_cosyvoice_unavailable": (
+            "Το CosyVoice 2.0 δεν είναι εγκατεστημένο.\n"
+            "\n"
+            "Αυτόματη εγκατάσταση;\n"
+            "  - Πακέτο Python: ~500 MB\n"
+            "  - Μοντέλο (στην πρώτη Εκκίνηση): ~1,7 GB\n"
+            "\n"
+            "Το CosyVoice έχει ποσοστό παραισθήσεων <2 % (έναντι XTTS 5-15 %) σε μεγάλο περιεχόμενο, οπότε ακραίες ηχητικές εξόδους είναι πολύ σπάνιες."
+        ),
+        "msg_cosyvoice_installing": "[*] Εγκατάσταση CosyVoice 2.0 σε εξέλιξη (~500 MB pip + 1,7 GB μοντέλο στην πρώτη Εκκίνηση)...",
+        "hint_cosyvoice": "Μοντέλο: CosyVoice2-0.5B (Instruct) — IT μέσω cross-lingual με πρόθεμα <|it|>",
+        "label_log_panel": "Καταγραφή:",
+        "btn_log_show": "▼ Εμφάνιση καταγραφής",
+        "btn_log_hide": "▲ Απόκρυψη καταγραφής",
+        "btn_log_copy": "Αντιγραφή",
+        "btn_log_save": "Αποθήκευση...",
+        "btn_log_clear": "Εκκαθάριση",
     },
     "hi": {
         "label_video": "वीडियो:",
@@ -1226,6 +1526,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (स्थानीय, अनुशंसित — डबिंग के लिए संक्षिप्त अनुवाद)",
+        "label_ollama_model": "मॉडल:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "डिफ़ॉल्ट: qwen3:8b (अनुशंसित) — qwen3:4b हल्का (~3 GB), qwen3:14b उच्च गुणवत्ता (~9 GB), qwen2.5:7b-instruct पुराना। Ollama स्थापित होना आवश्यक",
+        "msg_ollama_unavailable": (
+            "Ollama उपलब्ध नहीं है। स्थापित करने के लिए:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "फिर मॉडल खींचें:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "MarianMT/Google पर वापस जाएगा।"
+        ),
+        "opt_cosyvoice": "🎤 प्रो वॉइस क्लोनिंग (CosyVoice 2.0 — प्रायोगिक, मैन्युअल सेटअप)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 स्थापित नहीं है।\n"
+            "\n"
+            "स्वचालित रूप से स्थापित करें?\n"
+            "  - Python पैकेज: ~500 MB\n"
+            "  - मॉडल (पहली बार Start पर): ~1.7 GB\n"
+            "\n"
+            "CosyVoice की हलूसिनेशन दर <2% है (बनाम XTTS 5-15%) लंबी सामग्री पर, इसलिए ऑडियो आउटलेयर बहुत दुर्लभ हैं।"
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 स्थापित किया जा रहा है (~500 MB pip + पहली बार Start पर 1.7 GB मॉडल)...",
+        "hint_cosyvoice": "मॉडल: CosyVoice2-0.5B (Instruct) — IT क्रॉस-लिंगुअल के माध्यम से <|it|> उपसर्ग के साथ",
+        "label_log_panel": "लॉग:",
+        "btn_log_show": "▼ लॉग दिखाएं",
+        "btn_log_hide": "▲ लॉग छिपाएं",
+        "btn_log_copy": "कॉपी",
+        "btn_log_save": "सहेजें...",
+        "btn_log_clear": "साफ़ करें",
     },
     "hu": {
         "label_video": "Videó:",
@@ -1298,6 +1630,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "Ollama LLM (helyi, ajánlott — tömör fordítások szinkronizáláshoz)",
+        "label_ollama_model": "Modell:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "Alapértelmezett: qwen3:8b (ajánlott) — qwen3:4b könnyű (~3 GB), qwen3:14b jobb minőség (~9 GB), qwen2.5:7b-instruct régi. Telepített Ollama szükséges",
+        "msg_ollama_unavailable": (
+            "Ollama nem elérhető. Telepítéshez:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Majd húzza le a modellt:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Visszaállás MarianMT/Google használatára."
+        ),
+        "opt_cosyvoice": "🎤 Pro hangklónozás (CosyVoice 2.0 — kísérleti, kézi beállítás)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 nincs telepítve.\n"
+            "\n"
+            "Telepítse automatikusan?\n"
+            "  - Python csomag: ~500 MB\n"
+            "  - Modell (első indításkor): ~1,7 GB\n"
+            "\n"
+            "A CosyVoice hallucinációs aránya <2 % (XTTS 5-15 %) hosszú tartalmaknál, így a kiugró audiok nagyon ritkák."
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 telepítése folyamatban (~500 MB pip + 1,7 GB modell az első indításkor)...",
+        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT cross-lingual módban <|it|> előtaggal",
+        "label_log_panel": "Napló:",
+        "btn_log_show": "▼ Napló megjelenítése",
+        "btn_log_hide": "▲ Napló elrejtése",
+        "btn_log_copy": "Másolás",
+        "btn_log_save": "Mentés...",
+        "btn_log_clear": "Törlés",
     },
     "id": {
         "label_video": "Video:",
@@ -1370,6 +1734,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokal, direkomendasikan — terjemahan ringkas untuk dubbing)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Default: qwen3:8b (direkomendasikan) — qwen3:4b ringan (~3 GB), qwen3:14b kualitas lebih tinggi (~9 GB), qwen2.5:7b-instruct lawas. Memerlukan Ollama terinstal",
+        "msg_ollama_unavailable": (
+            "Ollama tidak tersedia. Untuk instal:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Kemudian tarik model:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Akan kembali ke MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — eksperimental, setup manual)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 tidak terinstal.\n"
+            "\n"
+            "Instal otomatis?\n"
+            "  - Paket Python: ~500 MB\n"
+            "  - Model (saat Start pertama): ~1,7 GB\n"
+            "\n"
+            "CosyVoice memiliki tingkat halusinasi <2% (vs XTTS 5-15%) pada konten panjang, sehingga audio outlier sangat jarang."
+        ),
+        "msg_cosyvoice_installing": "[*] Menginstal CosyVoice 2.0 (~500 MB pip + 1,7 GB model saat Start pertama)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual dengan prefiks <|it|>",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Tampilkan log",
+        "btn_log_hide": "▲ Sembunyikan log",
+        "btn_log_copy": "Salin",
+        "btn_log_save": "Simpan...",
+        "btn_log_clear": "Bersihkan",
     },
     "ja": {
         "label_video": "ビデオ：",
@@ -1442,6 +1838,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "Ollama LLM(ローカル、推奨 — 吹き替え用の簡潔な翻訳)",
+        "label_ollama_model": "モデル:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "デフォルト: qwen3:8b(推奨) — qwen3:4b 軽量(~3 GB)、qwen3:14b 高品質(~9 GB)、qwen2.5:7b-instruct レガシー。Ollama のインストールが必要",
+        "msg_ollama_unavailable": (
+            "Ollama が利用できません。インストール方法:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "その後モデルを取得:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "MarianMT/Google にフォールバックします。"
+        ),
+        "opt_cosyvoice": "🎤 プロボイスクローニング(CosyVoice 2.0 — 実験的、手動セットアップ)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 がインストールされていません。\n"
+            "\n"
+            "自動インストールしますか?\n"
+            "  - Python パッケージ: 約 500 MB\n"
+            "  - モデル(初回 Start 時): 約 1.7 GB\n"
+            "\n"
+            "CosyVoice の幻覚率は 2% 未満(XTTS の 5-15% に対して)で、長尺コンテンツでも異常な音声出力は非常にまれです。"
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 をインストール中(~500 MB pip + 初回 Start 時 1.7 GB モデル)...",
+        "hint_cosyvoice": "モデル: CosyVoice2-0.5B (Instruct) — IT はクロスリンガル経由で <|it|> プレフィックス付き",
+        "label_log_panel": "ログ:",
+        "btn_log_show": "▼ ログを表示",
+        "btn_log_hide": "▲ ログを非表示",
+        "btn_log_copy": "コピー",
+        "btn_log_save": "保存...",
+        "btn_log_clear": "クリア",
     },
     "ko": {
         "label_video": "동영상:",
@@ -1514,6 +1942,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "Ollama LLM (로컬, 권장 — 더빙용 간결한 번역)",
+        "label_ollama_model": "모델:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "기본값: qwen3:8b (권장) — qwen3:4b 경량 (~3 GB), qwen3:14b 고품질 (~9 GB), qwen2.5:7b-instruct 레거시. Ollama 설치 필요",
+        "msg_ollama_unavailable": (
+            "Ollama를 사용할 수 없습니다. 설치하려면:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "그런 다음 모델을 가져오세요:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "MarianMT/Google로 폴백됩니다."
+        ),
+        "opt_cosyvoice": "🎤 프로 보이스 클로닝 (CosyVoice 2.0 — 실험적, 수동 설정)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0이 설치되지 않았습니다.\n"
+            "\n"
+            "자동으로 설치하시겠습니까?\n"
+            "  - Python 패키지: ~500 MB\n"
+            "  - 모델 (첫 시작 시): ~1.7 GB\n"
+            "\n"
+            "CosyVoice는 장문 콘텐츠에서 환각률이 2% 미만(XTTS의 5-15% 대비)이므로 이상한 오디오 출력은 매우 드뭅니다."
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 설치 중 (~500 MB pip + 첫 시작 시 1.7 GB 모델)...",
+        "hint_cosyvoice": "모델: CosyVoice2-0.5B (Instruct) — IT는 <|it|> 접두사가 있는 크로스링구얼 경유",
+        "label_log_panel": "로그:",
+        "btn_log_show": "▼ 로그 표시",
+        "btn_log_hide": "▲ 로그 숨기기",
+        "btn_log_copy": "복사",
+        "btn_log_save": "저장...",
+        "btn_log_clear": "지우기",
     },
     "no": {
         "label_video": "Video:",
@@ -1586,6 +2046,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokal, anbefalt — konsise oversettelser for dubbing)",
+        "label_ollama_model": "Modell:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "Standard: qwen3:8b (anbefalt) — qwen3:4b lett (~3 GB), qwen3:14b høyere kvalitet (~9 GB), qwen2.5:7b-instruct eldre. Krever Ollama installert",
+        "msg_ollama_unavailable": (
+            "Ollama ikke tilgjengelig. For å installere:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Deretter hent modellen:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Faller tilbake til MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice 2.0 — eksperimentell, manuelt oppsett)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 ikke installert.\n"
+            "\n"
+            "Installere automatisk?\n"
+            "  - Python-pakke: ~500 MB\n"
+            "  - Modell (ved første Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice har en hallusinasjonsrate på <2 % (mot XTTS 5-15 %) på lange opptak, så avvikende lyd er svært sjeldent."
+        ),
+        "msg_cosyvoice_installing": "[*] Installerer CosyVoice 2.0 (~500 MB pip + 1,7 GB modell ved første Start)...",
+        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med prefiks <|it|>",
+        "label_log_panel": "Logg:",
+        "btn_log_show": "▼ Vis logg",
+        "btn_log_hide": "▲ Skjul logg",
+        "btn_log_copy": "Kopier",
+        "btn_log_save": "Lagre...",
+        "btn_log_clear": "Tøm",
     },
     "pl": {
         "label_video": "Wideo:",
@@ -1658,6 +2150,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokalny, zalecany — zwięzłe tłumaczenia do dubbingu)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Domyślnie: qwen3:8b (zalecane) — qwen3:4b lekki (~3 GB), qwen3:14b wyższa jakość (~9 GB), qwen2.5:7b-instruct starszy. Wymaga zainstalowanego Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama niedostępny. Aby zainstalować:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Następnie pobierz model:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Zostanie użyty MarianMT/Google jako rezerwa."
+        ),
+        "opt_cosyvoice": "🎤 Pro klonowanie głosu (CosyVoice 2.0 — eksperymentalne, ręczna konfiguracja)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 nie jest zainstalowany.\n"
+            "\n"
+            "Zainstalować automatycznie?\n"
+            "  - Pakiet Python: ~500 MB\n"
+            "  - Model (przy pierwszym Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice ma wskaźnik halucynacji <2% (vs XTTS 5-15%) w długich nagraniach, więc nietypowe wyjścia audio są bardzo rzadkie."
+        ),
+        "msg_cosyvoice_installing": "[*] Instalowanie CosyVoice 2.0 (~500 MB pip + 1,7 GB model przy pierwszym Start)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT przez cross-lingual z prefiksem <|it|>",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Pokaż log",
+        "btn_log_hide": "▲ Ukryj log",
+        "btn_log_copy": "Kopiuj",
+        "btn_log_save": "Zapisz...",
+        "btn_log_clear": "Wyczyść",
     },
     "pt": {
         "label_video": "Vídeo:",
@@ -1730,6 +2254,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (local, recomendado — traduções concisas para dublagem)",
+        "label_ollama_model": "Modelo:",
+        "label_ollama_url": "URL do Ollama:",
+        "hint_ollama": "Padrão: qwen3:8b (recomendado) — qwen3:4b leve (~3 GB), qwen3:14b qualidade superior (~9 GB), qwen2.5:7b-instruct legado. Requer Ollama instalado",
+        "msg_ollama_unavailable": (
+            "Ollama indisponível. Para instalar:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Depois baixe o modelo:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Será usado MarianMT/Google como alternativa."
+        ),
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, configuração manual)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 não instalado.\n"
+            "\n"
+            "Instalar automaticamente?\n"
+            "  - Pacote Python: ~500 MB\n"
+            "  - Modelo (no primeiro Iniciar): ~1,7 GB\n"
+            "\n"
+            "CosyVoice tem taxa de alucinação <2% (vs XTTS 5-15%) em conteúdo longo, então saídas de áudio anômalas são muito raras."
+        ),
+        "msg_cosyvoice_installing": "[*] Instalando CosyVoice 2.0 (~500 MB pip + modelo de 1,7 GB no primeiro Iniciar)...",
+        "hint_cosyvoice": "Modelo: CosyVoice2-0.5B (Instruct) — IT via cross-lingual com prefixo <|it|>",
+        "label_log_panel": "Log:",
+        "btn_log_show": "▼ Mostrar log",
+        "btn_log_hide": "▲ Ocultar log",
+        "btn_log_copy": "Copiar",
+        "btn_log_save": "Salvar...",
+        "btn_log_clear": "Limpar",
     },
     "ro": {
         "label_video": "Video:",
@@ -1802,6 +2358,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (local, recomandat — traduceri concise pentru dublaj)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Implicit: qwen3:8b (recomandat) — qwen3:4b ușor (~3 GB), qwen3:14b calitate superioară (~9 GB), qwen2.5:7b-instruct vechi. Necesită Ollama instalat",
+        "msg_ollama_unavailable": (
+            "Ollama indisponibil. Pentru instalare:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Apoi descărcați modelul:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Se va folosi MarianMT/Google ca rezervă."
+        ),
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — experimental, configurare manuală)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 nu este instalat.\n"
+            "\n"
+            "Instalați automat?\n"
+            "  - Pachet Python: ~500 MB\n"
+            "  - Model (la prima pornire): ~1,7 GB\n"
+            "\n"
+            "CosyVoice are rata de halucinații <2 % (față de XTTS 5-15 %) pe conținut lung, deci ieșirile audio aberante sunt foarte rare."
+        ),
+        "msg_cosyvoice_installing": "[*] Se instalează CosyVoice 2.0 (~500 MB pip + 1,7 GB model la prima pornire)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual cu prefix <|it|>",
+        "label_log_panel": "Jurnal:",
+        "btn_log_show": "▼ Afișează jurnalul",
+        "btn_log_hide": "▲ Ascunde jurnalul",
+        "btn_log_copy": "Copiază",
+        "btn_log_save": "Salvează...",
+        "btn_log_clear": "Șterge",
     },
     "ru": {
         "label_video": "Видео:",
@@ -1874,6 +2462,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (локально, рекомендуется — лаконичные переводы для дубляжа)",
+        "label_ollama_model": "Модель:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "По умолчанию: qwen3:8b (рекомендуется) — qwen3:4b лёгкий (~3 ГБ), qwen3:14b более высокое качество (~9 ГБ), qwen2.5:7b-instruct устаревший. Требуется установленный Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama недоступен. Для установки:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Затем загрузите модель:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Будет использован MarianMT/Google как резервный."
+        ),
+        "opt_cosyvoice": "🎤 Pro клонирование голоса (CosyVoice 2.0 — экспериментально, ручная настройка)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 не установлен.\n"
+            "\n"
+            "Установить автоматически?\n"
+            "  - Пакет Python: ~500 МБ\n"
+            "  - Модель (при первом Старте): ~1,7 ГБ\n"
+            "\n"
+            "Уровень галлюцинаций CosyVoice <2 % (против XTTS 5-15 %) на длинном контенте, поэтому аномальные аудиовыходы очень редки."
+        ),
+        "msg_cosyvoice_installing": "[*] Установка CosyVoice 2.0 (~500 МБ pip + 1,7 ГБ модель при первом Старте)...",
+        "hint_cosyvoice": "Модель: CosyVoice2-0.5B (Instruct) — IT через cross-lingual с префиксом <|it|>",
+        "label_log_panel": "Журнал:",
+        "btn_log_show": "▼ Показать журнал",
+        "btn_log_hide": "▲ Скрыть журнал",
+        "btn_log_copy": "Копировать",
+        "btn_log_save": "Сохранить...",
+        "btn_log_clear": "Очистить",
     },
     "es": {
         "label_video": "Video:",
@@ -1946,6 +2566,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (local, recomendado — traducciones concisas para doblaje)",
+        "label_ollama_model": "Modelo:",
+        "label_ollama_url": "URL de Ollama:",
+        "hint_ollama": "Por defecto: qwen3:8b (recomendado) — qwen3:4b ligero (~3 GB), qwen3:14b mayor calidad (~9 GB), qwen2.5:7b-instruct heredado. Requiere Ollama instalado",
+        "msg_ollama_unavailable": (
+            "Ollama no disponible. Para instalar:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Luego descargue el modelo:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Se usará MarianMT/Google como alternativa."
+        ),
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, configuración manual)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 no instalado.\n"
+            "\n"
+            "¿Instalar automáticamente?\n"
+            "  - Paquete Python: ~500 MB\n"
+            "  - Modelo (al primer Iniciar): ~1,7 GB\n"
+            "\n"
+            "CosyVoice tiene una tasa de alucinación <2% (vs XTTS 5-15%) en contenido largo, por lo que las salidas de audio anómalas son muy raras."
+        ),
+        "msg_cosyvoice_installing": "[*] Instalando CosyVoice 2.0 (~500 MB pip + modelo de 1,7 GB al primer Iniciar)...",
+        "hint_cosyvoice": "Modelo: CosyVoice2-0.5B (Instruct) — IT vía cross-lingual con prefijo <|it|>",
+        "label_log_panel": "Registro:",
+        "btn_log_show": "▼ Mostrar registro",
+        "btn_log_hide": "▲ Ocultar registro",
+        "btn_log_copy": "Copiar",
+        "btn_log_save": "Guardar...",
+        "btn_log_clear": "Borrar",
     },
     "sv": {
         "label_video": "Video:",
@@ -2018,6 +2670,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (lokal, rekommenderas — koncisa översättningar för dubbning)",
+        "label_ollama_model": "Modell:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "Standard: qwen3:8b (rekommenderas) — qwen3:4b lätt (~3 GB), qwen3:14b högre kvalitet (~9 GB), qwen2.5:7b-instruct äldre. Kräver installerat Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama inte tillgänglig. För att installera:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Hämta sedan modellen:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Faller tillbaka på MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Pro röstkloning (CosyVoice 2.0 — experimentell, manuell installation)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 inte installerad.\n"
+            "\n"
+            "Installera automatiskt?\n"
+            "  - Python-paket: ~500 MB\n"
+            "  - Modell (vid första Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice har en hallucinationsfrekvens <2 % (mot XTTS 5-15 %) på långt innehåll, så avvikande ljudutdata är mycket sällsynt."
+        ),
+        "msg_cosyvoice_installing": "[*] Installerar CosyVoice 2.0 (~500 MB pip + 1,7 GB modell vid första Start)...",
+        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med prefix <|it|>",
+        "label_log_panel": "Logg:",
+        "btn_log_show": "▼ Visa logg",
+        "btn_log_hide": "▲ Dölj logg",
+        "btn_log_copy": "Kopiera",
+        "btn_log_save": "Spara...",
+        "btn_log_clear": "Rensa",
     },
     "tr": {
         "label_video": "Video:",
@@ -2090,6 +2774,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (yerel, önerilen — dublaj için özlü çeviriler)",
+        "label_ollama_model": "Model:",
+        "label_ollama_url": "Ollama URL:",
+        "hint_ollama": "Varsayılan: qwen3:8b (önerilen) — qwen3:4b hafif (~3 GB), qwen3:14b daha yüksek kalite (~9 GB), qwen2.5:7b-instruct eski. Ollama kurulu olmasını gerektirir",
+        "msg_ollama_unavailable": (
+            "Ollama mevcut değil. Kurulum için:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Ardından modeli indirin:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "MarianMT/Google'a geri dönülecek."
+        ),
+        "opt_cosyvoice": "🎤 Pro ses klonlama (CosyVoice 2.0 — deneysel, manuel kurulum)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 kurulu değil.\n"
+            "\n"
+            "Otomatik olarak kur?\n"
+            "  - Python paketi: ~500 MB\n"
+            "  - Model (ilk Başlat'ta): ~1,7 GB\n"
+            "\n"
+            "CosyVoice'un halüsinasyon oranı <%2'dir (XTTS %5-15'e karşı) uzun içerikte, bu nedenle aykırı ses çıktıları çok nadirdir."
+        ),
+        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 kuruluyor (~500 MB pip + ilk Başlat'ta 1,7 GB model)...",
+        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT, <|it|> önekiyle cross-lingual üzerinden",
+        "label_log_panel": "Günlük:",
+        "btn_log_show": "▼ Günlüğü göster",
+        "btn_log_hide": "▲ Günlüğü gizle",
+        "btn_log_copy": "Kopyala",
+        "btn_log_save": "Kaydet...",
+        "btn_log_clear": "Temizle",
     },
     "uk": {
         "label_video": "Відео:",
@@ -2162,6 +2878,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (локально, рекомендовано — лаконічні переклади для дубляжу)",
+        "label_ollama_model": "Модель:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "За замовчуванням: qwen3:8b (рекомендовано) — qwen3:4b легка (~3 ГБ), qwen3:14b вища якість (~9 ГБ), qwen2.5:7b-instruct застаріла. Потрібен встановлений Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama недоступний. Для встановлення:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Потім завантажте модель:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Буде використано MarianMT/Google як резервний варіант."
+        ),
+        "opt_cosyvoice": "🎤 Pro клонування голосу (CosyVoice 2.0 — експериментально, ручне налаштування)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 не встановлено.\n"
+            "\n"
+            "Встановити автоматично?\n"
+            "  - Пакет Python: ~500 МБ\n"
+            "  - Модель (при першому Старті): ~1,7 ГБ\n"
+            "\n"
+            "Рівень галюцинацій CosyVoice <2 % (проти XTTS 5-15 %) на довгому контенті, тому аномальні аудіовиходи дуже рідкі."
+        ),
+        "msg_cosyvoice_installing": "[*] Встановлення CosyVoice 2.0 (~500 МБ pip + 1,7 ГБ модель при першому Старті)...",
+        "hint_cosyvoice": "Модель: CosyVoice2-0.5B (Instruct) — IT через cross-lingual з префіксом <|it|>",
+        "label_log_panel": "Журнал:",
+        "btn_log_show": "▼ Показати журнал",
+        "btn_log_hide": "▲ Сховати журнал",
+        "btn_log_copy": "Копіювати",
+        "btn_log_save": "Зберегти...",
+        "btn_log_clear": "Очистити",
     },
     "vi": {
         "label_video": "Băng hình:",
@@ -2234,6 +2982,38 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
+        "engine_ollama": "LLM Ollama (cục bộ, khuyến nghị — bản dịch ngắn gọn cho lồng tiếng)",
+        "label_ollama_model": "Mô hình:",
+        "label_ollama_url": "URL Ollama:",
+        "hint_ollama": "Mặc định: qwen3:8b (khuyến nghị) — qwen3:4b nhẹ (~3 GB), qwen3:14b chất lượng cao hơn (~9 GB), qwen2.5:7b-instruct cũ. Yêu cầu đã cài Ollama",
+        "msg_ollama_unavailable": (
+            "Ollama không khả dụng. Để cài đặt:\n"
+            "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
+            "  https://ollama.com/download                      (Windows)\n"
+            "\n"
+            "Sau đó tải mô hình:\n"
+            "  ollama pull {model}\n"
+            "\n"
+            "Sẽ chuyển sang MarianMT/Google."
+        ),
+        "opt_cosyvoice": "🎤 Nhân bản giọng Pro (CosyVoice 2.0 — thử nghiệm, cài thủ công)",
+        "msg_cosyvoice_unavailable": (
+            "CosyVoice 2.0 chưa được cài đặt.\n"
+            "\n"
+            "Cài đặt tự động?\n"
+            "  - Gói Python: ~500 MB\n"
+            "  - Mô hình (lần đầu Start): ~1,7 GB\n"
+            "\n"
+            "CosyVoice có tỷ lệ ảo giác <2% (so với XTTS 5-15%) trên nội dung dài, vì vậy đầu ra âm thanh bất thường rất hiếm."
+        ),
+        "msg_cosyvoice_installing": "[*] Đang cài CosyVoice 2.0 (~500 MB pip + 1,7 GB mô hình ở lần đầu Start)...",
+        "hint_cosyvoice": "Mô hình: CosyVoice2-0.5B (Instruct) — IT qua cross-lingual với tiền tố <|it|>",
+        "label_log_panel": "Nhật ký:",
+        "btn_log_show": "▼ Hiển thị nhật ký",
+        "btn_log_hide": "▲ Ẩn nhật ký",
+        "btn_log_copy": "Sao chép",
+        "btn_log_save": "Lưu...",
+        "btn_log_clear": "Xóa",
     },
 
 # ── UI_LANG_OPTIONS ──
@@ -5333,7 +6113,15 @@ WAV2LIP_BASE_PKGS = ["opencv-python", "librosa", "tqdm"]
 # installer ships pre-built dlib wheels; on Linux dlib must compile from
 # source (needs cmake + a C++ toolchain), so we attempt it best-effort and
 # surface a clear message on failure instead of crashing mid-pipeline.
-WAV2LIP_FACE_PKGS = ["basicsr", "facexlib"]
+#
+# We pull `new-basicsr` (maintained fork) instead of the original `basicsr`
+# 1.4.2 (abandoned 2022). The original fails to build on Python 3.13 with
+# `KeyError: '__version__'` because its setup.py uses the
+# get_version() helper that relies on PEP 667-broken locals() semantics.
+# `new-basicsr` ships a pre-built wheel (no setup.py invocation at install
+# time) AND installs the SAME top-level `basicsr` package — every
+# `import basicsr...` in Wav2Lip / facexlib keeps working unchanged.
+WAV2LIP_FACE_PKGS = ["new-basicsr", "facexlib"]
 
 _active_subprocesses: set[subprocess.Popen] = set()
 _active_subprocesses_lock = threading.Lock()
@@ -5362,22 +6150,27 @@ def _snapshot_active_subprocesses() -> list[subprocess.Popen]:
 
 
 def _install_wav2lip_face_stack_linux() -> None:
-    """Install dlib + basicsr + facexlib on Linux with a cmake pre-check.
+    """Install dlib + new-basicsr + facexlib on Linux with a cmake pre-check.
 
     dlib has no official PyPI wheels for Linux; pip must compile from source
     via cmake + libboost. We pre-check for cmake and emit an actionable error
-    instead of letting pip dump a long traceback. basicsr/facexlib are pure
-    Python and install cleanly regardless.
+    instead of letting pip dump a long traceback.
+
+    `new-basicsr` is a maintained fork of the abandoned `basicsr` 1.4.2 — it
+    ships a pre-built wheel and installs as the same `basicsr` module, which
+    sidesteps the `KeyError: '__version__'` build failure of the original on
+    Python 3.13 (PEP 667 broke its setup.py exec/locals pattern).
+    `facexlib` is pure Python and installs cleanly regardless.
     """
-    # basicsr + facexlib are cheap (pure python), install them first so lipsync
-    # can at least attempt to run even if dlib is missing.
+    # new-basicsr + facexlib are cheap (wheel + pure python), install them
+    # first so lipsync can at least attempt to run even if dlib is missing.
     res = subprocess.run(
         [sys.executable, "-m", "pip", "install", "--quiet",
          "--break-system-packages"] + WAV2LIP_FACE_PKGS,
         check=False,
     )
     if res.returncode != 0:
-        print("     ! basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
+        print("     ! new-basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
 
     # dlib: short-circuit if already importable (system package or prior install).
     try:
@@ -6204,7 +6997,21 @@ class App(tk.Tk):
         self._pending_pkgs_after_ffmpeg: list[str] = []
 
         self._build_ui()
+        # Restore log panel visibility from config (default True)
+        self._log_visible = bool(_ocfg.get("ui_log_visible", True))
+        if not self._log_visible:
+            self._log_container.grid_remove()
+            self._btn_log_toggle.configure(text=self._s("btn_log_show"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        # Minimum window size + reasonable default geometry so the window
+        # remains usable on small displays (1366×768, 1280×720) and at
+        # Windows scaling 125%/150%. The form area is wrapped in a Canvas
+        # with a vertical Scrollbar (see `_build_ui`), so even when the
+        # window is resized below the form's natural height the user can
+        # scroll to reach every control. Log + progress bar stay outside
+        # the canvas and remain visible at all times.
+        self.minsize(900, 600)
+        self.geometry("1100x780")
         self.after(100, self._fit_to_screen)
         self.after(200, self._check_deps_on_start)
         self.after(800, self._upgrade_ytdlp_in_background)
@@ -6253,8 +7060,17 @@ class App(tk.Tk):
         self.update_idletasks()
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
-        win_w    = min(self.winfo_reqwidth(),  screen_w - 40)
-        win_h    = min(self.winfo_reqheight(), screen_h - 80)
+        # Clamp to screen but enforce a usable minimum (matches `self.minsize`
+        # set in __init__). When the form is taller than the screen, the
+        # Canvas + Scrollbar in `_build_ui` lets the user reach every row.
+        # Prefer the explicit geometry hint (1100x780) over reqsize, because the
+        # form lives inside a Canvas-wrapped frame and reqwidth from the Canvas
+        # under-reports the form's actual width.
+        win_w = max(1100, min(self.winfo_reqwidth(),  screen_w - 40))
+        win_h = max(780,  min(self.winfo_reqheight(), screen_h - 80))
+        # But never exceed a strict minimum that defeats the purpose on small screens.
+        win_w = max(win_w, 900)
+        win_h = max(win_h, 600)
         x = (screen_w - win_w) // 2
         y = max(0, (screen_h - win_h) // 2 - 20)
         self.geometry(f"{win_w}x{win_h}+{x}+{y}")
@@ -6606,8 +7422,44 @@ class App(tk.Tk):
     def _build_ui(self):
         pad = {"padx": 16, "pady": 5}
 
+        # ── Outer layout (3 rows on the root window) ─────────────────────
+        # row 0: scrollable canvas hosting the entire form
+        # row 1: log panel (always visible, outside the canvas so the user
+        #        can keep watching pipeline output while scrolling the form)
+        # row 2: progress bar
+        # The canvas approach lets the GUI stay usable on small displays
+        # (1366×768, 1280×720) and on Windows 125%/150% scaling without
+        # truncating the Start button or the option rows.
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=0)
+        self.grid_columnconfigure(0, weight=1)
+
+        self._main_canvas = tk.Canvas(self, bg=BG, highlightthickness=0)
+        self._main_canvas.grid(row=0, column=0, sticky="nsew")
+        main_vsb = tk.Scrollbar(self, orient="vertical",
+                                command=self._main_canvas.yview)
+        main_vsb.grid(row=0, column=1, sticky="ns")
+        self._main_canvas.configure(yscrollcommand=main_vsb.set)
+
+        self._main_frame = tk.Frame(self._main_canvas, bg=BG)
+        self._main_canvas_window = self._main_canvas.create_window(
+            (0, 0), window=self._main_frame, anchor="nw")
+
+        # Keep scrollregion in sync with the inner frame's natural size.
+        self._main_frame.bind(
+            "<Configure>",
+            lambda e: self._main_canvas.configure(
+                scrollregion=self._main_canvas.bbox("all")))
+        # Stretch the inner frame to the canvas width so the existing
+        # column-weighted grid still expands horizontally as expected.
+        self._main_canvas.bind(
+            "<Configure>",
+            lambda e: self._main_canvas.itemconfig(
+                self._main_canvas_window, width=e.width))
+
         # Header: title + UI language selector
-        header = tk.Frame(self, bg=BG)
+        header = tk.Frame(self._main_frame, bg=BG)
         header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=16, pady=(16, 2))
         header.columnconfigure(0, weight=1)
 
@@ -6626,15 +7478,15 @@ class App(tk.Tk):
         self._ui_lang_combo.pack(side="left")
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
-        tk.Label(self, text="faster-whisper  •  Demucs  •  Google Translate  •  Edge-TTS / XTTS v2",
+        tk.Label(self._main_frame, text="faster-whisper  •  Demucs  •  Google Translate  •  Edge-TTS / XTTS v2",
                  font=("Helvetica", 9), bg=BG, fg=FG2).grid(row=1, column=0, columnspan=3)
 
-        ttk.Separator(self, orient="horizontal").grid(
+        ttk.Separator(self._main_frame, orient="horizontal").grid(
             row=2, column=0, columnspan=3, sticky="ew", padx=16, pady=6)
 
         # Batch file list
         self._lbl_video = self._row_label(3, self._s("label_video"))
-        batch_frame = tk.Frame(self, bg=BG)
+        batch_frame = tk.Frame(self._main_frame, bg=BG)
         batch_frame.grid(row=3, column=1, columnspan=2, sticky="ew", **pad)
         self._batch_listbox = tk.Listbox(batch_frame, height=4, width=52,
                                          bg=SEL, fg=FG, selectbackground=ACC,
@@ -6658,17 +7510,17 @@ class App(tk.Tk):
         # Output
         self._lbl_output = self._row_label(4, self._s("label_output"))
         self._output_var = tk.StringVar()
-        tk.Entry(self, textvariable=self._output_var, width=42,
+        tk.Entry(self._main_frame, textvariable=self._output_var, width=42,
                  bg=SEL, fg=FG, insertbackground=FG,
                  relief="flat", font=("Helvetica", 9)).grid(
             row=4, column=1, sticky="ew", padx=(0, 6), pady=5)
-        self._btn_browse = tk.Button(self, text=self._s("btn_browse"),
+        self._btn_browse = tk.Button(self._main_frame, text=self._s("btn_browse"),
                                      command=self._browse_output, bg="#45475a", fg=FG, relief="flat")
         self._btn_browse.grid(row=4, column=2, padx=(0, 16))
 
         # URL download field
         self._lbl_url = self._row_label(5, self._s("label_url"))
-        url_frame = tk.Frame(self, bg=BG)
+        url_frame = tk.Frame(self._main_frame, bg=BG)
         url_frame.grid(row=5, column=1, columnspan=2, sticky="ew", **pad)
         self._url_text = tk.Text(url_frame, height=2, width=52,
                                   bg=SEL, fg=FG, insertbackground=FG,
@@ -6684,12 +7536,12 @@ class App(tk.Tk):
                                         relief="flat", padx=8, cursor="hand2")
         self._btn_download.pack(side="left", padx=(6, 0))
 
-        ttk.Separator(self, orient="horizontal").grid(
+        ttk.Separator(self._main_frame, orient="horizontal").grid(
             row=6, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Whisper model
         self._lbl_model = self._row_label(7, self._s("label_model"))
-        mf = tk.Frame(self, bg=BG)
+        mf = tk.Frame(self._main_frame, bg=BG)
         mf.grid(row=7, column=1, columnspan=2, sticky="w", **pad)
         for m in WHISPER_MODELS:
             tk.Radiobutton(mf, text=m, variable=self._model, value=m,
@@ -6702,7 +7554,7 @@ class App(tk.Tk):
 
         # Source language
         self._lbl_from = self._row_label(8, self._s("label_from"))
-        src_frame = tk.Frame(self, bg=BG)
+        src_frame = tk.Frame(self._main_frame, bg=BG)
         src_frame.grid(row=8, column=1, columnspan=2, sticky="w", **pad)
         self._src_combo = ttk.Combobox(src_frame, values=list(SOURCE_LANGS.values()),
                                         state="readonly", width=22, font=("Helvetica", 9))
@@ -6714,7 +7566,7 @@ class App(tk.Tk):
 
         # Target language
         self._lbl_to = self._row_label(9, self._s("label_to"))
-        tgt_frame = tk.Frame(self, bg=BG)
+        tgt_frame = tk.Frame(self._main_frame, bg=BG)
         tgt_frame.grid(row=9, column=1, columnspan=2, sticky="w", **pad)
         self._tgt_combo = ttk.Combobox(tgt_frame, values=[v["name"] for v in LANGUAGES.values()],
                                         state="readonly", width=22, font=("Helvetica", 9))
@@ -6724,13 +7576,13 @@ class App(tk.Tk):
 
         # Voice
         self._lbl_voice = self._row_label(10, self._s("label_voice"))
-        self._voice_frame = tk.Frame(self, bg=BG)
+        self._voice_frame = tk.Frame(self._main_frame, bg=BG)
         self._voice_frame.grid(row=10, column=1, columnspan=2, sticky="w", **pad)
         self._build_voice_buttons()
 
         # TTS rate
         self._lbl_tts_rate = self._row_label(11, self._s("label_tts_rate"))
-        rate_frame = tk.Frame(self, bg=BG)
+        rate_frame = tk.Frame(self._main_frame, bg=BG)
         rate_frame.grid(row=11, column=1, columnspan=2, sticky="w", **pad)
         tk.Label(rate_frame, text="-50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
         ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
@@ -6741,12 +7593,12 @@ class App(tk.Tk):
         self._rate_lbl.pack(side="left", padx=4)
         self._tts_rate.trace_add("write", self._update_rate_label)
 
-        ttk.Separator(self, orient="horizontal").grid(
+        ttk.Separator(self._main_frame, orient="horizontal").grid(
             row=12, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Options
         self._lbl_options = self._row_label(13, self._s("label_options"))
-        opts = tk.Frame(self, bg=BG)
+        opts = tk.Frame(self._main_frame, bg=BG)
         opts.grid(row=13, column=1, columnspan=2, sticky="w", **pad)
 
         def cb(parent, text_key, var, cmd=None):
@@ -6895,40 +7747,133 @@ class App(tk.Tk):
         self._lbl_hf_hint.pack(side="left")
         self._hf_row.grid_remove()  # hidden until diarization enabled
 
-        ttk.Separator(self, orient="horizontal").grid(
+        ttk.Separator(self._main_frame, orient="horizontal").grid(
             row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
 
         # Start button
-        self._btn = tk.Button(self, text=self._s("btn_start"), command=self._start,
+        self._btn = tk.Button(self._main_frame, text=self._s("btn_start"), command=self._start,
                               bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
                               relief="flat", padx=20, pady=8, cursor="hand2",
                               activebackground="#74c7ec")
         self._btn.grid(row=15, column=0, columnspan=3, pady=8)
 
-        # Log
+        # Log panel — toolbar + collapsible Text widget.
+        # Stays a direct child of the root window (NOT inside the scrollable
+        # canvas) so pipeline output remains visible while the user scrolls
+        # the form above. Sits in row=1 of the root grid (canvas is row=0).
         log_frame = tk.Frame(self, bg=BG)
-        log_frame.grid(row=16, column=0, columnspan=3, padx=16, pady=(0, 4), sticky="nsew")
-        log_frame.rowconfigure(0, weight=1)
+        log_frame.grid(row=1, column=0, columnspan=2, padx=16, pady=(0, 4), sticky="nsew")
+        log_frame.rowconfigure(1, weight=1)
         log_frame.columnconfigure(0, weight=1)
-        self._log = tk.Text(log_frame, height=8, width=76,
+
+        log_header = tk.Frame(log_frame, bg=BG)
+        log_header.grid(row=0, column=0, sticky="ew")
+        self._lbl_log_panel = tk.Label(log_header, text=self._s("label_log_panel"),
+                                       bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+        self._lbl_log_panel.pack(side="left")
+        self._btn_log_toggle = tk.Button(
+            log_header, text=self._s("btn_log_hide"),
+            command=self._toggle_log,
+            bg=SEL, fg=FG, font=("Helvetica", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_log_toggle.pack(side="left", padx=(8, 0))
+        self._btn_log_clear = tk.Button(
+            log_header, text=self._s("btn_log_clear"),
+            command=self._log_clear,
+            bg=SEL, fg=FG, font=("Helvetica", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_log_clear.pack(side="right")
+        self._btn_log_save = tk.Button(
+            log_header, text=self._s("btn_log_save"),
+            command=self._log_save,
+            bg=SEL, fg=FG, font=("Helvetica", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_log_save.pack(side="right", padx=(0, 4))
+        self._btn_log_copy = tk.Button(
+            log_header, text=self._s("btn_log_copy"),
+            command=self._log_copy,
+            bg=SEL, fg=FG, font=("Helvetica", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_log_copy.pack(side="right", padx=(0, 4))
+
+        self._log_container = tk.Frame(log_frame, bg=BG)
+        self._log_container.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
+        self._log_container.rowconfigure(0, weight=1)
+        self._log_container.columnconfigure(0, weight=1)
+        self._log = tk.Text(self._log_container, height=12, width=76,
                             bg="#11111b", fg=GRN, font=("Monospace", 8),
                             relief="flat", state="disabled", wrap="word")
-        vsb = tk.Scrollbar(log_frame, command=self._log.yview)
+        vsb = tk.Scrollbar(self._log_container, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
         self._log.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
 
+        # Progress bar — root child, row=2 (under the log panel).
         self._progress = ttk.Progressbar(self, mode="indeterminate", length=500)
-        self._progress.grid(row=17, column=0, columnspan=3, padx=16, pady=(0, 12))
+        self._progress.grid(row=2, column=0, columnspan=2, padx=16, pady=(0, 12))
 
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure(16, weight=1)  # log row expands, progress bar stays at bottom
+        # Inner-frame column weight so form widgets stretch horizontally
+        # (column 1 hosts entries / combos / wrap frames).
+        self._main_frame.columnconfigure(1, weight=1)
+
+        # Cross-platform mouse wheel scrolling. Tk does not propagate the
+        # MouseWheel event to children automatically, so we walk the tree
+        # and bind on every descendant of the canvas + main frame.
+        self._bind_mousewheel(self._main_canvas)
+        self._bind_mousewheel(self._main_frame)
 
     def _row_label(self, row, text):
-        lbl = tk.Label(self, text=text, bg=BG, fg="#bac2de",
+        # All form rows live inside `self._main_frame` (a child of the
+        # scrollable canvas built in `_build_ui`). Anchoring labels to the
+        # root would break the scrolling layout, so we route them through
+        # the inner frame just like every other form widget.
+        lbl = tk.Label(self._main_frame, text=text, bg=BG, fg="#bac2de",
                        font=("Helvetica", 9, "bold"), anchor="e")
         lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=7)
         return lbl
+
+    # ── Mouse wheel scrolling for the form canvas ──────────────────────────
+
+    def _on_mousewheel(self, event):
+        """Scroll the form canvas in response to a wheel event.
+
+        Cross-platform delta normalisation:
+          * Linux delivers Button-4 (up) / Button-5 (down) without `delta`.
+          * Windows / macOS deliver MouseWheel with `delta` in multiples
+            of 120 (positive = up).
+        """
+        # Defensive: the canvas may have been destroyed mid-shutdown.
+        if not hasattr(self, "_main_canvas"):
+            return
+        if sys.platform.startswith("linux"):
+            delta = -1 if getattr(event, "num", 0) == 5 else 1
+        else:
+            delta = int(-1 * (event.delta / 120))
+        try:
+            self._main_canvas.yview_scroll(delta, "units")
+        except tk.TclError:
+            # Window being destroyed
+            pass
+
+    def _bind_mousewheel(self, widget):
+        """Recursively bind wheel events on `widget` and all its descendants.
+
+        Tk does not auto-propagate MouseWheel events to child widgets, so
+        the canvas would otherwise stop scrolling as soon as the cursor
+        hovers over any inner control (entry, combobox, button, ...).
+        """
+        try:
+            widget.bind("<MouseWheel>", self._on_mousewheel, add="+")  # Win/Mac
+            widget.bind("<Button-4>",   self._on_mousewheel, add="+")  # Linux up
+            widget.bind("<Button-5>",   self._on_mousewheel, add="+")  # Linux down
+        except tk.TclError:
+            pass
+        for child in widget.winfo_children():
+            self._bind_mousewheel(child)
 
     # ── Language switcher ────────────────────────────────────────────────────
 
@@ -6981,6 +7926,13 @@ class App(tk.Tk):
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
         self._lbl_hf_hint.configure(text="  " + self._s("hint_hf_token"))
+        # Log panel labels
+        self._lbl_log_panel.configure(text=self._s("label_log_panel"))
+        self._btn_log_toggle.configure(
+            text=self._s("btn_log_hide" if getattr(self, "_log_visible", True) else "btn_log_show"))
+        self._btn_log_copy.configure(text=self._s("btn_log_copy"))
+        self._btn_log_save.configure(text=self._s("btn_log_save"))
+        self._btn_log_clear.configure(text=self._s("btn_log_clear"))
         # Update source language combo labels
         lang = self._ui_lang.get()
         src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
@@ -7011,6 +7963,11 @@ class App(tk.Tk):
     def _on_lang_tgt_change(self, _=None):
         self._lang_tgt.set(list(LANGUAGES.keys())[self._tgt_combo.current()])
         self._build_voice_buttons()
+        # Re-bind mousewheel to newly created voice radio buttons
+        try:
+            self._bind_mousewheel(self._voice_frame)
+        except Exception:
+            pass
 
     def _update_rate_label(self, *_):
         try:
@@ -7697,13 +8654,72 @@ class App(tk.Tk):
 
     # ── Log ──────────────────────────────────────────────────────────────────
 
+    _LOG_MAX_LINES = 5000
+
     def _log_write(self, text: str):
         if self._destroying:
             return
+        # Smart auto-scroll: only follow tail if user hasn't scrolled up
+        try:
+            yview_bottom = self._log.yview()[1]
+        except Exception:
+            yview_bottom = 1.0
+        at_bottom = yview_bottom >= 0.95
         self._log.configure(state="normal")
         self._log.insert("end", text)
-        self._log.see("end")
+        # Hard cap to prevent RAM blowup on long pipelines
+        try:
+            line_count = int(self._log.index("end-1c").split(".")[0])
+            if line_count > self._LOG_MAX_LINES:
+                self._log.delete("1.0", f"{line_count - self._LOG_MAX_LINES}.0")
+        except Exception:
+            pass
+        if at_bottom:
+            self._log.see("end")
         self._log.configure(state="disabled")
+
+    def _log_copy(self):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self._log.get("1.0", "end-1c"))
+        except Exception:
+            pass
+
+    def _log_save(self):
+        try:
+            from tkinter import filedialog
+            path = filedialog.asksaveasfilename(
+                defaultextension=".log",
+                filetypes=[("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")],
+                initialfile="video_translator.log",
+            )
+            if not path:
+                return
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self._log.get("1.0", "end-1c"))
+        except Exception as e:
+            try:
+                messagebox.showerror(self._s("msg_error_t"), str(e))
+            except Exception:
+                pass
+
+    def _log_clear(self):
+        self._log.configure(state="normal")
+        self._log.delete("1.0", "end")
+        self._log.configure(state="disabled")
+
+    def _toggle_log(self):
+        self._log_visible = not getattr(self, "_log_visible", True)
+        if self._log_visible:
+            self._log_container.grid()
+            self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
+        else:
+            self._log_container.grid_remove()
+            self._btn_log_toggle.configure(text=self._s("btn_log_show"))
+        try:
+            save_config({"ui_log_visible": self._log_visible})
+        except Exception:
+            pass
 
     # ── Done / Close ─────────────────────────────────────────────────────────
 

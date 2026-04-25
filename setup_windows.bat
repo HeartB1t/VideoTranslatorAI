@@ -6,7 +6,7 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-set "SCRIPT_VERSION=2.0.0"
+set "SCRIPT_VERSION=2.1.0"
 title Video Translator AI - Setup v%SCRIPT_VERSION%
 
 :: -- Centralised paths (single source of truth) ------------------------------
@@ -135,6 +135,8 @@ if errorlevel 1 ( pause & exit /b 1 )
 call :step_ffmpeg "4/5" "0"
 call :step_shortcut "5/5"
 
+call :validate_install
+if errorlevel 1 exit /b 1
 call :print_done "Installation complete"
 exit /b 0
 
@@ -188,6 +190,8 @@ if exist "%PUBLIC_SHORTCUT%" (
     call :step_shortcut "5/5"
 )
 
+call :validate_install
+if errorlevel 1 exit /b 1
 call :print_done "Repair complete"
 exit /b 0
 
@@ -345,34 +349,40 @@ if errorlevel 1 (
     echo  [!] python not found in PATH, skipping package removal.
     goto uninst_custom_tools
 )
+if not defined PYTHON_EXE (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        if not defined PYTHON_EXE set "PYTHON_EXE=%%i"
+    )
+)
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
 
 set "Q_TTS="
 set /p "Q_TTS=Remove TTS group (coqui-tts, transformers) ? [Y/N]: "
-if /i "!Q_TTS!"=="Y" python -m pip uninstall -y coqui-tts transformers
+if /i "!Q_TTS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y coqui-tts transformers
 
 set "Q_TORCH="
 set /p "Q_TORCH=Remove PyTorch stack (torch, torchaudio, torchvision, torchcodec) ? [Y/N]: "
-if /i "!Q_TORCH!"=="Y" python -m pip uninstall -y torch torchaudio torchvision torchcodec
+if /i "!Q_TORCH!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y torch torchaudio torchvision torchcodec
 
 set "Q_WHI="
 set /p "Q_WHI=Remove Whisper + ctranslate2 ? [Y/N]: "
-if /i "!Q_WHI!"=="Y" python -m pip uninstall -y faster-whisper ctranslate2
+if /i "!Q_WHI!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y faster-whisper ctranslate2
 
 set "Q_DEM="
 set /p "Q_DEM=Remove Demucs ? [Y/N]: "
-if /i "!Q_DEM!"=="Y" python -m pip uninstall -y demucs
+if /i "!Q_DEM!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y demucs
 
 set "Q_W2L="
-set /p "Q_W2L=Remove Wav2Lip deps (basicsr, facexlib, dlib) ? [Y/N]: "
-if /i "!Q_W2L!"=="Y" python -m pip uninstall -y basicsr facexlib dlib
+set /p "Q_W2L=Remove Wav2Lip deps (new-basicsr/basicsr, facexlib, dlib) ? [Y/N]: "
+if /i "!Q_W2L!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y new-basicsr basicsr facexlib dlib
 
 set "Q_PYA="
 set /p "Q_PYA=Remove pyannote.audio (speaker diarization) ? [Y/N]: "
-if /i "!Q_PYA!"=="Y" python -m pip uninstall -y pyannote.audio
+if /i "!Q_PYA!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y pyannote.audio
 
 set "Q_MIS="
 set /p "Q_MIS=Remove pipeline utilities (yt-dlp, edge-tts, deep-translator, pydub, pyloudnorm, soundfile, sacremoses, sentencepiece) ? [Y/N]: "
-if /i "!Q_MIS!"=="Y" python -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
+if /i "!Q_MIS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
 
 :uninst_custom_tools
 echo.
@@ -421,6 +431,42 @@ echo  ============================================
 echo    %~1
 echo  ============================================
 echo.
+goto :eof
+
+
+:validate_install
+echo.
+echo  [*] Validating installation...
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
+"%PYTHON_EXE%" -c "import torch, faster_whisper, demucs, edge_tts, soundfile, numpy" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo  ============================================
+    echo    INSTALLATION INCOMPLETE
+    echo  ============================================
+    echo.
+    echo   Some core modules failed to install.
+    echo   Run setup_windows.bat again and choose
+    echo   option [2] Repair / Update.
+    echo.
+    echo   Missing modules:
+    call :check_module torch "torch (PyTorch)"
+    call :check_module faster_whisper "faster-whisper"
+    call :check_module demucs "demucs"
+    call :check_module edge_tts "edge-tts"
+    call :check_module soundfile "soundfile"
+    call :check_module numpy "numpy"
+    echo.
+    pause
+    exit /b 1
+)
+echo  [+] All core modules importable.
+exit /b 0
+
+
+:check_module
+"%PYTHON_EXE%" -c "import %~1" >nul 2>&1
+if errorlevel 1 echo     - %~2
 goto :eof
 
 
@@ -574,13 +620,45 @@ if errorlevel 1 (
 call :reload_path
 
 :step_python_found
-for /f "tokens=*" %%i in ('python --version 2^>^&1') do set "PY_VER=%%i"
-echo  [+] Found: %PY_VER%
-python -c "import sys; exit(0 if sys.version_info >= (3,9) else 1)" >nul 2>&1
+set "PYTHON_EXE="
+for /f "tokens=*" %%i in ('where python 2^>nul') do (
+    if not defined PYTHON_EXE set "PYTHON_EXE=%%i"
+)
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
+
+for /f "tokens=*" %%i in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%i"
+echo  [+] Found: !PY_VER! at !PYTHON_EXE!
+
+"%PYTHON_EXE%" -c "import sys; sys.exit(0 if (3,10) <= sys.version_info[:2] <= (3,13) else 1)" >nul 2>&1
+if not errorlevel 1 goto step_python_ok
+
+echo  [!] Detected !PY_VER! is incompatible (need Python 3.10-3.13).
+echo  [!] Installing Python 3.11.9 alongside (without altering PATH)...
+powershell -Command ^
+    "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
+    "$out = $env:TEMP + '\python_installer.exe';" ^
+    "Write-Host '     Downloading Python 3.11.9...';" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
+    "Write-Host '     Installing silently (this may take a minute)...';" ^
+    "Start-Process -FilePath $out -ArgumentList '/quiet InstallAllUsers=1 Include_test=0 Include_doc=0' -Wait;" ^
+    "Remove-Item $out -Force;" ^
+    "Write-Host '  [+] Python 3.11 installed alongside.'"
 if errorlevel 1 (
-    echo  [!] Python 3.9 or higher is required.
+    echo  [!] Bundled Python 3.11.9 install failed. Aborting.
+    echo      Install Python 3.10-3.13 manually from https://www.python.org/downloads/
     exit /b 1
 )
+
+set "PYTHON_EXE=%ProgramFiles%\Python311\python.exe"
+if not exist "%PYTHON_EXE%" (
+    echo  [!] Bundled Python 3.11.9 not found at "%PYTHON_EXE%" after install. Aborting.
+    exit /b 1
+)
+for /f "tokens=*" %%i in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%i"
+echo  [+] Using bundled !PY_VER! at !PYTHON_EXE!
+
+:step_python_ok
 exit /b 0
 
 
@@ -613,7 +691,7 @@ exit /b 0
 echo.
 echo [%~1] Installing Python dependencies...
 echo  [*] Upgrading pip...
-python -m pip install --upgrade pip --quiet
+"%PYTHON_EXE%" -m pip install --upgrade pip --quiet
 
 :: NB: pyannote.audio<4.0 kept in its OWN variable, NOT echoed expanded.
 :: cmd.exe parses '<' as input redirection BEFORE quote handling on `echo`,
@@ -622,53 +700,53 @@ python -m pip install --upgrade pip --quiet
 set "PYANNOTE_PIN="pyannote.audio<4.0""
 set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses torchcodec silero-vad keyring"
 
-python -c "import sys; exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
+"%PYTHON_EXE%" -c "import sys; sys.exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
 if not errorlevel 1 (
     set "PACKAGES=!PACKAGES! audioop-lts"
 )
 
 echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
-python -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet ^
+"%PYTHON_EXE%" -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo  [!] PyTorch cu124 failed, trying CPU version...
-    python -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet
+    "%PYTHON_EXE%" -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet
 )
 
 echo  [*] Installing ctranslate2...
-python -m pip install ctranslate2 --quiet
+"%PYTHON_EXE%" -m pip install ctranslate2 --quiet
 
 echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)...
-python -m pip install %PYANNOTE_PIN% !PACKAGES! --quiet
+"%PYTHON_EXE%" -m pip install %PYANNOTE_PIN% !PACKAGES! --quiet
 if errorlevel 1 (
     echo  [!] Error installing Python packages.
     exit /b 1
 )
 
-python -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
+"%PYTHON_EXE%" -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
     echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
-    python -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
+    "%PYTHON_EXE%" -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
 )
 
 echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
-python -m pip install "transformers>=4.40.0,<5.1" --quiet
+"%PYTHON_EXE%" -m pip install "transformers>=4.40.0,<5.1" --quiet
 if errorlevel 1 (
     echo  [!] transformers install failed.
     exit /b 1
 )
 
-python -m pip install Cython setuptools wheel --quiet
+"%PYTHON_EXE%" -m pip install Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 call :find_vcvarsall
 
 echo  [*] Installing coqui-tts fork (voice cloning)...
-python -m pip install coqui-tts "transformers<5.1" --quiet 2>nul
+"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
-python -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
+"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
 if "%~2"=="1" (
@@ -695,7 +773,7 @@ if errorlevel 1 (
 )
 
 call :find_vcvarsall
-python -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
+"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
 :step_tts_failed
@@ -727,9 +805,13 @@ exit /b 0
 :: %~1 = REPAIR_MODE flag (currently unused, kept for symmetry / future)
 :step_wav2lip
 echo.
-echo  [*] Installing Wav2Lip dependencies (basicsr, facexlib, dlib)...
+echo  [*] Installing Wav2Lip dependencies (new-basicsr, facexlib, dlib)...
+echo      Note: using new-basicsr (maintained fork, ships pre-built wheel) instead
+echo            of basicsr 1.4.2 -- original is abandoned and KeyError '__version__'
+echo            on Python 3.13 (PEP 667 broke its setup.py exec/locals pattern).
+echo            new-basicsr installs the same 'basicsr' module (drop-in import).
 
-for /f "tokens=*" %%i in ('python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"') do set "PY_TAG=%%i"
+for /f "tokens=*" %%i in ('"%PYTHON_EXE%" -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"') do set "PY_TAG=%%i"
 echo  [*] Python tag detected: cp%PY_TAG%
 
 set "DLIB_WHEEL_URL="
@@ -739,7 +821,7 @@ if "%PY_TAG%"=="311" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Wind
 if "%PY_TAG%"=="312" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp312-cp312-win_amd64.whl"
 if "%PY_TAG%"=="313" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Windows_Python3.x/raw/main/dlib-19.24.99-cp313-cp313-win_amd64.whl"
 
-python -c "import dlib" >nul 2>&1
+"%PYTHON_EXE%" -c "import dlib" >nul 2>&1
 if not errorlevel 1 (
     echo  [+] dlib already installed.
     goto step_dlib_done
@@ -751,7 +833,7 @@ if not defined DLIB_WHEEL_URL (
 )
 
 echo  [*] Installing dlib wheel for cp%PY_TAG%...
-python -m pip install "%DLIB_WHEEL_URL%" --quiet
+"%PYTHON_EXE%" -m pip install "%DLIB_WHEEL_URL%" --quiet
 if errorlevel 1 (
     echo  [!] dlib wheel install failed. Lip Sync may not work.
 ) else (
@@ -759,11 +841,15 @@ if errorlevel 1 (
 )
 
 :step_dlib_done
-python -m pip install basicsr facexlib --quiet
+:: Use new-basicsr (maintained fork shipping a pre-built wheel) instead of
+:: basicsr 1.4.2 -- abandoned 2022, fails to build on Python 3.13 with
+:: KeyError '__version__' (PEP 667 broke its setup.py exec/locals pattern).
+:: new-basicsr installs the SAME 'basicsr' module so all imports stay valid.
+"%PYTHON_EXE%" -m pip install new-basicsr facexlib --quiet
 if errorlevel 1 (
-    echo  [!] basicsr/facexlib install failed. Lip Sync may not work.
+    echo  [!] new-basicsr/facexlib install failed. Lip Sync may not work.
 ) else (
-    echo  [+] basicsr and facexlib installed.
+    echo  [+] new-basicsr (drop-in basicsr) and facexlib installed.
 )
 
 if not exist "%WAV2LIP_DIR%" mkdir "%WAV2LIP_DIR%"
@@ -938,7 +1024,7 @@ echo.
 echo [%~1] Creating Desktop shortcut...
 
 set "PYTHONW="
-for /f "tokens=*" %%i in ('python -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
+for /f "tokens=*" %%i in ('"%PYTHON_EXE%" -c "import sys,os; print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"') do set "PYTHONW=%%i"
 
 powershell -Command ^
     "$ws = New-Object -ComObject WScript.Shell;" ^
@@ -1103,12 +1189,18 @@ if errorlevel 1 (
     echo  [!] python not found in PATH, skipping.
     exit /b 0
 )
-python -m pip uninstall -y ^
+if not defined PYTHON_EXE (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        if not defined PYTHON_EXE set "PYTHON_EXE=%%i"
+    )
+)
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
+"%PYTHON_EXE%" -m pip uninstall -y ^
     coqui-tts transformers ^
     torch torchaudio torchvision torchcodec ^
     faster-whisper ctranslate2 ^
     demucs ^
-    basicsr facexlib dlib ^
+    new-basicsr basicsr facexlib dlib ^
     pyannote.audio ^
     yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
 echo  [+] Done.
