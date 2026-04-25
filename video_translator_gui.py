@@ -4263,6 +4263,18 @@ def generate_tts_xtts(
             text = (seg.get("text_tgt") or seg.get("text") or "").strip()
             if not text:
                 return None
+            # v2.5.2: rimuovi punteggiatura finale prima di passarla a XTTS.
+            # XTTS in voice cloning su lingue latine pronuncia letteralmente
+            # ".", "!", "?" finali ("punto", "esclamativo") nonostante
+            # enable_text_splitting=True. Lo strip non altera la prosodia
+            # (XTTS aggiunge naturalmente una pausa a fine generazione).
+            # NB: usiamo `text` strippato per stima durata e generazione, MA
+            # _compute_segment_speed lo riceve dopo lo strip → la stima
+            # chars/sec è marginalmente più bassa (1-2 char in meno) → speed
+            # leggermente più basso → trade-off accettabile.
+            text = _strip_xtts_terminal_punct(text)
+            if not text:
+                return None
             spk = seg.get("speaker")
             spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
             # Speed adattivo: `speed` (arg funzione) agisce da ceiling.
@@ -4302,14 +4314,15 @@ def generate_tts_xtts(
                         speed=seg_speed,
                         **xtts_kwargs,
                     )
-                # v2.2: post-TTS validation. Misura la durata effettiva e la
-                # confronta con la stima a `seg_speed` corrente. Se l'output è
-                # più di 2.5x il predicted, XTTS sta hallucinando (loop di
-                # parole/sillabe). Re-genera UNA VOLTA con torch seed esplicito:
-                # XTTS è non-deterministico, la seconda chiamata può produrre
-                # un output sano. Se anche il retry hallucinas, teniamo
-                # l'originale (build_dubbed_track applicherà atempo a ratio>2.5
-                # con cap a 4.0; meglio audio veloce che file mancante).
+                # v2.5.2: post-TTS validation con strategia di recovery
+                # multi-stage. Se l'output supera 2.5x predicted (XTTS sta
+                # hallucinando), prova in sequenza:
+                #   1. Retry con seed alternativi (RETRY_SEEDS, max 2)
+                #   2. Split del testo a metà se >30 char e nessun retry OK
+                # Tiene sempre il "miglior" output finora — se nulla funziona
+                # build_dubbed_track applicherà atempo (cap 4.0). Conta tutti
+                # i tentativi falliti+riusciti in retry_stats per visibilità
+                # nel log finale.
                 actual_s = _measure_wav_duration_s(out)
                 est_at_unit_speed = _estimate_tts_duration_s(text, xtts_lang)
                 predicted_s = est_at_unit_speed / seg_speed if seg_speed > 0 else 0.0
@@ -4317,46 +4330,123 @@ def generate_tts_xtts(
                     print(
                         f"     ! XTTS output sospetto (segment {i}): "
                         f"{actual_s:.1f}s vs predicted {predicted_s:.1f}s "
-                        f"(ratio {actual_s/predicted_s:.1f}x). Retry.",
+                        f"(ratio {actual_s/predicted_s:.1f}x). Multi-seed retry.",
                         flush=True,
                     )
-                    with counter_lock:
-                        retry_stats["attempts"] += 1
-                    try:
-                        with tts_lock:
-                            # Seed esplicito: XTTS non espone `seed` come kwarg
-                            # in tts_to_file, ma legge torch.random_state. Un
-                            # seed fisso diverso dal default rompe il loop
-                            # deterministico se l'hallucination dipende dallo
-                            # stato del PRNG ereditato.
-                            torch.manual_seed(42)
-                            if torch.cuda.is_available():
-                                torch.cuda.manual_seed_all(42)
-                            tts_model.tts_to_file(
-                                text=text,
-                                speaker_wav=spk_ref,
-                                language=xtts_lang,
-                                file_path=out,
-                                speed=seg_speed,
-                                **xtts_kwargs,
-                            )
-                        actual_s_retry = _measure_wav_duration_s(out)
-                        if actual_s_retry > 0 and actual_s_retry < actual_s * 0.6:
+                    best_s = actual_s
+                    rescued = False
+                    # Step 1: due retry con seed differenti.
+                    for retry_n, seed in enumerate(RETRY_SEEDS[:2], start=1):
+                        with counter_lock:
+                            retry_stats["attempts"] += 1
+                        retry_path = out + f".retry{retry_n}"
+                        try:
+                            with tts_lock:
+                                torch.manual_seed(seed)
+                                if torch.cuda.is_available():
+                                    torch.cuda.manual_seed_all(seed)
+                                tts_model.tts_to_file(
+                                    text=text,
+                                    speaker_wav=spk_ref,
+                                    language=xtts_lang,
+                                    file_path=retry_path,
+                                    speed=seg_speed,
+                                    **xtts_kwargs,
+                                )
+                            retry_s = _measure_wav_duration_s(retry_path)
+                            if retry_s > 0 and retry_s < actual_s * 0.6:
+                                # Successo netto: questo retry rompe il loop.
+                                shutil.move(retry_path, out)
+                                best_s = retry_s
+                                rescued = True
+                                with counter_lock:
+                                    retry_stats["successful"] += 1
+                                print(
+                                    f"       Retry seed={seed} OK: "
+                                    f"{retry_s:.1f}s "
+                                    f"({retry_s/predicted_s:.1f}x predicted)",
+                                    flush=True,
+                                )
+                                break
+                            elif retry_s > 0 and retry_s < best_s:
+                                # Miglioramento parziale: tieni come "miglior tentativo".
+                                shutil.move(retry_path, out)
+                                best_s = retry_s
+                            else:
+                                try: os.remove(retry_path)
+                                except OSError: pass
+                        except Exception as re:
                             print(
-                                f"       Retry OK: {actual_s_retry:.1f}s "
-                                f"({actual_s_retry/predicted_s:.1f}x predicted)",
+                                f"       Retry seed={seed} failed for seg {i}: {re}",
                                 flush=True,
                             )
-                            with counter_lock:
-                                retry_stats["successful"] += 1
-                        else:
-                            print(
-                                f"       Retry no improvement "
-                                f"({actual_s_retry:.1f}s); keeping original.",
-                                flush=True,
-                            )
-                    except Exception as re:
-                        print(f"       Retry failed for seg {i}: {re}", flush=True)
+                            try: os.remove(retry_path)
+                            except OSError: pass
+                    # Step 2: split del testo se i seed non sono bastati.
+                    if not rescued and len(text) > 30:
+                        with counter_lock:
+                            retry_stats["attempts"] += 1
+                        print(
+                            f"       Retry seeds non risolti. Provo SPLIT testo.",
+                            flush=True,
+                        )
+                        split_pos = _find_split_point(text)
+                        if 10 < split_pos < len(text) - 10:
+                            part1 = text[:split_pos].strip()
+                            part2 = text[split_pos:].strip()
+                            chunk1_path = out + ".part1"
+                            chunk2_path = out + ".part2"
+                            try:
+                                with tts_lock:
+                                    tts_model.tts_to_file(
+                                        text=part1,
+                                        speaker_wav=spk_ref,
+                                        language=xtts_lang,
+                                        file_path=chunk1_path,
+                                        speed=seg_speed,
+                                        **xtts_kwargs,
+                                    )
+                                    tts_model.tts_to_file(
+                                        text=part2,
+                                        speaker_wav=spk_ref,
+                                        language=xtts_lang,
+                                        file_path=chunk2_path,
+                                        speed=seg_speed,
+                                        **xtts_kwargs,
+                                    )
+                                _concat_wavs([chunk1_path, chunk2_path], out)
+                                split_s = _measure_wav_duration_s(out)
+                                if split_s > 0 and split_s < best_s:
+                                    print(
+                                        f"       Split OK: {split_s:.1f}s "
+                                        f"({split_s/predicted_s:.1f}x predicted)",
+                                        flush=True,
+                                    )
+                                    with counter_lock:
+                                        retry_stats["successful"] += 1
+                                    best_s = split_s
+                                    rescued = True
+                                else:
+                                    print(
+                                        f"       Split no improvement "
+                                        f"({split_s:.1f}s).",
+                                        flush=True,
+                                    )
+                            except Exception as se:
+                                print(
+                                    f"       Split failed for seg {i}: {se}",
+                                    flush=True,
+                                )
+                            finally:
+                                for tmpf in (chunk1_path, chunk2_path):
+                                    try: os.remove(tmpf)
+                                    except OSError: pass
+                    if not rescued:
+                        print(
+                            f"       Nessun retry ha rotto il loop. "
+                            f"Mantengo miglior tentativo: {best_s:.1f}s.",
+                            flush=True,
+                        )
             except Exception as e:
                 print(f"     ! XTTS seg {i}: {e}", flush=True)
             with counter_lock:
@@ -4558,6 +4648,12 @@ def generate_tts_cosyvoice(
         text = (seg.get("text_tgt") or seg.get("text") or "").strip()
         if not text:
             return None
+        # v2.5.2: stesso strip terminale di XTTS — CosyVoice ha lo stesso
+        # bug noto in voice cloning su lingue latine (pronuncia letterale
+        # del simbolo finale). Per coerenza fra engine.
+        text = _strip_xtts_terminal_punct(text)
+        if not text:
+            return None
         spk = seg.get("speaker")
         spk_ref = speaker_refs.get(spk, ref_clip) if spk else ref_clip
         # Prefix lingua per cross-lingual mode. La forma `<|it|>` è
@@ -4731,6 +4827,127 @@ def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
         r /= 0.5
     parts.append(f"atempo={r:.3f}")
     return ",".join(parts)
+
+
+# v2.5.2: seed list for multi-attempt XTTS/CosyVoice retry.
+# Seeds empirici diversi spingono il decoder GPT2 di XTTS/CosyVoice a path
+# differenti, riducendo la probabilità che lo stesso testo cada nello stesso
+# loop deterministico di un seed fisso (era 42 in v2.2-2.5.1).
+# L'ultimo seed (42) è mantenuto per retrocompat con i log della v2.2-2.5.1
+# in caso di confronti di regression test.
+RETRY_SEEDS = (7, 1337, 42)
+
+
+def _strip_xtts_terminal_punct(text: str) -> str:
+    """Rimuove la punteggiatura finale di chiusura per evitare che XTTS la
+    pronunci letteralmente in voice cloning (bug noto coqui-tts 2024+ su
+    lingue latine: il modello tokenizza "." come "punto" anche con
+    enable_text_splitting=True).
+
+    Mantiene la punteggiatura INTERNA (virgole, punti di abbreviazioni come
+    "Mr." in mezzo alla frase) perché serve alla prosodia.
+
+    Esempi:
+        "Buongiorno a tutti."     → "Buongiorno a tutti"
+        "Buongiorno!"             → "Buongiorno"
+        "Mr. Smith ha detto qcs." → "Mr. Smith ha detto qcs"  (mantiene "Mr.")
+        "Frase, virgole, sì?"     → "Frase, virgole, sì"      (mantiene virgole)
+        "Domanda?!"               → "Domanda"
+    """
+    if not text:
+        return text
+    # rstrip ricorsivo: gestisce combinazioni "?!", "...", ":..", " . ", ecc.
+    # I caratteri inclusi coprono la punteggiatura di chiusura ASCII + alcuni
+    # tipografici (… — – -) che XTTS gestisce male a fine frase. Le virgole
+    # NON sono incluse perché in italiano/spagnolo possono terminare clausole
+    # legittime (rare ma non hallucination-trigger).
+    return text.rstrip().rstrip(".!?;:…—–-").rstrip()
+
+
+def _find_split_point(text: str) -> int:
+    """Trova posizione di split ottimale per dividere `text` in due chunk
+    di durata simile, preferendo confini sintattici naturali.
+
+    Strategia (in ordine):
+      1. Virgola/punto-virgola/due punti più vicini al centro (range ±25%)
+         → split DOPO il segno (spazio successivo incluso quando presente).
+      2. Spazio più vicino al centro (stesso range).
+      3. Fallback: split forzato a metà (può rompere parola, ultima risorsa).
+
+    Ritorna l'indice di split (carattere a `text[idx]` apparterrà al secondo
+    chunk). Su testi <2 chars ritorna 0 (chiamante deve guardare la lunghezza
+    prima di chiamare).
+    """
+    n = len(text or "")
+    if n < 2:
+        return 0
+    mid = n // 2
+    search_range = max(10, n // 4)
+    # Step 1: virgola / punto-virgola / due punti vicino al centro.
+    for offset in range(search_range):
+        for pos in (mid + offset, mid - offset):
+            if 0 < pos < n and text[pos] in ",;:":
+                # Split DOPO il segno; salta lo spazio se c'è.
+                cut = pos + 1
+                if cut < n and text[cut] == " ":
+                    cut += 1
+                return cut
+    # Step 2: spazio centrale.
+    for offset in range(search_range):
+        for pos in (mid + offset, mid - offset):
+            if 0 < pos < n and text[pos] == " ":
+                return pos + 1  # secondo chunk parte dal char successivo
+    # Step 3: fallback duro a metà.
+    return mid
+
+
+def _concat_wavs(paths: list[str], output: str) -> None:
+    """Concatena WAV listati in `paths` scrivendoli in `output` con un piccolo
+    crossfade (50ms) ai punti di giunzione, per evitare click udibili dovuti
+    al brusco cambio di ampiezza tra chunk.
+
+    Usato in v2.5.2 dalla strategia di retry XTTS/CosyVoice "split del testo a
+    metà" quando i retry multi-seed non hanno rotto l'hallucination loop.
+
+    Vincoli:
+      - Tutti i WAV devono avere lo stesso sample rate (assumiamo sì: stessi
+        modelli TTS). Se differiscono usiamo il sample rate del primo file.
+      - Mono o stereo: gestito dalla forma (numpy 1D vs 2D) restituita da
+        soundfile.read.
+      - Se un file è troppo corto per il crossfade (<50ms) viene concatenato
+        secco senza fade: meglio un piccolo click che zero output.
+    """
+    import soundfile as sf  # type: ignore
+    import numpy as np  # type: ignore
+
+    if not paths:
+        raise ValueError("_concat_wavs: empty paths list")
+
+    chunks: list = []
+    sr: int | None = None
+    for p in paths:
+        data, this_sr = sf.read(p)
+        if sr is None:
+            sr = this_sr
+        chunks.append(data)
+    if sr is None or sr <= 0:
+        raise ValueError("_concat_wavs: unable to read sample rate")
+
+    crossfade_samples = int(sr * 0.05)  # 50ms
+    out = chunks[0]
+    for chunk in chunks[1:]:
+        if len(out) >= crossfade_samples and len(chunk) >= crossfade_samples and crossfade_samples > 0:
+            fade_out = np.linspace(1.0, 0.0, crossfade_samples)
+            fade_in = np.linspace(0.0, 1.0, crossfade_samples)
+            # Gestione mono/stereo: se 2D, broadcasta sulla dim canali.
+            if out.ndim == 2:
+                fade_out = fade_out[:, None]
+                fade_in = fade_in[:, None]
+            tail = out[-crossfade_samples:] * fade_out + chunk[:crossfade_samples] * fade_in
+            out = np.concatenate([out[:-crossfade_samples], tail, chunk[crossfade_samples:]])
+        else:
+            out = np.concatenate([out, chunk])
+    sf.write(output, out, sr)
 
 
 def _measure_wav_duration_s(path: str) -> float:
