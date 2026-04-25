@@ -2922,6 +2922,27 @@ def _ollama_strip_preamble(text: str) -> str:
     # 8. Collassa whitespace multipli e newline → spazio singolo (evita pause
     #    lunghe durante la sintesi XTTS)
     t = _re.sub(r"\s+", " ", t)
+
+    # 9. Punteggiatura "isolata" / orfana che XTTS pronuncerebbe letteralmente
+    #    come "punto", "virgola", o emetterebbe colpi acustici secchi udibili
+    #    ("dice il punto alla fine"). Casi reali osservati su output Qwen3:
+    #      ".  Buongiorno a tutti."   (preamble strippato che lascia il "." iniziale)
+    #      "Buongiorno a tutti . . ."  (Qwen ripete punteggiatura di chiusura)
+    #      ".\nBuongiorno"             (riga vuota con sola punteggiatura)
+    #      "Buongiorno , a tutti"      (spazio prima della virgola)
+    #
+    # Sequence: leading isolated punct → multiple consecutive marks → space
+    # before punct → final tidy. Eseguito DOPO il collasso whitespace così
+    # opera su una stringa già normalizzata ai singoli spazi.
+    LEADING_PUNCT_RE   = _re.compile(r"^[\s.,;:!?\-–—…]+")
+    REPEATED_PUNCT_RE  = _re.compile(r"([.,;:!?])(?:\s*\1)+")
+    SPACE_BEFORE_RE    = _re.compile(r"\s+([.,;:!?])")
+    DANGLING_PUNCT_RE  = _re.compile(r"\s+[.,;:!?\-–—…]+\s*$")  # tail isolato
+    t = LEADING_PUNCT_RE.sub("", t)
+    t = REPEATED_PUNCT_RE.sub(r"\1", t)
+    t = SPACE_BEFORE_RE.sub(r"\1", t)
+    t = DANGLING_PUNCT_RE.sub(".", t)  # se la fine ha punct orfano, lascia un solo "."
+
     return t.strip()
 
 
