@@ -1280,19 +1280,29 @@ taskkill /F /IM ollama.exe       >nul 2>&1
 taskkill /F /IM ollama_app.exe   >nul 2>&1
 taskkill /F /IM "Ollama.exe"     >nul 2>&1
 taskkill /F /IM "Ollama Helper.exe" >nul 2>&1
-:: Run the registered uninstaller silently. Ollama uses NSIS (silent flag /S).
+:: Run the registered uninstaller fully silent. Ollama Windows uses Squirrel
+:: (NOT NSIS) -- the registry UninstallString points at Update.exe with the
+:: --uninstall flag. We append `-s` for Squirrel-silent. Other apps that
+:: happen to match "^Ollama" get the standard NSIS /S fallback.
 :: Per-user install lands in HKCU, so we scan HKLM + HKCU + WOW6432Node.
+:: Also kill any stray Update.exe so the new spawn isn't blocked.
+taskkill /F /IM Update.exe       >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Ollama' -and $_.UninstallString } } };" ^
     "if (-not $found) { Write-Host '  [-] Ollama not found in uninstall registry.' } else {" ^
     "  foreach ($u in $found) {" ^
     "    Write-Host ('  [*] ' + $u.DisplayName);" ^
-    "    $exe = $u.UninstallString.Trim([char]34).Trim();" ^
-    "    if (Test-Path $exe) {" ^
-    "      try { Start-Process -FilePath $exe -ArgumentList '/S' -Wait; Write-Host '  [+] Done.' }" ^
-    "      catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
-    "    } else { Write-Host ('  [!] Uninstaller not found at ' + $exe) }" ^
+    "    $raw = $u.UninstallString.Trim();" ^
+    "    if ($raw -match '^\"([^\"]+)\"\s*(.*)$') { $exe = $matches[1]; $extra = $matches[2].Trim() }" ^
+    "    elseif ($raw -match '^(\S+)\s+(.*)$') { $exe = $matches[1]; $extra = $matches[2].Trim() }" ^
+    "    else { $exe = $raw; $extra = '' };" ^
+    "    if (-not (Test-Path $exe)) { Write-Host ('  [!] Uninstaller not found at ' + $exe); continue };" ^
+    "    if ($exe -match 'Update\.exe$') { $argsArr = @('--uninstall','-s') }" ^
+    "    elseif ($extra -match '--uninstall') { $argsArr = ($extra -split '\s+') + @('-s') }" ^
+    "    else { $argsArr = @('/S') };" ^
+    "    try { Start-Process -FilePath $exe -ArgumentList $argsArr -Wait -WindowStyle Hidden; Write-Host '  [+] Done.' }" ^
+    "    catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
     "  }" ^
     "}"
 :: Force-remove leftover directories for every Windows user (binaries, model cache).
