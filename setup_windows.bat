@@ -136,8 +136,9 @@ call :step_ffmpeg "4/5" "0"
 call :step_shortcut "5/5"
 
 call :validate_install
-if errorlevel 1 exit /b 1
+if errorlevel 1 ( pause & exit /b 1 )
 call :print_done "Installation complete"
+pause
 exit /b 0
 
 
@@ -191,8 +192,9 @@ if exist "%PUBLIC_SHORTCUT%" (
 )
 
 call :validate_install
-if errorlevel 1 exit /b 1
+if errorlevel 1 ( pause & exit /b 1 )
 call :print_done "Repair complete"
+pause
 exit /b 0
 
 
