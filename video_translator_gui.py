@@ -2965,10 +2965,16 @@ def _ollama_find_binary() -> str | None:
     if p:
         return p
     if sys.platform.startswith("win"):
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
         candidates = [
-            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe",
+            # Installer ufficiale Ollama (per-user install)
+            Path(local_app_data) / "Programs" / "Ollama" / "ollama.exe",
+            # Installer ufficiale system-wide (raro, richiede admin)
             Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Ollama" / "ollama.exe",
             Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "Ollama" / "ollama.exe",
+            # winget install Ollama.Ollama → symlink in WinGet/Links (Win11
+            # default in PATH, Win10 spesso no — quindi serve fallback esplicito)
+            Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "ollama.exe",
         ]
         for c in candidates:
             try:
@@ -3210,6 +3216,16 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
             setup_path.unlink(missing_ok=True)
 
     if proc.returncode != 0:
+        # rc=1223 = ERROR_CANCELLED su Windows (utente ha cliccato "No" sul
+        # prompt UAC dell'installer Ollama). Il messaggio criptico "rc=1223"
+        # è inutile per l'utente finale → tradurre in linguaggio umano.
+        # rc=1602 = ERROR_INSTALL_USEREXIT (cancel volontario senza UAC).
+        if proc.returncode in (1223, 1602):
+            return False, (
+                "Installazione annullata dall'utente (UAC negato o annullato). "
+                "Riavvia la traduzione e accetta il prompt UAC, oppure scarica "
+                "manualmente da https://ollama.com/download"
+            )
         return False, (
             f"Installer exit rc={proc.returncode}. "
             f"Scarica e installa manualmente da https://ollama.com/download"
