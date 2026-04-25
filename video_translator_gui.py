@@ -334,7 +334,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — qualità superiore, ~3GB tot)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — sperimentale, setup manuale)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 non installato.\n\n"
@@ -433,7 +433,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — superior quality, ~3GB total)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, manual setup)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 not installed.\n\n"
@@ -6821,11 +6821,20 @@ class App(tk.Tk):
             self._use_cosyvoice.set(False)
 
     def _on_cosyvoice_toggle(self):
-        """User ha cliccato su CosyVoice: deseleziona XTTS e triggher
-        l'auto-detect/install se necessario.
+        """User ha cliccato su CosyVoice: deseleziona XTTS e gestisce il caso
+        "non installato" in modo onesto.
 
-        Tutto fuori dal main thread (popup via self.after) per non bloccare la
-        UI durante il pip install (~500MB, può richiedere minuti).
+        Stato attuale (2026-04): il pacchetto PyPI `cosyvoice` 0.0.8 (community
+        wrapper Lucas Jin) ha setup.py rotto su Python 3.13+ e CosyVoice 2.0
+        ufficiale di Alibaba (FunAudioLLM/CosyVoice) richiede git clone +
+        venv Python 3.10 isolato + torch==2.3.1 (incompatibile col nostro pin
+        torch>=2.6). Quindi NON tentiamo l'auto-install via pip: fallirebbe
+        sempre e l'utente vedrebbe il checkbox "auto-deselezionarsi" senza
+        capire perché. Mostriamo invece un popup informativo che spiega lo
+        stato sperimentale e linka le istruzioni manuali.
+
+        Quando un giorno il pacchetto pip sarà fixato a monte, basterà
+        rimuovere il branch "experimental info" e ripristinare l'auto-install.
         """
         if not self._use_cosyvoice.get():
             return  # toggle off → niente da fare
@@ -6843,27 +6852,29 @@ class App(tk.Tk):
                     f"scaricato al primo Avvia.\n"
                 )
             return
-        # Non installato → popup conferma
-        if not self._ask_yes_no_sync(
-            "CosyVoice 2.0",
-            self._s("msg_cosyvoice_unavailable"),
-        ):
-            self._log_write("[i] Install CosyVoice rifiutato. Disabilito il check.\n")
-            self._use_cosyvoice.set(False)
-            return
-        # Conferma OK → spawn install thread
-        self._log_write(self._s("msg_cosyvoice_installing") + "\n")
-
-        def _install_thread():
-            ok, msg = _cosyvoice_install(log_cb=self._log_async)
-            if not ok:
-                self._log_async(f"[x] CosyVoice install fallita: {msg}\n")
-                # Reset checkbox sul main thread
-                self.after(0, self._use_cosyvoice.set, False)
-                return
-            self._log_async("[+] CosyVoice installato. Modello verrà scaricato al primo Avvia.\n")
-
-        threading.Thread(target=_install_thread, daemon=True).start()
+        # NON installato — non tentiamo l'auto-install (rotto upstream).
+        # Mostriamo info + auto-deselezione con messaggio chiaro nel log.
+        messagebox.showinfo(
+            "CosyVoice 2.0 — Sperimentale",
+            "CosyVoice 2.0 è disponibile come feature sperimentale ma\n"
+            "richiede setup manuale (il pacchetto pip ufficiale è\n"
+            "temporaneamente rotto su Python 3.10+).\n\n"
+            "Per abilitarlo:\n"
+            "  1) git clone --recursive\n"
+            "     https://github.com/FunAudioLLM/CosyVoice.git\n"
+            "  2) Setup venv Python 3.10 con torch==2.3.1\n"
+            "  3) Aggiungi la dir clonata a PYTHONPATH\n\n"
+            "Per ora la pipeline userà XTTS v2 (raccomandato).\n"
+            "Verifica il CHANGELOG per aggiornamenti."
+        )
+        self._log_write(
+            "[i] CosyVoice 2.0 sperimentale: setup manuale richiesto. "
+            "Userò XTTS per questa sessione.\n"
+        )
+        self._use_cosyvoice.set(False)
+        # Riattiva XTTS (default raccomandato) se l'utente l'aveva attivo
+        # prima di cliccare CosyVoice
+        # NOTA: lasciato a discrezione utente, non forzo l'attivazione XTTS.
 
     # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
     #
