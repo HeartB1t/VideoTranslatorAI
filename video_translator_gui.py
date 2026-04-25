@@ -4124,23 +4124,50 @@ def _ollama_pull_model(
     watchdog = threading.Timer(timeout_s, proc.kill)
     watchdog.daemon = True
     watchdog.start()
-    # Rate-limit del log: `ollama pull` usa carriage-return per aggiornare la
-    # stessa riga di progress ~10 volte al secondo; scrivere tutto nella Text
-    # widget Tk inonda il main thread. Logghiamo solo transizioni significative.
-    last_logged = ""
+    # `ollama pull` uses \r to redraw progress 10x/sec + spinner chars
+    # (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) for unbounded ops like sha256 verify. Naive line capture
+    # produced thousands of duplicate log entries that filled the GUI's
+    # 5000-line cap during one pull. Filter to one line per "logical state"
+    # (spinner char stripped, % progress throttled).
+    import re
+    import time as _time
+    _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _PCT_RE = re.compile(r"(\d{1,3})%")
+    last_key = ""
+    last_pct_seen = -1
+    last_log_t = 0.0
     try:
         for line in proc.stdout:
-            # `ollama pull` mescola \r e \n. Splittiamo su \r per catturare
-            # i progress step senza spammare.
+            # Ollama mixes \r and \n. Split on both to recover individual frames.
             for fragment in line.replace("\r", "\n").split("\n"):
                 fragment = fragment.strip()
                 if not fragment:
                     continue
-                # Dedup riga identica consecutiva (progress tick stesso stato)
-                if fragment == last_logged:
+                # Strip spinner char(s) so identical states don't spam the log.
+                key = "".join(c for c in fragment if c not in _SPINNER).strip()
+                if not key:
                     continue
+                if key == last_key:
+                    # Same logical state — but if it's a progress line, throttle
+                    # to a new log entry every 5% delta OR every 2s.
+                    m = _PCT_RE.search(fragment)
+                    now = _time.monotonic()
+                    if m:
+                        pct = int(m.group(1))
+                        if pct - last_pct_seen >= 5 or now - last_log_t >= 2.0 or pct == 100:
+                            log(f"     {fragment}\n")
+                            last_pct_seen = pct
+                            last_log_t = now
+                    # else: pure spinner or duplicate, drop silently
+                    continue
+                # New logical state → always log.
                 log(f"     {fragment}\n")
-                last_logged = fragment
+                last_key = key
+                last_pct_seen = -1
+                last_log_t = _time.monotonic()
+                m = _PCT_RE.search(fragment)
+                if m:
+                    last_pct_seen = int(m.group(1))
         proc.wait(timeout=30)
     except Exception:
         with contextlib.suppress(Exception):
