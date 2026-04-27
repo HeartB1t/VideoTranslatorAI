@@ -3455,9 +3455,10 @@ def _split_on_punctuation(
 def _merge_short_segments(
     segments: list[dict],
     min_duration: float = 3.0,
-    max_gap: float = 1.0,
+    max_gap: float = 2.0,
     max_merged_duration: float = 20.0,
     aggressive: bool = False,
+    verbose: bool = False,
 ) -> list[dict]:
     """Unisce segmenti consecutivi brevi (<min_duration) con il successivo se:
     - gap tra fine precedente e inizio successivo < max_gap
@@ -3468,11 +3469,25 @@ def _merge_short_segments(
     Parametri tarati 2026-04-24 dopo diagnostic su video IT→EN: 60% segmenti
     avevano ratio > 1.30 con i vecchi default (1.5/0.4/12.0).
 
+    Default `max_gap=2.0` (bumpato 2026-04-27): tara permette di assorbire pause
+    respiro umane normali (1-2s) che Whisper interpreta erroneamente come
+    boundaries semantiche, evitando di spezzare frasi continue in frammenti.
+
+    Secondo passaggio "orfani" (2026-04-27): dopo il merge primario, rileva
+    segmenti molto corti (≤5 parole) che terminano con punteggiatura forte
+    (.?!) e che sono frammenti di coda di una frase Whisper-spezzata su pausa
+    respiro. Li forza nel precedente con vincoli più larghi (gap≤3s, dur
+    totale≤25s) ma stesso speaker e tetto stretto per evitare megaframmenti.
+
     `aggressive=True` alza i bound (min 4.0, gap 1.5, max 30.0) per dare più
     spazio al TTS quando il target è molto più lungo del source (es. EN→IT):
     segmenti più lunghi hanno margine maggiore per assorbire l'espansione della
     lingua. Trade-off: picchi massimi più alti, compensati dallo speed XTTS
-    auto-tuned più aggressivo.
+    auto-tuned più aggressivo. Nota: con il nuovo default max_gap=2.0,
+    aggressive=True non bumpa più il gap (max(1.5, 2.0)=2.0) — comportamento
+    voluto, conservativo per i caller esistenti.
+
+    `verbose=True` stampa ogni orfano fuso (debugging della tara).
     """
     if aggressive:
         # Override forzato dei parametri: il chiamante può anche essere passato
@@ -3510,7 +3525,48 @@ def _merge_short_segments(
                 prev["words"] = prev.get("words", []) + seg.get("words", [])
         else:
             merged.append(dict(seg))
-    return merged
+
+    # Secondo passaggio: orfani (frammenti corti terminali che Whisper ha
+    # staccato dalla frase precedente per via di una pausa respiro). Iteriamo
+    # su `merged` e costruiamo `final` decidendo per ogni elemento se è un
+    # orfano da fondere col precedente o un segmento autonomo. Più orfani
+    # consecutivi vengono fusi tutti nel primo non-orfano (a catena su `prev`
+    # in `final[-1]`).
+    final: list[dict] = []
+    for idx, seg in enumerate(merged):
+        if idx == 0 or not final:
+            final.append(seg)
+            continue
+        prev = final[-1]
+        text = (seg.get("text", "") or "").strip()
+        n_words = len(text.split()) if text else 0
+        ends_with_terminal = bool(text) and text[-1] in ".?!"
+        same_speaker = prev.get("speaker") == seg.get("speaker")
+        gap = seg["start"] - prev["end"]
+        new_dur = seg["end"] - prev["start"]
+        is_orphan = (
+            n_words > 0
+            and n_words <= 5
+            and ends_with_terminal
+            and same_speaker
+            and gap <= 3.0
+            and gap >= -0.5
+            and new_dur <= 25.0
+        )
+        if is_orphan:
+            if verbose:
+                print(
+                    f"[merge] orfano fuso con prev: '{text}' "
+                    f"(gap={gap:.2f}s, words={n_words})",
+                    flush=True,
+                )
+            prev["end"] = max(prev["end"], seg["end"])
+            prev["text"] = (prev.get("text", "") + " " + seg.get("text", "")).strip()
+            if "words" in prev or "words" in seg:
+                prev["words"] = prev.get("words", []) + seg.get("words", [])
+        else:
+            final.append(seg)
+    return final
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
