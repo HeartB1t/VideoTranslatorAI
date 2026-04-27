@@ -4698,15 +4698,16 @@ def translate_with_ollama(
                             text, is_qwen3, thinking, retry=1
                         )
                         print(
-                            f"     ! Ollama thinking returned empty response for segment #{i}; "
-                            f"retrying with num_predict={retry_predict}",
+                            f"     ! Ollama thinking returned empty response for segment #{i} "
+                            f"(num_predict={num_predict}); retrying with num_predict={retry_predict}",
                             flush=True,
                         )
                         tr = _call_ollama(prompt, retry_predict)
                         if not tr:
                             print(
                                 f"     ! Ollama thinking retry exhausted for segment #{i} "
-                                f"(num_predict={retry_predict}); falling back",
+                                f"(initial num_predict={num_predict}, retry num_predict={retry_predict}); "
+                                f"falling back",
                                 flush=True,
                             )
                     if not tr:
