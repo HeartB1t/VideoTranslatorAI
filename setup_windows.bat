@@ -470,6 +470,24 @@ if errorlevel 1 (
     exit /b 1
 )
 echo  [+] All core modules importable.
+pushd "%INSTALL_DIR%" >nul 2>&1
+"%PYTHON_EXE%" -c "import video_translator_gui" >nul 2>&1
+set "APP_IMPORT_RC=%ERRORLEVEL%"
+popd >nul 2>&1
+if not "%APP_IMPORT_RC%"=="0" (
+    echo.
+    echo  ============================================
+    echo    APPLICATION IMPORT FAILED
+    echo  ============================================
+    echo.
+    echo   The installed application files are incomplete.
+    echo   Run setup_windows.bat again and choose
+    echo   option [2] Repair / Update.
+    echo.
+    pause
+    exit /b 1
+)
+echo  [+] Application importable.
 exit /b 0
 
 
@@ -752,6 +770,16 @@ if errorlevel 1 (
     exit /b 1
 )
 echo  [+] Script copied.
+
+if exist "%SCRIPT_DIR%videotranslator" (
+    if not exist "%INSTALL_DIR%\videotranslator" mkdir "%INSTALL_DIR%\videotranslator"
+    copy /Y "%SCRIPT_DIR%videotranslator\*.py" "%INSTALL_DIR%\videotranslator\" >nul
+    if errorlevel 1 (
+        echo  [!] Error copying Python package folder. Make sure videotranslator\*.py is next to this .bat
+        exit /b 1
+    )
+    echo  [+] Python package copied.
+)
 
 if exist "%SCRIPT_DIR%assets" (
     if not exist "%INSTALL_DIR%\assets" mkdir "%INSTALL_DIR%\assets"
