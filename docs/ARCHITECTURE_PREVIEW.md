@@ -11,6 +11,7 @@ network access, Tkinter, ffmpeg, or platform-specific installers.
 - `videotranslator.platforms`: support policy and path resolution.
 - `videotranslator.config`: side-effect-light JSON config loading/writing.
 - `videotranslator.subprocess_utils`: command normalization and text-mode policy.
+- `videotranslator.secrets`: keyring-first token migration with JSON fallback.
 
 ## Migration Rule
 
@@ -26,7 +27,7 @@ the old names until call sites are moved.
 
 ## Next Safe Steps
 
-1. Move keyring/HF token helpers into `videotranslator.secrets`.
+1. Wire the legacy HF token functions to `videotranslator.secrets`.
 2. Move active subprocess registry and cleanup into `videotranslator.subprocess_utils`.
 3. Move translation engines one at a time.
 4. Leave Tkinter GUI as the last large extraction.
