@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import locale
 import shlex
+import subprocess
 from os import PathLike
 from typing import Sequence
 
@@ -40,3 +41,20 @@ def text_subprocess_kwargs(sys_platform: str) -> dict[str, object]:
         "errors": "replace",
     }
 
+
+def common_subprocess_kwargs(
+    sys_platform: str,
+    *,
+    stdin_devnull: bool = False,
+    stdout_pipe: bool = False,
+    stderr_pipe: bool = False,
+) -> dict[str, object]:
+    """Return common kwargs suitable for subprocess.run and subprocess.Popen."""
+    kwargs = text_subprocess_kwargs(sys_platform)
+    if stdin_devnull:
+        kwargs["stdin"] = subprocess.DEVNULL
+    if stdout_pipe:
+        kwargs["stdout"] = subprocess.PIPE
+    if stderr_pipe:
+        kwargs["stderr"] = subprocess.PIPE
+    return kwargs
