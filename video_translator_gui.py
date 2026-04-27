@@ -246,6 +246,15 @@ def _compute_segment_speed(
     return max(1.05, min(required, hard_cap))
 
 
+# Migration bridge: the legacy single-file entry point keeps its historical
+# private names, while new code lives in small importable modules with tests.
+from videotranslator.timing import (  # noqa: E402
+    compute_segment_speed as _compute_segment_speed,
+    estimate_tts_duration_s as _estimate_tts_duration_s,
+    suggest_xtts_speed as _suggest_xtts_speed,
+)
+
+
 REQUIRED_PACKAGES = {
     "faster_whisper": "faster-whisper",
     "edge_tts":       "edge-tts",
@@ -3621,6 +3630,15 @@ def _merge_short_segments(
     return final
 
 
+# Migration bridge for extracted pure segment helpers. This second binding is
+# intentional because the legacy definitions above still exist during the
+# transition; runtime callers below this point use the tested module versions.
+from videotranslator.segments import (  # noqa: E402,F811
+    merge_short_segments as _merge_short_segments,
+    split_on_punctuation as _split_on_punctuation,
+)
+
+
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
 # Mapping da codici ISO a nomi umani: il prompt LLM è molto più robusto se
 # riceve "English"/"Italian" invece di "en"/"it". Segue lo stesso set di
@@ -4647,6 +4665,13 @@ def translate_with_ollama(
                 # num_predict ~2x caratteri sorgente (circa 1 tok = 4 chars,
                 # quindi ~len/2 token; 2x come safety margin). Bound minimo 64.
                 num_predict = max(64, len(text) * 2 // 4 * 2)
+                # Thinking mode: qwen3 emette 200-500 token di chain-of-thought
+                # PRIMA della risposta. Con num_predict calibrato sul solo
+                # output, il budget si esaurisce nel ragionamento → response
+                # vuota → fallback "keeping source". Bump ×10 (min 2048) per
+                # accomodare CoT + traduzione effettiva.
+                if is_qwen3 and thinking:
+                    num_predict = max(2048, num_predict * 10)
                 tr = _call_ollama(prompt, num_predict)
                 if not tr:
                     # Risposta vuota = considera fallita, fallback
@@ -7812,12 +7837,16 @@ class App(tk.Tk):
         self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16, **_opy)
         self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
-        # XTTS + Lipsync su row 2 (layout originale, retrocompat). La selezione
-        # del checkbox XTTS resetta CosyVoice (mutuamente esclusivi).
+        # XTTS + Lipsync su row 2 in layout 2-colonne coerente con i checkbox
+        # sopra (col 0 / col 1). La versione precedente metteva lipsync in col=2
+        # con XTTS che occupava col 0+1: questo rendeva lipsync invisibile
+        # quando il riquadro Ollama (row=6, col 0+1 columnspan=2) si dilatava
+        # con il toggle thinking, perché col=2 finiva fuori dall'area visibile.
+        # La selezione del checkbox XTTS resetta CosyVoice (mutuamente esclusivi).
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts, self._on_xtts_toggle)
-        self._chk_xtts.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self._chk_xtts.grid(row=2, column=0, sticky="w", pady=(8, 0))
         self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
-        self._chk_lipsync.grid(row=2, column=2, sticky="w", padx=16, pady=(8, 0))
+        self._chk_lipsync.grid(row=2, column=1, sticky="w", padx=16, pady=(8, 0))
         # v2.3: nuovo checkbox CosyVoice in row dedicata sotto XTTS+Lipsync.
         # Mutual exclusion con XTTS gestita via _on_cosyvoice_toggle. Le row
         # successive del frame `opts` (translation engine, deepl, hf token,
@@ -7831,6 +7860,18 @@ class App(tk.Tk):
         # sequenziale solo con interi, quindi shift sotto: spostiamo la
         # translation engine row a row=4 e successive.
         self._chk_cosyvoice.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 4))
+        # MODIFICA LOCALE (non committata) -- 2026-04-26
+        # Checkbox CosyVoice 2.0 nascosta in attesa che l'integrazione upstream
+        # diventi production-ready (PyPI `cosyvoice` rotto + WeTextProcessing
+        # C++ build hell su Windows). Tutto il codice/i18n/scaffolding resta in
+        # place: per riabilitare basta commentare la riga `grid_remove()` qui
+        # sotto. Tentativo Cowork del 2026-04-26 fallito, in attesa di:
+        #   - fix upstream PyPI `cosyvoice` (community wrapper Lucas Jin)
+        #   - oppure CosyVoice 2.0 ufficiale (FunAudioLLM) pubblicato su PyPI
+        #   - oppure scelta di TTS alternativo (F5-TTS, OpenVoice, Qwen3-TTS)
+        # Riferimenti: helper a riga ~4222-4373, i18n keys `opt_cosyvoice` &
+        # `msg_cosyvoice_*` & `hint_cosyvoice` su 26 lingue (riga 311+).
+        self._chk_cosyvoice.grid_remove()
 
         # Translation engine radio group (row=4 dopo l'inserimento di
         # _chk_cosyvoice in row=3, v2.3).
@@ -7902,19 +7943,31 @@ class App(tk.Tk):
             variable=self._ollama_slot_aware,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
-        # Thinking mode toggle: visibile insieme alla riga Ollama, disabilita
-        # /no_think suffix + invia think:True al daemon. Solo Qwen3 risponde
-        # al flag (gli altri modelli lo ignorano silenziosamente).
+        self._ollama_row.grid_remove()  # hidden until llm_ollama selected
+
+        # Ollama thinking row (riga dedicata): tenere il toggle thinking sulla
+        # stessa riga di model+url+slot-aware ingrossava troppo `_ollama_row`,
+        # spingendo lipsync (col=2 di `opts`) fuori dall'area visibile e
+        # rendendo poco leggibile l'hint. Riga separata = label larga ok,
+        # nessun impatto sulla larghezza delle altre colonne. Il toggle
+        # disabilita il suffix `/no_think` nel prompt e invia `think:True` al
+        # daemon. Solo Qwen3 risponde al flag (altri modelli lo ignorano).
+        self._ollama_row2 = tk.Frame(opts, bg=BG)
+        self._ollama_row2.grid(row=7, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._chk_ollama_thinking = tk.Checkbutton(
-            self._ollama_row, text=self._s("opt_ollama_thinking"),
+            self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
-        self._chk_ollama_thinking.pack(side="left", padx=(8, 0))
-        self._ollama_row.grid_remove()  # hidden until llm_ollama selected
+        self._chk_ollama_thinking.pack(side="left")
+        self._lbl_ollama_thinking_hint = tk.Label(
+            self._ollama_row2, text="  " + self._s("hint_ollama_thinking"),
+            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_ollama_thinking_hint.pack(side="left")
+        self._ollama_row2.grid_remove()  # hidden until llm_ollama selected
 
         # DeepL API key row (visible only when DeepL selected)
         self._deepl_row = tk.Frame(opts, bg=BG)
-        self._deepl_row.grid(row=7, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._deepl_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_deepl_key = tk.Label(self._deepl_row, text=self._s("label_deepl_key"),
                                        bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_deepl_key.pack(side="left")
@@ -7927,7 +7980,7 @@ class App(tk.Tk):
 
         # Diarization row
         diar_row = tk.Frame(opts, bg=BG)
-        diar_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        diar_row.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._chk_diar = tk.Checkbutton(
             diar_row, text=self._s("opt_diarization"),
             variable=self._use_diarization,
@@ -7936,7 +7989,7 @@ class App(tk.Tk):
         self._chk_diar.pack(side="left")
 
         self._hf_row = tk.Frame(opts, bg=BG)
-        self._hf_row.grid(row=9, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._hf_row.grid(row=10, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._lbl_hf_token = tk.Label(self._hf_row, text=self._s("label_hf_token"),
                                       bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_hf_token.pack(side="left")
@@ -8126,6 +8179,7 @@ class App(tk.Tk):
         self._lbl_ollama_model.configure(text=self._s("label_ollama_model"))
         self._lbl_ollama_url.configure(text=self._s("label_ollama_url"))
         self._chk_ollama_thinking.configure(text=self._s("opt_ollama_thinking"))
+        self._lbl_ollama_thinking_hint.configure(text="  " + self._s("hint_ollama_thinking"))
         self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
@@ -8192,12 +8246,14 @@ class App(tk.Tk):
             self._deepl_row.grid_remove()
         if eng == "llm_ollama":
             self._ollama_row.grid()
+            self._ollama_row2.grid()
             # Auto-setup: binary detection → install → daemon → model pull.
             # Tutto in thread daemon, popup via self.after per thread safety.
             # Respect `ollama_auto_install` config flag (default True).
             self._ensure_ollama_ready_async(on_ready=None)
         else:
             self._ollama_row.grid_remove()
+            self._ollama_row2.grid_remove()
         if eng == "marian":
             self._check_marian_deps()
 
