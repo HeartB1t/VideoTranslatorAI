@@ -359,6 +359,8 @@ UI_STRINGS = {
             "qwen3:14b qualità superiore (~9 GB), qwen2.5:7b-instruct retrocompat. "
             "Richiede Ollama installato"
         ),
+        "opt_ollama_thinking":  "🧠 Modalità thinking (più lento, traduzioni migliori)",
+        "hint_ollama_thinking": "Delibera passo-passo, ~5x più lento ma riduce errori idiomi e grammatica",
         "msg_ollama_unavailable": (
             "Ollama non disponibile. Per installare:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -464,6 +466,8 @@ UI_STRINGS = {
             "qwen3:14b higher quality (~9 GB), qwen2.5:7b-instruct legacy. "
             "Requires Ollama installed"
         ),
+        "opt_ollama_thinking":  "🧠 Thinking mode (slower, better translations)",
+        "hint_ollama_thinking": "Deliberates step-by-step, ~5x slower but reduces idiom/grammar errors",
         "msg_ollama_unavailable": (
             "Ollama not available. To install:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -594,6 +598,8 @@ UI_STRINGS = {
         "label_ollama_model": "النموذج:",
         "label_ollama_url": "عنوان Ollama:",
         "hint_ollama": "افتراضي: qwen3:8b (موصى به) — qwen3:4b خفيف (~3 جيجابايت)، qwen3:14b جودة أعلى (~9 جيجابايت)، qwen2.5:7b-instruct قديم. يتطلب تثبيت Ollama",
+        "opt_ollama_thinking":  "🧠 وضع التفكير (أبطأ، ترجمات أفضل)",
+        "hint_ollama_thinking": "يتداول خطوة بخطوة، ~5x أبطأ ولكن يقلل من أخطاء التعابير والقواعد",
         "msg_ollama_unavailable": (
             "Ollama غير متاح. للتثبيت:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -698,6 +704,8 @@ UI_STRINGS = {
         "label_ollama_model": "模型:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "默认: qwen3:8b(推荐) — qwen3:4b 轻量级(~3 GB), qwen3:14b 更高质量(~9 GB), qwen2.5:7b-instruct 旧版本。需要安装 Ollama",
+        "opt_ollama_thinking":  "🧠 思考模式 (更慢，翻译更好)",
+        "hint_ollama_thinking": "逐步推敲，慢约5倍，但能减少习语和语法错误",
         "msg_ollama_unavailable": (
             "Ollama 不可用。安装方法:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -802,6 +810,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Výchozí: qwen3:8b (doporučeno) — qwen3:4b odlehčený (~3 GB), qwen3:14b vyšší kvalita (~9 GB), qwen2.5:7b-instruct starší. Vyžaduje nainstalovaný Ollama",
+        "opt_ollama_thinking":  "🧠 Režim přemýšlení (pomalejší, lepší překlady)",
+        "hint_ollama_thinking": "Zvažuje krok za krokem, ~5x pomalejší, ale snižuje chyby v idiomech a gramatice",
         "msg_ollama_unavailable": (
             "Ollama není k dispozici. Pro instalaci:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -906,6 +916,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "Standard: qwen3:8b (anbefalet) — qwen3:4b let (~3 GB), qwen3:14b højere kvalitet (~9 GB), qwen2.5:7b-instruct ældre. Kræver Ollama installeret",
+        "opt_ollama_thinking":  "🧠 Tænketilstand (langsommere, bedre oversættelser)",
+        "hint_ollama_thinking": "Overvejer trin for trin, ~5x langsommere, men reducerer idiom-/grammatikfejl",
         "msg_ollama_unavailable": (
             "Ollama ikke tilgængelig. For at installere:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1010,6 +1022,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama-URL:",
         "hint_ollama": "Standaard: qwen3:8b (aanbevolen) — qwen3:4b licht (~3 GB), qwen3:14b hogere kwaliteit (~9 GB), qwen2.5:7b-instruct legacy. Vereist Ollama geïnstalleerd",
+        "opt_ollama_thinking":  "🧠 Denkmodus (langzamer, betere vertalingen)",
+        "hint_ollama_thinking": "Overweegt stap voor stap, ~5x langzamer maar minder idioom- en grammaticafouten",
         "msg_ollama_unavailable": (
             "Ollama niet beschikbaar. Installeren:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1114,6 +1128,8 @@ UI_STRINGS = {
         "label_ollama_model": "Malli:",
         "label_ollama_url": "Ollaman URL:",
         "hint_ollama": "Oletus: qwen3:8b (suositeltu) — qwen3:4b kevyt (~3 GB), qwen3:14b parempi laatu (~9 GB), qwen2.5:7b-instruct vanha. Vaatii Ollaman asennuksen",
+        "opt_ollama_thinking":  "🧠 Ajattelutila (hitaampi, parempia käännöksiä)",
+        "hint_ollama_thinking": "Harkitsee vaiheittain, ~5x hitaampi mutta vähentää idiomi- ja kielioppivirheitä",
         "msg_ollama_unavailable": (
             "Ollama ei käytettävissä. Asennus:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1218,6 +1234,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modèle :",
         "label_ollama_url": "URL Ollama :",
         "hint_ollama": "Par défaut : qwen3:8b (recommandé) — qwen3:4b léger (~3 Go), qwen3:14b qualité supérieure (~9 Go), qwen2.5:7b-instruct hérité. Nécessite Ollama installé",
+        "opt_ollama_thinking":  "🧠 Mode réflexif (plus lent, meilleures traductions)",
+        "hint_ollama_thinking": "Délibère étape par étape, ~5x plus lent mais réduit les erreurs d'idiomes et de grammaire",
         "msg_ollama_unavailable": (
             "Ollama indisponible. Pour installer :\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1322,6 +1340,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama-URL:",
         "hint_ollama": "Standard: qwen3:8b (empfohlen) — qwen3:4b leichtgewichtig (~3 GB), qwen3:14b höhere Qualität (~9 GB), qwen2.5:7b-instruct älter. Erfordert installiertes Ollama",
+        "opt_ollama_thinking":  "🧠 Denkmodus (langsamer, bessere Übersetzungen)",
+        "hint_ollama_thinking": "Überlegt Schritt für Schritt, ~5x langsamer, reduziert aber Idiom- und Grammatikfehler",
         "msg_ollama_unavailable": (
             "Ollama nicht verfügbar. Installation:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1426,6 +1446,8 @@ UI_STRINGS = {
         "label_ollama_model": "Μοντέλο:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Προεπιλογή: qwen3:8b (συνιστάται) — qwen3:4b ελαφρύ (~3 GB), qwen3:14b υψηλότερη ποιότητα (~9 GB), qwen2.5:7b-instruct παλιό. Απαιτείται εγκατεστημένο Ollama",
+        "opt_ollama_thinking":  "🧠 Λειτουργία σκέψης (πιο αργή, καλύτερες μεταφράσεις)",
+        "hint_ollama_thinking": "Συλλογίζεται βήμα-βήμα, ~5x πιο αργή αλλά μειώνει λάθη ιδιωμάτων/γραμματικής",
         "msg_ollama_unavailable": (
             "Το Ollama δεν είναι διαθέσιμο. Εγκατάσταση:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1530,6 +1552,8 @@ UI_STRINGS = {
         "label_ollama_model": "मॉडल:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "डिफ़ॉल्ट: qwen3:8b (अनुशंसित) — qwen3:4b हल्का (~3 GB), qwen3:14b उच्च गुणवत्ता (~9 GB), qwen2.5:7b-instruct पुराना। Ollama स्थापित होना आवश्यक",
+        "opt_ollama_thinking":  "🧠 थिंकिंग मोड (धीमा, बेहतर अनुवाद)",
+        "hint_ollama_thinking": "चरण-दर-चरण विचार करता है, ~5x धीमा लेकिन मुहावरे/व्याकरण की गलतियाँ कम करता है",
         "msg_ollama_unavailable": (
             "Ollama उपलब्ध नहीं है। स्थापित करने के लिए:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1634,6 +1658,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "Alapértelmezett: qwen3:8b (ajánlott) — qwen3:4b könnyű (~3 GB), qwen3:14b jobb minőség (~9 GB), qwen2.5:7b-instruct régi. Telepített Ollama szükséges",
+        "opt_ollama_thinking":  "🧠 Gondolkodó mód (lassabb, jobb fordítások)",
+        "hint_ollama_thinking": "Lépésről lépésre mérlegel, ~5x lassabb, de csökkenti az idióma- és nyelvtani hibákat",
         "msg_ollama_unavailable": (
             "Ollama nem elérhető. Telepítéshez:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1738,6 +1764,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Default: qwen3:8b (direkomendasikan) — qwen3:4b ringan (~3 GB), qwen3:14b kualitas lebih tinggi (~9 GB), qwen2.5:7b-instruct lawas. Memerlukan Ollama terinstal",
+        "opt_ollama_thinking":  "🧠 Mode berpikir (lebih lambat, terjemahan lebih baik)",
+        "hint_ollama_thinking": "Mempertimbangkan langkah demi langkah, ~5x lebih lambat tetapi mengurangi kesalahan idiom/tata bahasa",
         "msg_ollama_unavailable": (
             "Ollama tidak tersedia. Untuk instal:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1842,6 +1870,8 @@ UI_STRINGS = {
         "label_ollama_model": "モデル:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "デフォルト: qwen3:8b(推奨) — qwen3:4b 軽量(~3 GB)、qwen3:14b 高品質(~9 GB)、qwen2.5:7b-instruct レガシー。Ollama のインストールが必要",
+        "opt_ollama_thinking":  "🧠 思考モード（低速、より高品質な翻訳）",
+        "hint_ollama_thinking": "段階的に検討、約5倍遅いがイディオム・文法エラーを削減",
         "msg_ollama_unavailable": (
             "Ollama が利用できません。インストール方法:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -1946,6 +1976,8 @@ UI_STRINGS = {
         "label_ollama_model": "모델:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "기본값: qwen3:8b (권장) — qwen3:4b 경량 (~3 GB), qwen3:14b 고품질 (~9 GB), qwen2.5:7b-instruct 레거시. Ollama 설치 필요",
+        "opt_ollama_thinking":  "🧠 사고 모드 (느림, 더 나은 번역)",
+        "hint_ollama_thinking": "단계별로 숙고, 약 5배 느리지만 관용구/문법 오류 감소",
         "msg_ollama_unavailable": (
             "Ollama를 사용할 수 없습니다. 설치하려면:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2050,6 +2082,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "Standard: qwen3:8b (anbefalt) — qwen3:4b lett (~3 GB), qwen3:14b høyere kvalitet (~9 GB), qwen2.5:7b-instruct eldre. Krever Ollama installert",
+        "opt_ollama_thinking":  "🧠 Tenkemodus (tregere, bedre oversettelser)",
+        "hint_ollama_thinking": "Vurderer trinn for trinn, ~5x tregere men reduserer idiom-/grammatikkfeil",
         "msg_ollama_unavailable": (
             "Ollama ikke tilgjengelig. For å installere:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2154,6 +2188,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Domyślnie: qwen3:8b (zalecane) — qwen3:4b lekki (~3 GB), qwen3:14b wyższa jakość (~9 GB), qwen2.5:7b-instruct starszy. Wymaga zainstalowanego Ollama",
+        "opt_ollama_thinking":  "🧠 Tryb myślenia (wolniejszy, lepsze tłumaczenia)",
+        "hint_ollama_thinking": "Rozważa krok po kroku, ~5x wolniej, ale zmniejsza błędy w idiomach i gramatyce",
         "msg_ollama_unavailable": (
             "Ollama niedostępny. Aby zainstalować:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2258,6 +2294,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modelo:",
         "label_ollama_url": "URL do Ollama:",
         "hint_ollama": "Padrão: qwen3:8b (recomendado) — qwen3:4b leve (~3 GB), qwen3:14b qualidade superior (~9 GB), qwen2.5:7b-instruct legado. Requer Ollama instalado",
+        "opt_ollama_thinking":  "🧠 Modo pensante (mais lento, traduções melhores)",
+        "hint_ollama_thinking": "Delibera passo a passo, ~5x mais lento mas reduz erros de idiomas/gramática",
         "msg_ollama_unavailable": (
             "Ollama indisponível. Para instalar:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2362,6 +2400,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Implicit: qwen3:8b (recomandat) — qwen3:4b ușor (~3 GB), qwen3:14b calitate superioară (~9 GB), qwen2.5:7b-instruct vechi. Necesită Ollama instalat",
+        "opt_ollama_thinking":  "🧠 Mod gândire (mai lent, traduceri mai bune)",
+        "hint_ollama_thinking": "Deliberează pas cu pas, ~5x mai lent, dar reduce erorile de idiomuri/gramatică",
         "msg_ollama_unavailable": (
             "Ollama indisponibil. Pentru instalare:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2466,6 +2506,8 @@ UI_STRINGS = {
         "label_ollama_model": "Модель:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "По умолчанию: qwen3:8b (рекомендуется) — qwen3:4b лёгкий (~3 ГБ), qwen3:14b более высокое качество (~9 ГБ), qwen2.5:7b-instruct устаревший. Требуется установленный Ollama",
+        "opt_ollama_thinking":  "🧠 Режим рассуждения (медленнее, переводы лучше)",
+        "hint_ollama_thinking": "Обдумывает шаг за шагом, ~5x медленнее, но уменьшает ошибки идиом/грамматики",
         "msg_ollama_unavailable": (
             "Ollama недоступен. Для установки:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2570,6 +2612,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modelo:",
         "label_ollama_url": "URL de Ollama:",
         "hint_ollama": "Por defecto: qwen3:8b (recomendado) — qwen3:4b ligero (~3 GB), qwen3:14b mayor calidad (~9 GB), qwen2.5:7b-instruct heredado. Requiere Ollama instalado",
+        "opt_ollama_thinking":  "🧠 Modo de pensamiento (más lento, mejores traducciones)",
+        "hint_ollama_thinking": "Delibera paso a paso, ~5x más lento pero reduce errores de modismos/gramática",
         "msg_ollama_unavailable": (
             "Ollama no disponible. Para instalar:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2674,6 +2718,8 @@ UI_STRINGS = {
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "Standard: qwen3:8b (rekommenderas) — qwen3:4b lätt (~3 GB), qwen3:14b högre kvalitet (~9 GB), qwen2.5:7b-instruct äldre. Kräver installerat Ollama",
+        "opt_ollama_thinking":  "🧠 Tänkeläge (långsammare, bättre översättningar)",
+        "hint_ollama_thinking": "Överväger steg för steg, ~5x långsammare men minskar idiom-/grammatikfel",
         "msg_ollama_unavailable": (
             "Ollama inte tillgänglig. För att installera:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2778,6 +2824,8 @@ UI_STRINGS = {
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama URL:",
         "hint_ollama": "Varsayılan: qwen3:8b (önerilen) — qwen3:4b hafif (~3 GB), qwen3:14b daha yüksek kalite (~9 GB), qwen2.5:7b-instruct eski. Ollama kurulu olmasını gerektirir",
+        "opt_ollama_thinking":  "🧠 Düşünme modu (daha yavaş, daha iyi çeviriler)",
+        "hint_ollama_thinking": "Adım adım değerlendirir, ~5x daha yavaş ancak deyim/dilbilgisi hatalarını azaltır",
         "msg_ollama_unavailable": (
             "Ollama mevcut değil. Kurulum için:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2882,6 +2930,8 @@ UI_STRINGS = {
         "label_ollama_model": "Модель:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "За замовчуванням: qwen3:8b (рекомендовано) — qwen3:4b легка (~3 ГБ), qwen3:14b вища якість (~9 ГБ), qwen2.5:7b-instruct застаріла. Потрібен встановлений Ollama",
+        "opt_ollama_thinking":  "🧠 Режим міркування (повільніше, кращі переклади)",
+        "hint_ollama_thinking": "Обмірковує крок за кроком, ~5x повільніше, але зменшує помилки ідіом/граматики",
         "msg_ollama_unavailable": (
             "Ollama недоступний. Для встановлення:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -2986,6 +3036,8 @@ UI_STRINGS = {
         "label_ollama_model": "Mô hình:",
         "label_ollama_url": "URL Ollama:",
         "hint_ollama": "Mặc định: qwen3:8b (khuyến nghị) — qwen3:4b nhẹ (~3 GB), qwen3:14b chất lượng cao hơn (~9 GB), qwen2.5:7b-instruct cũ. Yêu cầu đã cài Ollama",
+        "opt_ollama_thinking":  "🧠 Chế độ tư duy (chậm hơn, dịch tốt hơn)",
+        "hint_ollama_thinking": "Cân nhắc từng bước, chậm ~5x nhưng giảm lỗi thành ngữ/ngữ pháp",
         "msg_ollama_unavailable": (
             "Ollama không khả dụng. Để cài đặt:\n"
             "  curl -fsSL https://ollama.com/install.sh | sh   (Linux/macOS)\n"
@@ -4438,6 +4490,7 @@ def translate_with_ollama(
     slot_aware: bool = True,
     batch_size: int = 1,
     fallback_fn=None,
+    thinking: bool = False,
 ) -> list[dict]:
     """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
     impone concisione per il doppiaggio.
@@ -4486,10 +4539,16 @@ def translate_with_ollama(
     # Doppia protezione: payload `think:false` (Ollama API ≥2025) +
     # suffix `/no_think` nel prompt (vince anche su versioni vecchie).
     is_qwen3 = model.lower().startswith("qwen3")
-    print(
-        f"     → Mode: {'Qwen3 non-thinking (think=False)' if is_qwen3 else 'standard'}",
-        flush=True,
-    )
+    # `thinking` è significativo solo per Qwen3 (gli altri modelli ignorano il
+    # flag). Per modelli non-Qwen3 il log resta "standard"; per Qwen3 riflette
+    # la scelta utente — thinking=True abilita la deliberazione step-by-step
+    # (~5x più lento, riduce errori idiomi/grammatica), False mantiene il
+    # comportamento veloce con prompt /no_think.
+    if is_qwen3:
+        _mode_label = f"Qwen3 {'thinking' if thinking else 'non-thinking'} (think={thinking})"
+    else:
+        _mode_label = "standard"
+    print(f"     → Mode: {_mode_label}", flush=True)
 
     # Debug opt-in: se settato, logga sorgente + output finale per ogni segmento.
     # Utile per indagare residui di preamble/commentary senza re-runnare pipeline.
@@ -4532,8 +4591,10 @@ def translate_with_ollama(
         )
         # Doppia safety: se l'API Ollama non interpreta `think:false` (versioni
         # pre-2025), il suffisso `/no_think` nel prompt è il toggle ufficiale
-        # documentato da Qwen e vince comunque.
-        if is_qwen3:
+        # documentato da Qwen e vince comunque. Quando l'utente sceglie
+        # esplicitamente la modalità thinking lo OMETTIAMO (altrimenti il
+        # toggle `/no_think` annulla il think richiesto via API).
+        if is_qwen3 and not thinking:
             prompt = prompt.rstrip() + "\n\n/no_think"
         return prompt
 
@@ -4557,15 +4618,19 @@ def translate_with_ollama(
             "stream": False,
             "options": options,
         }
-        # Disabilita esplicitamente il thinking mode su Qwen3 via flag API
-        # nativa (Ollama supporta `think` dal 2025+). Se l'API ignora il flag
-        # su versioni vecchie, il suffisso `/no_think` nel prompt fa da safety.
+        # Toggle thinking mode su Qwen3 via flag API nativa (Ollama supporta
+        # `think` dal 2025+). Se l'API ignora il flag su versioni vecchie, il
+        # suffisso `/no_think` nel prompt (quando thinking=False) fa da safety.
+        # Con thinking=True il modello delibera step-by-step: ~5x più lento
+        # ma riduce errori idiomi/grammatica.
         if is_qwen3:
-            payload["think"] = False
+            payload["think"] = bool(thinking)
         # Timeout generoso: qwen3:8b / qwen2.5:7b su RTX 3090 produce
-        # ~40-80 tok/s, ma su CPU-only può arrivare a 2-5 tok/s → 120s
-        # copre anche risposte lunghe in fallback CPU.
-        r = requests.post(f"{base}/api/generate", json=payload, timeout=120)
+        # ~40-80 tok/s, ma su CPU-only può arrivare a 2-5 tok/s. Con thinking
+        # attivo il modello produce 3-5x più tokens (chain-of-thought interno
+        # + risposta) quindi alziamo il timeout a 360s per evitare cut-off.
+        _timeout = 360 if (is_qwen3 and thinking) else 120
+        r = requests.post(f"{base}/api/generate", json=payload, timeout=_timeout)
         r.raise_for_status()
         data = r.json()
         return _ollama_strip_preamble(data.get("response", ""))
@@ -4709,6 +4774,7 @@ def translate_segments(
     ollama_model: str = "qwen3:8b",
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
+    ollama_thinking: bool = False,
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
@@ -4723,6 +4789,7 @@ def translate_segments(
                 segments, src, target,
                 model=ollama_model, api_url=ollama_url,
                 slot_aware=ollama_slot_aware, batch_size=1,
+                thinking=ollama_thinking,
             )
         except Exception as e:
             print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
@@ -6688,6 +6755,7 @@ def translate_video(
     ollama_model: str = "qwen3:8b",
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
+    ollama_thinking: bool = False,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -6808,6 +6876,7 @@ def translate_video(
                 engine=translation_engine, deepl_key=deepl_key,
                 ollama_model=ollama_model, ollama_url=ollama_url,
                 ollama_slot_aware=ollama_slot_aware,
+                ollama_thinking=ollama_thinking,
             )
 
         if not no_subs:
@@ -7101,6 +7170,11 @@ class App(tk.Tk):
         )
         self._ollama_slot_aware  = tk.BooleanVar(
             value=_ocfg.get("ollama_slot_aware", True)
+        )
+        # Thinking mode su Qwen3: default OFF (veloce). Se True il modello
+        # delibera step-by-step (~5x più lento, riduce errori idiomi/grammatica).
+        self._ollama_thinking    = tk.BooleanVar(
+            value=_ocfg.get("ollama_thinking", False)
         )
         # Diarization: il token HF è persistito nel system keyring (con migrazione
         # automatica dal vecchio JSON legacy).
@@ -7828,6 +7902,14 @@ class App(tk.Tk):
             variable=self._ollama_slot_aware,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
+        # Thinking mode toggle: visibile insieme alla riga Ollama, disabilita
+        # /no_think suffix + invia think:True al daemon. Solo Qwen3 risponde
+        # al flag (gli altri modelli lo ignorano silenziosamente).
+        self._chk_ollama_thinking = tk.Checkbutton(
+            self._ollama_row, text=self._s("opt_ollama_thinking"),
+            variable=self._ollama_thinking,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
+        self._chk_ollama_thinking.pack(side="left", padx=(8, 0))
         self._ollama_row.grid_remove()  # hidden until llm_ollama selected
 
         # DeepL API key row (visible only when DeepL selected)
@@ -8043,6 +8125,7 @@ class App(tk.Tk):
         self._rb_eng_ollama.configure(text=self._s("engine_ollama"))
         self._lbl_ollama_model.configure(text=self._s("label_ollama_model"))
         self._lbl_ollama_url.configure(text=self._s("label_ollama_url"))
+        self._chk_ollama_thinking.configure(text=self._s("opt_ollama_thinking"))
         self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
@@ -8530,6 +8613,7 @@ class App(tk.Tk):
                             ollama_model=p["ollama_model"],
                             ollama_url=p["ollama_url"],
                             ollama_slot_aware=p["ollama_slot_aware"],
+                            ollama_thinking=p["ollama_thinking"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -8667,11 +8751,12 @@ class App(tk.Tk):
             "ollama_model":       self._ollama_model_var.get().strip() or "qwen3:8b",
             "ollama_url":         self._ollama_url_var.get().strip() or "http://localhost:11434",
             "ollama_slot_aware":  bool(self._ollama_slot_aware.get()),
+            "ollama_thinking":    bool(self._ollama_thinking.get()),
         }
         # Persist HF token for next launch
         if snap["hf_token"] and snap["use_diarization"]:
             save_hf_token(snap["hf_token"])
-        # Persist Ollama prefs (model/url/slot_aware) quando l'utente ha
+        # Persist Ollama prefs (model/url/slot_aware/thinking) quando l'utente ha
         # selezionato l'engine — così al prossimo avvio i campi sono precompilati.
         if snap["translation_engine"] == "llm_ollama":
             try:
@@ -8679,6 +8764,7 @@ class App(tk.Tk):
                     "ollama_model": snap["ollama_model"],
                     "ollama_url": snap["ollama_url"],
                     "ollama_slot_aware": snap["ollama_slot_aware"],
+                    "ollama_thinking": snap["ollama_thinking"],
                 })
             except Exception as e:
                 print(f"[i] Warning: could not persist Ollama prefs: {e}", flush=True)
@@ -8725,6 +8811,7 @@ class App(tk.Tk):
                     ollama_model=p["ollama_model"],
                     ollama_url=p["ollama_url"],
                     ollama_slot_aware=p["ollama_slot_aware"],
+                    ollama_thinking=p["ollama_thinking"],
                 )
                 self.after(0, self._open_editor, video_path,
                            result["segments"], cleanup_path)
@@ -8824,6 +8911,7 @@ class App(tk.Tk):
                     ollama_model=p["ollama_model"],
                     ollama_url=p["ollama_url"],
                     ollama_slot_aware=p["ollama_slot_aware"],
+                    ollama_thinking=p["ollama_thinking"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -8876,6 +8964,7 @@ class App(tk.Tk):
                             ollama_model=p["ollama_model"],
                             ollama_url=p["ollama_url"],
                             ollama_slot_aware=p["ollama_slot_aware"],
+                            ollama_thinking=p["ollama_thinking"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -9019,6 +9108,9 @@ def _cli():
                         help="Ollama daemon URL (default: http://localhost:11434)")
     parser.add_argument("--ollama-no-slot-aware", action="store_true",
                         help="Disable slot-aware prompting (faster, less constrained)")
+    parser.add_argument("--ollama-thinking", action="store_true",
+                        help="Enable Qwen3 thinking mode: deliberates step-by-step "
+                             "(~5x slower, fewer idiom/grammar errors). Default off.")
     parser.add_argument("--diarize", action="store_true",
                         help="Enable pyannote speaker diarization")
     parser.add_argument("--hf-token", default="",
@@ -9091,6 +9183,7 @@ def _cli():
             ollama_model=args.ollama_model or cfg_cli.get("ollama_model", "qwen3:8b"),
             ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
             ollama_slot_aware=not args.ollama_no_slot_aware,
+            ollama_thinking=args.ollama_thinking or bool(cfg_cli.get("ollama_thinking", False)),
         )
 
 
