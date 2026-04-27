@@ -8409,9 +8409,20 @@ class App(tk.Tk):
         self._log.configure(state="disabled")
         p = self._snapshot_params()
 
+        # Editor sottotitoli supportato solo su URL singolo (pipeline a 2 fasi
+        # con UI bloccante: in batch su più URL non avrebbe senso).
+        editor_requested = bool(self._edit_subs.get())
+        use_editor_for_single_url = editor_requested and len(urls) == 1
+        if editor_requested and len(urls) > 1:
+            self._log_write(
+                "[i] Editor sottotitoli supportato solo su singolo URL "
+                "— skipping editor for batch URLs.\n"
+            )
+
         def run():
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             all_ok = True
+            handed_off_to_editor = False
             try:
                 for url in urls:
                     self.after(0, self._log_write,
@@ -8427,6 +8438,21 @@ class App(tk.Tk):
                             fd, stable = tempfile.mkstemp(suffix=".mp4", prefix="yt_")
                             os.close(fd)
                             shutil.move(video_path, stable)
+                        # Branch editor: schedula la fase 1 (transcribe+translate)
+                        # sul main thread, lascia che _start_with_editor /
+                        # _run_with_segments / _open_editor (cancel) si occupino
+                        # del cleanup di `stable`. Salta _on_done qui — sarà
+                        # invocato dal flusso editor quando completato/abortito.
+                        if use_editor_for_single_url:
+                            self.after(0, self._log_write,
+                                       "[i] Opening subtitle editor — "
+                                       "pipeline paused, waiting for user...\n")
+                            self.after(0, self._start_with_editor,
+                                       stable, stable)
+                            handed_off_to_editor = True
+                            # Don't delete `stable` in finally: editor owns it.
+                            stable = None
+                            return
                         translate_video(
                             video_in=stable,
                             output=p["output"] if len(urls) == 1 else None,
@@ -8461,7 +8487,8 @@ class App(tk.Tk):
                                 pass
             finally:
                 _thread_local.redirect = None
-            self.after(0, self._on_done, all_ok)
+            if not handed_off_to_editor:
+                self.after(0, self._on_done, all_ok)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -8601,11 +8628,19 @@ class App(tk.Tk):
                 print(f"[i] Warning: could not persist Ollama prefs: {e}", flush=True)
         return snap
 
-    def _start_with_editor(self, video_path: str):
-        """Phase 1: transcribe + translate, then open subtitle editor."""
+    def _start_with_editor(self, video_path: str,
+                           cleanup_path: str | None = None):
+        """Phase 1: transcribe + translate, then open subtitle editor.
+
+        ``cleanup_path``: percorso di un file temporaneo (tipicamente il
+        download YouTube spostato su path stabile) che il flusso editor deve
+        rimuovere a fine pipeline (sia su confirm che su cancel/errore).
+        Per file locali aperti dall'utente è ``None`` — il file resta intatto.
+        """
         self._log_write("Phase 1: Transcription + translation (no dubbing)...\n")
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_transcribing"))
+        self._btn_download.configure(state="disabled")
         self._progress.start(12)
         p = self._snapshot_params()
 
@@ -8629,34 +8664,77 @@ class App(tk.Tk):
                     ollama_url=p["ollama_url"],
                     ollama_slot_aware=p["ollama_slot_aware"],
                 )
-                self.after(0, self._open_editor, video_path, result["segments"])
+                self.after(0, self._open_editor, video_path,
+                           result["segments"], cleanup_path)
             except Exception as e:
                 self.after(0, self._log_write, f"[x] Error: {e}\n{traceback.format_exc()}\n")
+                # Pulisci il temp scaricato anche su errore in fase 1
+                self._cleanup_editor_tempfile(cleanup_path)
                 self.after(0, self._on_done, False)
             finally:
                 _thread_local.redirect = None
 
         threading.Thread(target=phase1, daemon=True).start()
 
-    def _open_editor(self, video_path: str, segments: list[dict]):
+    def _cleanup_editor_tempfile(self, cleanup_path: str | None) -> None:
+        """Rimuove il file temporaneo associato al flusso editor (download URL).
+        Safe-no-op se ``cleanup_path`` è None o non esiste."""
+        if not cleanup_path:
+            return
+        try:
+            if os.path.exists(cleanup_path):
+                os.remove(cleanup_path)
+        except OSError:
+            pass
+
+    def _open_editor(self, video_path: str, segments: list[dict],
+                     cleanup_path: str | None = None):
         self._progress.stop()
         self._running = False
         self._btn.configure(state="normal", text=self._s("btn_start"))
+        self._btn_download.configure(state="normal", text=self._s("btn_download"))
         self._log_write(f"[i] {len(segments)} segments ready. Opening editor...\n")
         if not segments:
             messagebox.showwarning(self._s("warn_editor"), self._s("msg_no_segments"))
+            self._cleanup_editor_tempfile(cleanup_path)
             return
 
+        # Stato condiviso fra il callback _confirm e l'handler di chiusura
+        # finestra: serve a non duplicare il cleanup quando l'utente conferma
+        # (in quel caso il cleanup spetta a _run_with_segments) e a non
+        # rimuovere il file mentre la fase 2 lo sta ancora usando.
+        confirmed = {"flag": False}
+
         def on_confirm(edited):
+            confirmed["flag"] = True
             self._log_write("[i] Subtitles confirmed. Starting dubbing...\n")
-            self._run_with_segments(video_path, edited)
+            self._run_with_segments(video_path, edited, cleanup_path)
 
-        SubtitleEditor(self, segments, on_confirm, ui_s=self._s)
+        editor = SubtitleEditor(self, segments, on_confirm, ui_s=self._s)
 
-    def _run_with_segments(self, video_path: str, segments: list[dict]):
-        """Phase 2: dubbing with editor segments."""
+        # Tkinter propaga <Destroy> a tutti i widget figli; filtriamo per
+        # reagire solo alla distruzione del Toplevel stesso (idempotenza
+        # garantita anche dal flag `confirmed`).
+        def on_editor_destroyed(evt):
+            if evt.widget is not editor:
+                return
+            if not confirmed["flag"]:
+                self._log_write("[i] Editor closed without confirmation — "
+                                "discarding download.\n")
+                self._cleanup_editor_tempfile(cleanup_path)
+
+        editor.bind("<Destroy>", on_editor_destroyed)
+
+    def _run_with_segments(self, video_path: str, segments: list[dict],
+                           cleanup_path: str | None = None):
+        """Phase 2: dubbing with editor segments.
+
+        ``cleanup_path`` viene rimosso nel ``finally`` del worker: il file
+        scaricato non serve più dopo il mux finale.
+        """
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_dubbing"))
+        self._btn_download.configure(state="disabled")
         self._progress.start(12)
         p = self._snapshot_params()
 
@@ -8691,6 +8769,7 @@ class App(tk.Tk):
                 self.after(0, self._on_done, False)
             finally:
                 _thread_local.redirect = None
+                self._cleanup_editor_tempfile(cleanup_path)
 
         threading.Thread(target=do, daemon=True).start()
 
