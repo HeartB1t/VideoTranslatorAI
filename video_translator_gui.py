@@ -8708,6 +8708,12 @@ class App(tk.Tk):
                     model=p["model"],
                     lang_source=p["lang_src"],
                     lang_target=p["lang_tgt"],
+                    # voice passed even though phase 1 is subs_only (no TTS):
+                    # avoids the misleading log "[i] yt_xxx | auto->it |
+                    # it-IT-ElsaNeural" that defaulted to LANGUAGES[lang]["voices"][0]
+                    # when voice was None. Now phase 1 log reflects user's actual
+                    # voice selection (used for real in phase 2 _run_with_segments).
+                    voice=p["voice"],
                     subs_only=True,
                     no_demucs=p["no_demucs"],
                     tts_engine=p["tts_engine"],
