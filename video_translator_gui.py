@@ -6546,15 +6546,15 @@ KEYRING_SERVICE = "VideoTranslatorAI"
 KEYRING_USERNAME = "hf_token"
 _KEYRING_MIGRATED = False
 
+from videotranslator.config import (  # noqa: E402
+    load_json_config as _load_json_config,
+    merge_json_config as _merge_json_config,
+    write_json_config as _write_json_config,
+)
+
 
 def load_config() -> dict:
-    try:
-        if CONFIG_PATH.exists():
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-    except Exception:
-        pass
-    return {}
+    return _load_json_config(CONFIG_PATH)
 
 
 def _write_config_raw(cfg: dict) -> None:
@@ -6562,21 +6562,12 @@ def _write_config_raw(cfg: dict) -> None:
     Usare questa quando serve rimuovere chiavi; save_config fa merge e non
     cancellerebbe nulla.
     """
-    tmp = Path(str(CONFIG_PATH) + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
-    try:
-        os.chmod(tmp, 0o600)
-    except Exception:
-        pass
-    tmp.replace(CONFIG_PATH)
+    _write_json_config(CONFIG_PATH, cfg)
 
 
 def save_config(data: dict) -> None:
     try:
-        existing = load_config()
-        existing.update(data)
-        _write_config_raw(existing)
+        _merge_json_config(CONFIG_PATH, data)
     except Exception as e:
         print(f"     ! Could not save config: {e}", flush=True)
 
