@@ -3643,6 +3643,11 @@ from videotranslator.segments import (  # noqa: E402,F811
     merge_short_segments as _merge_short_segments,
     split_on_punctuation as _split_on_punctuation,
 )
+from videotranslator.ollama_length_control import (  # noqa: E402
+    build_rewrite_shorter_prompt as _build_rewrite_shorter_prompt,
+    compute_target_chars as _compute_target_chars,
+    should_reprompt_for_length as _should_reprompt_for_length,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -4616,6 +4621,12 @@ def translate_with_ollama(
     total_tgt_chars = 0
     failed = 0
     truncated_count = 0
+    # TASK 2C-1: re-prompt iterativo per length control. `rewrite_attempts`
+    # conta i segmenti per cui la prima traduzione era oltre budget e abbiamo
+    # chiesto un retry "rewrite shorter". `rewrite_success` conta quanti di
+    # quei retry hanno effettivamente prodotto una versione più corta.
+    rewrite_attempts = 0
+    rewrite_success = 0
 
     def _build_prompt(text: str, slot_s: float) -> str:
         slot_clause = ""
@@ -4713,6 +4724,55 @@ def translate_with_ollama(
                     if not tr:
                         # Risposta vuota = considera fallita, fallback
                         raise RuntimeError("empty response")
+                # ── Length re-prompt (TASK 2C-1) ────────────────────────
+                # Se la prima traduzione è significativamente sopra il budget
+                # ammesso per lo slot audio, chiediamo al modello di
+                # riscriverla più corta. Questo abbatte la zona "strong/severe"
+                # dell'atempo diagnostic (>1.50x) senza penalizzare i segmenti
+                # già a misura. Costo: +1 chiamata Ollama solo sugli outlier.
+                target_chars = _compute_target_chars(
+                    len(text), _expansion_factor, slack=1.20
+                )
+                if _should_reprompt_for_length(len(tr), target_chars, threshold=1.10):
+                    rewrite_attempts += 1
+                    rewrite_prompt = _build_rewrite_shorter_prompt(
+                        first_translation=tr,
+                        slot_s=slot_s,
+                        target_chars=target_chars,
+                        target_lang_name=tgt_name,
+                        is_qwen3=is_qwen3,
+                        thinking=thinking,
+                    )
+                    rewrite_predict = _ollama_num_predict_for_segment(
+                        text, is_qwen3, thinking
+                    )
+                    try:
+                        tr_short = _call_ollama(rewrite_prompt, rewrite_predict)
+                    except Exception as _re_err:
+                        tr_short = ""
+                        print(
+                            f"     ! Length retry seg #{i} HTTP failed: {_re_err}; "
+                            f"keeping first translation",
+                            flush=True,
+                        )
+                    if tr_short and len(tr_short) < len(tr):
+                        rewrite_success += 1
+                        print(
+                            f"     ↺ Length retry seg #{i}: {len(tr)} → "
+                            f"{len(tr_short)} chars (target {target_chars}, "
+                            f"slot {slot_s:.1f}s)",
+                            flush=True,
+                        )
+                        tr = tr_short
+                    elif tr_short:
+                        # Modello ha risposto ma non ha accorciato. Tracciamo
+                        # solo se _ollama_debug, per non rumorizzare i log.
+                        if _ollama_debug:
+                            print(
+                                f"     [ollama-debug] length retry seg #{i} "
+                                f"did not shorten ({len(tr_short)} >= {len(tr)})",
+                                flush=True,
+                            )
                 # ── Length safeguard ────────────────────────────────────
                 # Se l'output residuo dopo strip_preamble è >> del sorgente
                 # rispetto all'expansion atteso, il modello ha quasi
@@ -4804,6 +4864,12 @@ def translate_with_ollama(
             f"(shrinkage {shrinkage_pct:+.1f}%){fail_note}",
             flush=True,
         )
+        if rewrite_attempts > 0:
+            print(
+                f"     → Length re-prompt: {rewrite_attempts} segments over budget, "
+                f"{rewrite_success} shortened ({rewrite_attempts - rewrite_success} kept original)",
+                flush=True,
+            )
         if truncated_count > 0:
             print(
                 f"     → Safety-truncated for length: {truncated_count} segments "
