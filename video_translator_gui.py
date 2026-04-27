@@ -4703,6 +4703,12 @@ def translate_with_ollama(
                             flush=True,
                         )
                         tr = _call_ollama(prompt, retry_predict)
+                        if not tr:
+                            print(
+                                f"     ! Ollama thinking retry exhausted for segment #{i} "
+                                f"(num_predict={retry_predict}); falling back",
+                                flush=True,
+                            )
                     if not tr:
                         # Risposta vuota = considera fallita, fallback
                         raise RuntimeError("empty response")
