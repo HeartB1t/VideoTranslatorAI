@@ -6551,6 +6551,11 @@ from videotranslator.config import (  # noqa: E402
     merge_json_config as _merge_json_config,
     write_json_config as _write_json_config,
 )
+from videotranslator.secrets import (  # noqa: E402
+    import_keyring_backend as _import_keyring_backend,
+    load_secret_token as _load_secret_token,
+    save_secret_token as _save_secret_token,
+)
 
 
 def load_config() -> dict:
@@ -6574,53 +6579,17 @@ def save_config(data: dict) -> None:
 
 def _keyring_available():
     """Ritorna il modulo keyring se disponibile, altrimenti None."""
-    try:
-        import keyring as _kr
-        # Verifica che il backend sia usabile (es. Linux headless senza Secret Service).
-        _ = _kr.get_keyring()
-        return _kr
-    except Exception:
-        return None
+    return _import_keyring_backend()
 
 
 def load_hf_token() -> str:
     """Legge il token HF: prima dal keyring, poi (migrazione) dal JSON legacy."""
-    global _KEYRING_MIGRATED
-    kr = _keyring_available()
-    if kr is not None:
-        try:
-            tok = kr.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
-            if tok:
-                # Migra una volta sola rimuovendo il campo dal JSON se presente.
-                if not _KEYRING_MIGRATED:
-                    cfg = load_config()
-                    if "hf_token" in cfg:
-                        cfg.pop("hf_token", None)
-                        try:
-                            _write_config_raw(cfg)
-                            print("[i] HF token cleared from JSON (already in keyring).", flush=True)
-                        except Exception:
-                            pass
-                    _KEYRING_MIGRATED = True
-                return tok
-            # Token non in keyring ma forse in JSON legacy → migra.
-            legacy = load_config().get("hf_token", "")
-            if legacy:
-                try:
-                    kr.set_password(KEYRING_SERVICE, KEYRING_USERNAME, legacy)
-                    cfg = load_config()
-                    cfg.pop("hf_token", None)
-                    _write_config_raw(cfg)
-                    _KEYRING_MIGRATED = True
-                    print("[i] HF token migrated to system keyring.", flush=True)
-                except Exception as e:
-                    print(f"     ! keyring migration failed: {e}", flush=True)
-                return legacy
-            return ""
-        except Exception:
-            pass
-    # Fallback: JSON legacy.
-    return load_config().get("hf_token", "")
+    return _load_secret_token(
+        keyring_backend=_keyring_available(),
+        config_path=CONFIG_PATH,
+        service_name=KEYRING_SERVICE,
+        username=KEYRING_USERNAME,
+    )
 
 
 def save_hf_token(token: str) -> None:
@@ -6628,26 +6597,16 @@ def save_hf_token(token: str) -> None:
     token = (token or "").strip()
     if not token:
         return
-    kr = _keyring_available()
-    if kr is not None:
-        try:
-            kr.set_password(KEYRING_SERVICE, KEYRING_USERNAME, token)
-            # Pulisci eventuale copia in chiaro nel JSON.
-            cfg = load_config()
-            if "hf_token" in cfg:
-                cfg.pop("hf_token", None)
-                try:
-                    _write_config_raw(cfg)
-                except Exception:
-                    pass
-            return
-        except Exception as e:
-            print(f"     ! keyring backend unavailable ({e}), "
-                  f"storing HF token in plaintext at {CONFIG_PATH}", flush=True)
-    else:
+    stored_in_keyring = _save_secret_token(
+        token,
+        keyring_backend=_keyring_available(),
+        config_path=CONFIG_PATH,
+        service_name=KEYRING_SERVICE,
+        username=KEYRING_USERNAME,
+    )
+    if not stored_in_keyring:
         print(f"     ! keyring backend unavailable, "
               f"storing HF token in plaintext at {CONFIG_PATH}", flush=True)
-    save_config({"hf_token": token})
 
 
 def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
