@@ -3668,6 +3668,28 @@ def _ollama_lang_name(code: str) -> str:
     return _OLLAMA_LANG_NAMES.get(code, _OLLAMA_LANG_NAMES.get(code.lower(), code))
 
 
+def _ollama_num_predict_for_segment(
+    text: str,
+    is_qwen3: bool,
+    thinking: bool,
+    retry: int = 0,
+) -> int:
+    """Token budget for one Ollama segment.
+
+    Qwen3 thinking can spend thousands of tokens in chain-of-thought before it
+    emits the final answer. If ``num_predict`` is exhausted inside ``<think>``,
+    `_ollama_strip_preamble()` correctly strips the orphan reasoning block and
+    returns an empty string. Keep thinking enabled, but give it a larger budget
+    and one retry with doubled budget before falling back.
+    """
+    num_predict = max(64, len(text) * 2 // 4 * 2)
+    if is_qwen3 and thinking:
+        num_predict = max(4096, num_predict * 20)
+    if retry > 0:
+        num_predict *= 2 ** retry
+    return num_predict
+
+
 def _ollama_health_check(api_url: str, model: str, timeout: float = 5.0) -> tuple[bool, str]:
     """Verifica che Ollama sia raggiungibile e che il modello richiesto sia
     presente. Ritorna (ok, message). `message` è "" se ok, altrimenti è
@@ -4668,20 +4690,22 @@ def translate_with_ollama(
         else:
             try:
                 prompt = _build_prompt(text, slot_s)
-                # num_predict ~2x caratteri sorgente (circa 1 tok = 4 chars,
-                # quindi ~len/2 token; 2x come safety margin). Bound minimo 64.
-                num_predict = max(64, len(text) * 2 // 4 * 2)
-                # Thinking mode: qwen3 emette 200-500 token di chain-of-thought
-                # PRIMA della risposta. Con num_predict calibrato sul solo
-                # output, il budget si esaurisce nel ragionamento → response
-                # vuota → fallback "keeping source". Bump ×10 (min 2048) per
-                # accomodare CoT + traduzione effettiva.
-                if is_qwen3 and thinking:
-                    num_predict = max(2048, num_predict * 10)
+                num_predict = _ollama_num_predict_for_segment(text, is_qwen3, thinking)
                 tr = _call_ollama(prompt, num_predict)
                 if not tr:
-                    # Risposta vuota = considera fallita, fallback
-                    raise RuntimeError("empty response")
+                    if is_qwen3 and thinking:
+                        retry_predict = _ollama_num_predict_for_segment(
+                            text, is_qwen3, thinking, retry=1
+                        )
+                        print(
+                            f"     ! Ollama thinking returned empty response for segment #{i}; "
+                            f"retrying with num_predict={retry_predict}",
+                            flush=True,
+                        )
+                        tr = _call_ollama(prompt, retry_predict)
+                    if not tr:
+                        # Risposta vuota = considera fallita, fallback
+                        raise RuntimeError("empty response")
                 # ── Length safeguard ────────────────────────────────────
                 # Se l'output residuo dopo strip_preamble è >> del sorgente
                 # rispetto all'expansion atteso, il modello ha quasi
