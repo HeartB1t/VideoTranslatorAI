@@ -9,6 +9,7 @@ network access, Tkinter, ffmpeg, or platform-specific installers.
 - `videotranslator.segments`: Whisper/subtitle segment splitting and merging.
 - `videotranslator.timing`: XTTS timing and speed heuristics.
 - `videotranslator.platforms`: support policy and path resolution.
+- `videotranslator.config`: side-effect-light JSON config loading/writing.
 
 ## Migration Rule
 
@@ -24,8 +25,7 @@ the old names until call sites are moved.
 
 ## Next Safe Steps
 
-1. Move config/keyring helpers into `videotranslator.config`.
+1. Move keyring/HF token helpers into `videotranslator.secrets`.
 2. Move subprocess helpers into `videotranslator.subprocess_utils`.
 3. Move translation engines one at a time.
 4. Leave Tkinter GUI as the last large extraction.
-
