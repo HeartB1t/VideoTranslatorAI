@@ -28,6 +28,12 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+# Ensure local package modules resolve even when Python is launched with safe
+# path mode or a user environment that omits the script directory from sys.path.
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
 # ═══════════════════════════════════════════════════════════
 #  CONSTANTS
 # ═══════════════════════════════════════════════════════════
