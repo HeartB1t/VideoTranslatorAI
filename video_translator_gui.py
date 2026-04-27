@@ -3691,7 +3691,14 @@ def _ollama_num_predict_for_segment(
     if is_qwen3 and thinking:
         num_predict = max(4096, num_predict * 20)
     if retry > 0:
-        num_predict *= 2 ** retry
+        # Qwen3 thinking on dense segments (e.g. qwen3:14b on long sentences)
+        # can blow past 8192 tokens of chain-of-thought; observed in production
+        # 2026-04-28 with seg #24. Quadruple the retry budget instead of just
+        # doubling so the second attempt has a real chance to finish.
+        if is_qwen3 and thinking:
+            num_predict *= 4 ** retry
+        else:
+            num_predict *= 2 ** retry
     return num_predict
 
 
@@ -4731,7 +4738,7 @@ def translate_with_ollama(
                 # dell'atempo diagnostic (>1.50x) senza penalizzare i segmenti
                 # già a misura. Costo: +1 chiamata Ollama solo sugli outlier.
                 target_chars = _compute_target_chars(
-                    len(text), _expansion_factor, slack=1.20
+                    slot_s, target_lang, slack=1.10
                 )
                 if _should_reprompt_for_length(len(tr), target_chars, threshold=1.10):
                     rewrite_attempts += 1
