@@ -4,8 +4,6 @@ demucs
 soundfile
 edge-tts
 deep-translator
-# requests: usato sia da DeepL sia dal nuovo engine LLM Ollama (v2.0). È
-# dipendenza transitiva di deep-translator ma lo esplicitiamo per chiarezza.
 requests
 pydub
 pyloudnorm
@@ -13,39 +11,12 @@ coqui-tts>=0.27.5
 transformers>=4.40.0,<5.1
 sentencepiece>=0.2.0
 sacremoses>=0.1.1
-# pyannote: upper bound <4.0 — pyannote 4.x require torch>=2.8, ma pinniamo
-# torch a 2.6 per compatibilità con CUDA 12.4 / driver NVIDIA ≤550.
 pyannote.audio>=3.1,<4.0
 silero-vad
 keyring
 audioop-lts; python_version >= "3.13"
-# torch: pinnato <2.8 per prevenire upgrade transitivi (pyannote, altri) che
-# romperebbero l'ambiente CUDA 12.4. Serie 2.6.x / 2.7.x compatibili. Usare
-# --index-url https://download.pytorch.org/whl/cu124 per GPU Linux.
 torch>=2.6.0,<2.8
 torchaudio==2.6.0
 torchvision==0.21.0
 torchcodec
-# numpy: numba (dep di librosa / coqui-tts) richiede numpy<=2.3 al momento.
 numpy>=2.0,<2.4
-# Wav2Lip face stack (opzionale, on-demand). Installato pigramente al primo
-# uso del lip sync da `_install_wav2lip_face_stack_linux()` /
-# `:step_wav2lip` in setup_windows.bat. NON installato di default perché:
-#  - dlib su Linux compila da sorgente (richiede cmake + libboost-all-dev)
-#  - new-basicsr trascina torch/torchvision già pinnati sopra
-# Pacchetti effettivi: new-basicsr (drop-in `import basicsr`, fork mantenuto
-# di basicsr 1.4.2 abbandonato 2022 — ships wheel pre-built, evita il
-# KeyError '__version__' di basicsr originale su Python 3.13/PEP 667),
-# facexlib (pure python), dlib (Linux: source build; Windows: wheel pre-built
-# via setup_windows.bat).
-# new-basicsr  # uncomment per pre-installarlo
-# facexlib     # uncomment per pre-installarlo
-#
-# v2.3 (opzionale, on-demand) — CosyVoice 2.0 come terzo TTS engine.
-# NON installato di default: trascina giù modelscope, onnxruntime-gpu e wheel
-# pesanti (~500 MB pip + ~1.7 GB modello al primo uso). L'utente lo abilita
-# tramite il radio "Voice Cloning Pro" in GUI: il toggle triggera
-# `_cosyvoice_install` che esegue `pip install cosyvoice`. Quando CosyVoice 2.0
-# ufficiale (FunAudioLLM) sarà su PyPI, sostituire `cosyvoice` con quel nome
-# in `_COSYVOICE_PIP_PKG`.
-# cosyvoice  # uncomment per pre-installarlo
