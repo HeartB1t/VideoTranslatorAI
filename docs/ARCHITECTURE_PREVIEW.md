@@ -24,6 +24,13 @@ the old names until call sites are moved.
 - Supported: Windows 10/11 x64, Debian/Ubuntu/Kali-like Linux.
 - Best effort: other Linux distributions.
 - Experimental: macOS, until real testing exists.
+- `resolve_app_paths(sys_platform, env, home)` is the pure policy resolver. It
+  returns `PureWindowsPath` or `PurePosixPath` values and is safe for synthetic
+  cross-platform tests, including Windows path fixtures on Linux.
+- `runtime_app_paths(sys_platform, env, home)` is the runtime IO resolver. It
+  returns concrete `Path` values and rejects a `sys_platform` that does not
+  match the current host, so tests do not accidentally treat pure Windows
+  fixtures as filesystem paths on POSIX.
 
 ## Next Safe Steps
 

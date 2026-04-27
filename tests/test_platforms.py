@@ -1,7 +1,8 @@
+import sys
 import unittest
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from videotranslator.platforms import platform_info, resolve_app_paths
+from videotranslator.platforms import platform_info, resolve_app_paths, runtime_app_paths
 
 
 class PlatformTests(unittest.TestCase):
@@ -52,8 +53,44 @@ class PlatformTests(unittest.TestCase):
             Path("/home/exampleuser"),
         )
 
-        self.assertEqual(paths.config_dir, Path("/tmp/cfg/videotranslatorai"))
-        self.assertEqual(paths.wav2lip_dir, Path("/tmp/data/wav2lip"))
+        self.assertEqual(paths.config_dir, PurePosixPath("/tmp/cfg/videotranslatorai"))
+        self.assertEqual(paths.wav2lip_dir, PurePosixPath("/tmp/data/wav2lip"))
+
+    def test_runtime_paths_are_concrete_for_current_platform(self):
+        if sys.platform == "win32":
+            paths = runtime_app_paths(
+                sys.platform,
+                {
+                    "APPDATA": r"C:\Temp\AppData\Roaming",
+                    "LOCALAPPDATA": r"C:\Temp\AppData\Local",
+                    "PUBLIC": r"C:\Temp\Public",
+                },
+                Path(r"C:\Temp\ExampleUser"),
+            )
+        else:
+            paths = runtime_app_paths(
+                sys.platform,
+                {
+                    "XDG_CONFIG_HOME": "/tmp/vtai-cfg",
+                    "XDG_DATA_HOME": "/tmp/vtai-data",
+                    "XDG_CACHE_HOME": "/tmp/vtai-cache",
+                },
+                Path("/tmp/vtai-home"),
+            )
+
+        self.assertIs(type(paths.config_dir), type(Path()))
+        self.assertIs(type(paths.data_dir), type(Path()))
+
+    def test_runtime_paths_reject_synthetic_windows_on_non_windows(self):
+        if sys.platform == "win32":
+            self.skipTest("synthetic Windows matches the host on Windows")
+
+        with self.assertRaises(ValueError):
+            runtime_app_paths(
+                "win32",
+                {"APPDATA": r"C:\Temp\AppData\Roaming"},
+                Path("/tmp/vtai-home"),
+            )
 
 
 if __name__ == "__main__":
