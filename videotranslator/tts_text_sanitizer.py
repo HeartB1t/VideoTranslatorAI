@@ -38,10 +38,16 @@ _REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ("—", ","),  # —
     ("–", ","),  # –
     ("--", ","),
-    # Colon and semicolon -> comma / period (verbalized otherwise).
-    (":", ","),
+    # Semicolon -> period. Colon is handled via regex below to preserve
+    # digit-flanked occurrences (clock times, scores, ratios).
     (";", "."),
 )
+
+# Colon between non-digits OR adjacent to a non-digit becomes a comma.
+# Digit-flanked colons stay intact: clock times "10:30", durations "1:23:45",
+# scores "3:1" must keep their original spelling so XTTS pronounces them as
+# numbers, not as "ten comma thirty".
+_COLON_SAFE_TO_COMMA = re.compile(r"(?<!\d):|:(?!\d)")
 
 # Collapse repeated commas / periods left by the substitutions
 # (e.g. ", , " or ". . " when source contained "—," or ".:").
@@ -66,6 +72,7 @@ def sanitize_for_tts(text: str) -> str:
     out = text
     for src, dst in _REPLACEMENTS:
         out = out.replace(src, dst)
+    out = _COLON_SAFE_TO_COMMA.sub(",", out)
     out = _COMMA_BEFORE_PERIOD.sub(".", out)
     out = _PERIOD_BEFORE_COMMA.sub(".", out)
     out = _COLLAPSE_DOUBLE_PERIOD.sub(".", out)

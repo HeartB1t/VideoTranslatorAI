@@ -90,6 +90,38 @@ class SanitizeForTtsTests(unittest.TestCase):
             "parola altra",
         )
 
+    def test_clock_time_preserved(self):
+        # 10:30 must stay so XTTS reads "ten thirty" / "dieci e trenta".
+        # Regression spotted by Codex review: blanket colon->comma broke clocks.
+        self.assertEqual(
+            sanitize_for_tts("L'incontro è alle 10:30 in punto."),
+            "L'incontro è alle 10:30 in punto.",
+        )
+
+    def test_clock_time_with_seconds_preserved(self):
+        self.assertEqual(
+            sanitize_for_tts("Tempo finale 1:23:45 esatti."),
+            "Tempo finale 1:23:45 esatti.",
+        )
+
+    def test_score_ratio_preserved(self):
+        self.assertEqual(
+            sanitize_for_tts("Hanno vinto 3:1."),
+            "Hanno vinto 3:1.",
+        )
+
+    def test_colon_with_letter_left_becomes_comma(self):
+        self.assertEqual(sanitize_for_tts("X:30"), "X,30")
+
+    def test_colon_with_letter_right_becomes_comma(self):
+        self.assertEqual(sanitize_for_tts("10:b"), "10,b")
+
+    def test_mixed_clocks_and_speech(self):
+        self.assertEqual(
+            sanitize_for_tts("Alle 10:30 ho detto: andiamo!"),
+            "Alle 10:30 ho detto, andiamo!",
+        )
+
     def test_real_production_segment_20(self):
         # Live failure case from 2026-04-28 user test.
         raw = (
