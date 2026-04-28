@@ -3656,6 +3656,9 @@ from videotranslator.ollama_prompt import (  # noqa: E402
     CONTEXT_SNIPPET_MAX_CHARS as _CONTEXT_SNIPPET_MAX_CHARS,
     build_translation_prompt as _build_translation_prompt,
 )
+from videotranslator.tts_text_sanitizer import (  # noqa: E402
+    sanitize_for_tts as _sanitize_for_tts,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -5394,6 +5397,10 @@ def generate_tts_xtts(
             text = (seg.get("text_tgt") or seg.get("text") or "").strip()
             if not text:
                 return None
+            # TASK 2F: rimuovi punteggiatura interna che XTTS verbalizza
+            # (es. ":" pronunciato "due punti" in italiano). Va PRIMA dello
+            # strip terminale così la pulizia è completa.
+            text = _sanitize_for_tts(text)
             # v2.5.2: rimuovi punteggiatura finale prima di passarla a XTTS.
             # XTTS in voice cloning su lingue latine pronuncia letteralmente
             # ".", "!", "?" finali ("punto", "esclamativo") nonostante
