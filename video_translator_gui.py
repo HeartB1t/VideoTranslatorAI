@@ -259,6 +259,10 @@ from videotranslator.timing import (  # noqa: E402
     estimate_tts_duration_s as _estimate_tts_duration_s,
     suggest_xtts_speed as _suggest_xtts_speed,
 )
+from videotranslator.audio_stretch import (  # noqa: E402
+    build_rubberband_command as _build_rubberband_command,
+    select_stretch_engine as _select_stretch_engine,
+)
 
 
 REQUIRED_PACKAGES = {
@@ -6147,6 +6151,18 @@ def build_dubbed_track(
     # qualità percepita del doppiaggio (ratio alti → voce "velocizzata" udibile).
     _atempo_stats: list[tuple[int, float, int, int, float, bool]] = []
 
+    # Tier strategy per stretch audio (TASK 2C-2):
+    # - ratio <= 1.15 → atempo (default, ok per stretch leggeri)
+    # - 1.15 < ratio <= 1.50 → rubberband CLI se disponibile (no chipmunk)
+    # - ratio > 1.50 → atempo (rubberband stesso degrada oltre 1.5x)
+    # Probe del binario UNA volta sola: select_stretch_engine() falla cleanly
+    # ad atempo se il binary manca, quindi nessuna regressione.
+    _rubberband_available = shutil.which("rubberband") is not None
+    if _rubberband_available:
+        print("     [info] Rubber Band CLI available — using for ratio 1.15-1.50 band", flush=True)
+    rubberband_used = 0
+    atempo_used = 0
+
     # Raw PCM int32 in memmap: serve headroom per sommare senza saturare durante
     # gli overlay, si clampa a int16 alla fine.
     raw_path = os.path.join(tmp_dir, "_track_mix.raw")
@@ -6202,17 +6218,55 @@ def build_dubbed_track(
                 ratio_raw = tts_ms_probed / slot_ms
             if tts_ms_probed > slot_ms + 50:
                 ratio = max(1.0, min(ratio_raw, 4.0))
-                chain = _build_atempo_chain(ratio)
                 sped = os.path.join(tmp_dir, f"seg_{i:04d}_sped.wav")
-                try:
-                    _run_ffmpeg([
-                        "ffmpeg", "-y", "-i", tts_file,
-                        "-filter:a", chain,
-                        "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", sped,
-                    ], step=f"atempo seg {i}")
-                    src_path = sped
-                except Exception as e:
-                    print(f"     ! atempo failed seg {i}: {e}", flush=True)
+                # Dispatch: la policy pura sceglie engine in base al ratio
+                # (ed alla disponibilità del binary rubberband). Outside del
+                # range 1.15–1.50, oppure quando rubberband manca, ricade su atempo.
+                engine = _select_stretch_engine(ratio, _rubberband_available)
+                stretch_ok = False
+                if engine == "rubberband":
+                    cmd = _build_rubberband_command(tts_file, sped, ratio)
+                    try:
+                        proc = subprocess.run(
+                            cmd, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace",
+                        )
+                        if proc.returncode != 0:
+                            err_tail = (proc.stderr or "").strip().splitlines()[-10:]
+                            raise RuntimeError(
+                                f"rubberband seg {i} failed (exit {proc.returncode}):\n"
+                                + "\n".join(err_tail)
+                            )
+                        # Rubber Band conserva il sample rate dell'input;
+                        # _read_segment_to_pcm gestisce la conversione a SR/CH
+                        # quando differisce, quindi non serve un ffmpeg extra qui.
+                        rubberband_used += 1
+                        src_path = sped
+                        stretch_ok = True
+                    except Exception as e:
+                        # FALLBACK: nessuna regressione vs comportamento legacy.
+                        # Se rubberband fallisce per qualsiasi motivo, riproviamo
+                        # con atempo come se il binary non esistesse.
+                        print(f"     ! rubberband failed seg {i}: {e}; retrying with atempo", flush=True)
+                        engine = "atempo"
+
+                if engine == "atempo":
+                    chain = _build_atempo_chain(ratio)
+                    try:
+                        _run_ffmpeg([
+                            "ffmpeg", "-y", "-i", tts_file,
+                            "-filter:a", chain,
+                            "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", sped,
+                        ], step=f"atempo seg {i}")
+                        src_path = sped
+                        atempo_used += 1
+                        stretch_ok = True
+                    except Exception as e:
+                        print(f"     ! atempo failed seg {i}: {e}", flush=True)
+                # Se entrambi gli engine sono falliti, src_path resta tts_file
+                # (audio non compresso); il successivo hard-truncate con fade-out
+                # gestirà l'overshoot. Comportamento storico.
+                _ = stretch_ok  # lint: variabile usata solo per leggibilità del flow
 
         pcm = _read_segment_to_pcm(src_path)
         if pcm is None:
@@ -6261,6 +6315,15 @@ def build_dubbed_track(
             t_mark = "TRUNC" if trunc_v else "     "
             print(f"       #{idx:04d} @ {mm:02d}:{ss:02d}  slot={slot_ms_v:>5d}ms  tts={tts_ms_v:>5d}ms  ratio={ratio_v:5.2f}  {t_mark}", flush=True)
         print(f"     --- end diagnostic ---", flush=True)
+        # TASK 2C-2: stampa la ripartizione engine usati per stretch.
+        # Utile in produzione per verificare che la tier strategy funzioni
+        # come atteso (rubberband concentrato nel band 1.15–1.50).
+        if rubberband_used + atempo_used > 0:
+            print(
+                f"     -> Stretch engines: {rubberband_used} rubberband, "
+                f"{atempo_used} atempo",
+                flush=True,
+            )
 
     # Mix background se disponibile (stessa semantica storica: bg_volume in ampiezza).
     if bg_path and os.path.exists(bg_path) and bg_volume > 0:
@@ -7686,6 +7749,18 @@ class App(tk.Tk):
         if self._optional_checked:
             return
         self._optional_checked = True
+
+        # TASK 2C-2: suggerimento non-bloccante per Rubber Band CLI su Linux.
+        # È un binario di sistema (apt/dnf/pacman), non installabile via pip,
+        # quindi non rientra nel popup di OPTIONAL_PACKAGES. Loggiamo solo:
+        # se manca, build_dubbed_track userà comunque atempo (no regressione).
+        if sys.platform.startswith("linux") and shutil.which("rubberband") is None:
+            self._log_write(
+                "[i] Optional: install Rubber Band CLI for higher-quality "
+                "audio stretching in the 1.15-1.50 ratio band:\n"
+                "    sudo apt install rubberband-cli  "
+                "(or your distro equivalent)\n"
+            )
 
         def _is_present(mod: str) -> bool:
             aliases = _OPTIONAL_ALIASES.get(mod, [mod])
