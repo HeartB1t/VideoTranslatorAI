@@ -3648,6 +3648,10 @@ from videotranslator.ollama_length_control import (  # noqa: E402
     compute_target_chars as _compute_target_chars,
     should_reprompt_for_length as _should_reprompt_for_length,
 )
+from videotranslator.ollama_prompt import (  # noqa: E402
+    CONTEXT_SNIPPET_MAX_CHARS as _CONTEXT_SNIPPET_MAX_CHARS,
+    build_translation_prompt as _build_translation_prompt,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -4635,32 +4639,29 @@ def translate_with_ollama(
     rewrite_attempts = 0
     rewrite_success = 0
 
-    def _build_prompt(text: str, slot_s: float) -> str:
-        slot_clause = ""
-        if slot_aware and slot_s > 0:
-            slot_clause = (
-                f"2. Target reading time: approximately {slot_s:.1f} seconds when spoken aloud at normal pace.\n"
-            )
-        prompt = (
-            f"You are a professional dubbing translator. Translate the following {src_name} text to {tgt_name} for voice dubbing.\n\n"
-            f"CRITICAL REQUIREMENTS:\n"
-            f"1. Keep it CONCISE — {tgt_name} tends to be longer than {src_name}; your job is to compress while preserving meaning.\n"
-            f"{slot_clause}"
-            f"3. Use SPOKEN register, NOT formal/written language. Natural dubbing dialogue.\n"
-            f"4. Drop filler words, redundant adverbs, verbose constructions where possible.\n"
-            f"5. Output ONLY the translated text. No explanations, no quotes, no preambles.\n\n"
-            f"{src_name} text:\n{text}\n\n"
-            f"{tgt_name} translation (spoken, concise"
-            f"{', ~' + format(slot_s, '.1f') + 's' if slot_aware and slot_s > 0 else ''}):\n"
+    def _build_prompt(
+        text: str,
+        slot_s: float,
+        prev_text: str | None = None,
+        next_text: str | None = None,
+    ) -> str:
+        # Thin wrapper around the pure module-level builder. Closure captures
+        # src_name, tgt_name, slot_aware, is_qwen3, thinking from the
+        # surrounding _translate_with_ollama scope so the call sites stay
+        # short. The actual prompt construction (including the optional
+        # CONTEXT block injecting prev_text/next_text for disambiguation)
+        # lives in videotranslator.ollama_prompt and is unit-tested there.
+        return _build_translation_prompt(
+            text,
+            slot_s,
+            src_name,
+            tgt_name,
+            slot_aware=slot_aware,
+            is_qwen3=is_qwen3,
+            thinking=thinking,
+            prev_text=prev_text,
+            next_text=next_text,
         )
-        # Doppia safety: se l'API Ollama non interpreta `think:false` (versioni
-        # pre-2025), il suffisso `/no_think` nel prompt è il toggle ufficiale
-        # documentato da Qwen e vince comunque. Quando l'utente sceglie
-        # esplicitamente la modalità thinking lo OMETTIAMO (altrimenti il
-        # toggle `/no_think` annulla il think richiesto via API).
-        if is_qwen3 and not thinking:
-            prompt = prompt.rstrip() + "\n\n/no_think"
-        return prompt
 
     def _call_ollama(prompt: str, num_predict: int) -> str:
         if is_qwen3:
@@ -4703,11 +4704,34 @@ def translate_with_ollama(
         text = (seg.get("text") or "").strip()
         slot_s = max(0.0, float(seg.get("end", 0)) - float(seg.get("start", 0)))
 
+        # TASK 2D: sliding context window. Pass the previous and next
+        # segment text as CONTEXT (for understanding only) so qwen3 can
+        # resolve sentence-spanning fragments like "...less likely to" /
+        # "stick. When I gave up sugar..." that Whisper splits on
+        # punctuation/pause. Each snippet is capped at
+        # _CONTEXT_SNIPPET_MAX_CHARS by the builder to keep the prompt
+        # compact and Ollama latency low.
+        _prev_text: str | None = None
+        if i > 0:
+            _prev_raw = (segments[i - 1].get("text") or "").strip()
+            if _prev_raw:
+                _prev_text = _prev_raw
+        _next_text: str | None = None
+        if i + 1 < len(segments):
+            _next_raw = (segments[i + 1].get("text") or "").strip()
+            if _next_raw:
+                _next_text = _next_raw
+
         if not text:
             tr = ""
         else:
             try:
-                prompt = _build_prompt(text, slot_s)
+                prompt = _build_prompt(
+                    text,
+                    slot_s,
+                    prev_text=_prev_text,
+                    next_text=_next_text,
+                )
                 num_predict = _ollama_num_predict_for_segment(text, is_qwen3, thinking)
                 tr = _call_ollama(prompt, num_predict)
                 if not tr:
