@@ -3659,6 +3659,9 @@ from videotranslator.ollama_prompt import (  # noqa: E402
 from videotranslator.tts_text_sanitizer import (  # noqa: E402
     sanitize_for_tts as _sanitize_for_tts,
 )
+from videotranslator.metrics_csv import (  # noqa: E402
+    dump_segment_metrics as _dump_segment_metrics,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -4729,6 +4732,12 @@ def translate_with_ollama(
             if _next_raw:
                 _next_text = _next_raw
 
+        # Per-segment metrics counters (used later when building entry dict
+        # so the metrics CSV can correlate ratio outliers with retry decisions).
+        _seg_target_chars = 0
+        _seg_retry_attempted = False
+        _seg_retry_succeeded = False
+
         if not text:
             tr = ""
         else:
@@ -4771,8 +4780,10 @@ def translate_with_ollama(
                 target_chars = _compute_target_chars(
                     slot_s, target_lang, slack=1.10
                 )
+                _seg_target_chars = target_chars
                 if _should_reprompt_for_length(len(tr), target_chars, threshold=1.10):
                     rewrite_attempts += 1
+                    _seg_retry_attempted = True
                     rewrite_prompt = _build_rewrite_shorter_prompt(
                         first_translation=tr,
                         slot_s=slot_s,
@@ -4795,6 +4806,7 @@ def translate_with_ollama(
                         )
                     if tr_short and len(tr_short) < len(tr):
                         rewrite_success += 1
+                        _seg_retry_succeeded = True
                         print(
                             f"     ↺ Length retry seg #{i}: {len(tr)} → "
                             f"{len(tr_short)} chars (target {target_chars}, "
@@ -4877,6 +4889,12 @@ def translate_with_ollama(
             "end":   seg["end"],
             "text_src": text,
             "text_tgt": tr or text,
+            # STEP 1: per-segment metrics for CSV dump in build_dubbed_track.
+            # Underscore prefix marks them as internal pipeline metadata so
+            # downstream consumers (subtitle writers, editors) ignore them.
+            "_target_chars": _seg_target_chars,
+            "_length_retry_attempted": _seg_retry_attempted,
+            "_length_retry_succeeded": _seg_retry_succeeded,
         }
         if "speaker" in seg:
             entry["speaker"] = seg["speaker"]
@@ -6138,6 +6156,7 @@ def build_dubbed_track(
     tmp_dir: str,
     bg_volume: float = 0.15,
     label: str = "[6/6] Assembling dubbed track...",
+    metrics_csv_path: str | None = None,
 ) -> str:
     """Assembla la traccia doppiata in streaming via numpy memmap.
     Evita di accumulare AudioSegment in RAM (~600 MB per video 1h+): il mix avviene
@@ -6153,10 +6172,11 @@ def build_dubbed_track(
     total_frames = int(total_duration * SR)
     out = os.path.join(tmp_dir, "track_dubbed.wav")
 
-    # DIAGNOSTIC: traccia atempo ratio per segmento — fornisce sempre un report
-    # aggregato (distribuzione bucket + top 10 worst) utile per valutare la
-    # qualità percepita del doppiaggio (ratio alti → voce "velocizzata" udibile).
-    _atempo_stats: list[tuple[int, float, int, int, float, bool]] = []
+    # DIAGNOSTIC: traccia per-segment metrics — alimenta sia il diagnostic
+    # aggregato (distribuzione bucket + top 10 worst) sia il dump CSV
+    # opzionale per analisi P90/P95 cross-video. Lista di dict invece di
+    # tuple anonime per evolverla senza rompere consumer esistenti.
+    _atempo_stats: list[dict] = []
 
     # Tier strategy per stretch audio (TASK 2C-2):
     # - ratio <= 1.15 → atempo (default, ok per stretch leggeri)
@@ -6215,6 +6235,11 @@ def build_dubbed_track(
         end_ms = int(seg["end"] * 1000)
         slot_ms = max(end_ms - start_ms, 1)
 
+        # Per-segment engine record. 'none' means TTS fit the slot already.
+        # Distinguishes 'atempo' (chosen by policy) from 'atempo_fallback'
+        # (rubberband attempted and failed) for the metrics CSV.
+        _seg_engine_used = "none"
+
         # Se il TTS eccede lo slot (più 50 ms di margine), applica atempo via ffmpeg.
         src_path = tts_file
         tts_ms_probed = 0
@@ -6230,6 +6255,7 @@ def build_dubbed_track(
                 # (ed alla disponibilità del binary rubberband). Outside del
                 # range 1.15–1.50, oppure quando rubberband manca, ricade su atempo.
                 engine = _select_stretch_engine(ratio, _rubberband_available)
+                _initial_engine = engine
                 stretch_ok = False
                 if engine == "rubberband":
                     cmd = _build_rubberband_command(tts_file, sped, ratio)
@@ -6250,6 +6276,7 @@ def build_dubbed_track(
                         rubberband_used += 1
                         src_path = sped
                         stretch_ok = True
+                        _seg_engine_used = "rubberband"
                     except Exception as e:
                         # FALLBACK: nessuna regressione vs comportamento legacy.
                         # Se rubberband fallisce per qualsiasi motivo, riproviamo
@@ -6268,6 +6295,10 @@ def build_dubbed_track(
                         src_path = sped
                         atempo_used += 1
                         stretch_ok = True
+                        # Mark as fallback if rubberband had been the initial choice.
+                        _seg_engine_used = (
+                            "atempo_fallback" if _initial_engine == "rubberband" else "atempo"
+                        )
                     except Exception as e:
                         print(f"     ! atempo failed seg {i}: {e}", flush=True)
                 # Se entrambi gli engine sono falliti, src_path resta tts_file
@@ -6291,7 +6322,23 @@ def build_dubbed_track(
             pcm[-fade_len:] = tail.astype(np.int16)
 
         # Diagnostic: registra sempre (anche i segmenti "fit", ratio <=1.0).
-        _atempo_stats.append((i, seg["start"], slot_ms, tts_ms_probed, ratio_raw, truncated))
+        _atempo_stats.append({
+            "segment_index": i,
+            "start_s": seg["start"],
+            "end_s": seg["end"],
+            "slot_s": slot_ms / 1000.0,
+            "src_chars": len((seg.get("text_src") or "")),
+            "tgt_chars": len((seg.get("text_tgt") or "")),
+            "target_chars": seg.get("_target_chars", 0),
+            "length_retry_attempted": bool(seg.get("_length_retry_attempted", False)),
+            "length_retry_succeeded": bool(seg.get("_length_retry_succeeded", False)),
+            "tts_duration_ms": tts_ms_probed,
+            "pre_stretch_ratio": round(ratio_raw, 4),
+            "stretch_engine": _seg_engine_used,
+            "stretch_truncated": truncated,
+            "text_src": seg.get("text_src", ""),
+            "text_tgt": seg.get("text_tgt", ""),
+        })
 
         start_frame = int(start_ms * SR / 1000)
         _overlay(pcm, start_frame)
@@ -6307,20 +6354,26 @@ def build_dubbed_track(
             ("ratio > 2.00   (severe):             ", lambda r: r > 2.00),
         ]
         total = len(_atempo_stats)
-        trunc_count = sum(1 for _, _, _, _, _, t in _atempo_stats if t)
+        trunc_count = sum(1 for s in _atempo_stats if s["stretch_truncated"])
         print(f"     --- ATEMPO DIAGNOSTIC: {total} segments ---", flush=True)
         for label_b, pred in _buckets:
-            n = sum(1 for _, _, _, _, r, _ in _atempo_stats if pred(r))
+            n = sum(1 for s in _atempo_stats if pred(s["pre_stretch_ratio"]))
             pct = 100.0 * n / total if total else 0.0
             print(f"       {label_b} {n:>4d}  ({pct:5.1f}%)", flush=True)
         print(f"       truncated after atempo:              {trunc_count:>4d}  ({100.0*trunc_count/total:.1f}%)", flush=True)
         # Top 10 worst per ratio
-        worst = sorted(_atempo_stats, key=lambda t: -t[4])[:10]
+        worst = sorted(_atempo_stats, key=lambda s: -s["pre_stretch_ratio"])[:10]
         print(f"     --- Top 10 worst segments (highest ratio) ---", flush=True)
-        for idx, start_s, slot_ms_v, tts_ms_v, ratio_v, trunc_v in worst:
-            mm, ss = divmod(int(start_s), 60)
-            t_mark = "TRUNC" if trunc_v else "     "
-            print(f"       #{idx:04d} @ {mm:02d}:{ss:02d}  slot={slot_ms_v:>5d}ms  tts={tts_ms_v:>5d}ms  ratio={ratio_v:5.2f}  {t_mark}", flush=True)
+        for s in worst:
+            mm, ss = divmod(int(s["start_s"]), 60)
+            t_mark = "TRUNC" if s["stretch_truncated"] else "     "
+            slot_ms_v = int(s["slot_s"] * 1000)
+            print(
+                f"       #{s['segment_index']:04d} @ {mm:02d}:{ss:02d}  "
+                f"slot={slot_ms_v:>5d}ms  tts={s['tts_duration_ms']:>5d}ms  "
+                f"ratio={s['pre_stretch_ratio']:5.2f}  {t_mark}",
+                flush=True,
+            )
         print(f"     --- end diagnostic ---", flush=True)
         # TASK 2C-2: stampa la ripartizione engine usati per stretch.
         # Utile in produzione per verificare che la tier strategy funzioni
@@ -6331,6 +6384,21 @@ def build_dubbed_track(
                 f"{atempo_used} atempo",
                 flush=True,
             )
+
+        # STEP 1: dump per-segment metrics CSV for cross-video P90/P95 analysis.
+        # Best effort: never fail the dubbing pipeline if the file is unwritable.
+        if metrics_csv_path:
+            try:
+                n = _dump_segment_metrics(_atempo_stats, metrics_csv_path)
+                print(
+                    f"     -> Metrics CSV: {n} rows -> {metrics_csv_path}",
+                    flush=True,
+                )
+            except Exception as _csv_err:
+                print(
+                    f"     ! Metrics CSV dump failed ({_csv_err}); pipeline continues",
+                    flush=True,
+                )
 
     # Mix background se disponibile (stessa semantica storica: bg_volume in ampiezza).
     if bg_path and os.path.exists(bg_path) and bg_volume > 0:
@@ -7106,7 +7174,10 @@ def translate_video(
         if tts_files is None:
             tts_files = generate_tts(segments, voice, tmp_dir, rate=tts_rate)
         duration  = get_duration(video_in)
-        track     = build_dubbed_track(segments, tts_files, bg_path, duration, tmp_dir)
+        track     = build_dubbed_track(
+            segments, tts_files, bg_path, duration, tmp_dir,
+            metrics_csv_path=output_base + "_metrics.csv",
+        )
         mux_video(video_in, track, output)
 
         if use_lipsync:
