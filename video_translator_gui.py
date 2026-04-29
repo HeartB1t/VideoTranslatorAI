@@ -3667,6 +3667,7 @@ from videotranslator.difficulty_detector import (  # noqa: E402
     classify_difficulty as _classify_difficulty,
     estimate_p90_ratio as _estimate_p90_ratio,
     format_difficulty_log as _format_difficulty_log,
+    tts_speed_factor_for as _tts_speed_factor_for,
 )
 from videotranslator.face_detector import (  # noqa: E402
     has_enough_faces as _has_enough_faces,
@@ -4650,7 +4651,16 @@ def translate_with_ollama(
     # user know upfront whether the dub will be fluent (easy), partially
     # accelerated (medium) or audibly accelerated on most segments (hard).
     # Informational only — pipeline runs to completion regardless.
-    _est_p90 = _estimate_p90_ratio(segments, target_lang, _expansion_factor)
+    #
+    # tts_speed_factor lookup is per-target-language (it=1.15, en/es/fr/de
+    # ~=1.10, zh/ja/ko ~=1.05). Empirical means observed on production
+    # CSVs; the XTTS cap is 1.35 but most segments land lower. Using the
+    # cap as divisor would over-correct. See difficulty_detector module
+    # for the full table and calibration notes.
+    _est_p90 = _estimate_p90_ratio(
+        segments, target_lang, _expansion_factor,
+        tts_speed_factor=_tts_speed_factor_for(target_lang),
+    )
     if _est_p90 > 0:
         _diff_class = _classify_difficulty(_est_p90)
         print(

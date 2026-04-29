@@ -37,19 +37,32 @@ def estimate_segment_ratio(
     slot_s: float,
     target_lang_code: str,
     expansion_factor: float = 1.0,
+    tts_speed_factor: float = 1.0,
 ) -> float:
     """Estimated ``pre_stretch_ratio`` for a single segment.
 
+    ``tts_speed_factor`` accounts for any TTS-side compression that occurs
+    BEFORE the audio is handed to the stretch stage. XTTS for example
+    runs an adaptive speed pass capped at 1.35x: a segment that would
+    have been 9s of TTS at speed 1.0 leaves the synthesis at ~7.8s, which
+    is what gets compared to the slot. Without this term the estimator
+    is systematically pessimistic against the observed pre_stretch_ratio.
+
+    Default is ``1.0`` (no TTS-side compression) so callers without
+    pipeline context (CLI usage, unit tests) get a predictable result.
+    The runtime translation loop passes the empirical mean (``~1.15`` for
+    XTTS+Italian) which matches observed CSV distributions within ~0.1.
+
     Returns ``0.0`` for degenerate inputs (zero/negative slot, zero/negative
-    cps lookup, empty text). Callers can treat ``0.0`` as "no signal"
-    rather than as an outlier.
+    cps lookup, empty text, zero/negative tts_speed_factor). Callers can
+    treat ``0.0`` as "no signal" rather than as an outlier.
     """
-    if slot_s <= 0 or src_chars <= 0:
+    if slot_s <= 0 or src_chars <= 0 or tts_speed_factor <= 0:
         return 0.0
     cps = chars_per_second_for(target_lang_code)
     if cps <= 0:
         return 0.0
-    target_chars_at_normal_speed = slot_s * cps
+    target_chars_at_normal_speed = slot_s * cps * tts_speed_factor
     if target_chars_at_normal_speed <= 0:
         return 0.0
     return (src_chars * expansion_factor) / target_chars_at_normal_speed
@@ -59,6 +72,7 @@ def estimate_p90_ratio(
     segments: Iterable[Mapping],
     target_lang_code: str,
     expansion_factor: float = 1.0,
+    tts_speed_factor: float = 1.0,
 ) -> float:
     """Return the P90 of expected ratios across ``segments``.
 
@@ -67,6 +81,9 @@ def estimate_p90_ratio(
     ``0.0`` ratio (kept in the distribution so a video of mostly-silence
     is not classified hard just because of a couple of dense segments).
 
+    ``tts_speed_factor`` is forwarded to ``estimate_segment_ratio``; see
+    that function for the calibration rationale.
+
     Returns ``0.0`` if the input is empty.
     """
     ratios: list[float] = []
@@ -74,7 +91,10 @@ def estimate_p90_ratio(
         text = (s.get("text_src") or s.get("text") or "")
         slot_s = float(s.get("end", 0)) - float(s.get("start", 0))
         ratios.append(
-            estimate_segment_ratio(len(text), slot_s, target_lang_code, expansion_factor)
+            estimate_segment_ratio(
+                len(text), slot_s, target_lang_code, expansion_factor,
+                tts_speed_factor=tts_speed_factor,
+            )
         )
     if not ratios:
         return 0.0
@@ -92,6 +112,55 @@ def estimate_p90_ratio(
 # - Fitzgerald comedy clip: P90 2.43, dub sounded heavily accelerated -> "hard"
 EASY_THRESHOLD = 1.30
 HARD_THRESHOLD = 1.80
+
+
+# Empirical mean of XTTS adaptive speed per target language. The cap is
+# 1.35 but most segments land lower; using the cap as divisor would make
+# the estimator over-optimistic. These values come from observed CSV
+# distributions and are deliberately conservative — a value too low is
+# better than a value too high (false-positive HARD warnings are softer
+# than false-negative EASY classifications that mislead the user).
+#
+# Calibration data:
+# - it: 1.15 (Matt Cutts mean 1.07-1.10, Fitzgerald 1.10, voice-only ~1.18)
+# - en, es, fr, pt, de: 1.10 default (mid-range XTTS behaviour, CALIBRATION WIP)
+# - zh, ja, ko: 1.05 (logographic scripts have shorter chars, less compression
+#   headroom needed; XTTS produces fewer tokens/sec by design)
+# - others: 1.10 fallback
+_TTS_SPEED_BY_LANG: dict[str, float] = {
+    "it": 1.15,
+    "en": 1.10,
+    "es": 1.10,
+    "pt": 1.10,
+    "fr": 1.10,
+    "de": 1.10,
+    "nl": 1.10,
+    "pl": 1.10,
+    "ro": 1.10,
+    "tr": 1.10,
+    "cs": 1.10,
+    "hu": 1.10,
+    "ru": 1.10,
+    "uk": 1.10,
+    "ar": 1.10,
+    "hi": 1.10,
+    "id": 1.10,
+    "zh": 1.05,
+    "ja": 1.05,
+    "ko": 1.05,
+}
+_TTS_SPEED_DEFAULT = 1.10
+
+
+def tts_speed_factor_for(target_lang_code: str) -> float:
+    """Empirical XTTS adaptive speed mean for ``target_lang_code``.
+
+    Strips region (``it-IT`` -> ``it``) and falls back to a conservative
+    1.10 default for languages without calibration data. Standalone
+    callers (CLI, notebooks) can pass an explicit value to override.
+    """
+    code = (target_lang_code or "").lower().split("-")[0]
+    return _TTS_SPEED_BY_LANG.get(code, _TTS_SPEED_DEFAULT)
 
 
 def classify_difficulty(
@@ -216,7 +285,19 @@ def _cli() -> int:
             "EN->IT ~= 1.25, IT->EN ~= 0.80. Default: 1.0 (neutral)."
         ),
     )
+    parser.add_argument(
+        "--tts-speed",
+        type=float,
+        default=None,
+        help=(
+            "Anticipated TTS speed compression. Defaults to the per-language "
+            "empirical mean (it=1.15, zh/ja/ko=1.05, others=1.10). Pass an "
+            "explicit value to override (e.g. 1.0 for no compression)."
+        ),
+    )
     args = parser.parse_args()
+    if args.tts_speed is None:
+        args.tts_speed = tts_speed_factor_for(args.target_lang)
 
     if not os.path.exists(args.input_file):
         print(f"error: file not found: {args.input_file}", file=sys.stderr)
@@ -250,7 +331,10 @@ def _cli() -> int:
         )
         return 2
 
-    p90 = estimate_p90_ratio(segments, args.target_lang, args.expansion)
+    p90 = estimate_p90_ratio(
+        segments, args.target_lang, args.expansion,
+        tts_speed_factor=args.tts_speed,
+    )
     classification = classify_difficulty(p90)
     msg = format_difficulty_log(p90, classification, args.target_lang)
 
@@ -258,6 +342,7 @@ def _cli() -> int:
     print(f"Segments analyzed:   {len(segments)}")
     print(f"Target language:     {args.target_lang}")
     print(f"Expansion factor:    {args.expansion}")
+    print(f"TTS speed factor:    {args.tts_speed}")
     print(f"P90 estimate:        {p90:.3f}")
     print(f"Classification:      {classification.upper()}")
     print()

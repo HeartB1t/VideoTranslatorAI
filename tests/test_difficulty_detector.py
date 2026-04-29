@@ -7,6 +7,7 @@ from videotranslator.difficulty_detector import (
     estimate_p90_ratio,
     estimate_segment_ratio,
     format_difficulty_log,
+    tts_speed_factor_for,
 )
 
 
@@ -45,6 +46,56 @@ class EstimateSegmentRatioTests(unittest.TestCase):
             estimate_segment_ratio(60, 4.0, "it-IT"),
             estimate_segment_ratio(60, 4.0, "it"),
         )
+
+    def test_tts_speed_factor_compresses_predicted_ratio(self):
+        # Italian cps=15. 90 chars in 4s = base ratio 1.5
+        base = estimate_segment_ratio(90, 4.0, "it")
+        with_speed = estimate_segment_ratio(90, 4.0, "it", tts_speed_factor=1.5)
+        self.assertAlmostEqual(base, 1.5)
+        self.assertAlmostEqual(with_speed, 1.0)
+
+    def test_tts_speed_factor_default_neutral(self):
+        # Default 1.0 must yield identical numbers to the un-parameterized call
+        explicit = estimate_segment_ratio(90, 4.0, "it", tts_speed_factor=1.0)
+        implicit = estimate_segment_ratio(90, 4.0, "it")
+        self.assertEqual(explicit, implicit)
+
+    def test_tts_speed_factor_invalid_returns_zero(self):
+        self.assertEqual(estimate_segment_ratio(60, 4.0, "it", tts_speed_factor=0), 0.0)
+        self.assertEqual(estimate_segment_ratio(60, 4.0, "it", tts_speed_factor=-1.5), 0.0)
+
+    def test_tts_speed_factor_for_known_lang(self):
+        # Italian has a calibrated empirical value
+        self.assertAlmostEqual(tts_speed_factor_for("it"), 1.15)
+
+    def test_tts_speed_factor_for_logographic(self):
+        # zh/ja/ko share lower empirical compression
+        self.assertAlmostEqual(tts_speed_factor_for("zh"), 1.05)
+        self.assertAlmostEqual(tts_speed_factor_for("ja"), 1.05)
+        self.assertAlmostEqual(tts_speed_factor_for("ko"), 1.05)
+
+    def test_tts_speed_factor_for_unknown_lang_falls_back(self):
+        # Default 1.10 for any language not in the table
+        self.assertAlmostEqual(tts_speed_factor_for("xx"), 1.10)
+        self.assertAlmostEqual(tts_speed_factor_for(""), 1.10)
+        self.assertAlmostEqual(tts_speed_factor_for(None), 1.10)
+
+    def test_tts_speed_factor_for_locale_form(self):
+        # it-IT must resolve to the it entry, not fall back to default
+        self.assertAlmostEqual(tts_speed_factor_for("it-IT"), 1.15)
+        self.assertAlmostEqual(tts_speed_factor_for("EN-US"), 1.10)
+
+    def test_tts_speed_factor_realistic_xtts_cap(self):
+        # Empirical: XTTS adaptive cap 1.35 brings the Fitzgerald comedy
+        # P90 from ~2.43 (observed) towards ~1.80 (calibrated estimate),
+        # closing the over-pessimism gap reported by the smoke test.
+        # Single-segment proxy: 90 chars in 4s with EN->IT expansion 1.25
+        # at TTS speed 1.35:
+        # base = 90 * 1.25 / (4 * 15) = 1.875
+        # with cap = 1.875 / 1.35 = 1.389
+        out = estimate_segment_ratio(90, 4.0, "it", expansion_factor=1.25,
+                                     tts_speed_factor=1.35)
+        self.assertAlmostEqual(out, 1.389, places=2)
 
 
 class EstimateP90RatioTests(unittest.TestCase):
