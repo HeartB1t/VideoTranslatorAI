@@ -2,24 +2,7 @@
 
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
 
-## 🆕 What's new in v1.7
-
-Phase 2 quality release. The 9000-line single file is now backed by a modular `videotranslator/` package (12 modules, 229 unit tests) so individual stages can evolve and be tested in isolation.
-
-User-visible improvements:
-
-- **Length re-prompt loop on Ollama** — if the LLM produces a translation too long for the audio slot, the same engine is queried again with an explicit "rewrite shorter" prompt. Real measurement: -35% character count on outliers, ~15-20% fewer "audibly accelerated" segments.
-- **Context-aware translation window** — every prompt to Ollama now includes the previous and next segment as context (do-not-translate). Restores sentence-level coherence on segments split mid-clause by Whisper.
-- **Rubber Band CLI tier dispatcher** — `ratio 1.15-1.50` now routes to `rubberband-cli` (pitch-preserving) instead of ffmpeg `atempo` (pitch-altering chipmunk). `apt install rubberband-cli` to enable; falls back automatically to atempo if missing.
-- **Smart Ollama model fallback** — if the configured tag is missing but the daemon has another usable model, the pipeline switches to it instead of dropping to Google Translate.
-- **TTS punctuation sanitizer** — XTTS no longer verbalizes `:`, `;`, em/en-dash, ellipsis. Clock times and scores like `10:30` and `3:1` stay intact.
-- **Wav2Lip face pre-check** — voice-only / no-face videos skip Wav2Lip cleanly instead of running 30-60s of inference and aborting.
-- **Smart slot expansion** — segments expected to overshoot their audio slot can borrow time from adjacent silence or under-utilised neighbours (opt-out via `--no-slot-expansion`).
-- **Per-segment metrics CSV** — written next to every dub at `*_metrics.csv` with 15 columns for offline P90/P95 analysis across runs.
-- **Difficulty pre-flight** — a pre-translation `[difficulty]` line predicts the expected P90 stretch ratio so users know upfront whether the dub will be fluent, partly accelerated, or audibly compressed.
-- **Standalone module CLIs** — `python3 -m videotranslator.face_detector`, `.metrics_csv`, `.tts_text_sanitizer`, `.difficulty_detector` for ad-hoc checks without the full pipeline.
-
-The Ollama auto-setup, qwen3 thinking-mode toggle and the new TTS punctuation handling have all been validated end-to-end on EN→IT video. Other language pairs are supported but the calibration tables for `tts_speed_factor` and `chars_per_second` are most accurate for Italian; expect slightly conservative difficulty warnings on other targets.
+> **v1.7** — modular package, Phase 2 quality release. See [`CHANGELOG.md`](CHANGELOG.md) for the full list of changes.
 
 ## How it works
 
