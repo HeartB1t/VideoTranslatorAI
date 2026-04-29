@@ -3726,41 +3726,71 @@ def _ollama_num_predict_for_segment(
     return num_predict
 
 
-def _ollama_health_check(api_url: str, model: str, timeout: float = 5.0) -> tuple[bool, str]:
-    """Verifica che Ollama sia raggiungibile e che il modello richiesto sia
-    presente. Ritorna (ok, message). `message` è "" se ok, altrimenti è
-    human-readable (es. "Ollama non raggiungibile: ConnectionError", o
-    "Model qwen3:8b not installed").
+def _ollama_health_check(
+    api_url: str, model: str, timeout: float = 5.0
+) -> tuple[bool, str, str]:
+    """Verifica che Ollama sia raggiungibile e risolve il modello da usare.
 
-    Non solleva eccezioni — il chiamante gestisce il fallback.
+    Returns ``(ok, message, resolved_model)``:
+    - ``ok=False, message=<human readable>, resolved_model=""`` if the daemon
+      is unreachable, returns invalid JSON, or has zero models installed.
+    - ``ok=True, message="", resolved_model=<requested>`` if the requested
+      tag (or a quantization variant / same-family alternative) is present.
+    - ``ok=True, message=<warning>, resolved_model=<auto-selected>`` if the
+      requested tag is missing but ``select_compatible_model`` finds a
+      sensible Ollama alternative (e.g. configured ``mistral-nemo`` is gone
+      but ``qwen3:14b`` is installed). The pipeline should USE the
+      ``resolved_model`` value, not the original request.
+
+    Does not raise — the caller branches on ``ok`` and decides whether to
+    surface ``message`` to the user.
     """
     import requests
+    from videotranslator.ollama_model_selector import select_compatible_model
+
     base = api_url.rstrip("/")
+    target = (model or "").strip()
     try:
         r = requests.get(f"{base}/api/tags", timeout=timeout)
         r.raise_for_status()
         data = r.json()
     except requests.RequestException as e:
-        return False, f"Ollama not reachable at {base} ({e.__class__.__name__}: {e})"
+        return False, f"Ollama daemon not reachable at {base} ({e.__class__.__name__}: {e})", ""
     except Exception as e:
-        return False, f"Ollama returned invalid JSON at {base} ({e.__class__.__name__}: {e})"
+        return False, f"Ollama returned invalid JSON at {base} ({e.__class__.__name__}: {e})", ""
 
-    models = [m.get("name", "") for m in data.get("models", [])]
-    # Ollama tag naming: `qwen2.5:7b-instruct` vs `qwen2.5:7b-instruct-q4_K_M`.
-    # Accettiamo match esatto o prefix+":".
-    target = model.strip()
-    if target in models:
-        return True, ""
-    # Match per prefix (es. "qwen2.5:7b-instruct" matcha "qwen2.5:7b-instruct-q4_K_M")
+    models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+    if not models:
+        return (
+            False,
+            f"No models installed in Ollama at {base}. "
+            f"Install one with e.g. 'ollama pull {target or 'qwen3:14b'}'",
+            "",
+        )
+
+    # Tier 1+2: exact / quantization-tail match — keep legacy behaviour
+    # (silent ok, requested model used as-is).
+    if target and target in models:
+        return True, "", target
     for m in models:
-        if m.startswith(target + "-") or m.split(":")[0] == target.split(":")[0]:
-            # Non è match esatto, ma stesso base model → accept con warning
-            return True, ""
-    available = ", ".join(models[:5]) if models else "none"
-    return False, (
-        f"Model '{target}' not installed in Ollama. Available: {available}. "
-        f"Install with: ollama pull {target}"
+        if target and m.startswith(target + "-"):
+            return True, "", m
+
+    # Tier 3+ (the new behaviour): use the smart selector. It always
+    # returns a usable tag here because ``models`` is non-empty.
+    resolved = select_compatible_model(target, models)
+    if resolved == target:
+        # select_compatible_model returns the same string only when it is
+        # an exact match, but tier 1 above already covered that case. Guard
+        # against an unexpected logic shift in the selector.
+        return True, "", resolved
+    available_short = ", ".join(models[:5])
+    warning = (
+        f"Ollama model '{target}' not installed; using '{resolved}' instead "
+        f"(available: {available_short}). To use the original tag run: "
+        f"'ollama pull {target}'"
     )
+    return True, warning, resolved
 
 
 def _ollama_strip_preamble(text: str) -> str:
@@ -4606,10 +4636,16 @@ def translate_with_ollama(
     tgt_name = _ollama_lang_name(target_lang)
 
     # Health check upfront — così se Ollama è down solleviamo subito invece di
-    # fallire 300 volte nel loop.
-    ok, msg = _ollama_health_check(base, model)
+    # fallire 300 volte nel loop. TASK 2J: if the requested model is missing
+    # but the daemon has another usable model, the selector returns it via
+    # `resolved_model` and we proceed with it instead of falling through to
+    # Google. Surface the warning so the user sees what happened.
+    ok, msg, resolved_model = _ollama_health_check(base, model)
     if not ok:
         raise RuntimeError(msg)
+    if msg and resolved_model and resolved_model != model:
+        print(f"     ! {msg}", flush=True)
+        model = resolved_model
 
     print(f"     → Ollama ready ({model} @ {base}, slot_aware={slot_aware}, batch={batch_size})", flush=True)
 
@@ -8768,14 +8804,22 @@ class App(tk.Tk):
                         return False
 
         # Step 3: model available?
-        health_ok, health_msg = _ollama_health_check(url, model, timeout=5.0)
-        if not health_ok:
-            # Heuristic: è un problema di "modello mancante" o di "daemon giù"?
-            # _ollama_health_check ritorna "not reachable" se è il secondo caso.
-            if "not reachable" in (health_msg or "").lower():
+        # TASK 2J: health check now returns (ok, msg, resolved_model). When
+        # the requested tag is missing but the daemon has compatible models
+        # the selector picks a fallback and returns ok=True with a warning.
+        # We surface the warning to the user but DO NOT prompt for pull —
+        # the pipeline will run on `resolved_model` automatically.
+        health_ok, health_msg, resolved_model = _ollama_health_check(url, model, timeout=5.0)
+        if health_ok and health_msg and resolved_model and resolved_model != model:
+            self._log_async(f"[!] {health_msg}\n")
+        elif not health_ok:
+            # Heuristic: è un problema di "modello mancante", "daemon giù"
+            # o "nessun modello installato"?
+            msg_lower = (health_msg or "").lower()
+            if "not reachable" in msg_lower or "invalid json" in msg_lower:
                 self._log_async(f"[x] Ollama non raggiungibile: {health_msg}\n")
                 return False
-            # Modello mancante → chiedi pull
+            # Modello mancante (zero modelli installati nel daemon) → chiedi pull
             if not auto_install:
                 self._log_async(
                     f"[i] Modello '{model}' mancante e ollama_auto_install=false.\n"
@@ -8794,12 +8838,12 @@ class App(tk.Tk):
                 self._log_async(f"[x] ollama pull fallito: {msg}\n")
                 return False
             # Verifica finale
-            health_ok, health_msg = _ollama_health_check(url, model, timeout=5.0)
+            health_ok, health_msg, resolved_model = _ollama_health_check(url, model, timeout=5.0)
             if not health_ok:
                 self._log_async(f"[x] Verifica post-pull fallita: {health_msg}\n")
                 return False
 
-        self._log_async(f"[+] Ollama pronto: {model} @ {url}\n")
+        self._log_async(f"[+] Ollama pronto: {resolved_model or model} @ {url}\n")
         return True
 
     def _ask_yes_no_sync(self, title: str, message: str) -> bool:
