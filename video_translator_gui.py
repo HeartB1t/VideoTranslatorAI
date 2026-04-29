@@ -4675,15 +4675,43 @@ def _cosyvoice_model_present(cache_dir: Path | None = None) -> bool:
 def _cosyvoice_install(log_cb=None, timeout_s: int = 1800) -> tuple[bool, str]:
     """Installa il pacchetto CosyVoice via pip nel runtime corrente.
 
-    Cross-platform via `--break-system-packages` (PEP 668 su Debian e derivate) +
-    `--no-color` per output pulito nel log. Il timeout è generoso (30 min)
-    perché trascina giù modelscope, onnxruntime-gpu e altre wheel pesanti.
+    Status: il PyPI ``cosyvoice 0.0.8`` è un community wrapper di Lucas Jin
+    abbandonato. Il suo ``setup.py`` legge la versione da una variabile
+    ``__version__`` mancante e fallisce con ``KeyError: '__version__'``
+    su Python ≥ 3.12 (verificato live 2026-04-30 su Python 3.13).
 
-    Ritorna (ok, message). `message` è "" su successo, descrizione errore su
-    fallimento. Nota: questa è SOLO l'install del wrapper Python; il modello
-    (~1.7 GB) viene scaricato al primo `tts_to_file`.
+    Su Python 3.10 / 3.11 l'install pip storicamente funziona. L'ufficiale
+    FunAudioLLM/CosyVoice raccomanda comunque conda env dedicato Python
+    3.10 + clone GitHub recursive — vedi ``docs/COSYVOICE_INSTALL.md``.
+
+    Strategia: se la versione Python attuale è < 3.12 tentiamo pip install;
+    se ≥ 3.12 falliamo subito con messaggio actionable che punta alla
+    documentazione manuale (Python 3.13 garantisce KeyError, no senso
+    consumare 5 minuti di banda per scaricare la tarball).
+
+    Cross-platform via ``--break-system-packages`` (PEP 668 su Debian e
+    derivate) + ``--no-color`` per output pulito. Timeout generoso (30 min)
+    perché su 3.10/3.11 si trascina modelscope + onnxruntime-gpu.
+
+    Ritorna (ok, message). ``message`` è "" su successo, descrizione errore
+    altrimenti. Nota: questa è SOLO l'install del wrapper Python; il
+    modello (~1.7 GB) viene scaricato al primo ``tts_to_file``.
     """
     log = log_cb or (lambda s: None)
+
+    # Python version gate: PyPI cosyvoice 0.0.8 setup.py rotto su 3.12+.
+    py_major, py_minor = sys.version_info.major, sys.version_info.minor
+    if (py_major, py_minor) >= (3, 12):
+        msg = (
+            f"Python {py_major}.{py_minor} non supportato dal community "
+            f"wrapper PyPI 'cosyvoice 0.0.8' (setup.py KeyError __version__). "
+            f"CosyVoice ufficiale richiede Python 3.10 in conda env dedicato. "
+            f"Setup manuale: vedi docs/COSYVOICE_INSTALL.md (clone GitHub + "
+            f"conda env). Per ora la pipeline ricade su XTTS v2."
+        )
+        log(f"[!] {msg}\n")
+        return False, msg
+
     cmd = [
         sys.executable, "-m", "pip", "install",
         "--break-system-packages", "--no-color", _COSYVOICE_PIP_PKG,

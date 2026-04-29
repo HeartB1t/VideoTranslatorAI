@@ -30,13 +30,11 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-CHANGELOG.md
+
+# Project memory file (loaded automatically by Claude Code, must stay in repo root)
 CLAUDE.md
-video_translator_gui.py.bak
-video_translator_gui_v1.0_pre-wav2lip.bak
 
-# Dev/one-shot scripts (storia locale, non pushati)
+# Tutto il resto del contesto dev locale: CHANGELOG, memoria feedback,
+# script dev, backup .bak. Sono tutti dentro `_dev/` che è gitignored.
+# Vedi `_dev/memory/MEMORY.md` per l'indice della memoria.
 _dev/
-
-# Memoria Claude locale (note di lavoro, feedback, fix aperti)
-_memory/
