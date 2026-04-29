@@ -8274,16 +8274,21 @@ class App(tk.Tk):
         self._lbl_ollama_model = tk.Label(self._ollama_row, text=self._s("label_ollama_model"),
                                           bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_ollama_model.pack(side="left")
-        # Combobox invece di Entry: default + alternative suggerite nel task
+        # Combobox: solo modelli testati end-to-end (TASK 2T 2026-04-29).
+        # Power user che vuole un tag diverso può scriverlo a mano nel campo
+        # (combobox NON è readonly) o usare --ollama-model da CLI. Plus,
+        # smart fallback (TASK 2J) auto-resolve a qwen3:* se l'utente ha
+        # un tag legacy non installato.
+        # qwen3:4b incluso come 'leggero' anche se non profondamente testato:
+        # stessa famiglia qwen3, sampling parameters e thinking-mode identici,
+        # plausibilmente compatibile su GPU con VRAM ridotte (<6 GB).
         self._ollama_model_combo = ttk.Combobox(
             self._ollama_row, textvariable=self._ollama_model_var, width=28,
             values=[
-                "qwen3:8b",                  # Default raccomandato (Qwen3, 5.2 GB)
-                "qwen3:4b",                  # Leggero (Qwen3, ~3 GB)
-                "qwen3:14b",                 # Qualità superiore (~9 GB)
-                "qwen2.5:7b-instruct",       # Fallback compat (Qwen2.5)
-                "llama3.2:3b-instruct",      # Esistente
-                "mistral-nemo:12b-instruct", # Esistente
+                "qwen3:8b",                  # Default raccomandato (~5.2 GB) — tested
+                "qwen3:14b",                 # Qualità superiore (~9 GB)     — tested
+                "qwen2.5:7b-instruct",       # Fallback compat legacy         — tested
+                "qwen3:4b",                  # Leggero (~3 GB) — qwen3 family OK
             ],
             font=("Monospace", 8),
         )
