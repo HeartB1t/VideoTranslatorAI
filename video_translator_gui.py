@@ -3644,6 +3644,7 @@ def _merge_short_segments(
 # intentional because the legacy definitions above still exist during the
 # transition; runtime callers below this point use the tested module versions.
 from videotranslator.segments import (  # noqa: E402,F811
+    expand_tight_slots as _expand_tight_slots,
     merge_short_segments as _merge_short_segments,
     split_on_punctuation as _split_on_punctuation,
 )
@@ -7021,6 +7022,7 @@ def translate_video(
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
     ollama_thinking: bool = False,
+    slot_expansion: bool = True,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -7136,6 +7138,36 @@ def translate_video(
             if len(raw_segs) < pre_merge:
                 _note = " (aggressive)" if merge_aggressive else ""
                 print(f"     → Merged short segments{_note}: {pre_merge} → {len(raw_segs)}", flush=True)
+            # TASK 2E: smart slot expansion / time borrowing. Tight segments
+            # (expected pre_stretch_ratio > 1.50) "rubano" tempo dai gap
+            # silenziosi successivi e — se il vicino è sotto-utilizzato —
+            # anche dall'inizio del suo slot. Riduce l'atempo udibile senza
+            # toccare il testo o la traduzione. Disabilitabile con
+            # --no-slot-expansion per A/B test in caso di regressioni.
+            if slot_expansion:
+                _exp_tgt = LANG_EXPANSION.get(
+                    lang_target,
+                    LANG_EXPANSION.get(lang_target.split("-")[0], 1.0),
+                )
+                _exp_src = LANG_EXPANSION.get(
+                    effective_src,
+                    LANG_EXPANSION.get((effective_src or "").split("-")[0], 1.0),
+                ) or 1.0
+                _expansion_factor = _exp_tgt / _exp_src if _exp_src > 0 else 1.0
+                _orig_segs = [dict(s) for s in raw_segs]
+                raw_segs = _expand_tight_slots(
+                    raw_segs, lang_target, expansion_factor=_expansion_factor,
+                )
+                _n_expanded = sum(
+                    1 for a, b in zip(_orig_segs, raw_segs)
+                    if (b["end"] - b["start"]) > (a["end"] - a["start"]) + 1e-6
+                )
+                if _n_expanded > 0:
+                    print(
+                        f"     → Expanded {_n_expanded}/{len(raw_segs)} tight segments "
+                        f"by borrowing silence",
+                        flush=True,
+                    )
             segments = translate_segments(
                 raw_segs, effective_src, lang_target,
                 engine=translation_engine, deepl_key=deepl_key,
@@ -9432,6 +9464,11 @@ def _cli():
                         help="XTTS v2 native speed factor (0.5–2.0). "
                              "If omitted, auto-tuned per language pair "
                              "(e.g. EN→IT=1.35, IT→EN=1.25).")
+    parser.add_argument("--no-slot-expansion", action="store_true",
+                        help="Disable smart slot expansion / time borrowing for "
+                             "tight segments (TASK 2E). Default ON: tight segments "
+                             "borrow time from neighbouring silence/easy slots so "
+                             "ffmpeg atempo can stay below audible thresholds.")
     # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
     # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
     parser.add_argument("--xtts", action="store_true",
@@ -9495,6 +9532,7 @@ def _cli():
             ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
             ollama_slot_aware=not args.ollama_no_slot_aware,
             ollama_thinking=args.ollama_thinking or bool(cfg_cli.get("ollama_thinking", False)),
+            slot_expansion=not args.no_slot_expansion,
         )
 
 
