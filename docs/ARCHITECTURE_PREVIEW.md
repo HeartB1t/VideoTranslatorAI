@@ -21,7 +21,7 @@ the old names until call sites are moved.
 
 ## Platform Contract
 
-- Supported: Windows 10/11 x64, Debian/Ubuntu/Kali-like Linux.
+- Supported: Windows 10/11 x64, Debian/Ubuntu and derivatives.
 - Best effort: other Linux distributions.
 - Experimental: macOS, until real testing exists.
 - `resolve_app_paths(sys_platform, env, home)` is the pure policy resolver. It

@@ -4494,7 +4494,7 @@ def _cosyvoice_model_present(cache_dir: Path | None = None) -> bool:
 def _cosyvoice_install(log_cb=None, timeout_s: int = 1800) -> tuple[bool, str]:
     """Installa il pacchetto CosyVoice via pip nel runtime corrente.
 
-    Cross-platform via `--break-system-packages` (PEP 668 su Kali/Debian) +
+    Cross-platform via `--break-system-packages` (PEP 668 su Debian e derivate) +
     `--no-color` per output pulito nel log. Il timeout è generoso (30 min)
     perché trascina giù modelscope, onnxruntime-gpu e altre wheel pesanti.
 

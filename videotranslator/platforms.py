@@ -47,7 +47,7 @@ def platform_info(sys_platform: str) -> PlatformInfo:
     if sys_platform == "win32":
         return PlatformInfo("win32", "Windows 10/11 x64", supported=True)
     if sys_platform.startswith("linux"):
-        return PlatformInfo("linux", "Debian/Ubuntu/Kali-like Linux", supported=True)
+        return PlatformInfo("linux", "Debian/Ubuntu and derivatives", supported=True)
     if sys_platform == "darwin":
         return PlatformInfo("darwin", "macOS", supported=False, experimental=True)
     return PlatformInfo(sys_platform, sys_platform, supported=False)
