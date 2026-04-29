@@ -144,7 +144,8 @@ def build_translation_prompt(
         f"{slot_clause}"
         f"3. Use SPOKEN register, NOT formal/written language. Natural dubbing dialogue.\n"
         f"4. Drop filler words, redundant adverbs, verbose constructions where possible.\n"
-        f"5. Output ONLY the translated text. No explanations, no quotes, no preambles.\n\n"
+        f"5. PRESERVE NEGATIONS exactly. If the source contains 'not', 'no', \"don't\", \"doesn't\", \"haven't\", \"can't\", \"won't\", \"isn't\", \"wasn't\", 'never', 'nobody', 'nothing', 'none', the {tgt_name} translation MUST contain the equivalent negation. NEVER drop or invert a negation. PRESERVE quantifiers (all/some/none/every/each) in the same logical sense.\n"
+        f"6. Output ONLY the translated text. No explanations, no quotes, no preambles.\n\n"
         f"{target_marker}{text}\n\n"
         f"{tgt_name} translation (spoken, concise{slot_hint}):\n"
     )

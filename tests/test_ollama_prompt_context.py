@@ -203,5 +203,41 @@ class IntegrationStyleTests(unittest.TestCase):
         self.assertLess(req_idx, target_idx)
 
 
+class NegationPreservationRulesTests(unittest.TestCase):
+    """TASK 2N: prompt must explicitly tell the model to preserve
+    English negations and quantifiers. Regression scenario from the
+    2026-04-29 EN→IT run: 'if you haven't seen' got translated as
+    'se hai visto' (negation dropped). The fix is purely prompt-level
+    so it must show up in the rendered prompt text."""
+
+    def test_negation_clause_present(self):
+        prompt = _build()
+        self.assertIn("PRESERVE NEGATIONS", prompt)
+
+    def test_negation_clause_lists_canonical_forms(self):
+        prompt = _build()
+        # Spot-check: the prompt must namedrop the contractions the
+        # model is most likely to drop. Listing them explicitly tends
+        # to anchor instruction-tuned models on the rule.
+        for token in ("not", "haven't", "can't", "won't", "never"):
+            self.assertIn(token, prompt)
+
+    def test_quantifier_clause_present(self):
+        prompt = _build()
+        # Same idea but for quantifiers (all/some/none) which the model
+        # also occasionally weakens or strengthens.
+        self.assertIn("PRESERVE quantifiers", prompt)
+
+    def test_negation_rule_is_a_critical_requirement(self):
+        prompt = _build()
+        req_idx = prompt.index("CRITICAL REQUIREMENTS")
+        neg_idx = prompt.index("PRESERVE NEGATIONS")
+        # The rule must live inside the CRITICAL REQUIREMENTS block,
+        # not after the source text.
+        self.assertLess(req_idx, neg_idx)
+        text_marker = prompt.index("text:") if "text:" in prompt else len(prompt)
+        self.assertLess(neg_idx, text_marker)
+
+
 if __name__ == "__main__":
     unittest.main()
