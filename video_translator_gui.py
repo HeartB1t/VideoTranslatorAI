@@ -3283,61 +3283,14 @@ def extract_audio(video_path: str, audio_path: str):
 
 def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
     """Separates voice and music with Demucs htdemucs. Returns (vocals_path, background_path)."""
-    print("[2/6] Separating voice/music with Demucs...", flush=True)
-    import torch
-    import torchaudio
-    from demucs import pretrained
-    from demucs.apply import apply_model
+    from videotranslator.media import separate_audio as _separate_audio
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = pretrained.get_model("htdemucs")
-    model.to(device)
-
-    waveform, sr = torchaudio.load(audio_path)
-    if waveform.shape[0] == 1:
-        waveform = waveform.repeat(2, 1)
-    waveform = waveform.to(device)
-
-    sources = None
-    # Chunking: segment=7s è lo standard della CLI demucs, overlap=0.25 copre il
-    # taglio delle maschere. Evita OOM VRAM su video lunghi (>30 min / 8 GB GPU).
-    apply_kwargs = {"device": device}
-    try:
-        import inspect
-        sig = inspect.signature(apply_model)
-        if "segment" in sig.parameters:
-            apply_kwargs["segment"] = 7.0
-        if "overlap" in sig.parameters:
-            apply_kwargs["overlap"] = 0.25
-    except (TypeError, ValueError):
-        pass
-    try:
-        with torch.no_grad():
-            sources = apply_model(model, waveform.unsqueeze(0), **apply_kwargs)[0]
-        # htdemucs order: [drums, bass, other, vocals]
-        vocals = sources[3].mean(0, keepdim=True).cpu()
-        background = sources[:3].sum(0).mean(0, keepdim=True).cpu()
-    finally:
-        del model, waveform
-        if sources is not None:
-            del sources
-        if device == "cuda":
-            torch.cuda.empty_cache()
-
-    vocals_16k = os.path.join(tmp_dir, "vocals_16k.wav")
-    bg_path = os.path.join(tmp_dir, "background.wav")
-
-    torchaudio.save(os.path.join(tmp_dir, "vocals_raw.wav"), vocals, sr)
-    torchaudio.save(bg_path, background, sr)
-
-    _run_ffmpeg([
-        "ffmpeg", "-y", "-i", os.path.join(tmp_dir, "vocals_raw.wav"),
-        "-ar", "16000", "-ac", "1", vocals_16k
-    ], step="resample vocals")
-
-    print(f"     → Vocals (16kHz): {vocals_16k}", flush=True)
-    print(f"     → Background: {bg_path}", flush=True)
-    return vocals_16k, bg_path
+    return _separate_audio(
+        audio_path,
+        tmp_dir,
+        log_cb=lambda msg: print(msg, flush=True),
+        ffmpeg_runner=_run_ffmpeg,
+    )
 
 
 def transcribe(

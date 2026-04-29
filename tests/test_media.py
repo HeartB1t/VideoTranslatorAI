@@ -1,7 +1,13 @@
 import subprocess
 import unittest
 
-from videotranslator.media import build_extract_audio_cmd, extract_audio, run_ffmpeg
+from videotranslator.media import (
+    build_extract_audio_cmd,
+    build_resample_vocals_cmd,
+    demucs_apply_kwargs,
+    extract_audio,
+    run_ffmpeg,
+)
 
 
 class MediaTests(unittest.TestCase):
@@ -44,6 +50,30 @@ class MediaTests(unittest.TestCase):
         self.assertEqual(calls[0][0], build_extract_audio_cmd("video.mp4", "audio.wav"))
         self.assertEqual(logs[0], "[1/6] Extracting audio from: video.mp4")
         self.assertEqual(logs[-1], "     -> audio.wav")
+
+    def test_build_resample_vocals_cmd_matches_pipeline_contract(self):
+        cmd = build_resample_vocals_cmd("vocals_raw.wav", "vocals_16k.wav")
+
+        self.assertEqual(cmd[:4], ["ffmpeg", "-y", "-i", "vocals_raw.wav"])
+        self.assertIn("16000", cmd)
+        self.assertIn("1", cmd)
+        self.assertEqual(cmd[-1], "vocals_16k.wav")
+
+    def test_demucs_apply_kwargs_adds_chunking_when_supported(self):
+        def apply_model(_model, _waveform, *, device, segment=None, overlap=None):
+            return device, segment, overlap
+
+        kwargs = demucs_apply_kwargs(apply_model, "cuda")
+
+        self.assertEqual(kwargs["device"], "cuda")
+        self.assertEqual(kwargs["segment"], 7.0)
+        self.assertEqual(kwargs["overlap"], 0.25)
+
+    def test_demucs_apply_kwargs_stays_minimal_for_old_signature(self):
+        def apply_model(_model, _waveform, *, device):
+            return device
+
+        self.assertEqual(demucs_apply_kwargs(apply_model, "cpu"), {"device": "cpu"})
 
 
 if __name__ == "__main__":
