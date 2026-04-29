@@ -3259,16 +3259,7 @@ UI_LANG_OPTIONS = [
 #  PIPELINE FUNCTIONS
 # ═══════════════════════════════════════════════════════════
 
-def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
-    # ffmpeg moderno emette UTF-8 su tutte le piattaforme (incluso Windows).
-    # Usiamo errors="replace" per degradare gracefully su eventuali byte non-UTF8
-    # (es. path locali con encoding legacy) invece di crashare con UnicodeDecodeError.
-    proc = subprocess.run(cmd, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
-    if proc.returncode != 0:
-        err = (proc.stderr or "").strip().splitlines()[-10:]
-        raise RuntimeError(f"{step} failed (exit {proc.returncode}):\n" + "\n".join(err))
-    return proc
+from videotranslator.media import run_ffmpeg as _run_ffmpeg  # noqa: E402
 
 
 def download_youtube(url: str, out_dir: str) -> str:
@@ -3280,12 +3271,14 @@ def download_youtube(url: str, out_dir: str) -> str:
 
 
 def extract_audio(video_path: str, audio_path: str):
-    print(f"[1/6] Extracting audio from: {Path(video_path).name}", flush=True)
-    _run_ffmpeg([
-        "ffmpeg", "-y", "-i", video_path,
-        "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", audio_path
-    ], step="extract_audio")
-    print(f"     → {audio_path}", flush=True)
+    from videotranslator.media import extract_audio as _extract_audio
+
+    _extract_audio(
+        video_path,
+        audio_path,
+        log_cb=lambda msg: print(msg, flush=True),
+        runner=_run_ffmpeg,
+    )
 
 
 def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
