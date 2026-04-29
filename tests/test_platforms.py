@@ -147,11 +147,18 @@ class Wav2LipPathResolverTests(unittest.TestCase):
     def test_linux_default_paths(self):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
-            paths = resolve_wav2lip_paths("linux", {}, home)
+            expected_asset = home / ".local" / "share" / "wav2lip"
+            paths = resolve_wav2lip_paths(
+                "linux",
+                {},
+                home,
+                assets_check=lambda _path: False,
+                writable_check=lambda path: path == expected_asset,
+            )
 
         self.assertIsInstance(paths, Wav2LipPaths)
-        # /opt is read-only on the test host so the resolver must fall back
-        # to the user-local data dir.
+        # No candidate has pre-existing assets; /opt is simulated as
+        # non-writable so the resolver must pick the user-local data dir.
         self.assertEqual(paths.asset_dir, home / ".local" / "share" / "wav2lip")
         self.assertEqual(paths.work_dir, home / ".cache" / "wav2lip")
 
@@ -160,6 +167,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
             home = Path(home_str)
             data_root = home / "custom-data"
             cache_root = home / "custom-cache"
+            expected_asset = data_root / "wav2lip"
             paths = resolve_wav2lip_paths(
                 "linux",
                 {
@@ -167,6 +175,8 @@ class Wav2LipPathResolverTests(unittest.TestCase):
                     "XDG_CACHE_HOME": str(cache_root),
                 },
                 home,
+                assets_check=lambda _path: False,
+                writable_check=lambda path: path == expected_asset,
             )
 
         self.assertEqual(paths.asset_dir, data_root / "wav2lip")
