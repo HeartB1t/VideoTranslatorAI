@@ -3675,6 +3675,12 @@ from videotranslator.difficulty_detector import (  # noqa: E402
     format_difficulty_log as _format_difficulty_log,
     tts_speed_factor_for as _tts_speed_factor_for,
 )
+from videotranslator.difficulty_profile import (  # noqa: E402
+    MEDIUM as _DIFFICULTY_PROFILE_MEDIUM,
+    Profile as _DifficultyProfile,
+    format_profile_log as _format_profile_log,
+    resolve_profile as _resolve_difficulty_profile,
+)
 from videotranslator.face_detector import (  # noqa: E402
     has_enough_faces as _has_enough_faces,
 )
@@ -4610,6 +4616,7 @@ def translate_with_ollama(
     fallback_fn=None,
     thinking: bool = False,
     use_document_context: bool = True,
+    difficulty_profile: _DifficultyProfile | None = None,
 ) -> list[dict]:
     """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
     impone concisione per il doppiaggio.
@@ -4632,6 +4639,9 @@ def translate_with_ollama(
         fallback_fn: callable opzionale `(seg) -> str` invocata per il singolo
                      segmento quando Ollama solleva. Se None, il testo sorgente
                      è usato as-is (degrada a "no translation").
+        difficulty_profile: profilo TASK 2G v2 (easy/medium/hard) che configura
+                     soglia ed iterazioni del length re-prompt. Se None il
+                     comportamento ricalca v1.7 / pre-2G v2 (MEDIUM).
 
     Ritorna la lista di segmenti con `text_src` e `text_tgt` popolati, identica
     nello schema a quella prodotta da `translate_segments` per gli altri engine.
@@ -4641,6 +4651,14 @@ def translate_with_ollama(
     base = api_url.rstrip("/")
     src_name = _ollama_lang_name(source_lang)
     tgt_name = _ollama_lang_name(target_lang)
+
+    # TASK 2G v2: profile orchestrator. None = legacy MEDIUM behaviour
+    # (1.10 retry threshold, 1 retry iteration). The caller is expected
+    # to pass a resolved Profile when --no-difficulty-profile is OFF;
+    # we fall back to MEDIUM here so the public function stays usable
+    # standalone (CLI, notebooks) without forcing every caller to know
+    # about the orchestrator.
+    _profile = difficulty_profile or _DIFFICULTY_PROFILE_MEDIUM
 
     # Health check upfront — così se Ollama è down solleviamo subito invece di
     # fallire 300 volte nel loop. TASK 2J: if the requested model is missing
@@ -4889,17 +4907,34 @@ def translate_with_ollama(
                     if not tr:
                         # Risposta vuota = considera fallita, fallback
                         raise RuntimeError("empty response")
-                # ── Length re-prompt (TASK 2C-1) ────────────────────────
+                # ── Length re-prompt (TASK 2C-1, 2G v2) ─────────────────
                 # Se la prima traduzione è significativamente sopra il budget
                 # ammesso per lo slot audio, chiediamo al modello di
                 # riscriverla più corta. Questo abbatte la zona "strong/severe"
                 # dell'atempo diagnostic (>1.50x) senza penalizzare i segmenti
-                # già a misura. Costo: +1 chiamata Ollama solo sugli outlier.
+                # già a misura. Costo: +N chiamate Ollama solo sugli outlier
+                # (N = profile.length_retry_max_iter, 1 di default, 2 su HARD).
+                #
+                # TASK 2G v2: la soglia (legacy 1.10) e il numero di iter (legacy
+                # 1) ora vengono dal Profile. EASY alza la soglia a 1.20 (meno
+                # retry); HARD la abbassa a 1.05 e permette 2 iter consecutive
+                # così video con P90 > 1.80 hanno una seconda chance prima del
+                # safety truncation. Backward-compat: senza Profile passato dal
+                # caller, _profile = MEDIUM == comportamento storico identico.
                 target_chars = _compute_target_chars(
                     slot_s, target_lang, slack=1.10
                 )
                 _seg_target_chars = target_chars
-                if _should_reprompt_for_length(len(tr), target_chars, threshold=1.10):
+                _retry_threshold = _profile.length_retry_threshold
+                _retry_max_iter = _profile.length_retry_max_iter
+                _retry_iter = 0
+                while (
+                    _retry_iter < _retry_max_iter
+                    and _should_reprompt_for_length(
+                        len(tr), target_chars, threshold=_retry_threshold
+                    )
+                ):
+                    _retry_iter += 1
                     rewrite_attempts += 1
                     _seg_retry_attempted = True
                     rewrite_prompt = _build_rewrite_shorter_prompt(
@@ -4918,29 +4953,46 @@ def translate_with_ollama(
                     except Exception as _re_err:
                         tr_short = ""
                         print(
-                            f"     ! Length retry seg #{i} HTTP failed: {_re_err}; "
-                            f"keeping first translation",
+                            f"     ! Length retry seg #{i} (iter {_retry_iter}) "
+                            f"HTTP failed: {_re_err}; keeping previous translation",
                             flush=True,
                         )
+                        # On HTTP error stop iterating: a flaky daemon would
+                        # otherwise burn the full retry budget for nothing.
+                        break
                     if tr_short and len(tr_short) < len(tr):
-                        rewrite_success += 1
-                        _seg_retry_succeeded = True
+                        if not _seg_retry_succeeded:
+                            # Count "first success" once even if further iter
+                            # produce additional shrinkage; rewrite_success is
+                            # the number of segments improved, not the total
+                            # number of successful calls.
+                            rewrite_success += 1
+                            _seg_retry_succeeded = True
+                        _iter_tag = (
+                            f" iter {_retry_iter}/{_retry_max_iter}"
+                            if _retry_max_iter > 1 else ""
+                        )
                         print(
-                            f"     ↺ Length retry seg #{i}: {len(tr)} → "
-                            f"{len(tr_short)} chars (target {target_chars}, "
-                            f"slot {slot_s:.1f}s)",
+                            f"     ↺ Length retry seg #{i}{_iter_tag}: "
+                            f"{len(tr)} → {len(tr_short)} chars "
+                            f"(target {target_chars}, slot {slot_s:.1f}s)",
                             flush=True,
                         )
                         tr = tr_short
                     elif tr_short:
                         # Modello ha risposto ma non ha accorciato. Tracciamo
-                        # solo se _ollama_debug, per non rumorizzare i log.
+                        # solo se _ollama_debug, per non rumorizzare i log,
+                        # e fermiamo il loop: una seconda iterazione con la
+                        # stessa traduzione punterebbe allo stesso minimo
+                        # locale del modello, sprecando budget.
                         if _ollama_debug:
                             print(
                                 f"     [ollama-debug] length retry seg #{i} "
-                                f"did not shorten ({len(tr_short)} >= {len(tr)})",
+                                f"iter {_retry_iter} did not shorten "
+                                f"({len(tr_short)} >= {len(tr)})",
                                 flush=True,
                             )
+                        break
                 # ── Length safeguard ────────────────────────────────────
                 # Se l'output residuo dopo strip_preamble è >> del sorgente
                 # rispetto all'expansion atteso, il modello ha quasi
@@ -5078,6 +5130,7 @@ def translate_segments(
     ollama_slot_aware: bool = True,
     ollama_thinking: bool = False,
     ollama_document_context: bool = True,
+    difficulty_profile: _DifficultyProfile | None = None,
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
@@ -5094,6 +5147,7 @@ def translate_segments(
                 slot_aware=ollama_slot_aware, batch_size=1,
                 thinking=ollama_thinking,
                 use_document_context=ollama_document_context,
+                difficulty_profile=difficulty_profile,
             )
         except Exception as e:
             print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
@@ -6288,6 +6342,7 @@ def build_dubbed_track(
     label: str = "[6/6] Assembling dubbed track...",
     metrics_csv_path: str | None = None,
     overlap_fade_enabled: bool = True,
+    difficulty_profile: _DifficultyProfile | None = None,
 ) -> str:
     """Assembla la traccia doppiata in streaming via numpy memmap.
     Evita di accumulare AudioSegment in RAM (~600 MB per video 1h+): il mix avviene
@@ -6309,15 +6364,28 @@ def build_dubbed_track(
     # tuple anonime per evolverla senza rompere consumer esistenti.
     _atempo_stats: list[dict] = []
 
-    # Tier strategy per stretch audio (TASK 2C-2):
-    # - ratio <= 1.15 → atempo (default, ok per stretch leggeri)
-    # - 1.15 < ratio <= 1.50 → rubberband CLI se disponibile (no chipmunk)
-    # - ratio > 1.50 → atempo (rubberband stesso degrada oltre 1.5x)
+    # TASK 2G v2: profile orchestrator. None = legacy MEDIUM behaviour
+    # (atempo cap 4.0, rubberband band 1.15-1.50). Caller passes a Profile
+    # resolved from the difficulty classification when profile orchestration
+    # is enabled (translate_video → here).
+    _profile = difficulty_profile or _DIFFICULTY_PROFILE_MEDIUM
+    _atempo_cap = _profile.atempo_cap
+    _rb_min = _profile.rubberband_min
+    _rb_max = _profile.rubberband_max
+
+    # Tier strategy per stretch audio (TASK 2C-2, TASK 2G v2):
+    # - ratio <= rb_min → atempo (default, ok per stretch leggeri)
+    # - rb_min < ratio <= rb_max → rubberband CLI se disponibile (no chipmunk)
+    # - ratio > rb_max → atempo (rubberband stesso degrada oltre il band)
     # Probe del binario UNA volta sola: select_stretch_engine() falla cleanly
     # ad atempo se il binary manca, quindi nessuna regressione.
     _rubberband_available = shutil.which("rubberband") is not None
     if _rubberband_available:
-        print("     [info] Rubber Band CLI available — using for ratio 1.15-1.50 band", flush=True)
+        print(
+            f"     [info] Rubber Band CLI available — using for ratio "
+            f"{_rb_min:.2f}-{_rb_max:.2f} band",
+            flush=True,
+        )
     rubberband_used = 0
     atempo_used = 0
 
@@ -6390,12 +6458,17 @@ def build_dubbed_track(
             if slot_ms > 0:
                 ratio_raw = tts_ms_probed / slot_ms
             if tts_ms_probed > slot_ms + 50:
-                ratio = max(1.0, min(ratio_raw, 4.0))
+                ratio = max(1.0, min(ratio_raw, _atempo_cap))
                 sped = os.path.join(tmp_dir, f"seg_{i:04d}_sped.wav")
                 # Dispatch: la policy pura sceglie engine in base al ratio
                 # (ed alla disponibilità del binary rubberband). Outside del
-                # range 1.15–1.50, oppure quando rubberband manca, ricade su atempo.
-                engine = _select_stretch_engine(ratio, _rubberband_available)
+                # range rb_min-rb_max, oppure quando rubberband manca, ricade
+                # su atempo. Il band viene dal Profile (default 1.15-1.50,
+                # esteso a 1.15-1.80 su HARD).
+                engine = _select_stretch_engine(
+                    ratio, _rubberband_available,
+                    rb_min=_rb_min, rb_max=_rb_max,
+                )
                 _initial_engine = engine
                 stretch_ok = False
                 if engine == "rubberband":
@@ -6426,7 +6499,7 @@ def build_dubbed_track(
                         engine = "atempo"
 
                 if engine == "atempo":
-                    chain = _build_atempo_chain(ratio)
+                    chain = _build_atempo_chain(ratio, max_ratio=_atempo_cap)
                     try:
                         _run_ffmpeg([
                             "ffmpeg", "-y", "-i", tts_file,
@@ -7207,6 +7280,9 @@ def translate_video(
     slot_expansion: bool = True,
     sentence_repair: bool = True,
     overlap_fade_enabled: bool = True,
+    whisper_sanity: bool = True,
+    difficulty_profile_enabled: bool = True,
+    difficulty_override: str | None = None,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -7294,8 +7370,52 @@ def translate_video(
             vocals_path = vocals_16k
 
         diar_segments: list[dict] = []
+        # TASK 2G v2: resolved profile, computed lazily in the branch that
+        # has the pre-translation segments (raw_segs from Whisper, or the
+        # editor override). Stays None until the first compute path
+        # executes; defaults to MEDIUM downstream when None.
+        _resolved_profile: _DifficultyProfile | None = None
         if segments_override is not None:
             segments = segments_override
+            # Editor override path: estimate P90 from the override
+            # segments themselves (text_src or text). The user has
+            # already accepted/edited the source side of the segments,
+            # so this estimate is as good as the Whisper-driven one.
+            if difficulty_profile_enabled:
+                _src_for_p = (
+                    lang_source if lang_source and lang_source != "auto"
+                    else (segments[0].get("lang_source") if segments else "en") or "en"
+                )
+                _exp_tgt_o = LANG_EXPANSION.get(
+                    lang_target,
+                    LANG_EXPANSION.get(lang_target.split("-")[0], 1.0),
+                )
+                _exp_src_o = LANG_EXPANSION.get(
+                    _src_for_p,
+                    LANG_EXPANSION.get((_src_for_p or "").split("-")[0], 1.0),
+                ) or 1.0
+                _expansion_factor_o = (
+                    _exp_tgt_o / _exp_src_o if _exp_src_o > 0 else 1.0
+                )
+                _est_p90_o = _estimate_p90_ratio(
+                    segments, lang_target, _expansion_factor_o,
+                    tts_speed_factor=_tts_speed_factor_for(lang_target),
+                )
+                if difficulty_override:
+                    _classification_o = difficulty_override.lower()
+                    print(
+                        f"     [difficulty] manual override: "
+                        f"using {_classification_o.upper()} profile "
+                        f"(estimated P90 was {_est_p90_o:.2f})",
+                        flush=True,
+                    )
+                else:
+                    _classification_o = _classify_difficulty(_est_p90_o)
+                _resolved_profile = _resolve_difficulty_profile(_classification_o)
+                print(
+                    f"     {_format_profile_log(_classification_o, _resolved_profile, _est_p90_o)}",
+                    flush=True,
+                )
         else:
             raw_segs, detected_lang = transcribe(vocals_path, model, lang_source)
             effective_src = detected_lang if lang_source == "auto" else lang_source
@@ -7367,6 +7487,94 @@ def translate_video(
                         f"by borrowing silence",
                         flush=True,
                     )
+            # TASK 2M: post-Whisper sanity check. Flag segments con token
+            # sospetti (parole inglesi non standard di 1-3 char, ripetizioni
+            # immediate). NON corregge automaticamente — stamparli a console
+            # aiuta l'utente a sapere quali segmenti rivedere nell'editor
+            # sottotitoli prima del doppiaggio. Disabilitabile con
+            # --no-whisper-sanity per pipeline silenziosa.
+            if whisper_sanity:
+                try:
+                    from videotranslator.whisper_sanity import (
+                        sanity_score_segments as _sanity_score_segments,
+                    )
+                    _flagged = _sanity_score_segments(raw_segs)
+                except Exception as _e:  # pragma: no cover - defensive
+                    print(
+                        f"     ! Whisper sanity check skipped "
+                        f"({_e.__class__.__name__}: {_e})",
+                        flush=True,
+                    )
+                    _flagged = {}
+                if _flagged:
+                    print(
+                        f"     ⚠ Whisper sanity: {len(_flagged)} segment(s) "
+                        f"with suspicious tokens — review in editor:",
+                        flush=True,
+                    )
+                    for _idx, _info in list(_flagged.items())[:5]:
+                        _susp = _info.get("suspicious", [])
+                        _reps = _info.get("repeats", [])
+                        _details = []
+                        if _susp:
+                            _details.append(f"susp={_susp}")
+                        if _reps:
+                            _details.append(f"repeat={_reps}")
+                        print(
+                            f"        seg #{_idx}: {' '.join(_details)}",
+                            flush=True,
+                        )
+                    if len(_flagged) > 5:
+                        print(
+                            f"        ... and {len(_flagged) - 5} more",
+                            flush=True,
+                        )
+            # TASK 2G v2: pre-translation difficulty profile resolution.
+            # Estimate P90 of pre_stretch_ratio from the current segments
+            # (post-merge, post-repair, post-expand) BEFORE TTS+stretch.
+            # The classification (easy/medium/hard) drives a Profile that
+            # configures length retry threshold (Ollama re-prompt),
+            # atempo cap, Rubber Band band and XTTS speed cap.
+            #
+            # Manual override (--difficulty-override) bypasses the auto
+            # estimate — useful for A/B testing or for users who already
+            # know the source content profile (e.g. fast comedy).
+            #
+            # --no-difficulty-profile (difficulty_profile_enabled=False)
+            # forces MEDIUM, reproducing the v1.7 / pre-2G v2 hardcoded
+            # constants exactly.
+            if difficulty_profile_enabled:
+                _exp_tgt_p = LANG_EXPANSION.get(
+                    lang_target,
+                    LANG_EXPANSION.get(lang_target.split("-")[0], 1.0),
+                )
+                _exp_src_p = LANG_EXPANSION.get(
+                    effective_src,
+                    LANG_EXPANSION.get((effective_src or "").split("-")[0], 1.0),
+                ) or 1.0
+                _expansion_factor_p = (
+                    _exp_tgt_p / _exp_src_p if _exp_src_p > 0 else 1.0
+                )
+                _est_p90_p = _estimate_p90_ratio(
+                    raw_segs, lang_target, _expansion_factor_p,
+                    tts_speed_factor=_tts_speed_factor_for(lang_target),
+                )
+                if difficulty_override:
+                    _classification_p = difficulty_override.lower()
+                    print(
+                        f"     [difficulty] manual override: "
+                        f"using {_classification_p.upper()} profile "
+                        f"(estimated P90 was {_est_p90_p:.2f})",
+                        flush=True,
+                    )
+                else:
+                    _classification_p = _classify_difficulty(_est_p90_p)
+                _resolved_profile = _resolve_difficulty_profile(_classification_p)
+                print(
+                    f"     {_format_profile_log(_classification_p, _resolved_profile, _est_p90_p)}",
+                    flush=True,
+                )
+
             segments = translate_segments(
                 raw_segs, effective_src, lang_target,
                 engine=translation_engine, deepl_key=deepl_key,
@@ -7374,6 +7582,7 @@ def translate_video(
                 ollama_slot_aware=ollama_slot_aware,
                 ollama_thinking=ollama_thinking,
                 ollama_document_context=ollama_document_context,
+                difficulty_profile=_resolved_profile,
             )
 
         if not no_subs:
@@ -7382,6 +7591,26 @@ def translate_video(
         if subs_only:
             print("\n[+] --subs-only mode complete.")
             return {"srt": output_base + ".srt", "segments": segments}
+
+        # TASK 2G v2: clamp the autotuned XTTS ceiling by the resolved
+        # Profile's xtts_speed_cap. EASY: 1.30 cap (ridotto da 1.40),
+        # MEDIUM: 1.35 (legacy), HARD: 1.45 (esteso). Si applica solo
+        # quando l'utente NON ha pinnato xtts_speed esplicitamente
+        # (speed_auto=True) — un override CLI/config viene rispettato
+        # come prima per non sorprendere chi ha tuning manuale. Log
+        # esplicito quando il cap effettivamente cambia, così il
+        # diagnostic XTTS adaptive speed coincide con l'aspettativa.
+        if speed_auto and _resolved_profile is not None:
+            _orig_speed = effective_xtts_speed
+            _capped = min(effective_xtts_speed, _resolved_profile.xtts_speed_cap)
+            if abs(_capped - _orig_speed) > 1e-6:
+                print(
+                    f"     [difficulty] XTTS speed clamp: "
+                    f"{_orig_speed:.2f} → {_capped:.2f} "
+                    f"(profile cap {_resolved_profile.xtts_speed_cap:.2f})",
+                    flush=True,
+                )
+            effective_xtts_speed = _capped
 
         # TTS generation — Edge-TTS, Coqui XTTS v2 o CosyVoice (v2.3).
         # Cascata di fallback: cosyvoice → xtts → edge. Se l'utente ha scelto
@@ -7428,6 +7657,7 @@ def translate_video(
             segments, tts_files, bg_path, duration, tmp_dir,
             metrics_csv_path=output_base + "_metrics.csv",
             overlap_fade_enabled=overlap_fade_enabled,
+            difficulty_profile=_resolved_profile,
         )
         mux_video(video_in, track, output)
 
@@ -7458,7 +7688,8 @@ def translate_video(
                     # Build a vocals-only track (no background music) for accurate lip sync
                     track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir,
                                                        label="[6/6] Assembling vocals track for lip-sync...",
-                                                       overlap_fade_enabled=overlap_fade_enabled)
+                                                       overlap_fade_enabled=overlap_fade_enabled,
+                                                       difficulty_profile=_resolved_profile)
                     synced = apply_lipsync(output, track_vocals, tmp_dir)
                     shutil.move(synced, output)
                 except Exception as e:
@@ -9720,6 +9951,13 @@ def _cli():
                              "starts in lowercase are re-joined before translation, "
                              "so the LLM sees full sentences instead of mid-clause "
                              "fragments.")
+    parser.add_argument("--no-whisper-sanity", action="store_true",
+                        help="Disable post-Whisper sanity check (TASK 2M). "
+                             "Default ON: scans transcribed segments for "
+                             "suspicious 1-3 char tokens (e.g. 'ay' in place "
+                             "of 'okay') and immediate word repetitions, "
+                             "logging the segment indexes so the user knows "
+                             "what to review in the subtitle editor.")
     parser.add_argument("--no-overlap-fade", action="store_true",
                         help="Disable TASK 2P overlap fade and revert to legacy "
                              "hard-truncate when the TTS still overshoots its "
@@ -9728,6 +9966,21 @@ def _cli():
                              "slot and crossfade via the memmap mix, which "
                              "drops audible 'audio mozzato' artefacts on dense "
                              "voice-only content.")
+    # TASK 2G v2: difficulty profile orchestrator.
+    parser.add_argument("--difficulty-override",
+                        choices=("easy", "medium", "hard"),
+                        default=None,
+                        help="Force the TASK 2G v2 difficulty profile instead "
+                             "of computing it from the segment density. Useful "
+                             "for A/B testing or when you already know the "
+                             "source content profile (e.g. fast comedy → hard).")
+    parser.add_argument("--no-difficulty-profile", action="store_true",
+                        help="Disable the TASK 2G v2 profile orchestrator and "
+                             "use the legacy v1.7 hard-coded constants "
+                             "(equivalent to MEDIUM profile). Default OFF: the "
+                             "pipeline auto-tunes length retry threshold, "
+                             "atempo cap, Rubber Band band and XTTS speed cap "
+                             "based on the predicted P90 stretch ratio.")
     # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
     # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
     parser.add_argument("--xtts", action="store_true",
@@ -9795,6 +10048,9 @@ def _cli():
             slot_expansion=not args.no_slot_expansion,
             sentence_repair=not args.no_sentence_repair,
             overlap_fade_enabled=not args.no_overlap_fade,
+            whisper_sanity=not args.no_whisper_sanity,
+            difficulty_profile_enabled=not args.no_difficulty_profile,
+            difficulty_override=args.difficulty_override,
         )
 
 
