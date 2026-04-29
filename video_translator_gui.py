@@ -3662,6 +3662,11 @@ from videotranslator.tts_text_sanitizer import (  # noqa: E402
 from videotranslator.metrics_csv import (  # noqa: E402
     dump_segment_metrics as _dump_segment_metrics,
 )
+from videotranslator.difficulty_detector import (  # noqa: E402
+    classify_difficulty as _classify_difficulty,
+    estimate_p90_ratio as _estimate_p90_ratio,
+    format_difficulty_log as _format_difficulty_log,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -4635,6 +4640,19 @@ def translate_with_ollama(
     _exp_tgt = LANG_EXPANSION.get(target_lang, LANG_EXPANSION.get(_tgt_key, 1.0))
     _exp_src = LANG_EXPANSION.get(source_lang, LANG_EXPANSION.get(_src_key, 1.0)) or 1.0
     _expansion_factor = _exp_tgt / _exp_src if _exp_src > 0 else 1.0
+
+    # TASK 2G: pre-flight difficulty estimate. Pure-text heuristic that
+    # predicts the P90 of pre_stretch_ratio BEFORE TTS+stretch. Lets the
+    # user know upfront whether the dub will be fluent (easy), partially
+    # accelerated (medium) or audibly accelerated on most segments (hard).
+    # Informational only — pipeline runs to completion regardless.
+    _est_p90 = _estimate_p90_ratio(segments, target_lang, _expansion_factor)
+    if _est_p90 > 0:
+        _diff_class = _classify_difficulty(_est_p90)
+        print(
+            f"     {_format_difficulty_log(_est_p90, _diff_class, target_lang)}",
+            flush=True,
+        )
 
     translated: list[dict] = []
     total = len(segments)
