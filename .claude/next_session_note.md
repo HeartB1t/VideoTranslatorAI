@@ -10,6 +10,6 @@ Current local follow-up:
 
 Architecture note:
 
-- `videotranslator.platforms.resolve_wav2lip_paths()` currently chooses a writable `asset_dir` when assets are missing or when Wav2Lip needs patch/temp writes.
-- A true read-only system `asset_dir` + writable `work_dir` split is not complete yet because `apply_lipsync()` still runs Wav2Lip with `cwd=WAV2LIP_REPO` and cleans `Wav2Lip/temp`.
-- If you continue that refactor, route Wav2Lip scratch/temp output into `WAV2LIP_WORK_DIR` first, then loosen the resolver so fully populated system assets can be read-only.
+- `videotranslator.platforms.resolve_wav2lip_paths()` may now return a fully populated system `asset_dir` even when it is read-only.
+- `apply_lipsync()` runs Wav2Lip with `cwd=WAV2LIP_WORK_DIR` and cleans `WAV2LIP_WORK_DIR/temp`, so `Program Files` / `/opt` assets are no longer used for scratch IO.
+- If you touch this area again, keep this contract: complete assets can be read-only; fresh installs and partial installs must use a writable fallback asset directory.

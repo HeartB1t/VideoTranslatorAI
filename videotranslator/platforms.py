@@ -322,10 +322,8 @@ def resolve_wav2lip_paths(
 
       1. Walk the platform-specific candidate list in priority order. The
          first candidate that already contains a valid layout (repo + model)
-         AND is writable by the current user is returned as-is. Writability
-         matters even for "already populated" assets because the pipeline
-         occasionally writes patches (e.g. ``audio.py`` librosa fix) and
-         removes ``temp/`` between runs.
+         is returned as-is, even if it lives under a read-only system install
+         path. Runtime scratch IO is routed to ``work_dir`` by the caller.
       2. If no candidate is fully populated, fall back to the first writable
          candidate (creating it on demand). This is the "fresh install" path:
          the caller will git-clone + download into a guaranteed-writable
@@ -356,7 +354,7 @@ def resolve_wav2lip_paths(
 
     chosen: Path | None = None
     for cand in candidates:
-        if assets_check(cand) and writable_check(cand):
+        if assets_check(cand):
             chosen = cand
             break
 

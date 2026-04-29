@@ -239,12 +239,12 @@ class Wav2LipPathResolverTests(unittest.TestCase):
             Path(r"C:\Users\Example\AppData\Local") / "VideoTranslatorAI" / "wav2lip-work",
         )
 
-    def test_windows_program_files_present_but_not_writable_falls_back(self):
+    def test_windows_program_files_present_but_not_writable_is_valid_asset_dir(self):
         """A standard user can read assets but cannot write to ProgramFiles.
 
-        In that scenario the resolver must promote the writable LOCALAPPDATA
-        candidate to ``asset_dir``, otherwise downstream patches (audio.py
-        librosa fix, ``temp/`` cleanup) would crash with PermissionError.
+        In that scenario the resolver can still use ProgramFiles as
+        ``asset_dir`` because the runtime scratch directory is separated into
+        ``work_dir`` under LOCALAPPDATA.
         """
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
@@ -267,7 +267,11 @@ class Wav2LipPathResolverTests(unittest.TestCase):
                 assets_check=fake_assets_check,
             )
 
-        self.assertEqual(paths.asset_dir, localappdata_assets)
+        self.assertEqual(paths.asset_dir, program_files_assets)
+        self.assertEqual(
+            paths.work_dir,
+            Path(localappdata) / "VideoTranslatorAI" / "wav2lip-work",
+        )
 
     def test_windows_localappdata_with_assets_when_program_files_empty(self):
         with tempfile.TemporaryDirectory() as home_str:

@@ -7300,9 +7300,6 @@ def _ensure_wav2lip_assets():
         return
 
     WAV2LIP_DIR.mkdir(parents=True, exist_ok=True)
-    # Best-effort scratch dir creation; failures are non-fatal because the
-    # current Wav2Lip subprocess writes its temp/ inside the repo dir, not
-    # in WAV2LIP_WORK_DIR. Future refactors can route scratch IO here.
     try:
         WAV2LIP_WORK_DIR.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
@@ -7378,6 +7375,11 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
     if not inference_py.exists():
         raise RuntimeError(f"Wav2Lip inference script not found: {inference_py}")
 
+    try:
+        WAV2LIP_WORK_DIR.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError) as e:
+        raise RuntimeError(f"Wav2Lip work directory is not writable: {WAV2LIP_WORK_DIR}") from e
+
     out_path = os.path.join(tmp_dir, "video_lipsync.mp4")
 
     cmd = [
@@ -7391,11 +7393,14 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(WAV2LIP_REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    env["TMPDIR"] = str(WAV2LIP_WORK_DIR)
+    env["TEMP"] = str(WAV2LIP_WORK_DIR)
+    env["TMP"] = str(WAV2LIP_WORK_DIR)
 
     # Stream output line-by-line so the GUI log shows progress in real time
     output_lines: list[str] = []
     proc = subprocess.Popen(
-        cmd, cwd=str(WAV2LIP_REPO), env=env,
+        cmd, cwd=str(WAV2LIP_WORK_DIR), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
     )
@@ -7416,8 +7421,9 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
     finally:
         _watchdog.cancel()
         _unregister_subprocess(proc)
-        # Clean up Wav2Lip temp/ to avoid disk accumulation
-        wav2lip_tmp = WAV2LIP_REPO / "temp"
+        # Wav2Lip writes its relative temp/ folder under cwd; keep that cwd in
+        # the per-user work dir so system asset installs can stay read-only.
+        wav2lip_tmp = WAV2LIP_WORK_DIR / "temp"
         if wav2lip_tmp.exists():
             shutil.rmtree(wav2lip_tmp, ignore_errors=True)
 
