@@ -1,5 +1,7 @@
 # 🎬 Video Translator AI
 
+[![tests](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml/badge.svg)](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml)
+
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
 
 > **v1.7** — modular package, Phase 2 quality release. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) and the commit history for the full list of changes.
