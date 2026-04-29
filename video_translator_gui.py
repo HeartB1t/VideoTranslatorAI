@@ -6085,7 +6085,17 @@ def _strip_xtts_terminal_punct(text: str) -> str:
     # tipografici (… — – -) che XTTS gestisce male a fine frase. Le virgole
     # NON sono incluse perché in italiano/spagnolo possono terminare clausole
     # legittime (rare ma non hallucination-trigger).
-    return text.rstrip().rstrip(".!?;:…—–-").rstrip()
+    #
+    # TASK 2R 2026-04-29: aggressive sweep dei 5 char finali. Anche dopo il
+    # primo rstrip XTTS verbalizzava "punto" su segmenti tipo "X)." o "Y!.".
+    # Loop fino a 5 iter per pulire residui multipli (es. "abc.. ? ").
+    cleaned = text.rstrip()
+    for _ in range(5):
+        before = cleaned
+        cleaned = cleaned.rstrip(".!?;:…—–-,) ​。！？").rstrip()
+        if cleaned == before:
+            break
+    return cleaned
 
 
 def _find_split_point(text: str) -> int:
@@ -6379,11 +6389,15 @@ def build_dubbed_track(
             continue
 
         # Hard-truncate con fade-out se ancora troppo lungo dopo atempo.
+        # TASK 2S 2026-04-29: bump fade-out 80ms → 200ms. Il valore precedente
+        # lasciava udibili echi/click XTTS quando il TTS sforava in modo
+        # marcato (ratio > 1.5). 200ms è ancora ben sotto la soglia di
+        # percezione "voce tagliata" (~400ms) ma copre i transienti finali.
         slot_frames = int(slot_ms * SR / 1000)
         truncated = pcm.shape[0] > slot_frames
         if truncated:
             pcm = pcm[:slot_frames].copy()
-            fade_len = max(1, min(int(0.08 * SR), pcm.shape[0] // 4))
+            fade_len = max(1, min(int(0.20 * SR), pcm.shape[0] // 4))
             # Fade lineare su int16 → calcolato in float32 poi riconvertito.
             ramp = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
             tail = pcm[-fade_len:].astype(np.float32) * ramp[:, None]
