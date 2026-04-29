@@ -6,6 +6,58 @@ from videotranslator.ollama_length_control import chars_per_second_for
 
 END_PUNCT_CHARS = r".?!;。？！；؟"
 
+# --- TASK 2L: continuation-token lists -------------------------------------
+# Function words that, when they appear at the END of a Whisper segment,
+# almost certainly mean the sentence has been cut mid-clause: prepositions,
+# articles, conjunctions and a few subordinators. We keep each list short
+# (high-precision tokens only) so we don't accidentally merge legitimate
+# sentences that simply happen to end on a common word.
+_CONTINUATION_TOKENS_EN: tuple[str, ...] = (
+    "to", "for", "of", "at", "in", "on", "by", "with", "from",
+    "about", "and", "or", "but", "because", "so", "that",
+    "which", "who", "when", "while", "since", "if", "though",
+    "as", "than", "into", "onto", "upon", "across",
+    "the", "a", "an",
+)
+_CONTINUATION_TOKENS_IT: tuple[str, ...] = (
+    "di", "del", "della", "dello", "dei", "delle", "degli",
+    "al", "alla", "allo", "agli", "alle",
+    "per", "con", "da", "in", "su", "tra", "fra",
+    "e", "o", "ma", "che", "chi", "quando", "mentre", "se",
+    "il", "la", "lo", "i", "gli", "le", "un", "una", "uno",
+    "ha", "ho", "hai", "abbiamo", "avete", "hanno",
+)
+_CONTINUATION_TOKENS_ES: tuple[str, ...] = (
+    "de", "del", "al", "a", "en", "con", "por", "para", "sobre", "entre",
+    "y", "o", "pero", "que", "cuando", "mientras", "si",
+    "el", "la", "los", "las", "un", "una", "unos", "unas",
+)
+_CONTINUATION_TOKENS_FR: tuple[str, ...] = (
+    "de", "du", "des", "au", "aux", "à", "en", "avec", "pour", "par",
+    "sur", "sous", "entre", "vers", "chez",
+    "et", "ou", "mais", "que", "qui", "quand", "pendant", "si",
+    "le", "la", "les", "un", "une", "des",
+)
+_CONTINUATION_TOKENS_DE: tuple[str, ...] = (
+    "von", "vom", "zur", "zum", "am", "im", "in", "mit", "bei", "auf",
+    "für", "über", "unter", "gegen",
+    "und", "oder", "aber", "dass", "wenn", "weil", "während",
+    "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen",
+)
+
+_CONTINUATION_TOKENS_BY_LANG: dict[str, tuple[str, ...]] = {
+    "en": _CONTINUATION_TOKENS_EN,
+    "it": _CONTINUATION_TOKENS_IT,
+    "es": _CONTINUATION_TOKENS_ES,
+    "fr": _CONTINUATION_TOKENS_FR,
+    "de": _CONTINUATION_TOKENS_DE,
+}
+
+# Trailing punctuation we strip before testing the last token. We keep a
+# trailing period because the typical Whisper false-stop is "to." / "going
+# to.", so we MUST be able to look past the dot.
+_TRAILING_PUNCT_RE = re.compile(r"[\s\.,;:?!\"\'\)\]\}…]+$")
+
 
 def split_on_punctuation(
     segments: list[dict],
@@ -318,5 +370,157 @@ def expand_tight_slots(
         if delta_total > 0:
             cur["end"] = cur_end
 
+    return out
+
+
+def _last_word(text: str) -> str:
+    """Return the last whitespace-separated word of ``text`` with trailing
+    punctuation stripped. Empty string if no alphabetic content remains."""
+    stripped = _TRAILING_PUNCT_RE.sub("", text or "").rstrip()
+    if not stripped:
+        return ""
+    parts = stripped.split()
+    if not parts:
+        return ""
+    last = parts[-1]
+    # Strip leading punctuation too (e.g. opening quote on a single token).
+    return last.lstrip("\"'([{").rstrip("\"'.,;:?!)]}…")
+
+
+def _starts_with_proper_capital(text: str) -> bool:
+    """Return True when ``text`` starts with an uppercase letter that is
+    *not* the English standalone "I" / "I'm" / "I'll" — those are legitimate
+    lowercase-equivalents at sentence start that should not block joining.
+    """
+    s = (text or "").lstrip()
+    if not s:
+        return False
+    first = s[0]
+    if not first.isalpha() or not first.isupper():
+        return False
+    if s == "I" or s.startswith("I ") or s.startswith("I'"):
+        return False
+    return True
+
+
+def _should_join(
+    seg_i: dict,
+    seg_next: dict,
+    max_gap: float,
+    tokens: tuple[str, ...],
+) -> bool:
+    """Decide whether ``seg_i`` and ``seg_next`` are halves of the same
+    sentence wrongly cut by Whisper. See :func:`repair_split_sentences`
+    for the full set of conditions."""
+    text_i = (seg_i.get("text") or "").strip()
+    text_next = (seg_next.get("text") or "").strip()
+    if not text_i or not text_next:
+        return False
+
+    # Different speakers → always keep them split.
+    if seg_i.get("speaker") != seg_next.get("speaker"):
+        return False
+
+    # Gap budget: only join when the segments are nearly contiguous.
+    try:
+        gap = float(seg_next["start"]) - float(seg_i["end"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if gap > max_gap:
+        return False
+
+    # Continuation token at the end of seg_i?
+    last = _last_word(text_i).lower()
+    if not last or last not in tokens:
+        return False
+
+    # Capitalised continuation (other than "I" / "I'm") usually means a
+    # NEW sentence began — don't merge in that case. Lowercase continuation
+    # is the strongest possible signal of a mid-clause cut.
+    if _starts_with_proper_capital(text_next):
+        return False
+
+    return True
+
+
+def repair_split_sentences(
+    segments: list[dict],
+    max_join_gap_s: float = 0.5,
+    src_lang_hint: str = "en",
+) -> list[dict]:
+    """Detect Whisper segmentation that broke sentences mid-clause and
+    join the offending pairs back into single segments.
+
+    Pure function: returns a NEW list, never mutates input. Each output
+    dict is also a fresh copy. ``text`` (and ``text_tgt`` if present) are
+    concatenated when joining; ``start`` of the left segment and ``end``
+    of the right segment are kept; ``speaker`` is preserved when equal
+    on both sides (segments with different speakers are never merged).
+
+    Heuristic: a segment ending with a continuation token (preposition,
+    article, conjunction, subordinator) AND a follow-up segment starting
+    in lowercase (or with the English standalone "I"/"I'm") AND a small
+    inter-segment gap is almost always a Whisper false-stop.
+
+    ``src_lang_hint`` selects the token list. Unknown / multi-region
+    codes (e.g. ``"en-US"``, ``"auto"``) fall back to English, which is
+    the safest default since false-stops on the English ASR are by far
+    the most common pattern reported.
+
+    The merge is **cascading**: if a join produces a new segment whose
+    new tail still ends in a continuation token AND the segment after
+    matches all conditions too, the chain is collapsed in one go.
+
+    Returns a same-or-shorter list.
+    """
+    if not segments:
+        return []
+
+    # Defensive copy so we never mutate caller dicts.
+    work: list[dict] = [dict(s) for s in segments]
+    if len(work) < 2:
+        return work
+
+    # Resolve token list once. Strip region tag so "en-US" behaves like "en".
+    base_lang = (src_lang_hint or "en").split("-")[0].lower()
+    tokens = _CONTINUATION_TOKENS_BY_LANG.get(
+        base_lang, _CONTINUATION_TOKENS_EN
+    )
+
+    out: list[dict] = []
+    i = 0
+    n = len(work)
+    while i < n:
+        cur = dict(work[i])  # working copy we may extend in-place
+        j = i + 1
+        while j < n and _should_join(cur, work[j], max_join_gap_s, tokens):
+            nxt = work[j]
+            # Concatenate text with a single space.
+            cur_text = (cur.get("text") or "").strip()
+            nxt_text = (nxt.get("text") or "").strip()
+            if cur_text and nxt_text:
+                cur["text"] = cur_text + " " + nxt_text
+            elif nxt_text:
+                cur["text"] = nxt_text
+            # Preserve text_tgt symmetrically if a caller already attached one.
+            if "text_tgt" in cur or "text_tgt" in nxt:
+                cur_tgt = (cur.get("text_tgt") or "").strip()
+                nxt_tgt = (nxt.get("text_tgt") or "").strip()
+                merged_tgt = (cur_tgt + " " + nxt_tgt).strip()
+                if merged_tgt:
+                    cur["text_tgt"] = merged_tgt
+            # Extend the time slot to cover both segments.
+            try:
+                cur["end"] = max(float(cur["end"]), float(nxt["end"]))
+            except (KeyError, TypeError, ValueError):
+                cur["end"] = nxt.get("end", cur.get("end"))
+            # Keep words list contiguous if either side carried one.
+            if "words" in cur or "words" in nxt:
+                cur["words"] = list(cur.get("words", [])) + list(
+                    nxt.get("words", [])
+                )
+            j += 1
+        out.append(cur)
+        i = j
     return out
 

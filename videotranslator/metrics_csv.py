@@ -20,6 +20,14 @@ Schema:
   pre_stretch_ratio        tts_duration_ms / slot_ms (key audibility metric)
   stretch_engine           'none', 'atempo', 'rubberband', 'atempo_fallback'
   stretch_truncated        True if audio was hard-cut after stretch (>4x cap)
+  overlap_used             True if TASK 2P overlap fade was applied instead
+                           of (or before) hard truncate. Flag is independent
+                           of ``stretch_truncated``: a segment can have
+                           both False (fit), only ``overlap_used`` True
+                           (mild overshoot, full pcm preserved with
+                           crossfade tail), only ``stretch_truncated`` True
+                           (legacy mode, ``--no-overlap-fade``), or both
+                           True (large overshoot capped at slot+max_overlap)
   text_src, text_tgt       full source / translation text for outlier audit
 """
 
@@ -42,6 +50,7 @@ CSV_FIELDS: tuple[str, ...] = (
     "pre_stretch_ratio",
     "stretch_engine",
     "stretch_truncated",
+    "overlap_used",
     "text_src",
     "text_tgt",
 )

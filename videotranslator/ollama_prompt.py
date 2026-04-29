@@ -61,6 +61,7 @@ def build_translation_prompt(
     thinking: bool = False,
     prev_text: str | None = None,
     next_text: str | None = None,
+    global_context: str | None = None,
 ) -> str:
     """Build the full Ollama translation prompt for a single segment.
 
@@ -90,6 +91,12 @@ def build_translation_prompt(
         :data:`CONTEXT_SNIPPET_MAX_CHARS` and inserted as a CONTEXT block
         before the requirements list. The LLM is explicitly instructed not
         to translate this material.
+    global_context:
+        Optional document-level summary of the whole transcript (TASK 2K).
+        When provided, it is injected as a ``GLOBAL CONTEXT`` block ABOVE
+        the local prev/next CONTEXT block so the model anchors terminology,
+        tone and global anaphora across the whole video. The LLM is
+        instructed not to translate this material.
 
     Returns
     -------
@@ -99,20 +106,37 @@ def build_translation_prompt(
 
     prev_snippet = _truncate_context(prev_text)
     next_snippet = _truncate_context(next_text)
-    has_context = bool(prev_snippet) or bool(next_snippet)
+    has_local_context = bool(prev_snippet) or bool(next_snippet)
+    # Document-level context is just a stripped-non-empty check; no length
+    # cap here because the whole point of the summary is to be present in
+    # full on every prompt. The summary builder upstream caps the source
+    # transcript before generation, so the summary is already bounded.
+    global_snippet = (global_context or "").strip()
+    has_global_context = bool(global_snippet)
+    has_context = has_local_context or has_global_context
 
-    # CONTEXT block — only emitted when at least one neighbour is available.
-    # Lines are explicit ([Previous] / [Next]) so the model can locate the
-    # boundary even when the snippets themselves contain newlines.
-    if has_context:
-        context_lines = [
+    # CONTEXT blocks — emitted only when there is something to say.
+    # GLOBAL CONTEXT goes FIRST so the model reads the document-level
+    # anchor before any local prev/next snippet. Both blocks share the
+    # same "do not translate" framing.
+    context_parts: list[str] = []
+    if has_global_context:
+        context_parts.append(
+            "GLOBAL CONTEXT (entire video summary, for understanding only — DO NOT translate, "
+            "only the target segment below):\n"
+            f"{global_snippet}"
+        )
+    if has_local_context:
+        local_lines = [
             "CONTEXT (for understanding only — DO NOT translate, only the target segment below):",
         ]
         if prev_snippet:
-            context_lines.append(f"[Previous] {prev_snippet}")
+            local_lines.append(f"[Previous] {prev_snippet}")
         if next_snippet:
-            context_lines.append(f"[Next] {next_snippet}")
-        context_block = "\n".join(context_lines) + "\n\n"
+            local_lines.append(f"[Next] {next_snippet}")
+        context_parts.append("\n".join(local_lines))
+    if context_parts:
+        context_block = "\n\n".join(context_parts) + "\n\n"
     else:
         context_block = ""
 
@@ -125,9 +149,16 @@ def build_translation_prompt(
     # When CONTEXT is present we tighten the wording on the source-text
     # marker so a model that "helpfully" tries to translate the surrounding
     # context is reminded one more time which fragment is the actual target.
-    if has_context:
+    # Wording is split: with local prev/next we reference those tokens
+    # explicitly (most common case, regression test relies on it); with
+    # only the document-level summary we use a more generic phrasing.
+    if has_local_context:
         target_marker = (
             f"{src_name} text TO TRANSLATE (only this, ignoring the [Previous]/[Next] context):\n"
+        )
+    elif has_global_context:
+        target_marker = (
+            f"{src_name} text TO TRANSLATE (only this, ignoring the GLOBAL CONTEXT above):\n"
         )
     else:
         target_marker = f"{src_name} text:\n"

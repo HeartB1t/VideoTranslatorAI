@@ -261,6 +261,7 @@ from videotranslator.timing import (  # noqa: E402
 )
 from videotranslator.audio_stretch import (  # noqa: E402
     build_rubberband_command as _build_rubberband_command,
+    compute_overlap_strategy as _compute_overlap_strategy,
     select_stretch_engine as _select_stretch_engine,
 )
 
@@ -3646,6 +3647,7 @@ def _merge_short_segments(
 from videotranslator.segments import (  # noqa: E402,F811
     expand_tight_slots as _expand_tight_slots,
     merge_short_segments as _merge_short_segments,
+    repair_split_sentences as _repair_split_sentences,
     split_on_punctuation as _split_on_punctuation,
 )
 from videotranslator.ollama_length_control import (  # noqa: E402
@@ -3656,6 +3658,10 @@ from videotranslator.ollama_length_control import (  # noqa: E402
 from videotranslator.ollama_prompt import (  # noqa: E402
     CONTEXT_SNIPPET_MAX_CHARS as _CONTEXT_SNIPPET_MAX_CHARS,
     build_translation_prompt as _build_translation_prompt,
+)
+from videotranslator.document_context import (  # noqa: E402
+    build_summary_prompt as _build_summary_prompt,
+    is_summary_useful as _is_summary_useful,
 )
 from videotranslator.tts_text_sanitizer import (  # noqa: E402
     sanitize_for_tts as _sanitize_for_tts,
@@ -4603,6 +4609,7 @@ def translate_with_ollama(
     batch_size: int = 1,
     fallback_fn=None,
     thinking: bool = False,
+    use_document_context: bool = True,
 ) -> list[dict]:
     """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
     impone concisione per il doppiaggio.
@@ -4727,8 +4734,9 @@ def translate_with_ollama(
         # src_name, tgt_name, slot_aware, is_qwen3, thinking from the
         # surrounding _translate_with_ollama scope so the call sites stay
         # short. The actual prompt construction (including the optional
-        # CONTEXT block injecting prev_text/next_text for disambiguation)
-        # lives in videotranslator.ollama_prompt and is unit-tested there.
+        # CONTEXT block injecting prev_text/next_text for disambiguation
+        # and the document-level GLOBAL CONTEXT from TASK 2K) lives in
+        # videotranslator.ollama_prompt and is unit-tested there.
         return _build_translation_prompt(
             text,
             slot_s,
@@ -4739,6 +4747,7 @@ def translate_with_ollama(
             thinking=thinking,
             prev_text=prev_text,
             next_text=next_text,
+            global_context=_global_context,
         )
 
     def _call_ollama(prompt: str, num_predict: int) -> str:
@@ -4777,6 +4786,47 @@ def translate_with_ollama(
         r.raise_for_status()
         data = r.json()
         return _ollama_strip_preamble(data.get("response", ""))
+
+    # TASK 2K: document-level context. One Ollama call up front to get a
+    # semantic summary of the whole transcript; injected into every per-
+    # segment prompt as 'GLOBAL CONTEXT (do not translate)' to anchor
+    # terminology, tone and global referents (a "he" 3 minutes later
+    # referring to a person introduced at the start). Skipped for short
+    # videos where the local prev/next window already covers everything,
+    # and skipped entirely when the caller passes use_document_context=False
+    # (CLI --no-document-context, ergonomic opt-out for fast runs).
+    _global_context: str | None = None
+    if use_document_context and _is_summary_useful(segments):
+        try:
+            _summary_prompt = _build_summary_prompt(
+                segments, tgt_name, src_name,
+                is_qwen3=is_qwen3, thinking=thinking,
+            )
+            if _summary_prompt:
+                # Token budget for the summary: bias the input length
+                # toward "long" so the output budget is generous. The
+                # summary is a one-off call; spending an extra ~500
+                # tokens of headroom is cheaper than truncating the
+                # glossary.
+                _summary_predict = _ollama_num_predict_for_segment(
+                    "x" * 1500, is_qwen3, thinking,
+                )
+                _summary_raw = _call_ollama(_summary_prompt, _summary_predict)
+                _summary_clean = (_summary_raw or "").strip()
+                if _summary_clean:
+                    _global_context = _summary_clean
+                    print(
+                        f"     → Document context: {len(_global_context)} chars summary "
+                        f"generated for translation guide",
+                        flush=True,
+                    )
+        except Exception as _ctx_err:
+            print(
+                f"     ! Document context generation failed: {_ctx_err}; "
+                f"proceeding without global context",
+                flush=True,
+            )
+            _global_context = None
 
     for i, seg in enumerate(segments):
         text = (seg.get("text") or "").strip()
@@ -5027,6 +5077,7 @@ def translate_segments(
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
     ollama_thinking: bool = False,
+    ollama_document_context: bool = True,
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
@@ -5042,6 +5093,7 @@ def translate_segments(
                 model=ollama_model, api_url=ollama_url,
                 slot_aware=ollama_slot_aware, batch_size=1,
                 thinking=ollama_thinking,
+                use_document_context=ollama_document_context,
             )
         except Exception as e:
             print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
@@ -6235,6 +6287,7 @@ def build_dubbed_track(
     bg_volume: float = 0.15,
     label: str = "[6/6] Assembling dubbed track...",
     metrics_csv_path: str | None = None,
+    overlap_fade_enabled: bool = True,
 ) -> str:
     """Assembla la traccia doppiata in streaming via numpy memmap.
     Evita di accumulare AudioSegment in RAM (~600 MB per video 1h+): il mix avviene
@@ -6267,6 +6320,16 @@ def build_dubbed_track(
         print("     [info] Rubber Band CLI available — using for ratio 1.15-1.50 band", flush=True)
     rubberband_used = 0
     atempo_used = 0
+
+    # TASK 2P (overlap fade): when the post-stretch TTS still overshoots
+    # the slot, instead of hard-truncating we let the tail spill up to
+    # MAX_OVERLAP_FRAMES into the next segment's slot. The memmap mix
+    # below sums int32 samples, so the tail naturally crossfades with
+    # whatever gets written there next. Counters drive the diagnostic.
+    MAX_OVERLAP_FRAMES = int(0.40 * SR)  # 400 ms — perception-safe ceiling
+    overlap_clean_count = 0      # full pcm preserved, mild overshoot
+    overlap_truncate_count = 0   # capped at slot+max_overlap, fade-out
+    last_seg_index = len(segments) - 1
 
     # Raw PCM int32 in memmap: serve headroom per sommare senza saturare durante
     # gli overlay, si clampa a int16 alla fine.
@@ -6388,17 +6451,52 @@ def build_dubbed_track(
         if pcm is None:
             continue
 
-        # Hard-truncate con fade-out se ancora troppo lungo dopo atempo.
-        # TASK 2S 2026-04-29: bump fade-out 80ms → 200ms. Il valore precedente
-        # lasciava udibili echi/click XTTS quando il TTS sforava in modo
-        # marcato (ratio > 1.5). 200ms è ancora ben sotto la soglia di
-        # percezione "voce tagliata" (~400ms) ma copre i transienti finali.
+        # TASK 2P 2026-04-29: instead of hard-truncating segments that
+        # overshoot the slot, allow up to MAX_OVERLAP_FRAMES of overflow
+        # into the next segment's slot via a tail crossfade. Pre-fix
+        # diagnostic on real videos showed 15-25% of segments truncated
+        # → audible "audio mozzato" at end of phrase. The np.memmap mix
+        # accumulates int32 samples so the spill-over is summed with the
+        # next segment's pcm naturally; no explicit cross-fade-in needed.
+        # TASK 2S (2026-04-29) bump fade-out 80ms → 200ms is preserved as
+        # the LEGACY truncate fade length when overlap is disabled or for
+        # the last segment of the video.
         slot_frames = int(slot_ms * SR / 1000)
-        truncated = pcm.shape[0] > slot_frames
-        if truncated:
-            pcm = pcm[:slot_frames].copy()
-            fade_len = max(1, min(int(0.20 * SR), pcm.shape[0] // 4))
-            # Fade lineare su int16 → calcolato in float32 poi riconvertito.
+        is_last_seg = (i == last_seg_index)
+        strategy, target_frames, fade_len = _compute_overlap_strategy(
+            pcm_frames=pcm.shape[0],
+            slot_frames=slot_frames,
+            max_overlap_frames=MAX_OVERLAP_FRAMES,
+            is_last_segment=is_last_seg,
+            overlap_enabled=overlap_fade_enabled,
+        )
+        # Trim/keep pcm according to the strategy; "fit" is a no-op.
+        truncated = False         # legacy semantics: hard-cut at slot
+        overlap_used = False      # TASK 2P new flag
+        if strategy == "truncate":
+            pcm = pcm[:target_frames].copy()
+            truncated = True
+        elif strategy == "overlap_clean":
+            # Full pcm preserved. The tail will spill into the next
+            # segment's slot and crossfade via the memmap sum.
+            overlap_used = True
+            overlap_clean_count += 1
+        elif strategy == "overlap_truncate":
+            pcm = pcm[:target_frames].copy()
+            truncated = True
+            overlap_used = True
+            overlap_truncate_count += 1
+        # else: "fit" — no slicing, no fade.
+
+        if strategy != "fit":
+            # Apply the trailing fade-out on whatever is left of pcm.
+            # The helper already returns a fade_frames sized to pcm, but
+            # this clamp is a runtime safety net: pcm.shape[0] could differ
+            # from what the helper reasoned about if upstream resampling
+            # kicked in (very short segments < SR/4 frames). Keep the
+            # fade <= 1/4 of the kept pcm so short segments don't get a
+            # fade longer than their content (audible as a click).
+            fade_len = max(1, min(fade_len, pcm.shape[0] // 4 or 1))
             ramp = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
             tail = pcm[-fade_len:].astype(np.float32) * ramp[:, None]
             pcm[-fade_len:] = tail.astype(np.int16)
@@ -6418,6 +6516,7 @@ def build_dubbed_track(
             "pre_stretch_ratio": round(ratio_raw, 4),
             "stretch_engine": _seg_engine_used,
             "stretch_truncated": truncated,
+            "overlap_used": overlap_used,
             "text_src": seg.get("text_src", ""),
             "text_tgt": seg.get("text_tgt", ""),
         })
@@ -6464,6 +6563,25 @@ def build_dubbed_track(
             print(
                 f"     -> Stretch engines: {rubberband_used} rubberband, "
                 f"{atempo_used} atempo",
+                flush=True,
+            )
+        # TASK 2P: report how often the overlap fade saved a phrase tail
+        # from being truncated. overlap_clean = full pcm preserved (best
+        # case); overlap_truncate = capped at slot+max_overlap (still
+        # better than hard-cut at slot).
+        overlap_total = overlap_clean_count + overlap_truncate_count
+        if overlap_total > 0:
+            print(
+                f"     -> Overlap fade applied to {overlap_total} segments "
+                f"({overlap_clean_count} clean, {overlap_truncate_count} "
+                f"capped at slot+{int(MAX_OVERLAP_FRAMES * 1000 / SR)}ms) "
+                f"instead of hard truncate",
+                flush=True,
+            )
+        elif not overlap_fade_enabled:
+            print(
+                "     -> Overlap fade disabled (--no-overlap-fade); "
+                "legacy hard-truncate active",
                 flush=True,
             )
 
@@ -7085,7 +7203,10 @@ def translate_video(
     ollama_url: str = "http://localhost:11434",
     ollama_slot_aware: bool = True,
     ollama_thinking: bool = False,
+    ollama_document_context: bool = True,
     slot_expansion: bool = True,
+    sentence_repair: bool = True,
+    overlap_fade_enabled: bool = True,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -7201,6 +7322,21 @@ def translate_video(
             if len(raw_segs) < pre_merge:
                 _note = " (aggressive)" if merge_aggressive else ""
                 print(f"     → Merged short segments{_note}: {pre_merge} → {len(raw_segs)}", flush=True)
+            # TASK 2L: ricompone frasi spezzate da Whisper (es. "sto per." +
+            # "Parlare di...") prima della traduzione, così qwen3 vede frasi
+            # coerenti invece di frammenti. Pure function, ritorna nuova lista.
+            # Disabilitabile con --no-sentence-repair per A/B test.
+            if sentence_repair:
+                _pre_repair = len(raw_segs)
+                raw_segs = _repair_split_sentences(
+                    raw_segs, src_lang_hint=effective_src,
+                )
+                _repaired = _pre_repair - len(raw_segs)
+                if _repaired > 0:
+                    print(
+                        f"     → Repaired {_repaired} split sentences from Whisper output",
+                        flush=True,
+                    )
             # TASK 2E: smart slot expansion / time borrowing. Tight segments
             # (expected pre_stretch_ratio > 1.50) "rubano" tempo dai gap
             # silenziosi successivi e — se il vicino è sotto-utilizzato —
@@ -7237,6 +7373,7 @@ def translate_video(
                 ollama_model=ollama_model, ollama_url=ollama_url,
                 ollama_slot_aware=ollama_slot_aware,
                 ollama_thinking=ollama_thinking,
+                ollama_document_context=ollama_document_context,
             )
 
         if not no_subs:
@@ -7290,6 +7427,7 @@ def translate_video(
         track     = build_dubbed_track(
             segments, tts_files, bg_path, duration, tmp_dir,
             metrics_csv_path=output_base + "_metrics.csv",
+            overlap_fade_enabled=overlap_fade_enabled,
         )
         mux_video(video_in, track, output)
 
@@ -7319,7 +7457,8 @@ def translate_video(
                 try:
                     # Build a vocals-only track (no background music) for accurate lip sync
                     track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir,
-                                                       label="[6/6] Assembling vocals track for lip-sync...")
+                                                       label="[6/6] Assembling vocals track for lip-sync...",
+                                                       overlap_fade_enabled=overlap_fade_enabled)
                     synced = apply_lipsync(output, track_vocals, tmp_dir)
                     shutil.move(synced, output)
                 except Exception as e:
@@ -9552,6 +9691,13 @@ def _cli():
     parser.add_argument("--ollama-thinking", action="store_true",
                         help="Enable Qwen3 thinking mode: deliberates step-by-step "
                              "(~10x slower, fewer idiom/grammar errors). Default off.")
+    parser.add_argument("--no-document-context", action="store_true",
+                        help="Disable TASK 2K document-level context. By default the "
+                             "Ollama engine generates one summary of the whole "
+                             "transcript up front and injects it as GLOBAL CONTEXT "
+                             "into every per-segment prompt to anchor terminology "
+                             "and tone across long videos. Disable for fastest runs "
+                             "on short clips.")
     parser.add_argument("--diarize", action="store_true",
                         help="Enable pyannote speaker diarization")
     parser.add_argument("--hf-token", default="",
@@ -9567,6 +9713,21 @@ def _cli():
                              "tight segments (TASK 2E). Default ON: tight segments "
                              "borrow time from neighbouring silence/easy slots so "
                              "ffmpeg atempo can stay below audible thresholds.")
+    parser.add_argument("--no-sentence-repair", action="store_true",
+                        help="Disable smart sentence-boundary repair (TASK 2L). "
+                             "Default ON: pairs of segments where the first ends "
+                             "with a connector (to/for/della/...) and the second "
+                             "starts in lowercase are re-joined before translation, "
+                             "so the LLM sees full sentences instead of mid-clause "
+                             "fragments.")
+    parser.add_argument("--no-overlap-fade", action="store_true",
+                        help="Disable TASK 2P overlap fade and revert to legacy "
+                             "hard-truncate when the TTS still overshoots its "
+                             "slot after atempo/rubberband. Default OFF: tails "
+                             "are allowed to spill up to 400 ms into the next "
+                             "slot and crossfade via the memmap mix, which "
+                             "drops audible 'audio mozzato' artefacts on dense "
+                             "voice-only content.")
     # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
     # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
     parser.add_argument("--xtts", action="store_true",
@@ -9630,7 +9791,10 @@ def _cli():
             ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
             ollama_slot_aware=not args.ollama_no_slot_aware,
             ollama_thinking=args.ollama_thinking or bool(cfg_cli.get("ollama_thinking", False)),
+            ollama_document_context=not args.no_document_context,
             slot_expansion=not args.no_slot_expansion,
+            sentence_repair=not args.no_sentence_repair,
+            overlap_fade_enabled=not args.no_overlap_fade,
         )
 
 

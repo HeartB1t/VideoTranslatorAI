@@ -118,3 +118,102 @@ def build_rubberband_command(
         input_path,
         output_path,
     ]
+
+
+# Strategy identifiers for compute_overlap_strategy (TASK 2P).
+# Kept as bare strings for the same reason as engine ids: the legacy
+# single-file caller compares against literals.
+_STRAT_FIT = "fit"                       # pcm fits the slot, no action
+_STRAT_OVERLAP_CLEAN = "overlap_clean"   # mild overshoot, full pcm kept + crossfade tail
+_STRAT_OVERLAP_TRUNCATE = "overlap_truncate"  # large overshoot, capped at slot+max_overlap with fade-out
+_STRAT_TRUNCATE = "truncate"             # legacy hard-truncate (overlap disabled)
+
+
+def compute_overlap_strategy(
+    pcm_frames: int,
+    slot_frames: int,
+    max_overlap_frames: int,
+    is_last_segment: bool = False,
+    overlap_enabled: bool = True,
+) -> tuple[str, int, int]:
+    """Decide how to fit ``pcm_frames`` of TTS audio into a ``slot_frames`` slot.
+
+    TASK 2P: hard-truncating segments that overshoot their slot leaves an
+    audible "audio mozzato" artefact at end of phrase (15-25% of segments
+    on dense voice-only content). Allowing a small overflow into the next
+    segment's slot — capped at ``max_overlap_frames`` — preserves the
+    tail of the phrase while keeping any leftover within a perceptually
+    safe window. The actual mixing is performed by the caller's memmap
+    accumulator, which sums int32 samples so the overflow naturally
+    crossfades with whatever the next segment writes there.
+
+    Parameters
+    ----------
+    pcm_frames:
+        Length of the TTS pcm buffer, in samples (per-channel count).
+    slot_frames:
+        Length of the segment's allocated slot, in samples.
+    max_overlap_frames:
+        Maximum permitted overflow into the following segment's slot, in
+        samples. Typical value: 0.40 * sample_rate (i.e. 400 ms).
+    is_last_segment:
+        When True the segment has no neighbour to overlap into, so the
+        function downgrades any overlap strategy to a plain truncate. This
+        keeps the very end of the dubbed track from running past
+        ``total_duration`` (the memmap is bounded, but a trailing tail
+        spilling into silent padding adds nothing useful).
+    overlap_enabled:
+        When False the function always returns the legacy ``"truncate"``
+        strategy even for mild overshoots. Wired to the
+        ``--no-overlap-fade`` CLI flag.
+
+    Returns
+    -------
+    tuple ``(strategy, target_frames, fade_frames)``:
+        * ``strategy`` — one of ``"fit"``, ``"overlap_clean"``,
+          ``"overlap_truncate"``, ``"truncate"``.
+        * ``target_frames`` — the number of pcm frames the caller should
+          keep (``pcm_frames`` for ``fit``/``overlap_clean``, the capped
+          length for the truncating strategies).
+        * ``fade_frames`` — number of samples of trailing fade-out the
+          caller should apply on the kept pcm to taper the tail. ``0``
+          when no fade is needed (``fit``).
+
+    The function is pure: no I/O, no globals, no float math beyond simple
+    comparisons, so it is trivially testable without audio fixtures.
+    """
+    if pcm_frames <= 0 or slot_frames <= 0:
+        # Defensive: nothing to mix or impossible slot. Caller will skip
+        # the segment, but returning "fit" with zero-length keeps the
+        # contract simple (no None branches).
+        return (_STRAT_FIT, max(pcm_frames, 0), 0)
+
+    overshoot = pcm_frames - slot_frames
+    if overshoot <= 0:
+        return (_STRAT_FIT, pcm_frames, 0)
+
+    # Legacy path: overlap disabled by CLI, or this is the last segment
+    # so there is no neighbour slot to spill into.
+    if not overlap_enabled or is_last_segment:
+        # Legacy fade-out matches the existing 200ms cap (TASK 2S).
+        # The caller already knows the fade ramp length: we hand back a
+        # safe upper bound (1/4 of the kept pcm, capped at 200ms-equivalent
+        # via max_overlap_frames/2 — caller clamps further if needed).
+        fade = min(max_overlap_frames // 2, slot_frames // 4)
+        return (_STRAT_TRUNCATE, slot_frames, max(1, fade))
+
+    if overshoot <= max_overlap_frames:
+        # Overlap mode: keep the full pcm. The trailing fade lasts at most
+        # OVERLAP_FADE_FRAMES = max_overlap_frames // 2 (i.e. 200ms when
+        # the cap is 400ms), or the full overshoot when shorter.
+        fade = min(max_overlap_frames // 2, overshoot)
+        # Never fade longer than the pcm itself.
+        fade = min(fade, pcm_frames)
+        return (_STRAT_OVERLAP_CLEAN, pcm_frames, max(1, fade))
+
+    # Beyond the overlap budget: cap at slot+max_overlap and fade. This
+    # protects against TTS hallucinations that would otherwise shout over
+    # several subsequent segments.
+    target = slot_frames + max_overlap_frames
+    fade = min(max_overlap_frames // 2, target // 4)
+    return (_STRAT_OVERLAP_TRUNCATE, target, max(1, fade))

@@ -11,6 +11,7 @@ import unittest
 
 from videotranslator.audio_stretch import (
     build_rubberband_command,
+    compute_overlap_strategy,
     select_stretch_engine,
 )
 
@@ -115,6 +116,142 @@ class BuildRubberbandCommandTests(unittest.TestCase):
         self.assertIsInstance(cmd, list)
         for token in cmd:
             self.assertIsInstance(token, str)
+
+
+class ComputeOverlapStrategyTests(unittest.TestCase):
+    """TASK 2P: pure tests for the overlap-vs-truncate decision helper."""
+
+    # 44.1 kHz reference: 400 ms = 17_640 frames, 200 ms = 8_820 frames.
+    SR = 44100
+    MAX_OVERLAP = int(0.40 * SR)  # 17_640
+
+    # ── Fit (no overshoot) ──────────────────────────────────────────────
+    def test_pcm_shorter_than_slot_returns_fit(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=self.SR,           # 1 s
+            slot_frames=2 * self.SR,      # 2 s
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "fit")
+        self.assertEqual(target, self.SR)
+        self.assertEqual(fade, 0)
+
+    def test_pcm_equal_to_slot_returns_fit(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR,
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "fit")
+        self.assertEqual(fade, 0)
+
+    # ── Overlap clean (mild overshoot, fits within max_overlap) ─────────
+    def test_mild_overshoot_uses_overlap_clean(self):
+        # 200 ms overshoot, well within the 400 ms cap.
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR + int(0.20 * self.SR),
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "overlap_clean")
+        # Full pcm is preserved.
+        self.assertEqual(target, 2 * self.SR + int(0.20 * self.SR))
+        # Fade equals min(MAX_OVERLAP/2, overshoot).
+        self.assertEqual(fade, int(0.20 * self.SR))
+
+    def test_overshoot_at_max_uses_overlap_clean(self):
+        # Overshoot exactly at the boundary stays in overlap_clean.
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR + self.MAX_OVERLAP,
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "overlap_clean")
+        self.assertEqual(target, 2 * self.SR + self.MAX_OVERLAP)
+        # Fade capped at MAX_OVERLAP/2 = 200 ms, never the full overshoot.
+        self.assertEqual(fade, self.MAX_OVERLAP // 2)
+
+    # ── Overlap truncate (overshoot beyond budget) ──────────────────────
+    def test_overshoot_beyond_budget_uses_overlap_truncate(self):
+        # 1 s overshoot, far beyond the 400 ms cap.
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR + 1 * self.SR,
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "overlap_truncate")
+        # Capped at slot + max_overlap.
+        self.assertEqual(target, 2 * self.SR + self.MAX_OVERLAP)
+        self.assertGreater(fade, 0)
+        self.assertLessEqual(fade, self.MAX_OVERLAP // 2)
+
+    # ── Last segment: never overlaps (no neighbour slot) ────────────────
+    def test_last_segment_overshoot_falls_back_to_truncate(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR + int(0.20 * self.SR),
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+            is_last_segment=True,
+        )
+        self.assertEqual(strat, "truncate")
+        # Target equals slot length (no overflow allowed past video end).
+        self.assertEqual(target, 2 * self.SR)
+        self.assertGreater(fade, 0)
+
+    def test_last_segment_no_overshoot_still_returns_fit(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=self.SR,
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+            is_last_segment=True,
+        )
+        self.assertEqual(strat, "fit")
+        self.assertEqual(fade, 0)
+
+    # ── Opt-out: overlap disabled by CLI ────────────────────────────────
+    def test_overlap_disabled_uses_legacy_truncate(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=2 * self.SR + int(0.20 * self.SR),
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+            overlap_enabled=False,
+        )
+        self.assertEqual(strat, "truncate")
+        self.assertEqual(target, 2 * self.SR)
+        self.assertGreater(fade, 0)
+
+    # ── Defensive edge cases ────────────────────────────────────────────
+    def test_zero_pcm_returns_fit(self):
+        strat, target, fade = compute_overlap_strategy(
+            pcm_frames=0,
+            slot_frames=2 * self.SR,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "fit")
+        self.assertEqual(target, 0)
+        self.assertEqual(fade, 0)
+
+    def test_zero_slot_returns_fit(self):
+        # Degenerate slot: caller will skip, helper must not divide by zero.
+        strat, _target, fade = compute_overlap_strategy(
+            pcm_frames=1000,
+            slot_frames=0,
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "fit")
+        self.assertEqual(fade, 0)
+
+    def test_fade_never_exceeds_pcm_length(self):
+        # Tiny pcm with tiny overshoot — fade must shrink, not be 200 ms.
+        strat, _target, fade = compute_overlap_strategy(
+            pcm_frames=100,         # 100 frames of pcm
+            slot_frames=80,         # 20-frame overshoot
+            max_overlap_frames=self.MAX_OVERLAP,
+        )
+        self.assertEqual(strat, "overlap_clean")
+        self.assertLessEqual(fade, 100)
+        self.assertLessEqual(fade, 20)  # bounded by overshoot
+        self.assertGreaterEqual(fade, 1)
 
 
 if __name__ == "__main__":

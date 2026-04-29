@@ -239,5 +239,86 @@ class NegationPreservationRulesTests(unittest.TestCase):
         self.assertLess(neg_idx, text_marker)
 
 
+class GlobalContextTests(unittest.TestCase):
+    """TASK 2K: optional document-level summary injected as GLOBAL CONTEXT.
+
+    The block must appear BEFORE the local prev/next CONTEXT block, and
+    above the requirements list, so the model reads the global anchor
+    first and applies it while parsing the local context."""
+
+    def test_no_global_block_when_global_context_none(self):
+        prompt = build_translation_prompt(
+            "Hello world.", 4.0, "English", "Italian",
+            global_context=None,
+        )
+        self.assertNotIn("GLOBAL CONTEXT", prompt)
+
+    def test_no_global_block_when_global_context_blank(self):
+        # Whitespace-only is treated as None.
+        prompt = build_translation_prompt(
+            "Hello world.", 4.0, "English", "Italian",
+            global_context="   \n\t  ",
+        )
+        self.assertNotIn("GLOBAL CONTEXT", prompt)
+
+    def test_global_block_emitted_when_provided(self):
+        summary = (
+            "Tutorial on keyboard shortcuts. Preserve verbatim: Ctrl+C, Cmd+V, VS Code."
+        )
+        prompt = build_translation_prompt(
+            "Press the key combination.", 4.0, "English", "Italian",
+            global_context=summary,
+        )
+        self.assertIn("GLOBAL CONTEXT", prompt)
+        self.assertIn(summary, prompt)
+        # Anti-translate framing must appear next to the global block too.
+        self.assertIn("DO NOT translate", prompt)
+
+    def test_global_block_appears_before_local_context(self):
+        # When BOTH are present the document-level summary must come
+        # first so the model has the global anchor before the locale.
+        prompt = build_translation_prompt(
+            "Press the key combination.", 4.0, "English", "Italian",
+            prev_text="Earlier we set up the editor.",
+            next_text="It saves the file.",
+            global_context="VS Code tutorial. Preserve: Ctrl+S.",
+        )
+        global_idx = prompt.index("GLOBAL CONTEXT")
+        local_idx = prompt.index("[Previous]")
+        self.assertLess(global_idx, local_idx)
+
+    def test_global_block_appears_before_requirements(self):
+        prompt = build_translation_prompt(
+            "Press the key combination.", 4.0, "English", "Italian",
+            global_context="VS Code tutorial. Preserve: Ctrl+S.",
+        )
+        global_idx = prompt.index("GLOBAL CONTEXT")
+        req_idx = prompt.index("CRITICAL REQUIREMENTS")
+        self.assertLess(global_idx, req_idx)
+
+    def test_global_only_uses_dedicated_target_marker(self):
+        # With only a global summary (no prev/next) the reinforced
+        # marker must reference the GLOBAL CONTEXT, not [Previous]/[Next]
+        # which are not present in the prompt.
+        prompt = build_translation_prompt(
+            "Press the key combination.", 4.0, "English", "Italian",
+            global_context="VS Code tutorial. Preserve: Ctrl+S.",
+        )
+        self.assertIn("ignoring the GLOBAL CONTEXT above", prompt)
+        # The local-context wording should NOT appear when prev/next are
+        # absent (the regression test for the local case still passes
+        # because it provides a prev_text).
+        self.assertNotIn("ignoring the [Previous]/[Next] context", prompt)
+
+    def test_target_text_still_appears_after_global_block(self):
+        prompt = build_translation_prompt(
+            "Press the key combination.", 4.0, "English", "Italian",
+            global_context="VS Code tutorial. Preserve: Ctrl+S.",
+        )
+        global_idx = prompt.index("GLOBAL CONTEXT")
+        target_idx = prompt.index("Press the key combination.")
+        self.assertLess(global_idx, target_idx)
+
+
 if __name__ == "__main__":
     unittest.main()
