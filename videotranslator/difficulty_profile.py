@@ -53,6 +53,15 @@ class Profile:
         the compression workload from ``atempo`` (post-stretch) to XTTS
         (synthesis-time), which sounds cleaner but risks XTTS prosody
         loss above ~1.40.
+    use_cove:
+        Whether to enable Chain-of-Verification (TASK 2U) for the
+        Ollama LLM translation path. When True, segments containing
+        risk patterns (negations, quantifiers) get a second-pass
+        verification call so the model can self-correct dropped
+        negations and softened quantifiers. Disabled on EASY because
+        the legacy "PRESERVE NEGATIONS" requirement in the main prompt
+        is sufficient for low-density videos and CoVe's per-segment
+        latency tax is not justified.
     """
 
     length_retry_threshold: float
@@ -61,6 +70,7 @@ class Profile:
     rubberband_min: float
     rubberband_max: float
     xtts_speed_cap: float
+    use_cove: bool = True
 
 
 # Calibration baseline:
@@ -86,6 +96,9 @@ EASY = Profile(
     rubberband_min=1.15,
     rubberband_max=1.50,
     xtts_speed_cap=1.30,
+    # EASY videos are low-density and the in-prompt PRESERVE NEGATIONS
+    # rule is enough; skip the CoVe per-segment cost.
+    use_cove=False,
 )
 MEDIUM = Profile(
     length_retry_threshold=1.10,
@@ -94,6 +107,7 @@ MEDIUM = Profile(
     rubberband_min=1.15,
     rubberband_max=1.50,
     xtts_speed_cap=1.35,
+    use_cove=True,
 )
 HARD = Profile(
     length_retry_threshold=1.05,
@@ -102,6 +116,7 @@ HARD = Profile(
     rubberband_min=1.15,
     rubberband_max=1.80,
     xtts_speed_cap=1.45,
+    use_cove=True,
 )
 
 PROFILES: dict[str, Profile] = {

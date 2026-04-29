@@ -80,6 +80,33 @@ def platform_info(sys_platform: str) -> PlatformInfo:
     return PlatformInfo(sys_platform, sys_platform, supported=False)
 
 
+def cosyvoice_supported(sys_platform: str | None = None) -> bool:
+    """Return True if CosyVoice (voice-cloning TTS) can be offered on this OS.
+
+    Linux is the only currently supported target. Two upstream blockers keep
+    it Linux-only:
+
+      * **Windows**: the optional dependency ``pynini`` requires MSVC, while
+        ``tensorrt-cu12`` wheels routinely fail to build outside conda. The
+        official FunAudioLLM install path is a conda env on Linux/macOS, with
+        no working pip path on Windows as of 2026-04.
+      * **macOS**: untested, no available CI signal. Rather than ship a
+        broken-by-default checkbox we hide the option until a user reports
+        a working setup.
+
+    On Linux the situation cleared up in 2026-04: the PyPI ``cosyvoice``
+    package now defaults to ``wetext`` instead of ``WeTextProcessing``, which
+    used to be the C++ build hell that motivated hiding the checkbox in the
+    first place.
+
+    Centralising this policy here means the GUI, CLI, and any future
+    headless entrypoint share a single source of truth.
+    """
+    if sys_platform is None:
+        sys_platform = sys.platform
+    return sys_platform.startswith("linux")
+
+
 def resolve_app_paths(
     sys_platform: str,
     env: dict[str, str],

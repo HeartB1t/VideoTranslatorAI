@@ -354,7 +354,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — sperimentale, setup manuale)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice — solo Linux, qualità superiore a XTTS, ~1.7 GB)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 non installato.\n\n"
@@ -392,6 +392,8 @@ UI_STRINGS = {
         "opt_diarization":    "👥 Diarization multi-speaker (pyannote)",
         "label_hf_token":     "HF token:",
         "hint_hf_token":      "Token HF gratuito: huggingface.co/settings/tokens",
+        "label_hotwords":     "Hotwords:",
+        "hint_hotwords":      "Termini tecnici/brand separati da virgola (es. Strix, pipx, Docker). Riduce errori Whisper su parole rare ~43%",
         "msg_xtts_no_lang":   "XTTS v2 non supporta '{lang}'. Verrà usato Edge-TTS.",
         "msg_no_video":       "Aggiungi almeno un video.",
         "msg_completed":      "Traduzione completata!",
@@ -466,7 +468,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, manual setup)",
+        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice — Linux only, higher quality than XTTS, ~1.7 GB)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 not installed.\n\n"
@@ -504,6 +506,8 @@ UI_STRINGS = {
         "opt_diarization":    "👥 Multi-speaker diarization (pyannote)",
         "label_hf_token":     "HF token:",
         "hint_hf_token":      "Free HF token: huggingface.co/settings/tokens",
+        "label_hotwords":     "Hotwords:",
+        "hint_hotwords":      "Comma-separated technical terms/brand names (e.g. Strix, pipx, Docker). Reduces Whisper errors on rare words ~43%",
         "msg_xtts_no_lang":   "XTTS v2 does not support '{lang}'. Falling back to Edge-TTS.",
         "msg_no_video":       "Add at least one video.",
         "msg_completed":      "Translation completed!",
@@ -645,7 +649,7 @@ UI_STRINGS = {
             "\n"
             "سيتم استخدام MarianMT/Google كبديل."
         ),
-        "opt_cosyvoice": "🎤 استنساخ صوت احترافي (CosyVoice 2.0 — تجريبي، إعداد يدوي)",
+        "opt_cosyvoice": "🎤 استنساخ صوت احترافي (CosyVoice — لينكس فقط، جودة أعلى من XTTS، ~1.7 جيجابايت)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 غير مثبت.\n"
             "\n"
@@ -756,7 +760,7 @@ UI_STRINGS = {
             "\n"
             "将回退到 MarianMT/Google。"
         ),
-        "opt_cosyvoice": "🎤 专业语音克隆(CosyVoice 2.0 — 实验性,手动设置)",
+        "opt_cosyvoice": "🎤 专业语音克隆(CosyVoice — 仅 Linux,质量优于 XTTS,~1.7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 未安装。\n"
             "\n"
@@ -867,7 +871,7 @@ UI_STRINGS = {
             "\n"
             "Bude použit MarianMT/Google jako záloha."
         ),
-        "opt_cosyvoice": "🎤 Pro klonování hlasu (CosyVoice 2.0 — experimentální, ruční instalace)",
+        "opt_cosyvoice": "🎤 Pro klonování hlasu (CosyVoice — pouze Linux, vyšší kvalita než XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 není nainstalován.\n"
             "\n"
@@ -978,7 +982,7 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google bruges som fallback."
         ),
-        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice 2.0 — eksperimentel, manuel opsætning)",
+        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice — kun Linux, højere kvalitet end XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 ikke installeret.\n"
             "\n"
@@ -1089,7 +1093,7 @@ UI_STRINGS = {
             "\n"
             "Terugvallen op MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — experimenteel, handmatige setup)",
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — alleen Linux, hogere kwaliteit dan XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 niet geïnstalleerd.\n"
             "\n"
@@ -1200,7 +1204,7 @@ UI_STRINGS = {
             "\n"
             "Käytetään MarianMT/Google varajärjestelmänä."
         ),
-        "opt_cosyvoice": "🎤 Pro-äänikloonaus (CosyVoice 2.0 — kokeellinen, manuaalinen asennus)",
+        "opt_cosyvoice": "🎤 Pro-äänikloonaus (CosyVoice — vain Linux, parempi laatu kuin XTTS, ~1,7 Gt)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 ei ole asennettu.\n"
             "\n"
@@ -1311,7 +1315,7 @@ UI_STRINGS = {
             "\n"
             "Repli vers MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — expérimental, installation manuelle)",
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — Linux uniquement, qualité supérieure à XTTS, ~1,7 Go)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 non installé.\n"
             "\n"
@@ -1422,7 +1426,7 @@ UI_STRINGS = {
             "\n"
             "Fallback auf MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimentell, manuelle Einrichtung)",
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — nur Linux, höhere Qualität als XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 nicht installiert.\n"
             "\n"
@@ -1533,7 +1537,7 @@ UI_STRINGS = {
             "\n"
             "Επιστροφή σε MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro κλωνοποίηση φωνής (CosyVoice 2.0 — πειραματικό, χειροκίνητη εγκατάσταση)",
+        "opt_cosyvoice": "🎤 Pro κλωνοποίηση φωνής (CosyVoice — μόνο Linux, υψηλότερη ποιότητα από XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "Το CosyVoice 2.0 δεν είναι εγκατεστημένο.\n"
             "\n"
@@ -1644,7 +1648,7 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google पर वापस जाएगा।"
         ),
-        "opt_cosyvoice": "🎤 प्रो वॉइस क्लोनिंग (CosyVoice 2.0 — प्रायोगिक, मैन्युअल सेटअप)",
+        "opt_cosyvoice": "🎤 प्रो वॉइस क्लोनिंग (CosyVoice — केवल Linux, XTTS से बेहतर गुणवत्ता, ~1.7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 स्थापित नहीं है।\n"
             "\n"
@@ -1755,7 +1759,7 @@ UI_STRINGS = {
             "\n"
             "Visszaállás MarianMT/Google használatára."
         ),
-        "opt_cosyvoice": "🎤 Pro hangklónozás (CosyVoice 2.0 — kísérleti, kézi beállítás)",
+        "opt_cosyvoice": "🎤 Pro hangklónozás (CosyVoice — csak Linux, jobb minőség mint XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 nincs telepítve.\n"
             "\n"
@@ -1866,7 +1870,7 @@ UI_STRINGS = {
             "\n"
             "Akan kembali ke MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — eksperimental, setup manual)",
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — hanya Linux, kualitas lebih tinggi dari XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 tidak terinstal.\n"
             "\n"
@@ -1977,7 +1981,7 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google にフォールバックします。"
         ),
-        "opt_cosyvoice": "🎤 プロボイスクローニング(CosyVoice 2.0 — 実験的、手動セットアップ)",
+        "opt_cosyvoice": "🎤 プロボイスクローニング(CosyVoice — Linux 専用、XTTS より高品質、約 1.7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 がインストールされていません。\n"
             "\n"
@@ -2088,7 +2092,7 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google로 폴백됩니다."
         ),
-        "opt_cosyvoice": "🎤 프로 보이스 클로닝 (CosyVoice 2.0 — 실험적, 수동 설정)",
+        "opt_cosyvoice": "🎤 프로 보이스 클로닝 (CosyVoice — Linux 전용, XTTS보다 높은 품질, ~1.7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0이 설치되지 않았습니다.\n"
             "\n"
@@ -2199,7 +2203,7 @@ UI_STRINGS = {
             "\n"
             "Faller tilbake til MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice 2.0 — eksperimentell, manuelt oppsett)",
+        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice — kun Linux, høyere kvalitet enn XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 ikke installert.\n"
             "\n"
@@ -2310,7 +2314,7 @@ UI_STRINGS = {
             "\n"
             "Zostanie użyty MarianMT/Google jako rezerwa."
         ),
-        "opt_cosyvoice": "🎤 Pro klonowanie głosu (CosyVoice 2.0 — eksperymentalne, ręczna konfiguracja)",
+        "opt_cosyvoice": "🎤 Pro klonowanie głosu (CosyVoice — tylko Linux, wyższa jakość niż XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 nie jest zainstalowany.\n"
             "\n"
@@ -2421,7 +2425,7 @@ UI_STRINGS = {
             "\n"
             "Será usado MarianMT/Google como alternativa."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, configuração manual)",
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — apenas Linux, qualidade superior ao XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 não instalado.\n"
             "\n"
@@ -2532,7 +2536,7 @@ UI_STRINGS = {
             "\n"
             "Se va folosi MarianMT/Google ca rezervă."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice 2.0 — experimental, configurare manuală)",
+        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — doar Linux, calitate superioară XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 nu este instalat.\n"
             "\n"
@@ -2643,7 +2647,7 @@ UI_STRINGS = {
             "\n"
             "Будет использован MarianMT/Google как резервный."
         ),
-        "opt_cosyvoice": "🎤 Pro клонирование голоса (CosyVoice 2.0 — экспериментально, ручная настройка)",
+        "opt_cosyvoice": "🎤 Pro клонирование голоса (CosyVoice — только Linux, качество выше XTTS, ~1,7 ГБ)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 не установлен.\n"
             "\n"
@@ -2754,7 +2758,7 @@ UI_STRINGS = {
             "\n"
             "Se usará MarianMT/Google como alternativa."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice 2.0 — experimental, configuración manual)",
+        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — solo Linux, calidad superior a XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 no instalado.\n"
             "\n"
@@ -2865,7 +2869,7 @@ UI_STRINGS = {
             "\n"
             "Faller tillbaka på MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro röstkloning (CosyVoice 2.0 — experimentell, manuell installation)",
+        "opt_cosyvoice": "🎤 Pro röstkloning (CosyVoice — endast Linux, högre kvalitet än XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 inte installerad.\n"
             "\n"
@@ -2976,7 +2980,7 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google'a geri dönülecek."
         ),
-        "opt_cosyvoice": "🎤 Pro ses klonlama (CosyVoice 2.0 — deneysel, manuel kurulum)",
+        "opt_cosyvoice": "🎤 Pro ses klonlama (CosyVoice — yalnızca Linux, XTTS'ten daha yüksek kalite, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 kurulu değil.\n"
             "\n"
@@ -3087,7 +3091,7 @@ UI_STRINGS = {
             "\n"
             "Буде використано MarianMT/Google як резервний варіант."
         ),
-        "opt_cosyvoice": "🎤 Pro клонування голосу (CosyVoice 2.0 — експериментально, ручне налаштування)",
+        "opt_cosyvoice": "🎤 Pro клонування голосу (CosyVoice — лише Linux, вища якість ніж XTTS, ~1,7 ГБ)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 не встановлено.\n"
             "\n"
@@ -3198,7 +3202,7 @@ UI_STRINGS = {
             "\n"
             "Sẽ chuyển sang MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Nhân bản giọng Pro (CosyVoice 2.0 — thử nghiệm, cài thủ công)",
+        "opt_cosyvoice": "🎤 Nhân bản giọng Pro (CosyVoice — chỉ Linux, chất lượng cao hơn XTTS, ~1,7 GB)",
         "msg_cosyvoice_unavailable": (
             "CosyVoice 2.0 chưa được cài đặt.\n"
             "\n"
@@ -3376,9 +3380,16 @@ def separate_audio(audio_path: str, tmp_dir: str) -> tuple[str, str]:
     return vocals_16k, bg_path
 
 
-def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list[dict], str]:
+def transcribe(
+    audio_path: str,
+    model_name: str,
+    lang_source: str,
+    hotwords: list[str] | None = None,
+) -> tuple[list[dict], str]:
     import torch
     from faster_whisper import WhisperModel
+
+    from videotranslator.hotwords import to_whisper_param
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute = "float16" if device == "cuda" else "int8"
@@ -3395,13 +3406,23 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
             raise
     lang = None if lang_source == "auto" else lang_source
 
+    # Context biasing (faster-whisper >=1.0): pass a space-separated string
+    # of expected terms (proper nouns, brand names, technical jargon) so the
+    # decoder weighs them higher when the audio matches phonetically.
+    # Empirical: ~43-44% Biased-WER reduction (arXiv:2508.17796).
+    hotwords_param = to_whisper_param(hotwords)
+    if hotwords_param:
+        print(
+            f"     [whisper] biased decoding with {len(hotwords or [])} hotwords",
+            flush=True,
+        )
+
     def _run_transcribe(dev, cmp):
         nonlocal model
         if dev != device:
             del model
             model = WhisperModel(model_name, device=dev, compute_type=cmp)
-        segments, info = model.transcribe(
-            audio_path,
+        transcribe_kwargs = dict(
             language=lang,
             beam_size=5,
             vad_filter=True,
@@ -3413,6 +3434,9 @@ def transcribe(audio_path: str, model_name: str, lang_source: str) -> tuple[list
             log_prob_threshold=-1.0,
             temperature=0,
         )
+        if hotwords_param:
+            transcribe_kwargs["hotwords"] = hotwords_param
+        segments, info = model.transcribe(audio_path, **transcribe_kwargs)
         out = []
         prev_text = None
         for s in segments:
@@ -3788,6 +3812,11 @@ from videotranslator.ollama_length_control import (  # noqa: E402
 from videotranslator.ollama_prompt import (  # noqa: E402
     CONTEXT_SNIPPET_MAX_CHARS as _CONTEXT_SNIPPET_MAX_CHARS,
     build_translation_prompt as _build_translation_prompt,
+)
+from videotranslator.ollama_cove import (  # noqa: E402
+    build_verification_prompt as _cove_build_verification_prompt,
+    needs_verification as _cove_needs_verification,
+    parse_verification_response as _cove_parse_verification_response,
 )
 from videotranslator.document_context import (  # noqa: E402
     build_summary_prompt as _build_summary_prompt,
@@ -4757,6 +4786,7 @@ def translate_with_ollama(
     thinking: bool = False,
     use_document_context: bool = True,
     difficulty_profile: _DifficultyProfile | None = None,
+    use_cove: bool = True,
 ) -> list[dict]:
     """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
     impone concisione per il doppiaggio.
@@ -4782,6 +4812,13 @@ def translate_with_ollama(
         difficulty_profile: profilo TASK 2G v2 (easy/medium/hard) che configura
                      soglia ed iterazioni del length re-prompt. Se None il
                      comportamento ricalca v1.7 / pre-2G v2 (MEDIUM).
+        use_cove: se True (default), abilita il second-pass Chain-of-Verification
+                     (TASK 2U) sui segmenti che contengono pattern rischiosi
+                     (negazioni, quantifiers). Il modello verifica con domande
+                     yes/no isolate se la prima traduzione preserva negazioni
+                     e quantifiers e può correggerla. Coperto dal Profile
+                     (EASY=False, MEDIUM/HARD=True) ma il caller può forzare
+                     il flag (CLI ``--no-cove`` per disabilitare globalmente).
 
     Ritorna la lista di segmenti con `text_src` e `text_tgt` popolati, identica
     nello schema a quella prodotta da `translate_segments` per gli altri engine.
@@ -4881,6 +4918,13 @@ def translate_with_ollama(
     # quei retry hanno effettivamente prodotto una versione più corta.
     rewrite_attempts = 0
     rewrite_success = 0
+    # TASK 2U: Chain-of-Verification counters. `cove_attempts` conta i
+    # segmenti per cui i pattern di rischio (negation/quantifier) hanno
+    # giustificato il second-pass. `cove_corrections` conta le volte in
+    # cui il modello ha effettivamente modificato la prima traduzione
+    # in qualcosa di sostanzialmente diverso (was_changed=True).
+    cove_attempts = 0
+    cove_corrections = 0
 
     def _build_prompt(
         text: str,
@@ -5179,6 +5223,58 @@ def translate_with_ollama(
                     else:
                         tr = tr[:max_reasonable_chars].rsplit(" ", 1)[0] + "..."
                     truncated_count += 1
+                # ── Chain-of-Verification (TASK 2U) ────────────────────
+                # Second-pass opt-in che attacca gli errori semantici
+                # qwen3 sui segmenti rischiosi (negazioni, quantifiers).
+                # Riferimento: paper ACL 2024 'Chain-of-Verification
+                # Reduces Hallucination in Large Language Models'.
+                # Triggata SOLO se: (a) flag use_cove True (controllato
+                # da Profile + CLI --no-cove), (b) source contiene
+                # pattern a rischio, (c) traduzione candidata non vuota.
+                # Failure best-effort: la prima traduzione resta valida
+                # se la verifica HTTP fallisce o l'output è inutilizzabile.
+                if use_cove and tr:
+                    _cove_needs, _cove_reasons = _cove_needs_verification(text)
+                    if _cove_needs:
+                        cove_attempts += 1
+                        try:
+                            _cove_prompt = _cove_build_verification_prompt(
+                                source_text=text,
+                                candidate_translation=tr,
+                                src_lang_name=src_name,
+                                tgt_lang_name=tgt_name,
+                                reasons=_cove_reasons,
+                                is_qwen3=is_qwen3,
+                                thinking=thinking,
+                            )
+                            _cove_predict = _ollama_num_predict_for_segment(
+                                text, is_qwen3, thinking
+                            )
+                            _cove_raw = _call_ollama(_cove_prompt, _cove_predict)
+                            _cove_corrected, _cove_changed = (
+                                _cove_parse_verification_response(
+                                    _cove_raw, original_translation=tr
+                                )
+                            )
+                            if _cove_changed and _cove_corrected:
+                                cove_corrections += 1
+                                if _ollama_debug:
+                                    print(
+                                        f"     ↻ CoVe seg #{i} "
+                                        f"(reasons={','.join(_cove_reasons)}): "
+                                        f"{tr!r} → {_cove_corrected!r}",
+                                        flush=True,
+                                    )
+                                tr = _cove_corrected
+                        except Exception as _cove_err:
+                            # CoVe è opt-in best-effort: un errore HTTP o
+                            # un parse failure non deve bloccare il
+                            # segmento. La prima traduzione resta valida.
+                            if _ollama_debug:
+                                print(
+                                    f"     ! CoVe seg #{i} failed: {_cove_err}",
+                                    flush=True,
+                                )
                 if _ollama_debug:
                     print(
                         f"     [ollama-debug] seg#{i} src={text!r} → tgt={tr!r}",
@@ -5267,6 +5363,20 @@ def translate_with_ollama(
                 f"(see log above for context)",
                 flush=True,
             )
+        if cove_attempts > 0:
+            # TASK 2U: CoVe summary. The "verified" count is the number
+            # of segments where the source had a risk pattern (negation
+            # / quantifier) and we ran the second-pass; "corrected" is
+            # the subset where the model produced a substantially
+            # different translation that we accepted. A 0/N corrected
+            # rate is normal on clean translations — it just means the
+            # first pass already preserved every negation.
+            print(
+                f"     → CoVe verification: {cove_attempts} segments verified, "
+                f"{cove_corrections} corrected "
+                f"({cove_attempts - cove_corrections} unchanged)",
+                flush=True,
+            )
     else:
         print(f"     → Ollama translation: {total}/{total} segments (no text)", flush=True)
 
@@ -5296,6 +5406,7 @@ def translate_segments(
     ollama_thinking: bool = False,
     ollama_document_context: bool = True,
     difficulty_profile: _DifficultyProfile | None = None,
+    ollama_use_cove: bool = True,
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
@@ -5305,6 +5416,12 @@ def translate_segments(
     # temporale e comprime la traduzione alla sorgente, invece di lasciare che
     # MarianMT/Google producano output letterali +25% più lunghi.
     if engine == "llm_ollama":
+        # TASK 2U: il Profile può forzare CoVe off (EASY) ma il flag
+        # esplicito del caller (CLI --no-cove) ha priorità. Quando il
+        # caller passa False, manteniamo l'override anche su MEDIUM/HARD.
+        _effective_use_cove = ollama_use_cove
+        if difficulty_profile is not None and not difficulty_profile.use_cove:
+            _effective_use_cove = False
         try:
             return translate_with_ollama(
                 segments, src, target,
@@ -5313,6 +5430,7 @@ def translate_segments(
                 thinking=ollama_thinking,
                 use_document_context=ollama_document_context,
                 difficulty_profile=difficulty_profile,
+                use_cove=_effective_use_cove,
             )
         except Exception as e:
             print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
@@ -7507,6 +7625,8 @@ def translate_video(
     whisper_sanity: bool = True,
     difficulty_profile_enabled: bool = True,
     difficulty_override: str | None = None,
+    hotwords: list[str] | None = None,
+    ollama_use_cove: bool = True,
 ) -> dict:
     """
     Main pipeline. Returns dict with output paths and segments.
@@ -7641,7 +7761,9 @@ def translate_video(
                     flush=True,
                 )
         else:
-            raw_segs, detected_lang = transcribe(vocals_path, model, lang_source)
+            raw_segs, detected_lang = transcribe(
+                vocals_path, model, lang_source, hotwords=hotwords,
+            )
             effective_src = detected_lang if lang_source == "auto" else lang_source
             # Re-split su punteggiatura forte: dà a XTTS frasi complete invece di
             # cut mid-sentence di Whisper. Riduce hallucinations.
@@ -7816,6 +7938,7 @@ def translate_video(
                 ollama_thinking=ollama_thinking,
                 ollama_document_context=ollama_document_context,
                 difficulty_profile=_resolved_profile,
+                ollama_use_cove=ollama_use_cove,
             )
 
         if not no_subs:
@@ -8302,6 +8425,22 @@ class SubtitleEditor(tk.Toplevel):
 #  MAIN GUI APP
 # ═══════════════════════════════════════════════════════════
 
+
+def _parse_hotwords_gui(raw: str) -> list[str]:
+    """Adapter from the Tk Entry text to a normalized hotwords list.
+
+    Wraps ``videotranslator.hotwords.parse_hotwords_string`` so the Entry
+    text (comma-separated by user) becomes the list expected by
+    ``translate_video(..., hotwords=...)``. Returns ``[]`` on empty
+    input; the caller flips that to ``None`` to keep the decoder default.
+    """
+    try:
+        from videotranslator.hotwords import parse_hotwords_string
+        return parse_hotwords_string(raw)
+    except Exception:
+        return []
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -8348,6 +8487,11 @@ class App(tk.Tk):
         # automatica dal vecchio JSON legacy).
         self._use_diarization = tk.BooleanVar(value=False)
         self._hf_token_var    = tk.StringVar(value=load_hf_token())
+        # Hotwords: comma-separated list of brand/proper nouns/jargon to bias
+        # Whisper decoding. Always visible (no gate). See videotranslator.hotwords.
+        self._hotwords_var    = tk.StringVar(
+            value=str(_ocfg.get("hotwords", ""))
+        )
         self._running    = False
         self._destroying = False
         # Guard re-entrancy: durante il setup async di Ollama (detect / install
@@ -9015,18 +9159,21 @@ class App(tk.Tk):
         # sequenziale solo con interi, quindi shift sotto: spostiamo la
         # translation engine row a row=4 e successive.
         self._chk_cosyvoice.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 4))
-        # MODIFICA LOCALE (non committata) -- 2026-04-26
-        # Checkbox CosyVoice 2.0 nascosta in attesa che l'integrazione upstream
-        # diventi production-ready (PyPI `cosyvoice` rotto + WeTextProcessing
-        # C++ build hell su Windows). Tutto il codice/i18n/scaffolding resta in
-        # place: per riabilitare basta commentare la riga `grid_remove()` qui
-        # sotto. Tentativo Cowork del 2026-04-26 fallito, in attesa di:
-        #   - fix upstream PyPI `cosyvoice` (community wrapper Lucas Jin)
-        #   - oppure CosyVoice 2.0 ufficiale (FunAudioLLM) pubblicato su PyPI
-        #   - oppure scelta di TTS alternativo (F5-TTS, OpenVoice, Qwen3-TTS)
-        # Riferimenti: helper a riga ~4222-4373, i18n keys `opt_cosyvoice` &
-        # `msg_cosyvoice_*` & `hint_cosyvoice` su 26 lingue (riga 311+).
-        self._chk_cosyvoice.grid_remove()
+        # TASK 4C (2026-04-29) — Linux-only re-enablement.
+        # CosyVoice è disponibile come opt-in solo su Linux. Il blocker storico
+        # (`WeTextProcessing` C++ build hell) è risolto upstream da 2026-04: il
+        # pacchetto PyPI `cosyvoice` ora usa `wetext` (pure-Python) come default.
+        # Su Windows persistono blocker non risolvibili lato nostro:
+        #   - `pynini` richiede MSVC + autotools → no wheel pre-built
+        #   - `tensorrt-cu12` build fallisce fuori da conda
+        #   - install ufficiale FunAudioLLM è conda-only su Linux/macOS
+        # Su macOS il path è untested → checkbox nascosto finché non c'è segnale
+        # CI o feedback utente. La policy è centralizzata in
+        # `videotranslator.platforms.cosyvoice_supported()` per avere una
+        # sola fonte di verità (GUI + CLI + futuri entrypoint headless).
+        from videotranslator.platforms import cosyvoice_supported as _cosy_supported
+        if not _cosy_supported(sys.platform):
+            self._chk_cosyvoice.grid_remove()
 
         # Translation engine radio group (row=4 dopo l'inserimento di
         # _chk_cosyvoice in row=3, v2.3).
@@ -9162,6 +9309,25 @@ class App(tk.Tk):
                                      bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
         self._lbl_hf_hint.pack(side="left")
         self._hf_row.grid_remove()  # hidden until diarization enabled
+
+        # Hotwords row: always visible. Bias Whisper decoding toward
+        # user-supplied brand names / proper nouns / technical jargon.
+        # Empty string = no biasing (decoder default behavior).
+        self._hotwords_row = tk.Frame(opts, bg=BG)
+        self._hotwords_row.grid(row=11, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._lbl_hotwords = tk.Label(
+            self._hotwords_row, text=self._s("label_hotwords"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_hotwords.pack(side="left")
+        self._hotwords_entry = tk.Entry(
+            self._hotwords_row, textvariable=self._hotwords_var, width=40,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8))
+        self._hotwords_entry.pack(side="left", padx=(4, 0))
+        self._lbl_hotwords_hint = tk.Label(
+            self._hotwords_row, text="  " + self._s("hint_hotwords"),
+            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_hotwords_hint.pack(side="left")
 
         ttk.Separator(self._main_frame, orient="horizontal").grid(
             row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
@@ -9344,6 +9510,9 @@ class App(tk.Tk):
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
         self._lbl_hf_hint.configure(text="  " + self._s("hint_hf_token"))
+        self._lbl_hotwords.configure(text=self._s("label_hotwords"))
+        self._lbl_hotwords_hint.configure(
+            text="  " + self._s("hint_hotwords"))
         # Log panel labels
         self._lbl_log_panel.configure(text=self._s("label_log_panel"))
         self._btn_log_toggle.configure(
@@ -9431,26 +9600,27 @@ class App(tk.Tk):
             self._use_cosyvoice.set(False)
 
     def _on_cosyvoice_toggle(self):
-        """User ha cliccato su CosyVoice: deseleziona XTTS e gestisce il caso
-        "non installato" in modo onesto.
+        """User ha cliccato su CosyVoice: deseleziona XTTS e gestisce
+        installazione/info modello in modo onesto.
 
-        Stato attuale (2026-04): il pacchetto PyPI `cosyvoice` 0.0.8 (community
-        wrapper Lucas Jin) ha setup.py rotto su Python 3.13+ e CosyVoice 2.0
-        ufficiale di Alibaba (FunAudioLLM/CosyVoice) richiede git clone +
-        venv Python 3.10 isolato + torch==2.3.1 (incompatibile col nostro pin
-        torch>=2.6). Quindi NON tentiamo l'auto-install via pip: fallirebbe
-        sempre e l'utente vedrebbe il checkbox "auto-deselezionarsi" senza
-        capire perché. Mostriamo invece un popup informativo che spiega lo
-        stato sperimentale e linka le istruzioni manuali.
-
-        Quando un giorno il pacchetto pip sarà fixato a monte, basterà
-        rimuovere il branch "experimental info" e ripristinare l'auto-install.
+        Stato attuale (TASK 4C, 2026-04-29): su Linux il pacchetto PyPI
+        ``cosyvoice`` è di nuovo installabile (default text-frontend
+        cambiato da WeTextProcessing → wetext, pure-Python). Offriamo
+        auto-install opt-in. Su Windows/macOS il checkbox è normalmente
+        nascosto via ``cosyvoice_supported()`` — se per qualche motivo è
+        comunque visibile (gating bypassato), mantieniamo il fallback
+        informativo che esiste storicamente per non promettere ciò che non
+        possiamo mantenere.
         """
         if not self._use_cosyvoice.get():
             return  # toggle off → niente da fare
         # Mutual exclusion con XTTS
         if self._use_xtts.get():
             self._use_xtts.set(False)
+
+        from videotranslator.platforms import cosyvoice_supported as _cosy_supported
+        platform_ok = _cosy_supported(sys.platform)
+
         # Già installato? Mostra solo info modello (download on-demand al run)
         if _cosyvoice_is_installed():
             cache = _cosyvoice_cache_dir()
@@ -9462,29 +9632,60 @@ class App(tk.Tk):
                     f"scaricato al primo Avvia.\n"
                 )
             return
-        # NON installato — non tentiamo l'auto-install (rotto upstream).
-        # Mostriamo info + auto-deselezione con messaggio chiaro nel log.
-        messagebox.showinfo(
-            "CosyVoice 2.0 — Sperimentale",
-            "CosyVoice 2.0 è disponibile come feature sperimentale ma\n"
-            "richiede setup manuale (il pacchetto pip ufficiale è\n"
-            "temporaneamente rotto su Python 3.10+).\n\n"
-            "Per abilitarlo:\n"
-            "  1) git clone --recursive\n"
-            "     https://github.com/FunAudioLLM/CosyVoice.git\n"
-            "  2) Setup venv Python 3.10 con torch==2.3.1\n"
-            "  3) Aggiungi la dir clonata a PYTHONPATH\n\n"
-            "Per ora la pipeline userà XTTS v2 (raccomandato).\n"
-            "Verifica il CHANGELOG per aggiornamenti."
+
+        # Non installato + piattaforma non supportata: messaggio informativo,
+        # auto-deselezione. Usiamo lo stesso testo i18n già presente.
+        if not platform_ok:
+            messagebox.showinfo(
+                "CosyVoice — Linux only",
+                "CosyVoice è disponibile solo su Linux per ora.\n\n"
+                "Su Windows il setup richiede MSVC + tensorrt + conda\n"
+                "e il path ufficiale upstream non è ancora stabile.\n\n"
+                "La pipeline userà XTTS v2 (raccomandato cross-platform)."
+            )
+            self._log_write(
+                "[i] CosyVoice non supportato su questa piattaforma. "
+                "Userò XTTS per questa sessione.\n"
+            )
+            self._use_cosyvoice.set(False)
+            return
+
+        # Linux + non installato: offri install opt-in. Stesso pattern di
+        # Ollama: popup yes/no, install in background thread, log streaming.
+        ans = messagebox.askyesno(
+            "CosyVoice 2.0 — Installazione",
+            "CosyVoice non è ancora installato.\n\n"
+            "Installazione automatica (~500 MB pip + ~1.7 GB modello al "
+            "primo Avvia, scaricato on-demand)?\n\n"
+            "L'install gira in background, la GUI resta utilizzabile.\n"
+            "Durante l'install il checkbox resta selezionato; se fallisce "
+            "verrà deselezionato con un messaggio chiaro nel log."
         )
-        self._log_write(
-            "[i] CosyVoice 2.0 sperimentale: setup manuale richiesto. "
-            "Userò XTTS per questa sessione.\n"
-        )
-        self._use_cosyvoice.set(False)
-        # Riattiva XTTS (default raccomandato) se l'utente l'aveva attivo
-        # prima di cliccare CosyVoice
-        # NOTA: lasciato a discrezione utente, non forzo l'attivazione XTTS.
+        if not ans:
+            self._log_write(
+                "[i] CosyVoice install rifiutata. Userò XTTS per questa sessione.\n"
+            )
+            self._use_cosyvoice.set(False)
+            return
+
+        # Background install. Tk operations from worker thread sono
+        # delegate al main loop via self.after().
+        self._log_write("[*] CosyVoice install in background...\n")
+
+        def _do_install():
+            try:
+                ok, msg = _cosyvoice_install(
+                    log_cb=lambda s: self.after(0, self._log_write, s)
+                )
+            except Exception as e:  # pragma: no cover — defensive
+                ok, msg = False, f"unexpected error: {e}"
+            if ok:
+                self.after(0, self._log_write, "[+] CosyVoice installato. Modello sarà scaricato al primo Avvia.\n")
+            else:
+                self.after(0, self._log_write, f"[!] CosyVoice install fallita: {msg}. Userò XTTS.\n")
+                self.after(0, self._use_cosyvoice.set, False)
+
+        threading.Thread(target=_do_install, daemon=True).start()
 
     # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
     #
@@ -9838,6 +10039,7 @@ class App(tk.Tk):
                             ollama_url=p["ollama_url"],
                             ollama_slot_aware=p["ollama_slot_aware"],
                             ollama_thinking=p["ollama_thinking"],
+                            hotwords=p["hotwords"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -9972,6 +10174,11 @@ class App(tk.Tk):
             "hf_token":           self._hf_token_var.get().strip(),
             "use_lipsync":        self._use_lipsync.get(),
             "xtts_speed":         xtts_speed,
+            # Hotwords parsed to normalized list (None if empty), so
+            # translate_video keeps the unbiased decoder default.
+            "hotwords":           (
+                _parse_hotwords_gui(self._hotwords_var.get()) or None
+            ),
             "ollama_model":       self._ollama_model_var.get().strip() or "qwen3:8b",
             "ollama_url":         self._ollama_url_var.get().strip() or "http://localhost:11434",
             "ollama_slot_aware":  bool(self._ollama_slot_aware.get()),
@@ -10036,6 +10243,7 @@ class App(tk.Tk):
                     ollama_url=p["ollama_url"],
                     ollama_slot_aware=p["ollama_slot_aware"],
                     ollama_thinking=p["ollama_thinking"],
+                    hotwords=p["hotwords"],
                 )
                 self.after(0, self._open_editor, video_path,
                            result["segments"], cleanup_path)
@@ -10136,6 +10344,7 @@ class App(tk.Tk):
                     ollama_url=p["ollama_url"],
                     ollama_slot_aware=p["ollama_slot_aware"],
                     ollama_thinking=p["ollama_thinking"],
+                    hotwords=p["hotwords"],
                 )
                 self.after(0, self._on_done, True)
             except Exception as e:
@@ -10189,6 +10398,7 @@ class App(tk.Tk):
                             ollama_url=p["ollama_url"],
                             ollama_slot_aware=p["ollama_slot_aware"],
                             ollama_thinking=p["ollama_thinking"],
+                            hotwords=p["hotwords"],
                         )
                     except Exception as e:
                         self.after(0, self._log_write,
@@ -10396,6 +10606,16 @@ def _cli():
                              "pipeline auto-tunes length retry threshold, "
                              "atempo cap, Rubber Band band and XTTS speed cap "
                              "based on the predicted P90 stretch ratio.")
+    # TASK 2U: Chain-of-Verification opt-out.
+    parser.add_argument("--no-cove", action="store_true",
+                        help="Disable TASK 2U Chain-of-Verification second-pass "
+                             "for the Ollama LLM engine. Default OFF: when the "
+                             "source segment contains a negation or a quantifier "
+                             "(all/some/none/every), a second Ollama call asks "
+                             "the model to verify those specific aspects and "
+                             "correct the translation if needed (~+30%% Ollama "
+                             "calls on dense talks, ~+5%% on light content). "
+                             "Use this flag on slow CPUs or for A/B testing.")
     # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
     # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
     parser.add_argument("--xtts", action="store_true",
@@ -10404,6 +10624,20 @@ def _cli():
                         help="Use CosyVoice 2.0 voice cloning — qualità "
                              "superiore, hallucination rate <2%% vs XTTS 5-15%% "
                              "(~500MB pkg + ~1.7GB model first run)")
+    parser.add_argument(
+        "--hotwords", type=str, default=None,
+        help="Comma-separated hotwords to bias Whisper decoding "
+             "(proper nouns, brand names, technical jargon). "
+             "Reduces Biased-WER ~43%% on rare words. "
+             "Example: --hotwords \"Strix, pipx, Docker\"",
+    )
+    parser.add_argument(
+        "--hotwords-file", type=str, default=None,
+        help="Path to JSON file with hotwords. Accepts a flat list "
+             "[\"Strix\", \"pipx\"] or a per-language dict "
+             "{\"en\": [...], \"it\": [...]}. Merged with --hotwords "
+             "(both can be passed; CLI string wins on duplicates).",
+    )
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
 
@@ -10433,6 +10667,33 @@ def _cli():
         tts_engine_cli = "xtts"
     else:
         tts_engine_cli = "edge"
+
+    # Hotwords: merge --hotwords (string) and --hotwords-file (JSON). CLI
+    # string takes precedence on duplicates (passed first to merge_hotwords,
+    # which preserves first-seen order).
+    hotwords_cli: list[str] | None = None
+    try:
+        from videotranslator.hotwords import (
+            load_hotwords_file,
+            merge_hotwords,
+            parse_hotwords_string,
+        )
+        cli_list = parse_hotwords_string(args.hotwords)
+        file_list: list[str] = []
+        if args.hotwords_file:
+            file_list = load_hotwords_file(
+                args.hotwords_file, src_lang=args.lang_source,
+            )
+        merged = merge_hotwords(cli_list, file_list)
+        hotwords_cli = merged or None
+        if hotwords_cli:
+            print(
+                f"[whisper] hotwords loaded: {len(hotwords_cli)} entries",
+                flush=True,
+            )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[!] Hotwords config error: {exc}", flush=True)
+        sys.exit(2)
     for f in files:
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
@@ -10466,6 +10727,8 @@ def _cli():
             whisper_sanity=not args.no_whisper_sanity,
             difficulty_profile_enabled=not args.no_difficulty_profile,
             difficulty_override=args.difficulty_override,
+            hotwords=hotwords_cli,
+            ollama_use_cove=not args.no_cove,
         )
 
 

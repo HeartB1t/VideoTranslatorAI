@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from videotranslator.platforms import (
     Wav2LipPaths,
+    cosyvoice_supported,
     platform_info,
     resolve_app_paths,
     resolve_wav2lip_paths,
@@ -98,6 +99,32 @@ class PlatformTests(unittest.TestCase):
                 {"APPDATA": r"C:\Temp\AppData\Roaming"},
                 Path("/tmp/vtai-home"),
             )
+
+    # ── cosyvoice_supported policy ────────────────────────────────────────
+    #
+    # CosyVoice was re-enabled on Linux in 2026-04 once the upstream pip
+    # package switched the text frontend default from WeTextProcessing (C++
+    # build hell) to wetext. Windows still has unsolved blockers (pynini
+    # MSVC + tensorrt-cu12 conda dependency) and macOS is untested; both
+    # must return False so the GUI keeps the checkbox hidden.
+    def test_cosyvoice_supported_on_linux(self):
+        self.assertTrue(cosyvoice_supported("linux"))
+        self.assertTrue(cosyvoice_supported("linux2"))
+
+    def test_cosyvoice_unsupported_on_windows(self):
+        self.assertFalse(cosyvoice_supported("win32"))
+
+    def test_cosyvoice_unsupported_on_macos(self):
+        self.assertFalse(cosyvoice_supported("darwin"))
+
+    def test_cosyvoice_unsupported_on_unknown_platform(self):
+        self.assertFalse(cosyvoice_supported("freebsd"))
+
+    def test_cosyvoice_supported_uses_sys_platform_by_default(self):
+        # Sanity: the default branch returns a plain bool tied to the host.
+        result = cosyvoice_supported()
+        self.assertIsInstance(result, bool)
+        self.assertEqual(result, sys.platform.startswith("linux"))
 
 
 def _seed_wav2lip_assets(directory: Path) -> None:

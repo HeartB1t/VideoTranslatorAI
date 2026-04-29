@@ -104,6 +104,16 @@ class ProfileMonotonicityTests(unittest.TestCase):
         self.assertAlmostEqual(MEDIUM.rubberband_max, 1.50)
         self.assertAlmostEqual(MEDIUM.xtts_speed_cap, 1.35)
 
+    def test_easy_disables_cove_medium_hard_enable(self):
+        # TASK 2U policy: EASY skips CoVe (legacy PRESERVE NEGATIONS in
+        # the main prompt is sufficient and the latency tax is not
+        # justified for low-density videos). MEDIUM/HARD enable it so
+        # the bug class "haven't seen" → "se hai visto" gets a second
+        # chance at correction.
+        self.assertFalse(EASY.use_cove)
+        self.assertTrue(MEDIUM.use_cove)
+        self.assertTrue(HARD.use_cove)
+
 
 class FormatProfileLogTests(unittest.TestCase):
     def test_message_uppercases_classification(self):
