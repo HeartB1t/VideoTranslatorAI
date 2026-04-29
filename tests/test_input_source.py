@@ -1,0 +1,49 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from videotranslator.input_source import (
+    build_ytdlp_options,
+    is_probable_url,
+    normalize_input_path,
+    resolve_downloaded_filename,
+)
+
+
+class InputSourceTests(unittest.TestCase):
+    def test_build_ytdlp_options_contains_project_policy(self):
+        opts = build_ytdlp_options("/tmp/videos")
+
+        self.assertEqual(opts["merge_output_format"], "mp4")
+        self.assertTrue(opts["noplaylist"])
+        self.assertIn("player_client", opts["extractor_args"]["youtube"])
+        self.assertIn("%(title).80s.%(ext)s", opts["outtmpl"])
+
+    def test_resolve_downloaded_filename_returns_existing_prepared_file(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            path = Path(tmp_str) / "video.webm"
+            path.write_bytes(b"x")
+
+            self.assertEqual(resolve_downloaded_filename(path), str(path))
+
+    def test_resolve_downloaded_filename_finds_merged_mp4(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            prepared = Path(tmp_str) / "video.webm"
+            merged = Path(tmp_str) / "video.mp4"
+            merged.write_bytes(b"x")
+
+            self.assertEqual(resolve_downloaded_filename(prepared), str(merged))
+
+    def test_resolve_downloaded_filename_raises_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            with self.assertRaises(RuntimeError):
+                resolve_downloaded_filename(Path(tmp_str) / "missing.webm")
+
+    def test_url_and_path_helpers(self):
+        self.assertTrue(is_probable_url("https://youtu.be/example"))
+        self.assertFalse(is_probable_url("~/Videos/input.mp4"))
+        self.assertTrue(normalize_input_path("~/Videos/input.mp4").endswith("Videos/input.mp4"))
+
+
+if __name__ == "__main__":
+    unittest.main()

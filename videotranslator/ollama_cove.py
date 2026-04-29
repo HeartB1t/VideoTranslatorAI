@@ -21,6 +21,7 @@ table-driven tests.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 
 # Patterns that, when present in source, justify CoVe verification.
@@ -68,6 +69,43 @@ _QUANTIFIER_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+@dataclass
+class CoVeMetrics:
+    """Mutable counters for Chain-of-Verification observability."""
+
+    attempted: int = 0
+    corrected: int = 0
+    skipped: int = 0
+    rejected: int = 0
+    failed: int = 0
+
+    @property
+    def unchanged(self) -> int:
+        return max(0, self.attempted - self.corrected - self.rejected - self.failed)
+
+    def record_skipped(self) -> None:
+        self.skipped += 1
+
+    def record_attempt(self) -> None:
+        self.attempted += 1
+
+    def record_correction(self) -> None:
+        self.corrected += 1
+
+    def record_rejected(self) -> None:
+        self.rejected += 1
+
+    def record_failure(self) -> None:
+        self.failed += 1
+
+    def summary(self) -> str:
+        return (
+            f"{self.attempted} verified, {self.corrected} corrected, "
+            f"{self.unchanged} unchanged, {self.rejected} rejected, "
+            f"{self.failed} failed, {self.skipped} skipped"
+        )
 
 
 def needs_verification(source_text: str) -> tuple[bool, list[str]]:

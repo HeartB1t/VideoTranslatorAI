@@ -10,6 +10,7 @@ smoke tests.
 import unittest
 
 from videotranslator.ollama_cove import (
+    CoVeMetrics,
     build_verification_prompt,
     needs_verification,
     parse_verification_response,
@@ -85,6 +86,32 @@ class NeedsVerificationTests(unittest.TestCase):
         # "wallpaper" contains "all" — must not trigger.
         needs, reasons = needs_verification("the wallpaper is nice")
         self.assertFalse(needs)
+
+
+class CoVeMetricsTests(unittest.TestCase):
+    def test_summary_tracks_attempts_outcomes_and_skips(self):
+        metrics = CoVeMetrics()
+        metrics.record_skipped()
+        metrics.record_attempt()
+        metrics.record_attempt()
+        metrics.record_attempt()
+        metrics.record_correction()
+        metrics.record_rejected()
+
+        self.assertEqual(metrics.attempted, 3)
+        self.assertEqual(metrics.corrected, 1)
+        self.assertEqual(metrics.rejected, 1)
+        self.assertEqual(metrics.unchanged, 1)
+        self.assertIn("3 verified", metrics.summary())
+        self.assertIn("1 skipped", metrics.summary())
+
+    def test_failure_reduces_unchanged_count(self):
+        metrics = CoVeMetrics()
+        metrics.record_attempt()
+        metrics.record_failure()
+
+        self.assertEqual(metrics.unchanged, 0)
+        self.assertIn("1 failed", metrics.summary())
 
 
 class BuildVerificationPromptTests(unittest.TestCase):

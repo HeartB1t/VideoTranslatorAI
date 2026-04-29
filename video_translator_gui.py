@@ -3275,38 +3275,16 @@ def download_youtube(url: str, out_dir: str) -> str:
     """Downloads a video from YouTube (or any yt-dlp supported site) to out_dir.
     Returns the path of the downloaded file."""
     import yt_dlp
+    from videotranslator.input_source import (
+        build_ytdlp_options,
+        resolve_downloaded_filename,
+    )
 
-    out_template = os.path.join(out_dir, "%(title).80s.%(ext)s")
-    ydl_opts = {
-        # Rimosso filtro ext=mp4: forzava h264 e YouTube cappa 1080p a VP9/AV1.
-        # ffmpeg fa il merge in mp4 grazie a merge_output_format.
-        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "outtmpl": out_template,
-        "quiet": True,
-        "no_warnings": True,
-        "merge_output_format": "mp4",
-        "noplaylist": True,
-        "restrictfilenames": True,
-        "socket_timeout": 30,
-        "retries": 5,
-        # Use iOS client to avoid YouTube 403/SABR streaming issues
-        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
-    }
+    ydl_opts = build_ytdlp_options(out_dir)
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-        # yt-dlp may change extension after merge
-        if not os.path.exists(filename):
-            stem = os.path.splitext(filename)[0]
-            for ext in (".mp4", ".mkv", ".webm"):
-                candidate = stem + ext
-                if os.path.exists(candidate):
-                    filename = candidate
-                    break
-
-    if not os.path.exists(filename):
-        raise RuntimeError(f"Download completed but file not found: {filename}")
+        filename = resolve_downloaded_filename(ydl.prepare_filename(info))
 
     print(f"[+] Downloaded: {filename}", flush=True)
     return filename
@@ -3814,6 +3792,7 @@ from videotranslator.ollama_prompt import (  # noqa: E402
     build_translation_prompt as _build_translation_prompt,
 )
 from videotranslator.ollama_cove import (  # noqa: E402
+    CoVeMetrics as _CoVeMetrics,
     build_verification_prompt as _cove_build_verification_prompt,
     needs_verification as _cove_needs_verification,
     parse_verification_response as _cove_parse_verification_response,
@@ -4946,13 +4925,10 @@ def translate_with_ollama(
     # quei retry hanno effettivamente prodotto una versione più corta.
     rewrite_attempts = 0
     rewrite_success = 0
-    # TASK 2U: Chain-of-Verification counters. `cove_attempts` conta i
-    # segmenti per cui i pattern di rischio (negation/quantifier) hanno
-    # giustificato il second-pass. `cove_corrections` conta le volte in
-    # cui il modello ha effettivamente modificato la prima traduzione
-    # in qualcosa di sostanzialmente diverso (was_changed=True).
-    cove_attempts = 0
-    cove_corrections = 0
+    # TASK 2U: Chain-of-Verification counters. Kept in a small shared object
+    # so logs/tests can distinguish useful corrections from rejected empty
+    # responses, HTTP failures and skipped non-risky segments.
+    cove_metrics = _CoVeMetrics()
 
     def _build_prompt(
         text: str,
@@ -5264,7 +5240,7 @@ def translate_with_ollama(
                 if use_cove and tr:
                     _cove_needs, _cove_reasons = _cove_needs_verification(text)
                     if _cove_needs:
-                        cove_attempts += 1
+                        cove_metrics.record_attempt()
                         try:
                             _cove_prompt = _cove_build_verification_prompt(
                                 source_text=text,
@@ -5285,7 +5261,7 @@ def translate_with_ollama(
                                 )
                             )
                             if _cove_changed and _cove_corrected:
-                                cove_corrections += 1
+                                cove_metrics.record_correction()
                                 if _ollama_debug:
                                     print(
                                         f"     ↻ CoVe seg #{i} "
@@ -5294,7 +5270,10 @@ def translate_with_ollama(
                                         flush=True,
                                     )
                                 tr = _cove_corrected
+                            elif _cove_changed and not _cove_corrected:
+                                cove_metrics.record_rejected()
                         except Exception as _cove_err:
+                            cove_metrics.record_failure()
                             # CoVe è opt-in best-effort: un errore HTTP o
                             # un parse failure non deve bloccare il
                             # segmento. La prima traduzione resta valida.
@@ -5303,6 +5282,8 @@ def translate_with_ollama(
                                     f"     ! CoVe seg #{i} failed: {_cove_err}",
                                     flush=True,
                                 )
+                    else:
+                        cove_metrics.record_skipped()
                 if _ollama_debug:
                     print(
                         f"     [ollama-debug] seg#{i} src={text!r} → tgt={tr!r}",
@@ -5391,7 +5372,7 @@ def translate_with_ollama(
                 f"(see log above for context)",
                 flush=True,
             )
-        if cove_attempts > 0:
+        if cove_metrics.attempted > 0:
             # TASK 2U: CoVe summary. The "verified" count is the number
             # of segments where the source had a risk pattern (negation
             # / quantifier) and we ran the second-pass; "corrected" is
@@ -5400,9 +5381,7 @@ def translate_with_ollama(
             # rate is normal on clean translations — it just means the
             # first pass already preserved every negation.
             print(
-                f"     → CoVe verification: {cove_attempts} segments verified, "
-                f"{cove_corrections} corrected "
-                f"({cove_attempts - cove_corrections} unchanged)",
+                f"     → CoVe verification: {cove_metrics.summary()}",
                 flush=True,
             )
     else:
@@ -10547,13 +10526,6 @@ class App(tk.Tk):
 # ═══════════════════════════════════════════════════════════
 
 def _cli():
-    missing_pkgs, missing_bins = check_dependencies()
-    if missing_pkgs or missing_bins:
-        all_missing = missing_pkgs + missing_bins
-        print(f"[!] Missing dependencies: {', '.join(all_missing)}", file=sys.stderr)
-        print("    Install with: pip install -r requirements.txt", file=sys.stderr)
-        sys.exit(1)
-
     parser = argparse.ArgumentParser(description="Video Translator AI")
     parser.add_argument("input", nargs="?", help="Input video")
     parser.add_argument("-o", "--output", help="Output file")
@@ -10680,6 +10652,16 @@ def _cli():
         parser.print_help()
         sys.exit(0)
 
+    missing_pkgs, missing_bins = check_dependencies()
+    if missing_pkgs or missing_bins:
+        all_missing = missing_pkgs + missing_bins
+        print(f"[!] Missing dependencies: {', '.join(all_missing)}", file=sys.stderr)
+        print("    Install with: pip install -r requirements.txt", file=sys.stderr)
+        sys.exit(1)
+
+    from videotranslator.jobs import TranslationJobConfig
+    from videotranslator.pipeline import run_translation_job
+
     cfg_cli = load_config()
     hf_token_cli = args.hf_token or load_hf_token() or cfg_cli.get("hf_token", "")
     # CLI ha la priorità, poi config JSON (se la chiave esiste), altrimenti None
@@ -10732,7 +10714,7 @@ def _cli():
         if not os.path.exists(f):
             print(f"[!] File not found: {f}")
             continue
-        translate_video(
+        job = TranslationJobConfig(
             video_in=f,
             output=args.output if len(files) == 1 else None,
             model=args.model,
@@ -10764,6 +10746,7 @@ def _cli():
             hotwords=hotwords_cli,
             ollama_use_cove=not args.no_cove,
         )
+        run_translation_job(job, runner=translate_video)
 
 
 if __name__ == "__main__":
