@@ -33,3 +33,19 @@ LICENSE text eol=lf
 *.gz binary
 *.tar binary
 *.whl binary
+
+# Exclude developer-only paths from `git archive` output, which is what
+# GitHub serves when a visitor clicks "Download ZIP" on the repo page.
+# - tests/      unit tests, only useful to contributors running the suite
+# - docs/       internal architecture notes (developer-facing)
+# - .gitignore, .gitattributes  meta files irrelevant outside a working tree
+# - .github/    CI workflow definitions (none yet, future-proofing)
+#
+# `git clone` still receives every path; only the zip/tar archives are
+# trimmed. End users who use the Windows installer never see these
+# either, since setup_windows.bat copies only runtime files.
+tests/          export-ignore
+docs/           export-ignore
+.gitignore      export-ignore
+.gitattributes  export-ignore
+.github/        export-ignore
