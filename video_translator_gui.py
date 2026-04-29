@@ -420,6 +420,11 @@ UI_STRINGS = {
         "editor_edit_title":  "Modifica",
         "editor_seg_label":   "Segmento {} —",
         "editor_btn_save":    "Salva",
+        "editor_filter_show_flagged_only": "Mostra solo segmenti da rivedere",
+        "editor_flag_summary": "Segmenti: {total}  ·  Da rivedere: {flagged} (lunghezza: {length}, trascrizione: {whisper}, fallback: {fallback})",
+        "editor_tooltip_length_unfit":         "Traduzione lunga: l'audio sarà accelerato — accorcia",
+        "editor_tooltip_whisper_suspicious":   "Trascrizione sospetta: token isolati o ripetizioni",
+        "editor_tooltip_translation_fallback": "Traduzione fallback: l'engine principale ha fallito",
         "warn_editor":        "Editor",
         "label_url":          "URL:",
         "btn_download":       "⬇  Scarica e Traduci",
@@ -527,6 +532,11 @@ UI_STRINGS = {
         "editor_edit_title":  "Edit",
         "editor_seg_label":   "Segment {} —",
         "editor_btn_save":    "Save",
+        "editor_filter_show_flagged_only": "Show only segments to review",
+        "editor_flag_summary": "Segments: {total}  ·  To review: {flagged} (length: {length}, transcript: {whisper}, fallback: {fallback})",
+        "editor_tooltip_length_unfit":         "Translation too long: audio will be sped up — shorten",
+        "editor_tooltip_whisper_suspicious":   "Suspicious transcript: isolated tokens or repetitions",
+        "editor_tooltip_translation_fallback": "Fallback translation: the primary engine failed",
         "warn_editor":        "Editor",
         "label_url":          "URL:",
         "btn_download":       "⬇  Download & Translate",
@@ -605,6 +615,11 @@ UI_STRINGS = {
         "editor_edit_title": "يحرر",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "يحفظ",
+        "editor_filter_show_flagged_only": "إظهار الأجزاء التي تحتاج للمراجعة فقط",
+        "editor_flag_summary": "الأجزاء: {total}  ·  للمراجعة: {flagged} (الطول: {length}، النص: {whisper}، الاحتياطي: {fallback})",
+        "editor_tooltip_length_unfit": "الترجمة طويلة: الصوت سيُسرَّع — اختصر",
+        "editor_tooltip_whisper_suspicious": "نص مشبوه: رموز منفصلة أو تكرارات",
+        "editor_tooltip_translation_fallback": "ترجمة احتياطية: فشل المحرك الرئيسي",
         "warn_editor": "محرر",
         "label_url": "URL:",
         "btn_download": "⬇ تنزيل وترجمة",
@@ -711,6 +726,11 @@ UI_STRINGS = {
         "editor_edit_title": "编辑",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "节省",
+        "editor_filter_show_flagged_only": "仅显示需复查的片段",
+        "editor_flag_summary": "片段: {total}  ·  待复查: {flagged} (长度: {length}, 转录: {whisper}, 回退: {fallback})",
+        "editor_tooltip_length_unfit": "译文过长: 音频将被加速 — 请缩短",
+        "editor_tooltip_whisper_suspicious": "可疑转录: 孤立标记或重复",
+        "editor_tooltip_translation_fallback": "回退翻译: 主翻译引擎失败",
         "warn_editor": "编辑",
         "label_url": "URL:",
         "btn_download": "⬇ 下载和翻译",
@@ -817,6 +837,11 @@ UI_STRINGS = {
         "editor_edit_title": "Upravit",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Uložit",
+        "editor_filter_show_flagged_only": "Zobrazit pouze segmenty ke kontrole",
+        "editor_flag_summary": "Segmenty: {total}  ·  Ke kontrole: {flagged} (délka: {length}, přepis: {whisper}, záloha: {fallback})",
+        "editor_tooltip_length_unfit": "Překlad příliš dlouhý: zvuk bude zrychlen — zkraťte",
+        "editor_tooltip_whisper_suspicious": "Podezřelý přepis: izolované tokeny nebo opakování",
+        "editor_tooltip_translation_fallback": "Záložní překlad: hlavní engine selhal",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Stáhnout a přeložit",
@@ -923,6 +948,11 @@ UI_STRINGS = {
         "editor_edit_title": "Redigere",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Spare",
+        "editor_filter_show_flagged_only": "Vis kun segmenter til gennemgang",
+        "editor_flag_summary": "Segmenter: {total}  ·  Til gennemgang: {flagged} (længde: {length}, transskription: {whisper}, reserve: {fallback})",
+        "editor_tooltip_length_unfit": "Oversættelsen er for lang: lyden vil blive fremskyndet — forkort",
+        "editor_tooltip_whisper_suspicious": "Mistænkelig transskription: isolerede tegn eller gentagelser",
+        "editor_tooltip_translation_fallback": "Reserveoversættelse: hovedmotoren fejlede",
         "warn_editor": "Redaktør",
         "label_url": "URL:",
         "btn_download": "⬇ Download og oversæt",
@@ -1029,6 +1059,11 @@ UI_STRINGS = {
         "editor_edit_title": "Bewerking",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Redden",
+        "editor_filter_show_flagged_only": "Alleen segmenten ter controle tonen",
+        "editor_flag_summary": "Segmenten: {total}  ·  Te controleren: {flagged} (lengte: {length}, transcriptie: {whisper}, fallback: {fallback})",
+        "editor_tooltip_length_unfit": "Vertaling te lang: audio wordt versneld — inkorten",
+        "editor_tooltip_whisper_suspicious": "Verdachte transcriptie: losse tokens of herhalingen",
+        "editor_tooltip_translation_fallback": "Fallback-vertaling: de hoofdengine faalde",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Downloaden en vertalen",
@@ -1135,6 +1170,11 @@ UI_STRINGS = {
         "editor_edit_title": "Muokata",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Tallentaa",
+        "editor_filter_show_flagged_only": "Näytä vain tarkistettavat segmentit",
+        "editor_flag_summary": "Segmentit: {total}  ·  Tarkistettavia: {flagged} (pituus: {length}, transkriptio: {whisper}, varakone: {fallback})",
+        "editor_tooltip_length_unfit": "Käännös liian pitkä: ääntä nopeutetaan — lyhennä",
+        "editor_tooltip_whisper_suspicious": "Epäilyttävä transkriptio: irrallisia tokeneita tai toistoja",
+        "editor_tooltip_translation_fallback": "Varakäännös: pääkone epäonnistui",
         "warn_editor": "Toimittaja",
         "label_url": "URL:",
         "btn_download": "⬇ Lataa ja käännä",
@@ -1241,6 +1281,11 @@ UI_STRINGS = {
         "editor_edit_title": "Modifier",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Sauvegarder",
+        "editor_filter_show_flagged_only": "Afficher uniquement les segments à revoir",
+        "editor_flag_summary": "Segments : {total}  ·  À revoir : {flagged} (longueur : {length}, transcription : {whisper}, secours : {fallback})",
+        "editor_tooltip_length_unfit": "Traduction trop longue : l'audio sera accéléré — raccourcissez",
+        "editor_tooltip_whisper_suspicious": "Transcription suspecte : jetons isolés ou répétitions",
+        "editor_tooltip_translation_fallback": "Traduction de secours : le moteur principal a échoué",
         "warn_editor": "Éditeur",
         "label_url": "URL:",
         "btn_download": "⬇ Télécharger et traduire",
@@ -1347,6 +1392,11 @@ UI_STRINGS = {
         "editor_edit_title": "Bearbeiten",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Speichern",
+        "editor_filter_show_flagged_only": "Nur zu prüfende Segmente anzeigen",
+        "editor_flag_summary": "Segmente: {total}  ·  Zu prüfen: {flagged} (Länge: {length}, Transkription: {whisper}, Fallback: {fallback})",
+        "editor_tooltip_length_unfit": "Übersetzung zu lang: Audio wird beschleunigt — kürzen",
+        "editor_tooltip_whisper_suspicious": "Verdächtige Transkription: isolierte Tokens oder Wiederholungen",
+        "editor_tooltip_translation_fallback": "Fallback-Übersetzung: die primäre Engine ist gescheitert",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Herunterladen und übersetzen",
@@ -1453,6 +1503,11 @@ UI_STRINGS = {
         "editor_edit_title": "Εκδίδω",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Εκτός",
+        "editor_filter_show_flagged_only": "Εμφάνιση μόνο τμημάτων προς έλεγχο",
+        "editor_flag_summary": "Τμήματα: {total}  ·  Προς έλεγχο: {flagged} (μήκος: {length}, μεταγραφή: {whisper}, εφεδρικό: {fallback})",
+        "editor_tooltip_length_unfit": "Μετάφραση πολύ μεγάλη: ο ήχος θα επιταχυνθεί — συντομεύστε",
+        "editor_tooltip_whisper_suspicious": "Ύποπτη μεταγραφή: μεμονωμένα tokens ή επαναλήψεις",
+        "editor_tooltip_translation_fallback": "Εφεδρική μετάφραση: η κύρια μηχανή απέτυχε",
         "warn_editor": "Συντάκτης",
         "label_url": "URL:",
         "btn_download": "⬇ Λήψη & Μετάφραση",
@@ -1559,6 +1614,11 @@ UI_STRINGS = {
         "editor_edit_title": "संपादन करना",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "बचाना",
+        "editor_filter_show_flagged_only": "केवल समीक्षा वाले खंड दिखाएँ",
+        "editor_flag_summary": "खंड: {total}  ·  समीक्षा हेतु: {flagged} (लंबाई: {length}, प्रतिलेख: {whisper}, फॉलबैक: {fallback})",
+        "editor_tooltip_length_unfit": "अनुवाद बहुत लंबा: ऑडियो तेज होगा — छोटा करें",
+        "editor_tooltip_whisper_suspicious": "संदिग्ध प्रतिलेख: एकल टोकन या दोहराव",
+        "editor_tooltip_translation_fallback": "फॉलबैक अनुवाद: मुख्य इंजन विफल",
         "warn_editor": "संपादक",
         "label_url": "URL:",
         "btn_download": "⬇ डाउनलोड करें और अनुवाद करें",
@@ -1665,6 +1725,11 @@ UI_STRINGS = {
         "editor_edit_title": "Szerkesztés",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Megtakarítás",
+        "editor_filter_show_flagged_only": "Csak az átvizsgálandó szegmensek mutatása",
+        "editor_flag_summary": "Szegmensek: {total}  ·  Ellenőrzendő: {flagged} (hossz: {length}, átirat: {whisper}, tartalék: {fallback})",
+        "editor_tooltip_length_unfit": "A fordítás túl hosszú: a hang fel lesz gyorsítva — rövidítse",
+        "editor_tooltip_whisper_suspicious": "Gyanús átirat: izolált tokenek vagy ismétlések",
+        "editor_tooltip_translation_fallback": "Tartalékfordítás: a fő motor meghiúsult",
         "warn_editor": "Szerkesztő",
         "label_url": "URL:",
         "btn_download": "⬇ Letöltés és fordítás",
@@ -1771,6 +1836,11 @@ UI_STRINGS = {
         "editor_edit_title": "Sunting",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Menyimpan",
+        "editor_filter_show_flagged_only": "Tampilkan hanya segmen yang perlu ditinjau",
+        "editor_flag_summary": "Segmen: {total}  ·  Perlu ditinjau: {flagged} (panjang: {length}, transkrip: {whisper}, cadangan: {fallback})",
+        "editor_tooltip_length_unfit": "Terjemahan terlalu panjang: audio akan dipercepat — perpendek",
+        "editor_tooltip_whisper_suspicious": "Transkrip mencurigakan: token terisolasi atau pengulangan",
+        "editor_tooltip_translation_fallback": "Terjemahan cadangan: mesin utama gagal",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Unduh & Terjemahkan",
@@ -1877,6 +1947,11 @@ UI_STRINGS = {
         "editor_edit_title": "編集",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "保存",
+        "editor_filter_show_flagged_only": "確認が必要なセグメントのみ表示",
+        "editor_flag_summary": "セグメント: {total}  ·  要確認: {flagged} (長さ: {length}, 文字起こし: {whisper}, フォールバック: {fallback})",
+        "editor_tooltip_length_unfit": "翻訳が長すぎ: 音声が速くなります — 短くしてください",
+        "editor_tooltip_whisper_suspicious": "疑わしい文字起こし: 単独のトークンや繰り返し",
+        "editor_tooltip_translation_fallback": "フォールバック翻訳: メインエンジンが失敗",
         "warn_editor": "エディタ",
         "label_url": "URL:",
         "btn_download": "⬇ ダウンロードと翻訳",
@@ -1983,6 +2058,11 @@ UI_STRINGS = {
         "editor_edit_title": "편집하다",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "구하다",
+        "editor_filter_show_flagged_only": "검토가 필요한 세그먼트만 표시",
+        "editor_flag_summary": "세그먼트: {total}  ·  검토 대상: {flagged} (길이: {length}, 전사: {whisper}, 폴백: {fallback})",
+        "editor_tooltip_length_unfit": "번역이 너무 김: 오디오가 빨라짐 — 줄이세요",
+        "editor_tooltip_whisper_suspicious": "의심스러운 전사: 고립된 토큰 또는 반복",
+        "editor_tooltip_translation_fallback": "폴백 번역: 기본 엔진 실패",
         "warn_editor": "편집자",
         "label_url": "URL:",
         "btn_download": "⬇ 다운로드 및 번역",
@@ -2089,6 +2169,11 @@ UI_STRINGS = {
         "editor_edit_title": "Redigere",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Spare",
+        "editor_filter_show_flagged_only": "Vis bare segmenter til gjennomgang",
+        "editor_flag_summary": "Segmenter: {total}  ·  Til gjennomgang: {flagged} (lengde: {length}, transkripsjon: {whisper}, reserve: {fallback})",
+        "editor_tooltip_length_unfit": "Oversettelsen er for lang: lyden blir raskere — forkort",
+        "editor_tooltip_whisper_suspicious": "Mistenkelig transkripsjon: isolerte tokens eller gjentakelser",
+        "editor_tooltip_translation_fallback": "Reserveoversettelse: hovedmotoren feilet",
         "warn_editor": "Redaktør",
         "label_url": "URL:",
         "btn_download": "⬇ Last ned og oversett",
@@ -2195,6 +2280,11 @@ UI_STRINGS = {
         "editor_edit_title": "Redagować",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Ratować",
+        "editor_filter_show_flagged_only": "Pokaż tylko segmenty do przejrzenia",
+        "editor_flag_summary": "Segmenty: {total}  ·  Do przejrzenia: {flagged} (długość: {length}, transkrypcja: {whisper}, zapas: {fallback})",
+        "editor_tooltip_length_unfit": "Tłumaczenie zbyt długie: dźwięk zostanie przyspieszony — skróć",
+        "editor_tooltip_whisper_suspicious": "Podejrzana transkrypcja: pojedyncze tokeny lub powtórzenia",
+        "editor_tooltip_translation_fallback": "Tłumaczenie zapasowe: główny silnik zawiódł",
         "warn_editor": "Redaktor",
         "label_url": "URL:",
         "btn_download": "⬇ Pobierz i przetłumacz",
@@ -2301,6 +2391,11 @@ UI_STRINGS = {
         "editor_edit_title": "Editar",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Salvar",
+        "editor_filter_show_flagged_only": "Mostrar somente segmentos para revisão",
+        "editor_flag_summary": "Segmentos: {total}  ·  Para revisar: {flagged} (comprimento: {length}, transcrição: {whisper}, reserva: {fallback})",
+        "editor_tooltip_length_unfit": "Tradução longa: o áudio será acelerado — encurte",
+        "editor_tooltip_whisper_suspicious": "Transcrição suspeita: tokens isolados ou repetições",
+        "editor_tooltip_translation_fallback": "Tradução de reserva: o motor principal falhou",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Baixe e traduza",
@@ -2407,6 +2502,11 @@ UI_STRINGS = {
         "editor_edit_title": "Edita",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Salva",
+        "editor_filter_show_flagged_only": "Afișează doar segmentele de revizuit",
+        "editor_flag_summary": "Segmente: {total}  ·  De revizuit: {flagged} (lungime: {length}, transcriere: {whisper}, rezervă: {fallback})",
+        "editor_tooltip_length_unfit": "Traducere prea lungă: audio va fi accelerat — scurtează",
+        "editor_tooltip_whisper_suspicious": "Transcriere suspectă: tokenuri izolate sau repetiții",
+        "editor_tooltip_translation_fallback": "Traducere de rezervă: motorul principal a eșuat",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Descărcați și traduceți",
@@ -2513,6 +2613,11 @@ UI_STRINGS = {
         "editor_edit_title": "Редактировать",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Сохранять",
+        "editor_filter_show_flagged_only": "Показывать только сегменты для проверки",
+        "editor_flag_summary": "Сегменты: {total}  ·  К проверке: {flagged} (длина: {length}, транскрипция: {whisper}, резерв: {fallback})",
+        "editor_tooltip_length_unfit": "Перевод слишком длинный: аудио ускорится — сократите",
+        "editor_tooltip_whisper_suspicious": "Подозрительная транскрипция: отдельные токены или повторы",
+        "editor_tooltip_translation_fallback": "Резервный перевод: основной движок не сработал",
         "warn_editor": "Редактор",
         "label_url": "URL:",
         "btn_download": "⬇ Скачать и перевести",
@@ -2619,6 +2724,11 @@ UI_STRINGS = {
         "editor_edit_title": "Editar",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Ahorrar",
+        "editor_filter_show_flagged_only": "Mostrar solo segmentos a revisar",
+        "editor_flag_summary": "Segmentos: {total}  ·  A revisar: {flagged} (longitud: {length}, transcripción: {whisper}, respaldo: {fallback})",
+        "editor_tooltip_length_unfit": "Traducción demasiado larga: el audio se acelerará — acorta",
+        "editor_tooltip_whisper_suspicious": "Transcripción sospechosa: tokens aislados o repeticiones",
+        "editor_tooltip_translation_fallback": "Traducción de respaldo: el motor principal falló",
         "warn_editor": "Editor",
         "label_url": "URL:",
         "btn_download": "⬇ Descargar y traducir",
@@ -2725,6 +2835,11 @@ UI_STRINGS = {
         "editor_edit_title": "Redigera",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Spara",
+        "editor_filter_show_flagged_only": "Visa endast segment att granska",
+        "editor_flag_summary": "Segment: {total}  ·  Att granska: {flagged} (längd: {length}, transkription: {whisper}, reserv: {fallback})",
+        "editor_tooltip_length_unfit": "Översättningen är för lång: ljudet kommer att snabbas upp — förkorta",
+        "editor_tooltip_whisper_suspicious": "Misstänkt transkription: isolerade token eller upprepningar",
+        "editor_tooltip_translation_fallback": "Reservöversättning: huvudmotorn misslyckades",
         "warn_editor": "Redaktör",
         "label_url": "URL:",
         "btn_download": "⬇ Ladda ner och översätt",
@@ -2831,6 +2946,11 @@ UI_STRINGS = {
         "editor_edit_title": "Düzenlemek",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Kaydetmek",
+        "editor_filter_show_flagged_only": "Yalnızca incelenecek segmentleri göster",
+        "editor_flag_summary": "Segmentler: {total}  ·  İncelenecek: {flagged} (uzunluk: {length}, transkripsiyon: {whisper}, yedek: {fallback})",
+        "editor_tooltip_length_unfit": "Çeviri çok uzun: ses hızlandırılacak — kısaltın",
+        "editor_tooltip_whisper_suspicious": "Şüpheli transkripsiyon: yalıtık jetonlar veya tekrarlar",
+        "editor_tooltip_translation_fallback": "Yedek çeviri: ana motor başarısız oldu",
         "warn_editor": "Editör",
         "label_url": "URL:",
         "btn_download": "⬇ İndir ve Çevir",
@@ -2937,6 +3057,11 @@ UI_STRINGS = {
         "editor_edit_title": "Редагувати",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "зберегти",
+        "editor_filter_show_flagged_only": "Показувати лише сегменти для перевірки",
+        "editor_flag_summary": "Сегменти: {total}  ·  До перевірки: {flagged} (довжина: {length}, транскрипція: {whisper}, резерв: {fallback})",
+        "editor_tooltip_length_unfit": "Переклад задовгий: аудіо буде прискорено — скоротіть",
+        "editor_tooltip_whisper_suspicious": "Підозріла транскрипція: ізольовані токени або повтори",
+        "editor_tooltip_translation_fallback": "Резервний переклад: основний рушій зазнав збою",
         "warn_editor": "редактор",
         "label_url": "URL:",
         "btn_download": "⬇ Завантажте та перекладіть",
@@ -3043,6 +3168,11 @@ UI_STRINGS = {
         "editor_edit_title": "Biên tập",
         "editor_seg_label": "Segment {} —",
         "editor_btn_save": "Cứu",
+        "editor_filter_show_flagged_only": "Chỉ hiển thị các đoạn cần xem lại",
+        "editor_flag_summary": "Đoạn: {total}  ·  Cần xem lại: {flagged} (độ dài: {length}, phiên âm: {whisper}, dự phòng: {fallback})",
+        "editor_tooltip_length_unfit": "Bản dịch quá dài: âm thanh sẽ bị tăng tốc — rút gọn",
+        "editor_tooltip_whisper_suspicious": "Phiên âm đáng ngờ: token riêng lẻ hoặc lặp lại",
+        "editor_tooltip_translation_fallback": "Bản dịch dự phòng: engine chính thất bại",
         "warn_editor": "Biên tập viên",
         "label_url": "URL:",
         "btn_download": "⬇ Tải xuống và dịch",
@@ -3683,6 +3813,16 @@ from videotranslator.difficulty_profile import (  # noqa: E402
 )
 from videotranslator.face_detector import (  # noqa: E402
     has_enough_faces as _has_enough_faces,
+)
+from videotranslator.quality_flags import (  # noqa: E402
+    FLAG_LENGTH_UNFIT as _FLAG_LENGTH_UNFIT,
+    FLAG_TRANSLATION_FALLBACK as _FLAG_TRANSLATION_FALLBACK,
+    FLAG_WHISPER_SUSPICIOUS as _FLAG_WHISPER_SUSPICIOUS,
+    QUALITY_FLAG_COLOURS as _QUALITY_FLAG_COLOURS,
+    add_quality_flag as _add_quality_flag,
+    compute_segment_quality_flags as _compute_segment_quality_flags,
+    has_any_flag as _has_any_flag,
+    primary_flag as _primary_flag,
 )
 
 
@@ -4993,6 +5133,19 @@ def translate_with_ollama(
                                 flush=True,
                             )
                         break
+                # TASK 5C: post-retry quality flag. If the (possibly
+                # multi-iter) length retry loop exhausted its budget and
+                # the translation is *still* above the comfort threshold,
+                # mark the segment so the editor highlights it for review.
+                # The pipeline still ships the over-budget translation —
+                # this is purely a hint for the human reviewer.
+                if (
+                    _seg_target_chars > 0
+                    and _should_reprompt_for_length(
+                        len(tr), _seg_target_chars, threshold=_retry_threshold
+                    )
+                ):
+                    _add_quality_flag(seg, _FLAG_LENGTH_UNFIT)
                 # ── Length safeguard ────────────────────────────────────
                 # Se l'output residuo dopo strip_preamble è >> del sorgente
                 # rispetto all'expansion atteso, il modello ha quasi
@@ -5051,6 +5204,11 @@ def translate_with_ollama(
                         f"     ! Ollama translation failed for segment #{i}, keeping source: {e}",
                         flush=True,
                     )
+                # TASK 5C: primary engine failed for this segment — flag so
+                # the editor surfaces it. Both branches (fallback used OR
+                # source kept) are lower-quality than a successful Ollama
+                # translation, so they share the same flag.
+                _add_quality_flag(seg, _FLAG_TRANSLATION_FALLBACK)
 
         total_src_chars += len(text)
         total_tgt_chars += len(tr)
@@ -5068,6 +5226,13 @@ def translate_with_ollama(
         }
         if "speaker" in seg:
             entry["speaker"] = seg["speaker"]
+        # TASK 5C: propagate quality flags from the source segment (where the
+        # Whisper sanity stage tagged whisper_suspicious) and from the in-loop
+        # additions (length_unfit, translation_fallback) to the translated
+        # entry so the subtitle editor can colourise the row.
+        _flags_for_entry = _compute_segment_quality_flags(seg)
+        if _flags_for_entry:
+            entry["_quality_flags"] = _flags_for_entry
         translated.append(entry)
         if (i + 1) % 4 == 0 or i + 1 == total:
             print(f"     {i+1}/{total}...", end="\r", flush=True)
@@ -5199,13 +5364,22 @@ def translate_segments(
                 translated_segs = []
                 for seg, tr in zip(segments, results):
                     text = (seg.get("text") or "").strip()
-                    translated_segs.append({
+                    _entry: dict = {
                         "start": seg["start"],
                         "end":   seg["end"],
                         "text_src": text,
                         "text_tgt": tr or text,
-                        **({"speaker": seg["speaker"]} if "speaker" in seg else {}),
-                    })
+                    }
+                    if "speaker" in seg:
+                        _entry["speaker"] = seg["speaker"]
+                    # TASK 5C: forward whisper_suspicious flag through the
+                    # MarianMT path so the editor still highlights segments
+                    # the upstream sanity check tagged. Other flags
+                    # (length_unfit, translation_fallback) are Ollama-only.
+                    _flags_in = _compute_segment_quality_flags(seg)
+                    if _flags_in:
+                        _entry["_quality_flags"] = _flags_in
+                    translated_segs.append(_entry)
                 print("     → Translation done (MarianMT)          ", flush=True)
                 return translated_segs
             except Exception as e:
@@ -5285,6 +5459,12 @@ def translate_segments(
                 }
                 if "speaker" in seg:
                     entry["speaker"] = seg["speaker"]
+                # TASK 5C: propagate upstream quality flags (whisper_suspicious)
+                # through the DeepL path. DeepL itself doesn't add new flags
+                # in this version — failed batches just keep the source text.
+                _flags_in = _compute_segment_quality_flags(seg)
+                if _flags_in:
+                    entry["_quality_flags"] = _flags_in
                 translated.append(entry)
             print("     → Translation done (DeepL)          ", flush=True)
             return translated
@@ -5316,6 +5496,13 @@ def translate_segments(
         }
         if "speaker" in seg:
             entry["speaker"] = seg["speaker"]
+        # TASK 5C: forward whisper_suspicious flag through the Google path.
+        # Google translation has no length retry, so length_unfit is not
+        # produced here; the sanity flag from upstream still surfaces in
+        # the editor for human review.
+        _flags_in = _compute_segment_quality_flags(seg)
+        if _flags_in:
+            entry["_quality_flags"] = _flags_in
         translated.append(entry)
         if i % 10 == 0:
             print(f"     {i+1}/{len(segments)}...", end="\r", flush=True)
@@ -7086,16 +7273,43 @@ def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
     return out_path
 
 
-CONFIG_PATH = Path.home() / ".videotranslatorai_config.json"
+from videotranslator.config import (  # noqa: E402
+    get_default_config_path as _get_default_config_path,
+    get_legacy_config_path as _get_legacy_config_path,
+    load_json_config as _load_json_config,
+    merge_json_config as _merge_json_config,
+    migrate_legacy_config_if_needed as _migrate_legacy_config_if_needed,
+    write_json_config as _write_json_config,
+)
+
+
+def _resolve_config_path() -> Path:
+    """Return the platform-aware user config path, migrating legacy on first run.
+
+    Linux: $XDG_CONFIG_HOME/videotranslatorai/config.json (default
+    ~/.config/videotranslatorai/config.json). Windows: %APPDATA%\\VideoTranslatorAI\\config.json.
+    macOS: ~/Library/Application Support/VideoTranslatorAI/config.json.
+
+    On first run after upgrading from <=v1.9, any existing
+    ~/.videotranslatorai_config.json is copied (not moved) to the new path so
+    older versions of the tool keep working during the transition window.
+    """
+    new_path = _get_default_config_path()
+    try:
+        migrated = _migrate_legacy_config_if_needed()
+    except Exception:
+        migrated = False
+    if migrated:
+        legacy = _get_legacy_config_path()
+        print(f"[+] Config migrated from {legacy} to {new_path}", flush=True)
+    return new_path
+
+
+CONFIG_PATH = _resolve_config_path()
 KEYRING_SERVICE = "VideoTranslatorAI"
 KEYRING_USERNAME = "hf_token"
 _KEYRING_MIGRATED = False
 
-from videotranslator.config import (  # noqa: E402
-    load_json_config as _load_json_config,
-    merge_json_config as _merge_json_config,
-    write_json_config as _write_json_config,
-)
 from videotranslator.secrets import (  # noqa: E402
     import_keyring_backend as _import_keyring_backend,
     load_secret_token as _load_secret_token,
@@ -7512,6 +7726,15 @@ def translate_video(
                         f"with suspicious tokens — review in editor:",
                         flush=True,
                     )
+                    # TASK 5C: persist the sanity hit on the segment dict so
+                    # the subtitle editor can colourise the row. The pipeline
+                    # carries the flag through translate_segments because the
+                    # Ollama path copies _quality_flags from seg → entry.
+                    for _idx, _info in _flagged.items():
+                        if 0 <= _idx < len(raw_segs):
+                            _add_quality_flag(
+                                raw_segs[_idx], _FLAG_WHISPER_SUSPICIOUS,
+                            )
                     for _idx, _info in list(_flagged.items())[:5]:
                         _susp = _info.get("suspicious", [])
                         _reps = _info.get("repeats", [])
@@ -7806,8 +8029,51 @@ class SubtitleEditor(tk.Toplevel):
         self.segments   = [s.copy() for s in segments]
         self.on_confirm = on_confirm
 
+        # TASK 5C: filter state — when True, only segments with at least one
+        # quality flag are shown. Useful on long videos (200+ segments) where
+        # only a handful are flagged for review.
+        self._filter_flagged_only = tk.BooleanVar(value=False)
+        # Tooltip handle (for hover-over flag explanation). Created lazily.
+        self._tooltip: tk.Toplevel | None = None
+        self._tooltip_iid: str | None = None
+
         tk.Label(self, text=self._s("editor_hint"),
                  bg=BG, fg=FG2, font=("Helvetica", 9)).pack(pady=(10, 4))
+
+        # ── Filter / summary bar ──────────────────────────────────────
+        # Counts how many segments carry each flag, plus a checkbox to
+        # restrict the view to flagged rows. When no segment is flagged
+        # we still show the bar (with all counts at 0) so the layout is
+        # stable across runs.
+        bar = tk.Frame(self, bg=BG)
+        bar.pack(fill="x", padx=12, pady=(2, 4))
+        flag_count = self._count_flags()
+        summary = self._s("editor_flag_summary").format(
+            total=len(self.segments),
+            flagged=flag_count["any"],
+            length=flag_count[_FLAG_LENGTH_UNFIT],
+            whisper=flag_count[_FLAG_WHISPER_SUSPICIOUS],
+            fallback=flag_count[_FLAG_TRANSLATION_FALLBACK],
+        )
+        tk.Label(bar, text=summary, bg=BG, fg=FG2,
+                 font=("Helvetica", 9)).pack(side="left")
+        # The Tk Checkbutton on a dark theme needs `selectcolor=BG` so the
+        # tick box doesn't render as a bright white square. `activebackground`
+        # keeps the hover state in-theme.
+        chk = tk.Checkbutton(
+            bar,
+            text=self._s("editor_filter_show_flagged_only"),
+            variable=self._filter_flagged_only,
+            command=self._populate,
+            bg=BG, fg=FG, activebackground=BG, activeforeground=FG,
+            selectcolor=BG, relief="flat", borderwidth=0,
+            highlightthickness=0, font=("Helvetica", 9),
+        )
+        # Disable the checkbox when there are zero flagged segments — toggling
+        # it would blank the table, which is confusing.
+        if flag_count["any"] == 0:
+            chk.configure(state="disabled")
+        chk.pack(side="right")
 
         frame = tk.Frame(self, bg=BG)
         frame.pack(fill="both", expand=True, padx=12, pady=4)
@@ -7820,6 +8086,20 @@ class SubtitleEditor(tk.Toplevel):
             self._tree.heading(c, text=c)
             self._tree.column(c, width=w, minwidth=w)
 
+        # TASK 5C: configure colour tags for each known quality flag. The
+        # palette is defined in videotranslator.quality_flags so the GUI
+        # and the pipeline stay in sync (and so the colours are unit-tested
+        # for shape). Catppuccin Mocha companions to BG=#1e1e2e — high
+        # saturation backgrounds with dark FG so flagged rows pop without
+        # losing legibility. Tag priority is resolved by primary_flag()
+        # which returns the most severe flag for the row.
+        for _flag, _colours in _QUALITY_FLAG_COLOURS.items():
+            self._tree.tag_configure(
+                _flag,
+                background=_colours["background"],
+                foreground=_colours["foreground"],
+            )
+
         vsb = ttk.Scrollbar(frame, orient="vertical", command=self._tree.yview)
         self._tree.configure(yscrollcommand=vsb.set)
         self._tree.pack(side="left", fill="both", expand=True)
@@ -7827,6 +8107,11 @@ class SubtitleEditor(tk.Toplevel):
 
         self._populate()
         self._tree.bind("<Double-1>", self._on_edit)
+        # Hover bindings for the per-row tooltip explaining why a row is
+        # flagged. Motion fires often (every pixel) but the handler is
+        # cheap (identify_row + dict lookup) so the cost is negligible.
+        self._tree.bind("<Motion>", self._on_tree_motion)
+        self._tree.bind("<Leave>", self._on_tree_leave)
 
         btn_frame = tk.Frame(self, bg=BG)
         btn_frame.pack(pady=8)
@@ -7838,16 +8123,45 @@ class SubtitleEditor(tk.Toplevel):
                   command=self.destroy,
                   bg=SEL, fg=FG, relief="flat", padx=12, pady=6).pack(side="left")
 
+    def _count_flags(self) -> dict[str, int]:
+        """Tally segments per quality flag for the summary bar."""
+        out: dict[str, int] = {
+            _FLAG_LENGTH_UNFIT: 0,
+            _FLAG_WHISPER_SUSPICIOUS: 0,
+            _FLAG_TRANSLATION_FALLBACK: 0,
+            "any": 0,
+        }
+        for s in self.segments:
+            flags = _compute_segment_quality_flags(s)
+            if not flags:
+                continue
+            out["any"] += 1
+            for f in flags:
+                if f in out:
+                    out[f] += 1
+        return out
+
     def _populate(self):
         self._tree.delete(*self._tree.get_children())
+        only_flagged = bool(self._filter_flagged_only.get())
         for i, s in enumerate(self.segments):
+            flags = _compute_segment_quality_flags(s)
+            if only_flagged and not flags:
+                continue
+            tags: tuple[str, ...] = ()
+            primary = _primary_flag(flags)
+            if primary:
+                tags = (primary,)
+            # iid keeps the original index so _on_edit / tooltip lookups
+            # always reference the correct dict in self.segments even
+            # when the filter hides intermediate rows.
             self._tree.insert("", "end", iid=str(i), values=(
                 i + 1,
                 f"{s['start']:.1f}s",
                 f"{s['end']:.1f}s",
                 s.get("text_src", s.get("text", "")),
                 s["text_tgt"],
-            ))
+            ), tags=tags)
 
     def _on_edit(self, event):
         item = self._tree.identify_row(event.y)
@@ -7879,6 +8193,95 @@ class SubtitleEditor(tk.Toplevel):
         entry.bind("<Return>", save)
         tk.Button(win, text=self._s("editor_btn_save"), command=save,
                   bg=ACC, fg=BG, relief="flat", padx=10).pack(pady=6)
+
+    def _flag_tooltip_text(self, flags: list[str]) -> str:
+        """Compose the hover text for a row with one or more flags.
+
+        When multiple flags coexist on a segment we list them in priority
+        order so the most severe explanation shows first. Each line is
+        the localised tooltip for one flag.
+        """
+        lines: list[str] = []
+        # Walk the canonical priority order: severe → mild.
+        for f in (
+            _FLAG_TRANSLATION_FALLBACK,
+            _FLAG_LENGTH_UNFIT,
+            _FLAG_WHISPER_SUSPICIOUS,
+        ):
+            if f in flags:
+                lines.append(self._s(f"editor_tooltip_{f}"))
+        return "\n".join(lines)
+
+    def _on_tree_motion(self, event) -> None:
+        iid = self._tree.identify_row(event.y)
+        if not iid:
+            self._hide_tooltip()
+            return
+        if iid == self._tooltip_iid:
+            return  # already showing the tooltip for this row
+        try:
+            idx = int(iid)
+        except ValueError:
+            self._hide_tooltip()
+            return
+        if not (0 <= idx < len(self.segments)):
+            self._hide_tooltip()
+            return
+        flags = _compute_segment_quality_flags(self.segments[idx])
+        if not flags:
+            self._hide_tooltip()
+            return
+        text = self._flag_tooltip_text(flags)
+        if not text:
+            self._hide_tooltip()
+            return
+        self._show_tooltip(event.x_root + 16, event.y_root + 12, text, iid)
+
+    def _on_tree_leave(self, _event) -> None:
+        self._hide_tooltip()
+
+    def _show_tooltip(self, x: int, y: int, text: str, iid: str) -> None:
+        # Recreate the tooltip when the bound row changes; reposition only
+        # otherwise. A persistent Toplevel would flicker on Motion.
+        if self._tooltip is not None and self._tooltip_iid != iid:
+            self._hide_tooltip()
+        if self._tooltip is None:
+            tip = tk.Toplevel(self)
+            tip.wm_overrideredirect(True)  # no titlebar/decoration
+            tip.configure(bg=SEL, padx=2, pady=2)
+            lbl = tk.Label(
+                tip, text=text, bg=SEL, fg=FG,
+                font=("Helvetica", 9), justify="left",
+                wraplength=320,
+            )
+            lbl.pack()
+            self._tooltip = tip
+        else:
+            # Update text in case priority/flag list changed for same iid.
+            for child in self._tooltip.winfo_children():
+                if isinstance(child, tk.Label):
+                    child.configure(text=text)
+                    break
+        try:
+            self._tooltip.wm_geometry(f"+{x}+{y}")
+        except tk.TclError:
+            pass
+        self._tooltip_iid = iid
+
+    def _hide_tooltip(self) -> None:
+        if self._tooltip is not None:
+            try:
+                self._tooltip.destroy()
+            except tk.TclError:
+                pass
+            self._tooltip = None
+        self._tooltip_iid = None
+
+    def destroy(self):  # type: ignore[override]
+        # Make sure the orphan tooltip Toplevel is cleaned up when the
+        # editor closes — otherwise it would linger as a ghost label.
+        self._hide_tooltip()
+        super().destroy()
 
     def _confirm(self):
         self.on_confirm(self.segments)
@@ -9932,7 +10335,9 @@ def _cli():
     parser.add_argument("--diarize", action="store_true",
                         help="Enable pyannote speaker diarization")
     parser.add_argument("--hf-token", default="",
-                        help="HuggingFace token (falls back to ~/.videotranslatorai_config.json)")
+                        help="HuggingFace token (falls back to the platform "
+                             "config file, e.g. "
+                             "~/.config/videotranslatorai/config.json on Linux)")
     parser.add_argument("--lipsync", action="store_true",
                         help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
     parser.add_argument("--xtts-speed", type=float, default=None,
