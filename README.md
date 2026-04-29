@@ -2,6 +2,25 @@
 
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
 
+## 🆕 What's new in v1.7
+
+Phase 2 quality release. The 9000-line single file is now backed by a modular `videotranslator/` package (12 modules, 229 unit tests) so individual stages can evolve and be tested in isolation.
+
+User-visible improvements:
+
+- **Length re-prompt loop on Ollama** — if the LLM produces a translation too long for the audio slot, the same engine is queried again with an explicit "rewrite shorter" prompt. Real measurement: -35% character count on outliers, ~15-20% fewer "audibly accelerated" segments.
+- **Context-aware translation window** — every prompt to Ollama now includes the previous and next segment as context (do-not-translate). Restores sentence-level coherence on segments split mid-clause by Whisper.
+- **Rubber Band CLI tier dispatcher** — `ratio 1.15-1.50` now routes to `rubberband-cli` (pitch-preserving) instead of ffmpeg `atempo` (pitch-altering chipmunk). `apt install rubberband-cli` to enable; falls back automatically to atempo if missing.
+- **Smart Ollama model fallback** — if the configured tag is missing but the daemon has another usable model, the pipeline switches to it instead of dropping to Google Translate.
+- **TTS punctuation sanitizer** — XTTS no longer verbalizes `:`, `;`, em/en-dash, ellipsis. Clock times and scores like `10:30` and `3:1` stay intact.
+- **Wav2Lip face pre-check** — voice-only / no-face videos skip Wav2Lip cleanly instead of running 30-60s of inference and aborting.
+- **Smart slot expansion** — segments expected to overshoot their audio slot can borrow time from adjacent silence or under-utilised neighbours (opt-out via `--no-slot-expansion`).
+- **Per-segment metrics CSV** — written next to every dub at `*_metrics.csv` with 15 columns for offline P90/P95 analysis across runs.
+- **Difficulty pre-flight** — a pre-translation `[difficulty]` line predicts the expected P90 stretch ratio so users know upfront whether the dub will be fluent, partly accelerated, or audibly compressed.
+- **Standalone module CLIs** — `python3 -m videotranslator.face_detector`, `.metrics_csv`, `.tts_text_sanitizer`, `.difficulty_detector` for ad-hoc checks without the full pipeline.
+
+The Ollama auto-setup, qwen3 thinking-mode toggle and the new TTS punctuation handling have all been validated end-to-end on EN→IT video. Other language pairs are supported but the calibration tables for `tts_speed_factor` and `chars_per_second` are most accurate for Italian; expect slightly conservative difficulty warnings on other targets.
+
 ## How it works
 
 1. **Transcription** — [faster-Whisper](https://github.com/SYSTRAN/faster-whisper) transcribes the audio (GPU accelerated)
@@ -89,6 +108,8 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 - 20 GB free disk space for a full install (PyTorch CUDA, Whisper large-v3, XTTS, Wav2Lip)
 
 > **ffmpeg and all Python packages are installed automatically** on first launch if missing. No manual setup required.
+
+**Optional system dependency** — `rubberband-cli` (Linux: `sudo apt install rubberband-cli`, macOS: `brew install rubberband`). When installed it is used for pitch-preserving time-stretching in the 1.15-1.50 ratio band, removing the residual "chipmunk" effect on cloned XTTS voices. The pipeline runs unchanged without it (auto-fallback to ffmpeg `atempo`).
 
 ### GPU support
 
@@ -254,6 +275,29 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 | large-v2/v3 | 3 GB | 🐢 | ★★★★★ |
 
 > Models are downloaded automatically on first use.
+
+## Standalone module CLIs
+
+The modular package exposes four user-facing tools that can be invoked directly without launching the full pipeline:
+
+```bash
+# Pre-flight a video for face presence (Wav2Lip would skip if absent).
+python3 -m videotranslator.face_detector path/to/video.mp4
+# exit 0 = face present, exit 1 = no face
+
+# Analyse a *_metrics.csv produced by build_dubbed_track.
+# Reports P50/P75/P90/P95 of pre_stretch_ratio, audibility band breakdown,
+# stretch engine usage, and the top-N worst outliers with their target text.
+python3 -m videotranslator.metrics_csv path/to/video_metrics.csv
+
+# Sanitize text for TTS (rewrites colons, semicolons, ellipsis, dashes).
+echo "alle 10:30 ho detto: andiamo!" | python3 -m videotranslator.tts_text_sanitizer
+
+# Estimate dubbing difficulty from a .srt or .json segments file BEFORE running TTS.
+python3 -m videotranslator.difficulty_detector path/to/video_it.srt --target-lang it --expansion 1.25
+```
+
+Each tool has `-h`/`--help` for full options. They are self-contained and reuse the same modules the dubbing pipeline relies on, so their output stays consistent with the runtime.
 
 ## License
 
