@@ -169,6 +169,156 @@ class ExpandTightSlotsTests(unittest.TestCase):
         out = expand_tight_slots([seg_tight, seg_easy], "it")
         self.assertEqual([s["text"] for s in out], original_texts)
 
+    # ---- TASK 2O: bidirectional slot expansion -----------------------------
+
+    # 14. Step 1b: backward gap stealing when forward neighbor is dense.
+    #     Tight middle segment has a small forward gap (skip step 1) but a
+    #     large backward gap → should anticipate i.start by stealing from
+    #     the silence after [i-1].
+    def test_step_1b_backward_gap_stealing(self):
+        # Loose first; long silence; tight middle; dense next (no fwd gap, not easy).
+        first = _make_seg(0.0, 2.0, ratio=0.30)         # [i-1] ends at 2.0
+        middle_tight = _make_seg(4.0, 6.0, ratio=1.80)  # 2.0s back-gap, fwd gap=0
+        dense_next = _make_seg(6.0, 9.0, ratio=1.20)    # not easy, no gap
+        out = expand_tight_slots(
+            [first, middle_tight, dense_next], "it",
+            max_gap_steal_s=1.5, min_gap_keep_s=0.15,
+            neighbor_easy_ratio=0.80,
+        )
+        # Step 1: forward gap = 0 → nothing.
+        # Step 1b: backward gap = 2.0 → steal min(2.0 - 0.15, 1.5) = 1.5s.
+        self.assertAlmostEqual(out[1]["start"], 4.0 - 1.5, places=5)
+        self.assertAlmostEqual(out[1]["end"], 6.0, places=5)
+        # Previous segment end is preserved (gap shrinks but stays > 0.15).
+        self.assertAlmostEqual(out[0]["end"], 2.0, places=5)
+
+    # 15. Step 2b: backward neighbor borrowing when forward neighbor is dense.
+    def test_step_2b_backward_neighbor_borrow(self):
+        easy_first = _make_seg(0.0, 6.0, ratio=0.30)    # very easy, long
+        middle_tight = _make_seg(6.0, 8.0, ratio=2.00)  # tight, no fwd/bwd gap
+        dense_next = _make_seg(8.0, 11.0, ratio=1.20)   # not easy, no gap
+        out = expand_tight_slots(
+            [easy_first, middle_tight, dense_next], "it",
+            min_gap_keep_s=0.15, max_neighbor_steal_s=0.5,
+            neighbor_easy_ratio=0.80,
+        )
+        # Step 1, 1b, 2: nothing (gaps=0, fwd neighbor not easy).
+        # Step 2b: easy_first is loose → cede up to 0.5s from its tail.
+        delta = 6.0 - out[1]["start"]
+        self.assertGreater(delta, 0.0)
+        self.assertLessEqual(delta, 0.5 + 1e-6)
+        # Previous segment end shifts back by the same delta.
+        self.assertAlmostEqual(easy_first["end"] - out[0]["end"], delta, places=5)
+        # Previous segment start preserved.
+        self.assertAlmostEqual(out[0]["start"], 0.0, places=5)
+        # Middle segment end preserved (only start anticipated).
+        self.assertAlmostEqual(out[1]["end"], 8.0, places=5)
+
+    # 16. Order matters: when both forward AND backward gaps are usable,
+    #     forward is consumed first (Step 1 before 1b). The middle segment
+    #     should grow from its END (forward gap), not its START.
+    def test_forward_gap_preferred_over_backward(self):
+        # Both gaps are 1.0s. Tight middle should consume forward first.
+        first = _make_seg(0.0, 1.0, ratio=0.30)            # ends at 1.0
+        middle_tight = _make_seg(2.0, 3.0, ratio=2.50)     # very tight
+        last = _make_seg(4.0, 6.0, ratio=0.30)             # easy
+        out = expand_tight_slots(
+            [first, middle_tight, last], "it",
+            max_gap_steal_s=1.5, min_gap_keep_s=0.15,
+        )
+        # Forward gap consumed: middle.end shifts from 3.0 to 3.0 + (1.0-0.15) = 3.85
+        self.assertAlmostEqual(out[1]["end"], 3.85, places=5)
+        # Backward gap consumption depends on whether middle is still tight
+        # after step 1. With ratio=2.50 and slot doubling, ratio drops to ~1.25
+        # which is below tight (1.50) → step 1b should NOT fire.
+        self.assertAlmostEqual(out[1]["start"], 2.0, places=5)
+        # First segment end untouched (we only stole silence after it).
+        self.assertAlmostEqual(out[0]["end"], 1.0, places=5)
+
+    # 17. bidirectional=False reproduces the pre-2O behaviour: even when a
+    #     backward gap is the only option, the segment stays tight.
+    def test_bidirectional_false_disables_backward_steps(self):
+        first = _make_seg(0.0, 2.0, ratio=0.30)
+        middle_tight = _make_seg(4.0, 6.0, ratio=1.80)
+        dense_next = _make_seg(6.0, 9.0, ratio=1.20)
+        out = expand_tight_slots(
+            [first, middle_tight, dense_next], "it",
+            min_gap_keep_s=0.15, max_gap_steal_s=1.5,
+            bidirectional=False,
+        )
+        # No forward gap, no easy forward neighbor → nothing to do.
+        # With bidirectional=False the backward gap is ignored.
+        self.assertAlmostEqual(out[1]["start"], 4.0, places=5)
+        self.assertAlmostEqual(out[1]["end"], 6.0, places=5)
+        self.assertAlmostEqual(out[0]["end"], 2.0, places=5)
+
+    # 18. Cumulative borrowing: 3 consecutive tight segments sandwiched
+    #     between two very loose ones. The runner should optimise each
+    #     in turn without producing overlap or shifting later segments
+    #     into earlier ones.
+    def test_cumulative_no_overlap(self):
+        easy_left = _make_seg(0.0, 8.0, ratio=0.20)        # very loose
+        tight_a = _make_seg(8.0, 9.5, ratio=1.80)
+        tight_b = _make_seg(9.5, 11.0, ratio=1.80)
+        tight_c = _make_seg(11.0, 12.5, ratio=1.80)
+        easy_right = _make_seg(12.5, 20.0, ratio=0.20)     # very loose
+        out = expand_tight_slots(
+            [easy_left, tight_a, tight_b, tight_c, easy_right], "it",
+            min_gap_keep_s=0.15, max_neighbor_steal_s=0.5,
+        )
+        # Sanity: timestamps remain sorted and non-overlapping.
+        for k in range(len(out) - 1):
+            self.assertLessEqual(out[k]["end"], out[k + 1]["start"] + 1e-6,
+                                 f"overlap at index {k}: {out[k]} / {out[k+1]}")
+            self.assertLess(out[k]["start"], out[k]["end"],
+                            f"non-positive slot at {k}: {out[k]}")
+        # Bidirectional should expand more segments than unidirectional.
+        out_uni = expand_tight_slots(
+            [easy_left, tight_a, tight_b, tight_c, easy_right], "it",
+            min_gap_keep_s=0.15, max_neighbor_steal_s=0.5,
+            bidirectional=False,
+        )
+        def _grew(orig, res):
+            return sum(
+                1 for a, b in zip(orig, res)
+                if (b["end"] - b["start"]) > (a["end"] - a["start"]) + 1e-6
+            )
+        n_bi = _grew([easy_left, tight_a, tight_b, tight_c, easy_right], out)
+        n_uni = _grew([easy_left, tight_a, tight_b, tight_c, easy_right], out_uni)
+        self.assertGreaterEqual(n_bi, n_uni)
+
+    # 19. Edge: first segment never triggers Step 1b nor 2b (no [i-1]).
+    def test_first_segment_no_backward_steps(self):
+        tight_first = _make_seg(0.0, 2.0, ratio=2.00)
+        easy_next = _make_seg(2.0, 8.0, ratio=0.30)
+        out = expand_tight_slots(
+            [tight_first, easy_next], "it",
+            min_gap_keep_s=0.15, max_neighbor_steal_s=0.5,
+        )
+        # First should still expand (Step 2 forward) but never get start<0.
+        self.assertGreaterEqual(out[0]["start"], 0.0)
+        self.assertAlmostEqual(out[0]["start"], 0.0, places=5)
+
+    # 20. Edge: last segment was a no-op pre-2O (only Step 1+2 forward),
+    #     post-2O it can use Step 1b / 2b if a backward path exists.
+    def test_last_segment_now_uses_backward_steps(self):
+        # Use a non-easy first segment so only Step 1b (gap) fires, not 2b.
+        # That isolates the backward gap stealing assertion cleanly.
+        non_easy_first = _make_seg(0.0, 6.0, ratio=1.20)  # not easy
+        tight_last = _make_seg(6.5, 8.5, ratio=1.80)      # 0.5s back-gap
+        out = expand_tight_slots(
+            [non_easy_first, tight_last], "it",
+            min_gap_keep_s=0.15, max_neighbor_steal_s=0.5,
+            neighbor_easy_ratio=0.80,
+        )
+        # Step 1b: back gap=0.5 → steal min(0.5-0.15, 1.5) = 0.35s.
+        # After: slot=2.35, ratio=1.80*2/2.35≈1.53 still > 1.50 (tight).
+        # Step 2b: previous ratio=1.20 not < 0.80 → no borrow.
+        self.assertAlmostEqual(out[1]["start"], 6.5 - 0.35, places=5)
+        self.assertAlmostEqual(out[1]["end"], 8.5, places=5)
+        # First segment end unchanged (gap-stealing doesn't move neighbour).
+        self.assertAlmostEqual(out[0]["end"], 6.0, places=5)
+
 
 if __name__ == "__main__":
     unittest.main()
