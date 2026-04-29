@@ -4,6 +4,7 @@ from pathlib import Path
 
 from videotranslator.input_source import (
     build_ytdlp_options,
+    download_url,
     is_probable_url,
     normalize_input_path,
     resolve_downloaded_filename,
@@ -43,6 +44,42 @@ class InputSourceTests(unittest.TestCase):
         self.assertTrue(is_probable_url("https://youtu.be/example"))
         self.assertFalse(is_probable_url("~/Videos/input.mp4"))
         self.assertTrue(normalize_input_path("~/Videos/input.mp4").endswith("Videos/input.mp4"))
+
+    def test_download_url_uses_injected_ytdlp_and_logs_final_path(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            final = Path(tmp_str) / "clip.mp4"
+            logs: list[str] = []
+            seen_opts = {}
+
+            class FakeYoutubeDL:
+                def __init__(self, opts):
+                    seen_opts.update(opts)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return None
+
+                def extract_info(self, url, download):
+                    self.url = url
+                    self.download = download
+                    final.write_bytes(b"x")
+                    return {"title": "clip"}
+
+                def prepare_filename(self, info):
+                    return str(Path(tmp_str) / "clip.webm")
+
+            result = download_url(
+                "https://youtu.be/example",
+                tmp_str,
+                ytdlp_cls=FakeYoutubeDL,
+                log_cb=logs.append,
+            )
+
+        self.assertEqual(result, str(final))
+        self.assertEqual(seen_opts["merge_output_format"], "mp4")
+        self.assertEqual(logs, [f"[+] Downloaded: {final}"])
 
 
 if __name__ == "__main__":

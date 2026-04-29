@@ -3274,20 +3274,9 @@ def _run_ffmpeg(cmd: list[str], step: str = "ffmpeg"):
 def download_youtube(url: str, out_dir: str) -> str:
     """Downloads a video from YouTube (or any yt-dlp supported site) to out_dir.
     Returns the path of the downloaded file."""
-    import yt_dlp
-    from videotranslator.input_source import (
-        build_ytdlp_options,
-        resolve_downloaded_filename,
-    )
+    from videotranslator.input_source import download_url
 
-    ydl_opts = build_ytdlp_options(out_dir)
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = resolve_downloaded_filename(ydl.prepare_filename(info))
-
-    print(f"[+] Downloaded: {filename}", flush=True)
-    return filename
+    return download_url(url, out_dir, log_cb=lambda msg: print(msg, flush=True))
 
 
 def extract_audio(video_path: str, audio_path: str):
