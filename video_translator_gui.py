@@ -3299,87 +3299,15 @@ def transcribe(
     lang_source: str,
     hotwords: list[str] | None = None,
 ) -> tuple[list[dict], str]:
-    import torch
-    from faster_whisper import WhisperModel
+    from videotranslator.transcription import transcribe_audio
 
-    from videotranslator.hotwords import to_whisper_param
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    compute = "float16" if device == "cuda" else "int8"
-    print(f"[3/6] Transcribing with faster-Whisper (model={model_name}, device={device})...", flush=True)
-
-    try:
-        model = WhisperModel(model_name, device=device, compute_type=compute)
-    except Exception as e:
-        if device == "cuda":
-            print(f"     ! CUDA unavailable ({e}), falling back to CPU...", flush=True)
-            device, compute = "cpu", "int8"
-            model = WhisperModel(model_name, device=device, compute_type=compute)
-        else:
-            raise
-    lang = None if lang_source == "auto" else lang_source
-
-    # Context biasing (faster-whisper >=1.0): pass a space-separated string
-    # of expected terms (proper nouns, brand names, technical jargon) so the
-    # decoder weighs them higher when the audio matches phonetically.
-    # Empirical: ~43-44% Biased-WER reduction (arXiv:2508.17796).
-    hotwords_param = to_whisper_param(hotwords)
-    if hotwords_param:
-        print(
-            f"     [whisper] biased decoding with {len(hotwords or [])} hotwords",
-            flush=True,
-        )
-
-    def _run_transcribe(dev, cmp):
-        nonlocal model
-        if dev != device:
-            del model
-            model = WhisperModel(model_name, device=dev, compute_type=cmp)
-        transcribe_kwargs = dict(
-            language=lang,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={"threshold": 0.3, "min_silence_duration_ms": 300},
-            condition_on_previous_text=False,
-            repetition_penalty=1.3,
-            no_repeat_ngram_size=3,
-            compression_ratio_threshold=2.4,
-            log_prob_threshold=-1.0,
-            temperature=0,
-        )
-        if hotwords_param:
-            transcribe_kwargs["hotwords"] = hotwords_param
-        segments, info = model.transcribe(audio_path, **transcribe_kwargs)
-        out = []
-        prev_text = None
-        for s in segments:
-            text = s.text.strip()
-            if text and text != prev_text:
-                out.append({"start": s.start, "end": s.end, "text": text})
-                prev_text = text
-        return out, info
-
-    try:
-        try:
-            result, info = _run_transcribe(device, compute)
-        except RuntimeError as e:
-            if device == "cuda" and ("libcublas" in str(e) or "CUDA" in str(e) or "cuda" in str(e).lower()):
-                print(f"     ! CUDA error during inference ({e}), retrying on CPU...", flush=True)
-                result, info = _run_transcribe("cpu", "int8")
-                device = "cpu"
-            else:
-                raise
-    finally:
-        del model
-        try:
-            import torch as _t
-            if device == "cuda":
-                _t.cuda.empty_cache()
-        except Exception:
-            pass
-    detected = info.language or lang_source
-    print(f"     → {len(result)} segments | detected language: {detected}", flush=True)
-    return result, detected
+    return transcribe_audio(
+        audio_path,
+        model_name,
+        lang_source,
+        hotwords,
+        log_cb=lambda msg: print(msg, flush=True),
+    )
 
 
 def _windows_known_videos_dir() -> Path | None:
