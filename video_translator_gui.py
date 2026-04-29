@@ -3668,6 +3668,9 @@ from videotranslator.difficulty_detector import (  # noqa: E402
     estimate_p90_ratio as _estimate_p90_ratio,
     format_difficulty_log as _format_difficulty_log,
 )
+from videotranslator.face_detector import (  # noqa: E402
+    has_enough_faces as _has_enough_faces,
+)
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
@@ -7231,14 +7234,36 @@ def translate_video(
         mux_video(video_in, track, output)
 
         if use_lipsync:
-            try:
-                # Build a vocals-only track (no background music) for accurate lip sync
-                track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir,
-                                                   label="[6/6] Assembling vocals track for lip-sync...")
-                synced = apply_lipsync(output, track_vocals, tmp_dir)
-                shutil.move(synced, output)
-            except Exception as e:
-                print(f"     ! Lip sync failed ({e.__class__.__name__}: {e}), keeping video without lip sync.", flush=True)
+            # TASK 2H: pre-check faces with cv2 Haar Cascade. Wav2Lip would
+            # otherwise spend 30-60s reading every frame just to fail with
+            # "Face not detected" on voice-only content (podcasts, screen
+            # recordings, voice-over animations). The pre-check samples 15
+            # frames in ~1s and skips Wav2Lip cleanly when no face is present.
+            _face_dir = os.path.join(tmp_dir, "_face_check")
+            _has_face, _face_ratio, _face_n, _face_total = _has_enough_faces(
+                video_in, _face_dir
+            )
+            if not _has_face:
+                print(
+                    f"     [face-check] {_face_n}/{_face_total} sampled frames "
+                    f"contain a face (ratio {_face_ratio:.2f}); skipping Wav2Lip "
+                    f"— voice-only or no-face video",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"     [face-check] {_face_n}/{_face_total} sampled frames "
+                    f"contain a face (ratio {_face_ratio:.2f}); proceeding with Wav2Lip",
+                    flush=True,
+                )
+                try:
+                    # Build a vocals-only track (no background music) for accurate lip sync
+                    track_vocals = build_dubbed_track(segments, tts_files, None, duration, tmp_dir,
+                                                       label="[6/6] Assembling vocals track for lip-sync...")
+                    synced = apply_lipsync(output, track_vocals, tmp_dir)
+                    shutil.move(synced, output)
+                except Exception as e:
+                    print(f"     ! Lip sync failed ({e.__class__.__name__}: {e}), keeping video without lip sync.", flush=True)
 
     print(f"\n[✓] Done: {output}")
     return {"video": output, "srt": output_base + ".srt", "segments": segments}
