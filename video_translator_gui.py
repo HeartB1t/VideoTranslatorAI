@@ -7004,47 +7004,36 @@ def _is_dir_user_writable(path: Path) -> bool:
         return False
 
 
-def _resolve_wav2lip_dir() -> Path:
-    """Return the directory that should host Wav2Lip repo + model.
+def _resolve_wav2lip_paths():
+    """Resolve Wav2Lip asset and work directories using the pure resolver.
 
-    Priority (cross-platform unified path):
-      1. system-wide install dir populated by the Windows/Linux installer
-         (%ProgramFiles%\\VideoTranslatorAI\\wav2lip on Windows,
-          /opt/VideoTranslatorAI/wav2lip on Linux), adopted only when it is
-         **fully populated** (repo clone AND model weights) **and actually
-         writable** by the current user — otherwise a later mkdir/git clone
-         under ProgramFiles or /opt would raise PermissionError without
-         falling back to the user-level path.
+    Delegates to :func:`videotranslator.platforms.resolve_wav2lip_paths` so
+    the platform-specific candidate logic lives in one place and is fully
+    unit-tested. The asset dir is allowed to live under a system-wide,
+    possibly read-only install path; the work dir is always per-user and
+    writable.
 
-         Writability is checked with a real tempfile probe
-         (``_is_dir_user_writable``) instead of ``os.access(..., os.W_OK)``
-         because on Windows the latter ignores NTFS ACLs / UAC virtualisation
-         and routinely reports ``True`` for Program Files directories that
-         would in fact reject writes from a non-elevated process.
-      2. per-user fallback: ~/.local/share/wav2lip (legacy path, always
-         writable, used when the installer has not pre-seeded a complete
-         system-wide copy).
-
-    The system-wide branch prevents a double 416 MB download on Windows when
-    ``install_windows.bat`` has already placed the assets under ProgramFiles.
+    Backwards compatibility: callers that previously used a single
+    ``WAV2LIP_DIR`` keep working — ``WAV2LIP_DIR`` is aliased to ``asset_dir``
+    below, which is exactly what the legacy code did when assets were
+    already populated under the system path or fell back to
+    ``~/.local/share/wav2lip``.
     """
-    candidates: list[Path] = []
-    if sys.platform.startswith("win"):
-        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-        candidates.append(Path(program_files) / "VideoTranslatorAI" / "wav2lip")
-    else:
-        candidates.append(Path("/opt/VideoTranslatorAI/wav2lip"))
-    for cand in candidates:
-        # AND (not OR): both repo and weights must be present, otherwise the
-        # caller will try to mkdir/clone under a read-only system path.
-        repo_ok   = (cand / "Wav2Lip" / "inference.py").exists()
-        model_ok  = (cand / "wav2lip_gan.pth").exists()
-        if repo_ok and model_ok and _is_dir_user_writable(cand):
-            return cand
-    return Path.home() / ".local" / "share" / "wav2lip"
+    from videotranslator.platforms import resolve_wav2lip_paths as _impl
+    return _impl()
 
 
-WAV2LIP_DIR     = _resolve_wav2lip_dir()
+def _resolve_wav2lip_dir() -> Path:
+    """Legacy single-dir helper kept for callers that only need asset_dir."""
+    return _resolve_wav2lip_paths().asset_dir
+
+
+_WAV2LIP_PATHS  = _resolve_wav2lip_paths()
+WAV2LIP_DIR     = _WAV2LIP_PATHS.asset_dir
+# Per-user scratch space for frames / intermediate sync output. NEVER under
+# ProgramFiles on Windows: the pipeline must be able to write here without
+# admin rights. See ``Wav2LipPaths`` in ``videotranslator/platforms.py``.
+WAV2LIP_WORK_DIR = _WAV2LIP_PATHS.work_dir
 WAV2LIP_REPO    = WAV2LIP_DIR / "Wav2Lip"
 WAV2LIP_MODEL   = WAV2LIP_DIR / "wav2lip_gan.pth"
 WAV2LIP_REPO_URL  = "https://github.com/Rudrabha/Wav2Lip.git"
@@ -7149,8 +7138,29 @@ def _install_wav2lip_face_stack_linux() -> None:
 
 
 def _ensure_wav2lip_assets():
-    """Ensure Wav2Lip repo and GAN weights are available locally."""
+    """Ensure Wav2Lip repo and GAN weights are available locally.
+
+    The asset directory may be a system-wide install (e.g. under
+    ``%ProgramFiles%`` on Windows) that is read-only for unprivileged users.
+    The pure path resolver guarantees that if assets are NOT yet present we
+    landed on a writable fallback, so a plain ``mkdir`` here is safe in
+    "fresh install" mode. The branch below short-circuits when the system
+    install is already complete: no mkdir, no patching attempts.
+    """
+    repo_present = WAV2LIP_REPO.exists() and (WAV2LIP_REPO / "inference.py").exists()
+    model_present = WAV2LIP_MODEL.exists()
+    if repo_present and model_present:
+        # Fully populated (typical Windows installer path) — nothing to do.
+        return
+
     WAV2LIP_DIR.mkdir(parents=True, exist_ok=True)
+    # Best-effort scratch dir creation; failures are non-fatal because the
+    # current Wav2Lip subprocess writes its temp/ inside the repo dir, not
+    # in WAV2LIP_WORK_DIR. Future refactors can route scratch IO here.
+    try:
+        WAV2LIP_WORK_DIR.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        pass
 
     if not WAV2LIP_REPO.exists():
         print(f"     Cloning Wav2Lip repo → {WAV2LIP_REPO}", flush=True)

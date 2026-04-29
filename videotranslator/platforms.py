@@ -7,13 +7,22 @@ keeps that contract explicit so the rest of the code can avoid scattered
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 
 SUPPORTED_PLATFORMS = {"win32", "linux"}
 EXPERIMENTAL_PLATFORMS = {"darwin"}
+
+# Sentinel that signals a Wav2Lip asset directory is "complete" (cloned repo
+# AND downloaded model). Both must be present; the resolver refuses to claim
+# a half-populated directory because callers would still trigger a 416 MB
+# re-download or a fresh git clone.
+_WAV2LIP_REPO_SENTINEL = ("Wav2Lip", "inference.py")
+_WAV2LIP_MODEL_SENTINEL = "wav2lip_gan.pth"
 
 
 @dataclass(frozen=True)
@@ -40,6 +49,24 @@ class RuntimeAppPaths:
     cache_dir: Path
     wav2lip_dir: Path
     default_videos_dir: Path
+
+
+@dataclass(frozen=True)
+class Wav2LipPaths:
+    """Two-tier path layout for the Wav2Lip lip-sync stage.
+
+    ``asset_dir`` hosts read-only inputs (cloned Wav2Lip repo + 416 MB model
+    weights). It may live under a system-wide, possibly read-only location
+    populated by the installer (``%ProgramFiles%\\VideoTranslatorAI\\wav2lip``
+    on Windows, ``/opt/VideoTranslatorAI/wav2lip`` on Linux).
+
+    ``work_dir`` hosts pipeline scratch space (extracted frames, audio chunks,
+    intermediate sync output). It MUST be writable by the unprivileged user
+    running the GUI; the resolver therefore always picks a per-user location.
+    """
+
+    asset_dir: Path
+    work_dir: Path
 
 
 def platform_info(sys_platform: str) -> PlatformInfo:
@@ -160,3 +187,170 @@ def runtime_app_paths(
         wav2lip_dir=data_root / "wav2lip",
         default_videos_dir=home_path / "Movies",
     )
+
+
+def _wav2lip_asset_candidates(
+    sys_platform: str,
+    env: dict[str, str],
+    home: Path,
+) -> list[Path]:
+    """Return ordered candidates for the Wav2Lip asset directory.
+
+    The first candidate is the system-wide install path that the installer
+    can pre-populate; the remaining ones are user-local fallbacks that are
+    always reachable even without admin privileges. Order matters: the
+    resolver picks the first candidate that already contains valid assets,
+    otherwise it falls back to the first writable one.
+    """
+    info = platform_info(sys_platform)
+    home_path = Path(home)
+    if info.key == "win32":
+        program_files = env.get("ProgramFiles") or env.get("PROGRAMFILES")
+        if not program_files:
+            program_files = r"C:\Program Files"
+        localappdata = env.get("LOCALAPPDATA") or str(home_path / "AppData" / "Local")
+        return [
+            Path(program_files) / "VideoTranslatorAI" / "wav2lip",
+            Path(localappdata) / "VideoTranslatorAI" / "wav2lip",
+        ]
+
+    if info.key == "linux":
+        data_root = Path(env.get("XDG_DATA_HOME") or (home_path / ".local" / "share"))
+        return [
+            Path("/opt/VideoTranslatorAI/wav2lip"),
+            data_root / "wav2lip",
+        ]
+
+    # macOS / unknown: keep a single user-local candidate.
+    return [home_path / "Library" / "Application Support" / "VideoTranslatorAI" / "wav2lip"]
+
+
+def _wav2lip_work_dir(
+    sys_platform: str,
+    env: dict[str, str],
+    home: Path,
+) -> Path:
+    """Return the user-local writable scratch directory for Wav2Lip."""
+    info = platform_info(sys_platform)
+    home_path = Path(home)
+    if info.key == "win32":
+        localappdata = env.get("LOCALAPPDATA") or str(home_path / "AppData" / "Local")
+        return Path(localappdata) / "VideoTranslatorAI" / "wav2lip-work"
+    if info.key == "linux":
+        cache_root = Path(env.get("XDG_CACHE_HOME") or (home_path / ".cache"))
+        return cache_root / "wav2lip"
+    return home_path / "Library" / "Caches" / "VideoTranslatorAI" / "wav2lip-work"
+
+
+def _wav2lip_assets_present(candidate: Path) -> bool:
+    """Return True if *candidate* already contains a usable Wav2Lip layout.
+
+    Both the cloned repo (with its ``inference.py``) AND the downloaded model
+    weights must exist. A half-populated directory is rejected so the caller
+    falls back to a writable location and finishes the install there instead
+    of trying to mkdir/git clone under a read-only system path.
+    """
+    if not candidate.is_dir():
+        return False
+    repo_ok = (candidate / _WAV2LIP_REPO_SENTINEL[0] / _WAV2LIP_REPO_SENTINEL[1]).exists()
+    model_ok = (candidate / _WAV2LIP_MODEL_SENTINEL).exists()
+    return repo_ok and model_ok
+
+
+def _is_dir_writable(path: Path) -> bool:
+    """Probe-write check that respects NTFS ACLs / UAC virtualisation.
+
+    ``os.access(..., os.W_OK)`` is unreliable on Windows: it inspects only the
+    read-only attribute and routinely reports True for ``C:\\Program Files``
+    even when a real write would be denied. A tempfile create+delete is the
+    only portable way to get a truthful answer without pulling in pywin32.
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        return False
+    if not path.is_dir():
+        return False
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=str(path), prefix=".vtai_wtest_", delete=True
+        ):
+            pass
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
+def resolve_wav2lip_paths(
+    sys_platform: str | None = None,
+    env: dict[str, str] | None = None,
+    home: Path | None = None,
+    *,
+    writable_check: "callable[[Path], bool] | None" = None,
+    assets_check: "callable[[Path], bool] | None" = None,
+) -> Wav2LipPaths:
+    """Resolve the asset and work directories for the Wav2Lip stage.
+
+    Resolution policy for ``asset_dir``:
+
+      1. Walk the platform-specific candidate list in priority order. The
+         first candidate that already contains a valid layout (repo + model)
+         AND is writable by the current user is returned as-is. Writability
+         matters even for "already populated" assets because the pipeline
+         occasionally writes patches (e.g. ``audio.py`` librosa fix) and
+         removes ``temp/`` between runs.
+      2. If no candidate is fully populated, fall back to the first writable
+         candidate (creating it on demand). This is the "fresh install" path:
+         the caller will git-clone + download into a guaranteed-writable
+         location instead of crashing under ``%ProgramFiles%``.
+      3. As a last resort, return the first candidate even if not writable;
+         the caller will surface an actionable error.
+
+    ``work_dir`` is always resolved to a per-user, guaranteed-writable
+    location and created on the spot.
+
+    The function takes ``sys_platform``, ``env`` and ``home`` so unit tests
+    can simulate Windows from a Linux developer machine. ``writable_check``
+    and ``assets_check`` are seams for the same reason — both default to the
+    real filesystem probes.
+    """
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if env is None:
+        env = dict(os.environ)
+    if home is None:
+        home = Path.home()
+    if writable_check is None:
+        writable_check = _is_dir_writable
+    if assets_check is None:
+        assets_check = _wav2lip_assets_present
+
+    candidates = _wav2lip_asset_candidates(sys_platform, env, Path(home))
+
+    chosen: Path | None = None
+    for cand in candidates:
+        if assets_check(cand) and writable_check(cand):
+            chosen = cand
+            break
+
+    if chosen is None:
+        for cand in candidates:
+            if writable_check(cand):
+                chosen = cand
+                break
+
+    if chosen is None:
+        # Nothing writable: surface the first candidate so the caller can
+        # report a precise "asset dir not writable" error instead of crashing
+        # later with a less actionable PermissionError.
+        chosen = candidates[0]
+
+    work_dir = _wav2lip_work_dir(sys_platform, env, Path(home))
+    try:
+        work_dir.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        # Even the user-local cache failed (read-only home?). Returning the
+        # path anyway lets the caller decide whether to abort or retry.
+        pass
+
+    return Wav2LipPaths(asset_dir=chosen, work_dir=work_dir)
