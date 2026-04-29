@@ -239,3 +239,93 @@ def has_enough_faces(
     ratio = compute_face_ratio(face, total)
     decision = decide_has_faces(ratio, min_face_ratio=min_face_ratio)
     return decision, ratio, face, total
+
+
+def _cli() -> int:
+    """Standalone CLI: report face presence in a video.
+
+    Exit codes:
+        0 — faces detected (Wav2Lip would proceed)
+        1 — no faces detected (Wav2Lip would skip)
+        2 — input file missing or other usage error
+
+    Examples:
+        python3 -m videotranslator.face_detector video.mp4
+        python3 -m videotranslator.face_detector --samples 30 --threshold 0.5 v.mp4
+    """
+    import argparse
+    import sys
+    import tempfile
+
+    parser = argparse.ArgumentParser(
+        prog="python3 -m videotranslator.face_detector",
+        description=(
+            "Sample N frames from a video and report whether enough of them "
+            "contain a face. Used by the dubbing pipeline to skip Wav2Lip on "
+            "voice-only content. Useful standalone for pre-flighting any "
+            "video before a longer pipeline run."
+        ),
+    )
+    parser.add_argument("video", help="Path to a video file readable by ffmpeg.")
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=DEFAULT_SAMPLE_FRAMES,
+        help=f"Number of frames to sample (default: {DEFAULT_SAMPLE_FRAMES}).",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_MIN_FACE_RATIO,
+        help=(
+            f"Minimum face ratio for the verdict to be PASS "
+            f"(default: {DEFAULT_MIN_FACE_RATIO})."
+        ),
+    )
+    parser.add_argument(
+        "--keep-frames",
+        action="store_true",
+        help=(
+            "Keep the sampled JPEGs in ./vt_face_check_frames/ for visual "
+            "inspection (default: temporary directory, removed at exit)."
+        ),
+    )
+    args = parser.parse_args()
+
+    if not os.path.exists(args.video):
+        print(f"error: video not found: {args.video}", file=sys.stderr)
+        return 2
+
+    if args.keep_frames:
+        out_dir = os.path.join(os.getcwd(), "vt_face_check_frames")
+        os.makedirs(out_dir, exist_ok=True)
+        decision, ratio, face_n, total = has_enough_faces(
+            args.video, out_dir,
+            n_samples=args.samples,
+            min_face_ratio=args.threshold,
+        )
+        kept_msg = f"\nFrames kept in: {out_dir}"
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            decision, ratio, face_n, total = has_enough_faces(
+                args.video, tmp,
+                n_samples=args.samples,
+                min_face_ratio=args.threshold,
+            )
+        kept_msg = ""
+
+    print(f"Sampled frames: {total}")
+    print(f"With face:      {face_n} ({ratio * 100:.1f}%)")
+    print(
+        f"Verdict:        {'PASS' if decision else 'SKIP'} "
+        f"(threshold {args.threshold * 100:.0f}%)"
+    )
+    if kept_msg:
+        print(kept_msg)
+
+    return 0 if decision else 1
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_cli())

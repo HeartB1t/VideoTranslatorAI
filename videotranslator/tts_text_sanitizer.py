@@ -79,3 +79,36 @@ def sanitize_for_tts(text: str) -> str:
     out = _COLLAPSE_DOUBLE_COMMA.sub(",", out)
     out = _MULTI_WS.sub(" ", out)
     return out.strip()
+
+
+def _cli() -> None:
+    """Standalone CLI: sanitize a string from argv or stdin.
+
+    Examples:
+        python3 -m videotranslator.tts_text_sanitizer "americano: l'ho scritto"
+        echo "X:30 ..." | python3 -m videotranslator.tts_text_sanitizer
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="python3 -m videotranslator.tts_text_sanitizer",
+        description=(
+            "Rewrite TTS-unsafe punctuation. Reads from positional argument "
+            "if given, otherwise from stdin. Output is one line on stdout."
+        ),
+    )
+    parser.add_argument(
+        "text",
+        nargs="?",
+        default=None,
+        help="Text to sanitize; if omitted, reads from stdin.",
+    )
+    args = parser.parse_args()
+
+    text = args.text if args.text is not None else sys.stdin.read()
+    sys.stdout.write(sanitize_for_tts(text) + "\n")
+
+
+if __name__ == "__main__":
+    _cli()
