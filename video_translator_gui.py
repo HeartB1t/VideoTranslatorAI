@@ -4376,188 +4376,24 @@ def _ollama_pull_model(
 # più basso (~2% vs 5-15% di XTTS su long-form), ma il safety net resta.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Pacchetto pip da installare per la modalità auto-install. La singola riga di
-# codice da aggiornare quando CosyVoice 2.0 ufficiale sarà su PyPI.
-_COSYVOICE_PIP_PKG = "cosyvoice"
-
-# Cache directory: il wrapper di Lucas usa "checkpoints/cosyvoice" relativo
-# alla cwd, comportamento scomodo per una GUI che può avere cwd variabile.
-# Lo forziamo sempre sotto la cache utente standard, cross-platform.
-def _cosyvoice_cache_dir() -> Path:
-    """Ritorna la directory dove tenere i pesi CosyVoice. Idempotente.
-
-    - Linux/macOS: $XDG_CACHE_HOME/videotranslatorai/cosyvoice (default ~/.cache).
-    - Windows:     %LOCALAPPDATA%\\VideoTranslatorAI\\cosyvoice.
-    Creata on-demand. Se la creazione fallisce (es. permessi), fallback a
-    tempfile.gettempdir() per non bloccare la pipeline.
-    """
-    if sys.platform.startswith("win"):
-        base = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "VideoTranslatorAI"
-    else:
-        base = Path(
-            os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-        ) / "videotranslatorai"
-    cache = base / "cosyvoice"
-    try:
-        cache.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        cache = Path(tempfile.gettempdir()) / "videotranslatorai_cosyvoice"
-        cache.mkdir(parents=True, exist_ok=True)
-    return cache
-
-
-def _cosyvoice_is_installed() -> bool:
-    """True se il pacchetto Python `cosyvoice` è importabile.
-
-    Usa importlib.util.find_spec per evitare di importare effettivamente il
-    modulo (che è pesante e farebbe partire il loading dei pesi).
-    """
-    try:
-        return importlib.util.find_spec("cosyvoice") is not None
-    except (ValueError, ModuleNotFoundError, ImportError):
-        return False
-
-
-def _cosyvoice_model_present(cache_dir: Path | None = None) -> bool:
-    """True se il modello CosyVoice-300M-Instruct è già stato scaricato.
-
-    Heuristic: cerca il file `llm.pt` (~600 MB) dentro la directory del modello.
-    Se manca, il primo `tts_to_file` triggherà un download di ~1.7 GB via
-    ModelScope. Vogliamo segnalarlo all'utente prima di lanciare la pipeline.
-    """
-    cache = cache_dir or _cosyvoice_cache_dir()
-    # Il wrapper salva i modelli in CosyVoice-300M-Instruct/, dentro cache_dir.
-    return (cache / "CosyVoice-300M-Instruct" / "llm.pt").exists()
+from videotranslator.cosyvoice_runtime import (  # noqa: E402
+    cosyvoice_cache_dir as _cosyvoice_cache_dir,
+    cosyvoice_download_model as _cosyvoice_download_model,
+    cosyvoice_is_installed as _cosyvoice_is_installed,
+    cosyvoice_model_present as _cosyvoice_model_present,
+)
+from videotranslator.cosyvoice_runtime import cosyvoice_install as _cosyvoice_install_impl  # noqa: E402
 
 
 def _cosyvoice_install(log_cb=None, timeout_s: int = 1800) -> tuple[bool, str]:
-    """Installa il pacchetto CosyVoice via pip nel runtime corrente.
-
-    Status: il PyPI ``cosyvoice 0.0.8`` è un community wrapper di Lucas Jin
-    abbandonato. Il suo ``setup.py`` legge la versione da una variabile
-    ``__version__`` mancante e fallisce con ``KeyError: '__version__'``
-    su Python ≥ 3.12 (verificato live 2026-04-30 su Python 3.13).
-
-    Su Python 3.10 / 3.11 l'install pip storicamente funziona. L'ufficiale
-    FunAudioLLM/CosyVoice raccomanda comunque conda env dedicato Python
-    3.10 + clone GitHub recursive — vedi ``docs/COSYVOICE_INSTALL.md``.
-
-    Strategia: se la versione Python attuale è < 3.12 tentiamo pip install;
-    se ≥ 3.12 falliamo subito con messaggio actionable che punta alla
-    documentazione manuale (Python 3.13 garantisce KeyError, no senso
-    consumare 5 minuti di banda per scaricare la tarball).
-
-    Cross-platform via ``--break-system-packages`` (PEP 668 su Debian e
-    derivate) + ``--no-color`` per output pulito. Timeout generoso (30 min)
-    perché su 3.10/3.11 si trascina modelscope + onnxruntime-gpu.
-
-    Ritorna (ok, message). ``message`` è "" su successo, descrizione errore
-    altrimenti. Nota: questa è SOLO l'install del wrapper Python; il
-    modello (~1.7 GB) viene scaricato al primo ``tts_to_file``.
-    """
-    log = log_cb or (lambda s: None)
-
-    # Python version gate: PyPI cosyvoice 0.0.8 setup.py rotto su 3.12+.
-    py_major, py_minor = sys.version_info.major, sys.version_info.minor
-    if (py_major, py_minor) >= (3, 12):
-        msg = (
-            f"Python {py_major}.{py_minor} non supportato dal community "
-            f"wrapper PyPI 'cosyvoice 0.0.8' (setup.py KeyError __version__). "
-            f"CosyVoice ufficiale richiede Python 3.10 in conda env dedicato. "
-            f"Setup manuale: vedi docs/COSYVOICE_INSTALL.md (clone GitHub + "
-            f"conda env). Per ora la pipeline ricade su XTTS v2."
-        )
-        log(f"[!] {msg}\n")
-        return False, msg
-
-    cmd = [
-        sys.executable, "-m", "pip", "install",
-        "--break-system-packages", "--no-color", _COSYVOICE_PIP_PKG,
-    ]
-    log(f"[*] pip install {_COSYVOICE_PIP_PKG} (può richiedere alcuni minuti)...\n")
-    try:
-        proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL, text=True,
-            encoding="utf-8", errors="replace",
-        )
-    except Exception as e:
-        return False, f"Failed to spawn pip install: {e}"
-
-    _register_subprocess(proc)
-    # Watchdog timer: pip può stallare su mirror slow senza chiudere stdout.
-    # Stessa pattern di _install_deps in GUI ma replicato qui per uso headless
-    # (CLI / chiamate fuori dal Tk loop).
-    timed_out = {"fired": False}
-
-    def _on_timeout():
-        timed_out["fired"] = True
-        with contextlib.suppress(Exception):
-            proc.kill()
-            if proc.stdout is not None:
-                proc.stdout.close()
-
-    watchdog = threading.Timer(timeout_s, _on_timeout)
-    watchdog.daemon = True
-    watchdog.start()
-    try:
-        for line in proc.stdout:
-            line = line.rstrip()
-            if line:
-                log(f"    {line}\n")
-        with contextlib.suppress(Exception):
-            proc.wait(timeout=30)
-    except Exception as e:
-        log(f"    ! pip install error: {e}\n")
-    finally:
-        watchdog.cancel()
-        _unregister_subprocess(proc)
-
-    if timed_out["fired"]:
-        return False, f"pip install timed out after {timeout_s}s"
-    if proc.returncode != 0:
-        return False, f"pip install {_COSYVOICE_PIP_PKG} failed (rc={proc.returncode})"
-    return True, ""
-
-
-def _cosyvoice_download_model(cache_dir: Path | None = None, log_cb=None) -> tuple[bool, str]:
-    """Scarica i pesi CosyVoice-300M-Instruct via ModelScope.
-
-    Idempotente: se i file esistono già, ritorna subito True. La modalità
-    "scarica tutti i checkpoint" è scelta intenzionale — il wrapper
-    `CosyVoiceTTS(model_type='instruct')` carica il bundle Instruct ma le
-    altre dipendenze condividono asset (es. CosyVoice-ttsfrd contiene il
-    text-frontend per i numeri/abbreviazioni IT/EN).
-
-    Se ModelScope non è raggiungibile (es. firewall sino), fallback su
-    HuggingFace Hub usando lo stesso repo `iic/CosyVoice-300M-Instruct`.
-    """
-    log = log_cb or (lambda s: None)
-    cache = cache_dir or _cosyvoice_cache_dir()
-    target_dir = cache / "CosyVoice-300M-Instruct"
-    # Idempotente: file marker presente = nulla da fare.
-    if (target_dir / "llm.pt").exists():
-        log(f"[+] CosyVoice model già presente in {target_dir}\n")
-        return True, ""
-
-    log(f"[*] Download CosyVoice-300M-Instruct (~1.7 GB) → {target_dir}...\n")
-    # Tentativo 1: ModelScope (canale ufficiale dei modelli iic/*)
-    try:
-        from modelscope import snapshot_download  # type: ignore
-        snapshot_download("iic/CosyVoice-300M-Instruct", local_dir=str(target_dir))
-        log("[+] Download da ModelScope OK\n")
-        return True, ""
-    except Exception as e:
-        log(f"    ! ModelScope download fallito ({e}), provo HuggingFace...\n")
-
-    # Tentativo 2: HuggingFace Hub mirror
-    try:
-        from huggingface_hub import snapshot_download as hf_snapshot_download  # type: ignore
-        hf_snapshot_download(repo_id="model-scope/CosyVoice-300M-Instruct", local_dir=str(target_dir))
-        log("[+] Download da HuggingFace OK\n")
-        return True, ""
-    except Exception as e:
-        return False, f"Sia ModelScope che HuggingFace hanno fallito: {e}"
+    return _cosyvoice_install_impl(
+        log_cb=log_cb,
+        timeout_s=timeout_s,
+        register_subprocess=_register_subprocess,
+        unregister_subprocess=_unregister_subprocess,
+        popen=subprocess.Popen,
+        timer_factory=threading.Timer,
+    )
 
 
 def translate_with_ollama(
