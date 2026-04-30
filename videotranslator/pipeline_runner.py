@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from videotranslator.output_media import get_duration, mux_video, save_subtitles
+
 DEFAULT_LANG = "it"
 
 
@@ -42,13 +44,10 @@ class PipelineRuntime:
     resolve_difficulty_profile: Any
     format_profile_log: Any
     translate_segments: Any
-    save_subtitles: Any
     generate_tts_cosyvoice: Any
     generate_tts_xtts: Any
     generate_tts: Any
-    get_duration: Any
     build_dubbed_track: Any
-    mux_video: Any
     has_enough_faces: Any
     apply_lipsync: Any
 
@@ -121,13 +120,10 @@ def translate_video(
     _resolve_difficulty_profile = runtime.resolve_difficulty_profile
     _format_profile_log = runtime.format_profile_log
     translate_segments = runtime.translate_segments
-    save_subtitles = runtime.save_subtitles
     generate_tts_cosyvoice = runtime.generate_tts_cosyvoice
     generate_tts_xtts = runtime.generate_tts_xtts
     generate_tts = runtime.generate_tts
-    get_duration = runtime.get_duration
     build_dubbed_track = runtime.build_dubbed_track
-    mux_video = runtime.mux_video
     _has_enough_faces = runtime.has_enough_faces
     apply_lipsync = runtime.apply_lipsync
 
@@ -546,4 +542,3 @@ def translate_video(
 
     print(f"\n[✓] Done: {output}")
     return {"video": output, "srt": output_base + ".srt", "segments": segments}
-

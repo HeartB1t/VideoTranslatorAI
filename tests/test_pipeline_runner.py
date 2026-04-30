@@ -23,10 +23,6 @@ class PipelineRunnerTests(unittest.TestCase):
             def run_ffmpeg(cmd, **_kwargs):
                 Path(cmd[-1]).write_bytes(b"resampled")
 
-            def save_subtitles(segments, output_base):
-                with open(output_base + ".srt", "w", encoding="utf-8") as fh:
-                    fh.write(segments[0]["text_tgt"])
-
             runtime = PipelineRuntime(
                 languages={"it": {"voices": ["it-IT-TestNeural"]}},
                 lang_expansion={"it": 1.0, "en": 1.0},
@@ -50,13 +46,10 @@ class PipelineRunnerTests(unittest.TestCase):
                 resolve_difficulty_profile=_unused,
                 format_profile_log=_unused,
                 translate_segments=_unused,
-                save_subtitles=save_subtitles,
                 generate_tts_cosyvoice=_unused,
                 generate_tts_xtts=_unused,
                 generate_tts=_unused,
-                get_duration=_unused,
                 build_dubbed_track=_unused,
-                mux_video=_unused,
                 has_enough_faces=_unused,
                 apply_lipsync=_unused,
             )

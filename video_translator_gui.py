@@ -14,7 +14,6 @@ import asyncio
 import contextlib
 import importlib.util
 import io
-import json
 import locale
 import traceback
 import math
@@ -4288,6 +4287,11 @@ RETRY_SEEDS = (7, 1337, 42)
 from videotranslator.audio_assembly import (  # noqa: E402
     build_dubbed_track as _build_dubbed_track_impl,
 )
+from videotranslator.output_media import (  # noqa: E402
+    get_duration,
+    mux_video as _mux_video_impl,
+    save_subtitles,
+)
 
 
 def build_dubbed_track(
@@ -4318,41 +4322,15 @@ def build_dubbed_track(
         log=print,
     )
 
-def save_subtitles(segments: list[dict], output_base: str):
-    def fmt(s: float) -> str:
-        h, rem = divmod(s, 3600)
-        m, sec = divmod(rem, 60)
-        ms = int((sec % 1) * 1000)
-        return f"{int(h):02d}:{int(m):02d}:{int(sec):02d},{ms:03d}"
-
-    path = output_base + ".srt"
-    with open(path, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, 1):
-            text = (seg.get("text_tgt") or "").strip()
-            f.write(f"{i}\n{fmt(seg['start'])} --> {fmt(seg['end'])}\n{text}\n\n")
-    print(f"[+] Subtitles: {path}", flush=True)
-
-
-def get_duration(video_path: str) -> float:
-    r = subprocess.run([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "json", video_path
-    ], capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"ffprobe failed: {r.stderr.strip()}")
-    try:
-        return float(json.loads(r.stdout)["format"]["duration"])
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
-        raise RuntimeError(f"Cannot read duration of {video_path}: {e}")
-
-
 def mux_video(video_input: str, audio_track: str, output_path: str):
-    print(f"[+] Muxing → {output_path}", flush=True)
-    _run_ffmpeg([
-        "ffmpeg", "-y", "-i", video_input, "-i", audio_track,
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-        "-map", "0:v:0", "-map", "1:a:0", output_path
-    ], step="mux_video")
+    """Compatibility wrapper around the modular mux helper."""
+    return _mux_video_impl(
+        video_input,
+        audio_track,
+        output_path,
+        run_ffmpeg=_run_ffmpeg,
+        log=print,
+    )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -4788,13 +4766,10 @@ def _build_pipeline_runtime() -> _PipelineRuntime:
         resolve_difficulty_profile=_resolve_difficulty_profile,
         format_profile_log=_format_profile_log,
         translate_segments=translate_segments,
-        save_subtitles=save_subtitles,
         generate_tts_cosyvoice=generate_tts_cosyvoice,
         generate_tts_xtts=generate_tts_xtts,
         generate_tts=generate_tts,
-        get_duration=get_duration,
         build_dubbed_track=build_dubbed_track,
-        mux_video=mux_video,
         has_enough_faces=_has_enough_faces,
         apply_lipsync=apply_lipsync,
     )

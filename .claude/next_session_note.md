@@ -4,9 +4,11 @@ Do not push unless Fabio explicitly asks for it in writing.
 
 Current local follow-up:
 
+- Subtitle/duration/mux helpers are now in `videotranslator/output_media.py`; `PipelineRuntime` no longer carries `save_subtitles`, `get_duration`, or `mux_video`.
+- New focused coverage: `tests/test_output_media.py`.
+- Next recommended target: extract CLI to `videotranslator/cli.py`, keeping `video_translator_gui.py` as the GUI/launcher facade.
 - `translate_video(...)` orchestration is now in `videotranslator/pipeline_runner.py`; `video_translator_gui.translate_video(...)` builds a legacy `PipelineRuntime` and delegates.
 - New focused coverage: `tests/test_pipeline_runner.py`.
-- Next recommended target: reduce `PipelineRuntime` by moving remaining legacy helpers into modules, starting with subtitle/video output helpers (`save_subtitles`, `get_duration`, `mux_video`) or extracting CLI to `videotranslator/cli.py`.
 - Dubbed track assembly is now in `videotranslator/audio_assembly.py`; `video_translator_gui.build_dubbed_track(...)` is only a compatibility wrapper.
 - New focused coverage: `tests/test_audio_assembly.py`.
 - Last Codex task extracted shared TTS/audio helpers into `videotranslator/tts_audio.py`.
