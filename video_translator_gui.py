@@ -5414,54 +5414,11 @@ def translate_segments(
     return translated
 
 
-async def _tts_segment(text: str, voice: str, out_path: str, rate: str = "+0%", retries: int = 5):
-    import edge_tts
-    for attempt in range(retries):
-        try:
-            comm = edge_tts.Communicate(text, voice, rate=rate)
-            await comm.save(out_path)
-            return
-        except Exception as e:
-            if attempt < retries - 1:
-                wait = 2 ** attempt
-                print(f"     ! TTS retry {attempt+1} ({e.__class__.__name__}) in {wait}s...", flush=True)
-                await asyncio.sleep(wait)
-            else:
-                print(f"     ! TTS failed: {text[:40]!r} ({e.__class__.__name__}: {e})", flush=True)
-
-
-async def _tts_all(segments: list[dict], voice: str, tmp_dir: str, rate: str) -> list[str]:
-    # Edge-TTS è HTTP puro → parallelizzazione safe con un semaphore per non
-    # saturare il servizio. Rate-limit Azure si assesta sui 3-5 req/s: 4 concorrenti
-    # è più conservativo di 8 e riduce i 429/timeout senza penalizzare il throughput.
-    total = len(segments)
-    files = [os.path.join(tmp_dir, f"seg_{i:04d}.mp3") for i in range(total)]
-    sem = asyncio.Semaphore(4)
-    done_counter = {"n": 0, "failed": 0}
-
-    async def _run(i: int):
-        text = (segments[i].get("text_tgt") or "").strip()
-        if not text:
-            return
-        async with sem:
-            await _tts_segment(text, voice, files[i], rate=rate)
-        if not os.path.exists(files[i]):
-            done_counter["failed"] += 1
-        done_counter["n"] += 1
-        if done_counter["n"] % 10 == 0 or done_counter["n"] == total:
-            print(f"     {done_counter['n']}/{total}...", end="\r", flush=True)
-
-    await asyncio.gather(*(_run(i) for i in range(total)))
-    if done_counter["failed"]:
-        print(f"     ! Warning: {done_counter['failed']}/{total} TTS segments failed and will be silent.", flush=True)
-    return files
-
-
-def generate_tts(segments: list[dict], voice: str, tmp_dir: str, rate: str = "+0%") -> list[str]:
-    print(f"[5/6] Generating TTS (voice={voice}, rate={rate})...", flush=True)
-    files = asyncio.run(_tts_all(segments, voice, tmp_dir, rate))
-    print("     → TTS done                   ", flush=True)
-    return files
+from videotranslator.edge_tts_engine import (  # noqa: E402
+    generate_tts,
+    tts_all as _tts_all,
+    tts_segment as _tts_segment,
+)
 
 
 def _build_vad_reference(
