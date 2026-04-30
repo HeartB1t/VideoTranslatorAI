@@ -3,9 +3,12 @@ import unittest
 
 from videotranslator.tts_reference import (
     build_speaker_reference_filter,
+    build_vad_reference_tiered,
     extract_speaker_reference,
+    merge_vad_timestamps,
     safe_speaker_name,
     select_speaker_turns,
+    select_vad_reference_ranges,
 )
 
 
@@ -73,6 +76,55 @@ class TtsReferenceTests(unittest.TestCase):
             )
         )
         self.assertTrue(any("Could not extract reference" in item for item in logs))
+
+    def test_merge_vad_timestamps_merges_short_gaps(self):
+        merged = merge_vad_timestamps(
+            [
+                {"start": 0.0, "end": 1.0},
+                {"start": 1.2, "end": 2.0},
+                {"start": 3.0, "end": 4.0},
+            ],
+            max_gap_ms=300,
+        )
+
+        self.assertEqual(merged, [(0.0, 2.0), (3.0, 4.0)])
+
+    def test_select_vad_reference_ranges_prefers_longest_or_enough_speech(self):
+        self.assertEqual(
+            select_vad_reference_ranges([(0.0, 20.0), (25.0, 30.0)], target_seconds=18.0),
+            [(0.0, 20.0)],
+        )
+        self.assertEqual(
+            select_vad_reference_ranges(
+                [(0.0, 2.0), (5.0, 7.0), (10.0, 12.0)],
+                target_seconds=5.0,
+                min_seconds=3.0,
+            ),
+            [(0.0, 2.0), (5.0, 7.0), (10.0, 12.0)],
+        )
+        self.assertIsNone(
+            select_vad_reference_ranges([(0.0, 1.0)], target_seconds=5.0, min_seconds=3.0)
+        )
+
+    def test_build_vad_reference_tiered_tries_descending_targets(self):
+        seen = []
+
+        def fake_builder(src_audio, out_wav, target_seconds):
+            seen.append(target_seconds)
+            return out_wav if target_seconds == 12.0 else None
+
+        logs = []
+        result = build_vad_reference_tiered(
+            "in.wav",
+            "out.wav",
+            targets=(18.0, 15.0, 12.0),
+            builder=fake_builder,
+            log=lambda *args, **kwargs: logs.append(" ".join(str(arg) for arg in args)),
+        )
+
+        self.assertEqual(result, "out.wav")
+        self.assertEqual(seen, [18.0, 15.0, 12.0])
+        self.assertTrue(any("fallback target 12s" in item for item in logs))
 
 
 if __name__ == "__main__":
