@@ -4,9 +4,11 @@ Do not push unless Fabio explicitly asks for it in writing.
 
 Current local follow-up:
 
+- `translate_video(...)` orchestration is now in `videotranslator/pipeline_runner.py`; `video_translator_gui.translate_video(...)` builds a legacy `PipelineRuntime` and delegates.
+- New focused coverage: `tests/test_pipeline_runner.py`.
+- Next recommended target: reduce `PipelineRuntime` by moving remaining legacy helpers into modules, starting with subtitle/video output helpers (`save_subtitles`, `get_duration`, `mux_video`) or extracting CLI to `videotranslator/cli.py`.
 - Dubbed track assembly is now in `videotranslator/audio_assembly.py`; `video_translator_gui.build_dubbed_track(...)` is only a compatibility wrapper.
 - New focused coverage: `tests/test_audio_assembly.py`.
-- Next recommended target: extract `translate_video` orchestration into `videotranslator/pipeline_runner.py`, keeping the GUI as a facade.
 - Last Codex task extracted shared TTS/audio helpers into `videotranslator/tts_audio.py`.
 - Edge-TTS generation is now in `videotranslator/edge_tts_engine.py` with network-free unit tests.
 - Speaker reference extraction is now in `videotranslator/tts_reference.py` with ffmpeg mocked in tests.
