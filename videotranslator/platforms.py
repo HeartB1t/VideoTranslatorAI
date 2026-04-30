@@ -277,11 +277,16 @@ def _wav2lip_assets_present(candidate: Path) -> bool:
     falls back to a writable location and finishes the install there instead
     of trying to mkdir/git clone under a read-only system path.
     """
-    if not candidate.is_dir():
+    try:
+        if not candidate.is_dir():
+            return False
+        repo_ok = (
+            candidate / _WAV2LIP_REPO_SENTINEL[0] / _WAV2LIP_REPO_SENTINEL[1]
+        ).exists()
+        model_ok = (candidate / _WAV2LIP_MODEL_SENTINEL).exists()
+        return repo_ok and model_ok
+    except (OSError, PermissionError):
         return False
-    repo_ok = (candidate / _WAV2LIP_REPO_SENTINEL[0] / _WAV2LIP_REPO_SENTINEL[1]).exists()
-    model_ok = (candidate / _WAV2LIP_MODEL_SENTINEL).exists()
-    return repo_ok and model_ok
 
 
 def _is_dir_writable(path: Path) -> bool:
@@ -296,7 +301,10 @@ def _is_dir_writable(path: Path) -> bool:
         path.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
         return False
-    if not path.is_dir():
+    try:
+        if not path.is_dir():
+            return False
+    except (OSError, PermissionError):
         return False
     try:
         with tempfile.NamedTemporaryFile(

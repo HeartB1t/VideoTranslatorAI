@@ -10,6 +10,7 @@ from videotranslator.platforms import (
     resolve_app_paths,
     resolve_wav2lip_paths,
     runtime_app_paths,
+    _wav2lip_assets_present,
 )
 
 
@@ -404,6 +405,13 @@ class Wav2LipPathResolverTests(unittest.TestCase):
             )
 
         self.assertEqual(paths.asset_dir, asset_target)
+
+    def test_assets_present_probe_treats_permission_error_as_missing(self):
+        class DeniedPath:
+            def is_dir(self):
+                raise PermissionError("denied")
+
+        self.assertFalse(_wav2lip_assets_present(DeniedPath()))
 
 
 if __name__ == "__main__":
