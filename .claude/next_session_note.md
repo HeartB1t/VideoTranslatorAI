@@ -11,6 +11,7 @@ Current local follow-up:
 - Wav2Lip runtime `apply_lipsync` is now in `videotranslator/lipsync.py`; the GUI wrapper passes legacy path globals and subprocess/timer hooks.
 - Audio mix primitives are now in `videotranslator/audio_mix.py`; `build_dubbed_track` still owns orchestration/diagnostics.
 - CosyVoice install/cache/download helpers are now in `videotranslator/cosyvoice_runtime.py`; the actual synthesis function still lives in the GUI facade for now.
+- XTTS core synthesis is now in `videotranslator/xtts_engine.py` with fake-model unit tests.
 - Before touching TTS engines, keep `video_translator_gui.py` as compatibility facade and move behavior in small, testable slices.
 - Next recommended target: move XTTS/CosyVoice only with compatibility aliases and full import/test checks as user `kali`.
 - The Wav2Lip Linux path tests were made deterministic because they previously depended on the real writability of `/opt/VideoTranslatorAI/wav2lip`.
