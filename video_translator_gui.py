@@ -6770,83 +6770,25 @@ def _ensure_wav2lip_assets():
             raise RuntimeError(f"Failed downloading Wav2Lip model: {e}") from e
 
 
+from videotranslator.lipsync import apply_lipsync as _apply_lipsync_impl  # noqa: E402
+
+
 def apply_lipsync(video_path: str, audio_path: str, tmp_dir: str) -> str:
-    """Sync lips of video_path with audio_path via Wav2Lip. Returns path to synced video."""
-    print("[+] Applying Lip Sync (Wav2Lip)...", flush=True)
-    _ensure_wav2lip_assets()
-
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Free VRAM before starting subprocess so Wav2Lip finds GPU available
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        device = "cpu"
-    print(f"     Wav2Lip device: {device}", flush=True)
-
-    inference_py = WAV2LIP_REPO / "inference.py"
-    if not inference_py.exists():
-        raise RuntimeError(f"Wav2Lip inference script not found: {inference_py}")
-
-    try:
-        WAV2LIP_WORK_DIR.mkdir(parents=True, exist_ok=True)
-    except (OSError, PermissionError) as e:
-        raise RuntimeError(f"Wav2Lip work directory is not writable: {WAV2LIP_WORK_DIR}") from e
-
-    out_path = os.path.join(tmp_dir, "video_lipsync.mp4")
-
-    cmd = [
-        sys.executable, str(inference_py),
-        "--checkpoint_path", str(WAV2LIP_MODEL),
-        "--face", video_path,
-        "--audio", audio_path,
-        "--outfile", out_path,
-        "--nosmooth",
-    ]
-
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(WAV2LIP_REPO) + os.pathsep + env.get("PYTHONPATH", "")
-    env["TMPDIR"] = str(WAV2LIP_WORK_DIR)
-    env["TEMP"] = str(WAV2LIP_WORK_DIR)
-    env["TMP"] = str(WAV2LIP_WORK_DIR)
-
-    # Stream output line-by-line so the GUI log shows progress in real time
-    output_lines: list[str] = []
-    proc = subprocess.Popen(
-        cmd, cwd=str(WAV2LIP_WORK_DIR), env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8", errors="replace",
+    return _apply_lipsync_impl(
+        video_path,
+        audio_path,
+        tmp_dir,
+        wav2lip_repo=WAV2LIP_REPO,
+        wav2lip_model=WAV2LIP_MODEL,
+        wav2lip_work_dir=WAV2LIP_WORK_DIR,
+        ensure_assets=_ensure_wav2lip_assets,
+        timeout=WAV2LIP_TIMEOUT,
+        register_subprocess=_register_subprocess,
+        unregister_subprocess=_unregister_subprocess,
+        popen=subprocess.Popen,
+        timer_factory=threading.Timer,
+        log=print,
     )
-    _register_subprocess(proc)
-    # Watchdog: kill Wav2Lip if it hangs beyond timeout
-    _watchdog = threading.Timer(WAV2LIP_TIMEOUT, proc.kill)
-    _watchdog.start()
-    try:
-        for line in proc.stdout:
-            line = line.rstrip()
-            output_lines.append(line)
-            print(f"     [wav2lip] {line}", flush=True)
-        proc.wait()
-    except Exception:
-        proc.kill()
-        proc.wait()
-        raise
-    finally:
-        _watchdog.cancel()
-        _unregister_subprocess(proc)
-        # Wav2Lip writes its relative temp/ folder under cwd; keep that cwd in
-        # the per-user work dir so system asset installs can stay read-only.
-        wav2lip_tmp = WAV2LIP_WORK_DIR / "temp"
-        if wav2lip_tmp.exists():
-            shutil.rmtree(wav2lip_tmp, ignore_errors=True)
-
-    if proc.returncode != 0 or not os.path.exists(out_path):
-        tail = "\n".join(output_lines[-20:])
-        raise RuntimeError(f"Wav2Lip failed (exit {proc.returncode}):\n{tail}")
-
-    print(f"     → Lip sync done: {out_path}", flush=True)
-    return out_path
 
 
 from videotranslator.config import (  # noqa: E402
