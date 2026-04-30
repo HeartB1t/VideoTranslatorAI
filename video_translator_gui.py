@@ -6068,6 +6068,11 @@ from videotranslator.tts_audio import (  # noqa: E402
     probe_duration_ms as _probe_duration_ms,
     strip_xtts_terminal_punct as _strip_xtts_terminal_punct,
 )
+from videotranslator.audio_mix import (  # noqa: E402
+    apply_tail_fade as _apply_tail_fade,
+    overlay_pcm as _overlay_pcm,
+    read_segment_to_pcm as _read_segment_to_pcm,
+)
 
 
 # v2.5.2: seed list for multi-attempt XTTS/CosyVoice retry.
@@ -6153,39 +6158,6 @@ def build_dubbed_track(
     # Azzera esplicitamente (memmap 'w+' lo fa, ma su alcuni FS conviene forzare).
     mix[:] = 0
 
-    def _overlay(pcm: np.ndarray, start_frame: int):
-        end_frame = min(start_frame + pcm.shape[0], total_frames)
-        length = end_frame - start_frame
-        if length <= 0:
-            return
-        # Somma int32: i sample TTS sono int16 (±32k), gli int32 hanno ±2G.
-        mix[start_frame:end_frame] += pcm[:length].astype(np.int32)
-
-    def _read_segment_to_pcm(path: str) -> np.ndarray | None:
-        if not os.path.exists(path) or os.path.getsize(path) == 0:
-            return None
-        try:
-            data, sr = sf.read(path, dtype="int16", always_2d=True)
-        except Exception as e:
-            print(f"     ! Cannot read {path}: {e}", flush=True)
-            return None
-        if data.size == 0:
-            return None
-        # Resample/reformat a 44.1 kHz stereo via ffmpeg se necessario (fast path
-        # quando matcha già il target).
-        if sr == SR and data.shape[1] == CH:
-            return data
-        conv = os.path.join(tmp_dir, Path(path).stem + "_pcm.wav")
-        try:
-            _run_ffmpeg([
-                "ffmpeg", "-y", "-i", path,
-                "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", conv,
-            ], step=f"pcm conv {Path(path).name}")
-            return sf.read(conv, dtype="int16", always_2d=True)[0]
-        except Exception as e:
-            print(f"     ! PCM conv failed {path}: {e}", flush=True)
-            return None
-
     for i, (seg, tts_file) in enumerate(zip(segments, tts_files)):
         start_ms = int(seg["start"] * 1000)
         end_ms = int(seg["end"] * 1000)
@@ -6267,7 +6239,15 @@ def build_dubbed_track(
                 # gestirà l'overshoot. Comportamento storico.
                 _ = stretch_ok  # lint: variabile usata solo per leggibilità del flow
 
-        pcm = _read_segment_to_pcm(src_path)
+        pcm = _read_segment_to_pcm(
+            src_path,
+            tmp_dir=tmp_dir,
+            sample_rate=SR,
+            channels=CH,
+            sf_module=sf,
+            run_ffmpeg=_run_ffmpeg,
+            log=print,
+        )
         if pcm is None:
             continue
 
@@ -6316,10 +6296,7 @@ def build_dubbed_track(
             # kicked in (very short segments < SR/4 frames). Keep the
             # fade <= 1/4 of the kept pcm so short segments don't get a
             # fade longer than their content (audible as a click).
-            fade_len = max(1, min(fade_len, pcm.shape[0] // 4 or 1))
-            ramp = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
-            tail = pcm[-fade_len:].astype(np.float32) * ramp[:, None]
-            pcm[-fade_len:] = tail.astype(np.int16)
+            pcm = _apply_tail_fade(pcm, fade_len)
 
         # Diagnostic: registra sempre (anche i segmenti "fit", ratio <=1.0).
         _atempo_stats.append({
@@ -6342,7 +6319,7 @@ def build_dubbed_track(
         })
 
         start_frame = int(start_ms * SR / 1000)
-        _overlay(pcm, start_frame)
+        _overlay_pcm(mix, pcm, start_frame, total_frames)
 
     # DIAGNOSTIC: stampa distribuzione atempo (attivo sempre, output sintetico).
     if _atempo_stats:
