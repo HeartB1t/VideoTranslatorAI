@@ -4,9 +4,13 @@ Do not push unless Fabio explicitly asks for it in writing.
 
 Current local follow-up:
 
+- Last Codex task extracted shared TTS/audio helpers into `videotranslator/tts_audio.py`.
+- Before touching TTS engines, keep `video_translator_gui.py` as compatibility facade and move behavior in small, testable slices.
+- Next recommended target: split engine-specific TTS code into `videotranslator/tts_engines.py` or separate `edge_tts_engine.py`, `xtts_engine.py`, `cosyvoice_engine.py` modules.
 - The Wav2Lip Linux path tests were made deterministic because they previously depended on the real writability of `/opt/VideoTranslatorAI/wav2lip`.
 - Run `python3 -m pytest -q` before any next commit.
 - `.claude/settings.local.json` is local permission state and should not be committed.
+- `.claude/scheduled_tasks.json` is currently untracked local state; do not add it unless Fabio explicitly asks.
 
 Architecture note:
 

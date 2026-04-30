@@ -6222,32 +6222,14 @@ def generate_tts_cosyvoice(
     return files
 
 
-def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
-    """Costruisce una catena di filtri atempo per ffmpeg.
-    atempo accetta 0.5–2.0 in un singolo filtro; per ratio fuori range si concatenano istanze.
-    Esempio: ratio=3.0 → 'atempo=2.0,atempo=1.5'
-
-    Parametri:
-      ratio     : rapporto di time-stretch desiderato.
-      max_ratio : cap massimo applicato al ratio per evitare artefatti audio.
-                  Default 4.0 (coerente col chiamante build_dubbed_track).
-                  Il chiamante può passare un valore diverso se lo desidera.
-    """
-    if not math.isfinite(ratio) or ratio <= 0:
-        return "atempo=1.0"
-    # Clamp simmetrico: il reciproco del max per slow-down estremi.
-    lo = 1.0 / max_ratio if max_ratio > 0 else 0.25
-    ratio = max(lo, min(ratio, max_ratio))
-    parts = []
-    r = ratio
-    while r > 2.0:
-        parts.append("atempo=2.0")
-        r /= 2.0
-    while r < 0.5:
-        parts.append("atempo=0.5")
-        r /= 0.5
-    parts.append(f"atempo={r:.3f}")
-    return ",".join(parts)
+from videotranslator.tts_audio import (  # noqa: E402
+    build_atempo_chain as _build_atempo_chain,
+    concat_wavs as _concat_wavs,
+    find_split_point as _find_split_point,
+    measure_wav_duration_s as _measure_wav_duration_s,
+    probe_duration_ms as _probe_duration_ms,
+    strip_xtts_terminal_punct as _strip_xtts_terminal_punct,
+)
 
 
 # v2.5.2: seed list for multi-attempt XTTS/CosyVoice retry.
@@ -6257,170 +6239,6 @@ def _build_atempo_chain(ratio: float, max_ratio: float = 4.0) -> str:
 # L'ultimo seed (42) è mantenuto per retrocompat con i log della v2.2-2.5.1
 # in caso di confronti di regression test.
 RETRY_SEEDS = (7, 1337, 42)
-
-
-def _strip_xtts_terminal_punct(text: str) -> str:
-    """Rimuove la punteggiatura finale di chiusura per evitare che XTTS la
-    pronunci letteralmente in voice cloning (bug noto coqui-tts 2024+ su
-    lingue latine: il modello tokenizza "." come "punto" anche con
-    enable_text_splitting=True).
-
-    Mantiene la punteggiatura INTERNA (virgole, punti di abbreviazioni come
-    "Mr." in mezzo alla frase) perché serve alla prosodia.
-
-    Esempi:
-        "Buongiorno a tutti."     → "Buongiorno a tutti"
-        "Buongiorno!"             → "Buongiorno"
-        "Mr. Smith ha detto qcs." → "Mr. Smith ha detto qcs"  (mantiene "Mr.")
-        "Frase, virgole, sì?"     → "Frase, virgole, sì"      (mantiene virgole)
-        "Domanda?!"               → "Domanda"
-    """
-    if not text:
-        return text
-    # rstrip ricorsivo: gestisce combinazioni "?!", "...", ":..", " . ", ecc.
-    # I caratteri inclusi coprono la punteggiatura di chiusura ASCII + alcuni
-    # tipografici (… — – -) che XTTS gestisce male a fine frase. Le virgole
-    # NON sono incluse perché in italiano/spagnolo possono terminare clausole
-    # legittime (rare ma non hallucination-trigger).
-    #
-    # TASK 2R 2026-04-29: aggressive sweep dei 5 char finali. Anche dopo il
-    # primo rstrip XTTS verbalizzava "punto" su segmenti tipo "X)." o "Y!.".
-    # Loop fino a 5 iter per pulire residui multipli (es. "abc.. ? ").
-    cleaned = text.rstrip()
-    for _ in range(5):
-        before = cleaned
-        cleaned = cleaned.rstrip(".!?;:…—–-,) ​。！？").rstrip()
-        if cleaned == before:
-            break
-    return cleaned
-
-
-def _find_split_point(text: str) -> int:
-    """Trova posizione di split ottimale per dividere `text` in due chunk
-    di durata simile, preferendo confini sintattici naturali.
-
-    Strategia (in ordine):
-      1. Virgola/punto-virgola/due punti più vicini al centro (range ±25%)
-         → split DOPO il segno (spazio successivo incluso quando presente).
-      2. Spazio più vicino al centro (stesso range).
-      3. Fallback: split forzato a metà (può rompere parola, ultima risorsa).
-
-    Ritorna l'indice di split (carattere a `text[idx]` apparterrà al secondo
-    chunk). Su testi <2 chars ritorna 0 (chiamante deve guardare la lunghezza
-    prima di chiamare).
-    """
-    n = len(text or "")
-    if n < 2:
-        return 0
-    mid = n // 2
-    search_range = max(10, n // 4)
-    # Step 1: virgola / punto-virgola / due punti vicino al centro.
-    for offset in range(search_range):
-        for pos in (mid + offset, mid - offset):
-            if 0 < pos < n and text[pos] in ",;:":
-                # Split DOPO il segno; salta lo spazio se c'è.
-                cut = pos + 1
-                if cut < n and text[cut] == " ":
-                    cut += 1
-                return cut
-    # Step 2: spazio centrale.
-    for offset in range(search_range):
-        for pos in (mid + offset, mid - offset):
-            if 0 < pos < n and text[pos] == " ":
-                return pos + 1  # secondo chunk parte dal char successivo
-    # Step 3: fallback duro a metà.
-    return mid
-
-
-def _concat_wavs(paths: list[str], output: str) -> None:
-    """Concatena WAV listati in `paths` scrivendoli in `output` con un piccolo
-    crossfade (50ms) ai punti di giunzione, per evitare click udibili dovuti
-    al brusco cambio di ampiezza tra chunk.
-
-    Usato in v2.5.2 dalla strategia di retry XTTS/CosyVoice "split del testo a
-    metà" quando i retry multi-seed non hanno rotto l'hallucination loop.
-
-    Vincoli:
-      - Tutti i WAV devono avere lo stesso sample rate (assumiamo sì: stessi
-        modelli TTS). Se differiscono usiamo il sample rate del primo file.
-      - Mono o stereo: gestito dalla forma (numpy 1D vs 2D) restituita da
-        soundfile.read.
-      - Se un file è troppo corto per il crossfade (<50ms) viene concatenato
-        secco senza fade: meglio un piccolo click che zero output.
-    """
-    import soundfile as sf  # type: ignore
-    import numpy as np  # type: ignore
-
-    if not paths:
-        raise ValueError("_concat_wavs: empty paths list")
-
-    chunks: list = []
-    sr: int | None = None
-    for p in paths:
-        data, this_sr = sf.read(p)
-        if sr is None:
-            sr = this_sr
-        chunks.append(data)
-    if sr is None or sr <= 0:
-        raise ValueError("_concat_wavs: unable to read sample rate")
-
-    crossfade_samples = int(sr * 0.05)  # 50ms
-    out = chunks[0]
-    for chunk in chunks[1:]:
-        if len(out) >= crossfade_samples and len(chunk) >= crossfade_samples and crossfade_samples > 0:
-            fade_out = np.linspace(1.0, 0.0, crossfade_samples)
-            fade_in = np.linspace(0.0, 1.0, crossfade_samples)
-            # Gestione mono/stereo: se 2D, broadcasta sulla dim canali.
-            if out.ndim == 2:
-                fade_out = fade_out[:, None]
-                fade_in = fade_in[:, None]
-            tail = out[-crossfade_samples:] * fade_out + chunk[:crossfade_samples] * fade_in
-            out = np.concatenate([out[:-crossfade_samples], tail, chunk[crossfade_samples:]])
-        else:
-            out = np.concatenate([out, chunk])
-    sf.write(output, out, sr)
-
-
-def _measure_wav_duration_s(path: str) -> float:
-    """Ritorna la durata in secondi di un wav (o altro formato leggibile da
-    soundfile/ffprobe). Wrapper su `_probe_duration_ms` che converte il valore
-    in float-seconds. 0.0 se la probe fallisce — il chiamante deve guardare.
-
-    Usato da v2.2 in `generate_tts_xtts` per detectare hallucination XTTS:
-    confronto fra durata effettiva e predicted (`_estimate_tts_duration_s`).
-    """
-    ms = _probe_duration_ms(path)
-    return ms / 1000.0 if ms > 0 else 0.0
-
-
-def _probe_duration_ms(path: str) -> int:
-    """Ritorna la durata in millisecondi di un file audio.
-    Prova prima soundfile.info (veloce, no subprocess). Su libsndfile datati
-    (< 1.1) sf.info può fallire su MP3 generati da Edge-TTS → fallback ffprobe.
-    Se entrambi falliscono, logga un warning e ritorna 0.
-    """
-    try:
-        import soundfile as sf
-        info = sf.info(path)
-        if info.samplerate:
-            return int(info.frames * 1000 / info.samplerate)
-    except Exception:
-        pass
-    try:
-        r = subprocess.run(
-            [
-                "ffprobe", "-v", "quiet",
-                "-show_entries", "format=duration",
-                "-of", "csv=p=0", path,
-            ],
-            capture_output=True, text=True, check=False,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            return int(float(r.stdout.strip()) * 1000)
-    except Exception as e:
-        print(f"     ! ffprobe duration fallback failed for {path}: {e}", flush=True)
-    print(f"     ! Could not probe duration for {path} (sf.info + ffprobe failed)", flush=True)
-    return 0
 
 
 def build_dubbed_track(
