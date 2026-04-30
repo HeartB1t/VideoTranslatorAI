@@ -13,6 +13,7 @@ Current local follow-up:
 - CosyVoice install/cache/download helpers are now in `videotranslator/cosyvoice_runtime.py`; the actual synthesis function still lives in the GUI facade for now.
 - XTTS core synthesis is now in `videotranslator/xtts_engine.py` with fake-model unit tests.
 - CosyVoice core synthesis is now in `videotranslator/cosyvoice_engine.py` with fake runtime unit tests.
+- Ollama setup/runtime helpers are now in `videotranslator/ollama_runtime.py`; translation dispatcher lives in `videotranslator/translation.py`.
 - Before touching TTS engines, keep `video_translator_gui.py` as compatibility facade and move behavior in small, testable slices.
 - Next recommended target: move XTTS/CosyVoice only with compatibility aliases and full import/test checks as user `kali`.
 - The Wav2Lip Linux path tests were made deterministic because they previously depended on the real writability of `/opt/VideoTranslatorAI/wav2lip`.
