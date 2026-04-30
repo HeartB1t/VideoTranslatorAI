@@ -5419,6 +5419,9 @@ from videotranslator.edge_tts_engine import (  # noqa: E402
     tts_all as _tts_all,
     tts_segment as _tts_segment,
 )
+from videotranslator.tts_reference import (  # noqa: E402
+    extract_speaker_reference as _extract_speaker_reference,
+)
 
 
 def _build_vad_reference(
@@ -7113,53 +7116,6 @@ def assign_speakers(whisper_segments: list[dict], diar_segments: list[dict]) -> 
         if best_speaker is not None:
             seg["speaker"] = best_speaker
     return whisper_segments
-
-
-def _extract_speaker_reference(
-    vocals_path: str, diar_segments: list[dict], speaker: str,
-    tmp_dir: str, max_duration: float = 30.0,
-) -> str | None:
-    """Concat up to max_duration seconds of clean vocals from one speaker."""
-    turns = [d for d in diar_segments if d["speaker"] == speaker]
-    if not turns:
-        return None
-    # Prefer longer turns first (cleaner reference)
-    turns.sort(key=lambda d: d["end"] - d["start"], reverse=True)
-    selected: list[tuple[float, float]] = []
-    total = 0.0
-    for d in turns:
-        dur = d["end"] - d["start"]
-        if dur < 1.0:
-            continue
-        take = min(dur, max_duration - total)
-        if take <= 0:
-            break
-        selected.append((d["start"], d["start"] + take))
-        total += take
-        if total >= max_duration:
-            break
-    if not selected:
-        return None
-
-    # Build ffmpeg concat via filter_complex trim
-    import re as _re
-    safe_spk = _re.sub(r'[^A-Za-z0-9_-]', '_', speaker)
-    out = os.path.join(tmp_dir, f"ref_{safe_spk}.wav")
-    filter_parts = []
-    for i, (s, e) in enumerate(selected):
-        filter_parts.append(f"[0:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{i}]")
-    concat_inputs = "".join(f"[a{i}]" for i in range(len(selected)))
-    filter_complex = ";".join(filter_parts) + f";{concat_inputs}concat=n={len(selected)}:v=0:a=1[out]"
-    try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", vocals_path,
-            "-filter_complex", filter_complex,
-            "-map", "[out]", "-ar", "22050", "-ac", "1", out,
-        ], capture_output=True, check=True)
-        return out
-    except subprocess.CalledProcessError as e:
-        print(f"     ! Could not extract reference for {speaker}: {e}", flush=True)
-        return None
 
 
 def translate_video(
