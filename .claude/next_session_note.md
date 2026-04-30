@@ -4,18 +4,20 @@ Do not push unless Fabio explicitly asks for it in writing.
 
 Current local follow-up:
 
+- Dubbed track assembly is now in `videotranslator/audio_assembly.py`; `video_translator_gui.build_dubbed_track(...)` is only a compatibility wrapper.
+- New focused coverage: `tests/test_audio_assembly.py`.
+- Next recommended target: extract `translate_video` orchestration into `videotranslator/pipeline_runner.py`, keeping the GUI as a facade.
 - Last Codex task extracted shared TTS/audio helpers into `videotranslator/tts_audio.py`.
 - Edge-TTS generation is now in `videotranslator/edge_tts_engine.py` with network-free unit tests.
 - Speaker reference extraction is now in `videotranslator/tts_reference.py` with ffmpeg mocked in tests.
 - VAD global reference extraction is also in `videotranslator/tts_reference.py`; pure VAD selection helpers are unit-tested without Silero.
 - Wav2Lip runtime `apply_lipsync` is now in `videotranslator/lipsync.py`; the GUI wrapper passes legacy path globals and subprocess/timer hooks.
-- Audio mix primitives are now in `videotranslator/audio_mix.py`; `build_dubbed_track` still owns orchestration/diagnostics.
+- Audio mix primitives are in `videotranslator/audio_mix.py`; final dubbed-track orchestration/diagnostics now live in `videotranslator/audio_assembly.py`.
 - CosyVoice install/cache/download helpers are now in `videotranslator/cosyvoice_runtime.py`; the actual synthesis function still lives in the GUI facade for now.
 - XTTS core synthesis is now in `videotranslator/xtts_engine.py` with fake-model unit tests.
 - CosyVoice core synthesis is now in `videotranslator/cosyvoice_engine.py` with fake runtime unit tests.
 - Ollama setup/runtime helpers are now in `videotranslator/ollama_runtime.py`; translation dispatcher lives in `videotranslator/translation.py`.
-- Before touching TTS engines, keep `video_translator_gui.py` as compatibility facade and move behavior in small, testable slices.
-- Next recommended target: move XTTS/CosyVoice only with compatibility aliases and full import/test checks as user `kali`.
+- Keep `video_translator_gui.py` as compatibility facade and move behavior in small, testable slices.
 - The Wav2Lip Linux path tests were made deterministic because they previously depended on the real writability of `/opt/VideoTranslatorAI/wav2lip`.
 - Run `python3 -m pytest -q` before any next commit.
 - `.claude/settings.local.json` is local permission state and should not be committed.
