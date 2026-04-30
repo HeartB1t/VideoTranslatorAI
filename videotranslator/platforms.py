@@ -8,10 +8,13 @@ keeps that contract explicit so the rest of the code can avoid scattered
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
+from typing import Any
 
 
 SUPPORTED_PLATFORMS = {"win32", "linux"}
@@ -214,6 +217,100 @@ def runtime_app_paths(
         wav2lip_dir=data_root / "wav2lip",
         default_videos_dir=home_path / "Movies",
     )
+
+
+def linux_xdg_videos_dir(
+    *,
+    run: Callable[..., Any] = subprocess.run,
+) -> Path | None:
+    """Return ``xdg-user-dir VIDEOS`` when available on Linux."""
+    try:
+        out = run(
+            ["xdg-user-dir", "VIDEOS"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        ).stdout.strip()
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    return Path(out) if out else None
+
+
+def windows_known_videos_dir(sys_platform: str | None = None) -> Path | None:
+    """Resolve the real Windows Videos Known Folder via Shell32 when possible."""
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if not sys_platform.startswith("win"):
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        folderid_videos = _GUID(
+            0x18989B1D,
+            0x99B5,
+            0x455B,
+            (ctypes.c_ubyte * 8)(0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC),
+        )
+        sh_get_known_folder_path = ctypes.windll.shell32.SHGetKnownFolderPath
+        sh_get_known_folder_path.argtypes = [
+            ctypes.POINTER(_GUID),
+            wintypes.DWORD,
+            wintypes.HANDLE,
+            ctypes.POINTER(ctypes.c_wchar_p),
+        ]
+        sh_get_known_folder_path.restype = ctypes.c_long
+        out = ctypes.c_wchar_p()
+        hr = sh_get_known_folder_path(ctypes.byref(folderid_videos), 0, None, ctypes.byref(out))
+        if hr == 0 and out.value:
+            path_str = out.value
+            ctypes.windll.ole32.CoTaskMemFree(out)
+            return Path(path_str)
+    except Exception:
+        return None
+    return None
+
+
+def default_videos_dir(
+    sys_platform: str | None = None,
+    home: Path | None = None,
+    *,
+    xdg_videos_dir: Callable[[], Path | None] | None = None,
+    windows_videos_dir: Callable[[], Path | None] | None = None,
+) -> Path:
+    """Return the user's preferred videos folder for the current platform."""
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if home is None:
+        home = Path.home()
+
+    if sys_platform.startswith("linux"):
+        resolver = xdg_videos_dir or linux_xdg_videos_dir
+        xdg_path = resolver()
+        if xdg_path is not None:
+            return xdg_path
+
+    if sys_platform == "darwin":
+        movies = home / "Movies"
+        if movies.exists():
+            return movies
+
+    if sys_platform.startswith("win"):
+        resolver = windows_videos_dir or (lambda: windows_known_videos_dir(sys_platform))
+        known_folder = resolver()
+        if known_folder is not None:
+            return known_folder
+
+    return home / "Videos"
 
 
 def _wav2lip_asset_candidates(

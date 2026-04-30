@@ -2,14 +2,18 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from subprocess import CompletedProcess, CalledProcessError, TimeoutExpired
 
 from videotranslator.platforms import (
     Wav2LipPaths,
     cosyvoice_supported,
+    default_videos_dir,
+    linux_xdg_videos_dir,
     platform_info,
     resolve_app_paths,
     resolve_wav2lip_paths,
     runtime_app_paths,
+    windows_known_videos_dir,
     _wav2lip_assets_present,
 )
 
@@ -126,6 +130,73 @@ class PlatformTests(unittest.TestCase):
         result = cosyvoice_supported()
         self.assertIsInstance(result, bool)
         self.assertEqual(result, sys.platform.startswith("linux"))
+
+    def test_linux_xdg_videos_dir_returns_path_from_command(self):
+        def fake_run(*_args, **_kwargs):
+            return CompletedProcess(["xdg-user-dir"], 0, stdout="/home/example/Video\n")
+
+        self.assertEqual(linux_xdg_videos_dir(run=fake_run), Path("/home/example/Video"))
+
+    def test_linux_xdg_videos_dir_returns_none_on_failure(self):
+        def fake_run(*_args, **_kwargs):
+            raise CalledProcessError(1, ["xdg-user-dir"])
+
+        self.assertIsNone(linux_xdg_videos_dir(run=fake_run))
+
+    def test_linux_xdg_videos_dir_returns_none_on_timeout(self):
+        def fake_run(*_args, **_kwargs):
+            raise TimeoutExpired(["xdg-user-dir"], timeout=2)
+
+        self.assertIsNone(linux_xdg_videos_dir(run=fake_run))
+
+    def test_default_videos_dir_uses_linux_xdg_when_available(self):
+        self.assertEqual(
+            default_videos_dir(
+                "linux",
+                Path("/home/example"),
+                xdg_videos_dir=lambda: Path("/mnt/media/Video"),
+            ),
+            Path("/mnt/media/Video"),
+        )
+
+    def test_default_videos_dir_linux_falls_back_to_home_videos(self):
+        self.assertEqual(
+            default_videos_dir(
+                "linux",
+                Path("/home/example"),
+                xdg_videos_dir=lambda: None,
+            ),
+            Path("/home/example/Videos"),
+        )
+
+    def test_default_videos_dir_macos_prefers_movies_when_present(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            home = Path(tmp_str)
+            (home / "Movies").mkdir()
+            self.assertEqual(default_videos_dir("darwin", home), home / "Movies")
+
+    def test_default_videos_dir_windows_uses_known_folder_when_available(self):
+        self.assertEqual(
+            default_videos_dir(
+                "win32",
+                Path(r"C:\Users\Example"),
+                windows_videos_dir=lambda: Path(r"D:\Media"),
+            ),
+            Path(r"D:\Media"),
+        )
+
+    def test_default_videos_dir_windows_falls_back_to_home_videos(self):
+        self.assertEqual(
+            default_videos_dir(
+                "win32",
+                Path(r"C:\Users\Example"),
+                windows_videos_dir=lambda: None,
+            ),
+            Path(r"C:\Users\Example") / "Videos",
+        )
+
+    def test_windows_known_videos_dir_non_windows_returns_none(self):
+        self.assertIsNone(windows_known_videos_dir("linux"))
 
 
 def _seed_wav2lip_assets(directory: Path) -> None:

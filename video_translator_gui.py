@@ -3310,94 +3310,10 @@ def transcribe(
     )
 
 
-def _windows_known_videos_dir() -> Path | None:
-    """Resolve the real 'Videos' Known Folder on Windows via Shell32.
-
-    Returns the actual filesystem path even when the user has redirected
-    the Videos library to another drive (Properties → Location → Move).
-    ``Path.home() / "Videos"`` is wrong in that case because it always
-    points at ``%USERPROFILE%\\Videos`` regardless of the redirection.
-
-    Uses ctypes (stdlib) against ``SHGetKnownFolderPath`` with
-    ``FOLDERID_Videos = {18989B1D-99B5-455B-841C-AB7C74E4DDFC}`` — the
-    Shell32 API recommended since Windows Vista (SHGetFolderPath is
-    deprecated). No pywin32 dependency is added: pulling pywin32 just for
-    one Known Folder lookup would bloat the Windows installer by ~9 MB and
-    complicate multi-user system-wide installs, which is not justified
-    for an edge case (user-relocated Videos folder).
-
-    Returns None on any failure so the caller can fall back safely.
-    """
-    if not sys.platform.startswith("win"):
-        return None
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        class _GUID(ctypes.Structure):
-            _fields_ = [
-                ("Data1", wintypes.DWORD),
-                ("Data2", wintypes.WORD),
-                ("Data3", wintypes.WORD),
-                ("Data4", ctypes.c_ubyte * 8),
-            ]
-
-        # FOLDERID_Videos = {18989B1D-99B5-455B-841C-AB7C74E4DDFC}
-        folderid_videos = _GUID(
-            0x18989B1D, 0x99B5, 0x455B,
-            (ctypes.c_ubyte * 8)(0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC),
-        )
-        SHGetKnownFolderPath = ctypes.windll.shell32.SHGetKnownFolderPath
-        SHGetKnownFolderPath.argtypes = [
-            ctypes.POINTER(_GUID), wintypes.DWORD, wintypes.HANDLE,
-            ctypes.POINTER(ctypes.c_wchar_p),
-        ]
-        SHGetKnownFolderPath.restype = ctypes.c_long  # HRESULT
-        out = ctypes.c_wchar_p()
-        hr = SHGetKnownFolderPath(ctypes.byref(folderid_videos), 0, None,
-                                  ctypes.byref(out))
-        if hr == 0 and out.value:
-            path_str = out.value
-            # CoTaskMemFree the buffer returned by SHGetKnownFolderPath
-            ctypes.windll.ole32.CoTaskMemFree(out)
-            return Path(path_str)
-    except Exception:
-        # ctypes failure, ancient Windows, sandboxed Python — all fall back.
-        return None
-    return None
-
-
-def _default_videos_dir() -> Path:
-    """User's preferred 'Videos' folder, honouring XDG / Known Folders.
-
-    - Linux: query ``xdg-user-dir VIDEOS`` so a localised system (``~/Video``
-      on Italian, ``~/视频`` on zh_CN, ``~/Filme`` on German, …) saves there
-      instead of a parallel English-named ``~/Videos`` directory.
-    - macOS: the canonical folder is ``~/Movies``; use it when present.
-    - Windows: use Shell32 ``SHGetKnownFolderPath(FOLDERID_Videos)`` so we
-      follow the real location even when the user has redirected the Videos
-      library to another drive (e.g. ``D:\\Media``). Fall back to
-      ``%USERPROFILE%\\Videos`` if the Shell32 call fails.
-    """
-    if sys.platform.startswith("linux"):
-        with contextlib.suppress(FileNotFoundError,
-                                 subprocess.CalledProcessError,
-                                 subprocess.TimeoutExpired):
-            out = subprocess.run(
-                ["xdg-user-dir", "VIDEOS"],
-                capture_output=True, text=True, check=True, timeout=2,
-            ).stdout.strip()
-            if out:
-                return Path(out)
-    if sys.platform == "darwin":
-        movies = Path.home() / "Movies"
-        if movies.exists():
-            return movies
-    if sys.platform.startswith("win"):
-        kf = _windows_known_videos_dir()
-        if kf is not None:
-            return kf
-    return Path.home() / "Videos"
+from videotranslator.platforms import (  # noqa: E402
+    default_videos_dir as _default_videos_dir,
+    windows_known_videos_dir as _windows_known_videos_dir,
+)
 
 
 # Punteggiatura forte di fine-frase — ASCII + CJK full-width + interrogativo arabo.
