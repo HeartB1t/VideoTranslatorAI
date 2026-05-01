@@ -67,15 +67,6 @@ When enabled, the app extracts the speaker's voice from the original video and u
 - **Generation speed** configurable (`xtts_speed`, default `1.25`): higher values reduce post-processing audio compression artifacts when the translated text is longer than the source slot. Tune via `~/.config/videotranslatorai/config.json` or CLI `--xtts-speed`
 - Runs on CUDA or CPU
 
-### CosyVoice (Linux, experimental)
-
-A second voice-cloning engine built on FunAudioLLM's CosyVoice is available on Linux as an alternative to XTTS v2. It produces noticeably more natural prosody and reports a much lower hallucination rate on long-form content (~2 % vs 5–15 % for XTTS), at the cost of a heavier model (~1.7 GB) and a slower first run.
-
-- **Linux only** — Windows is blocked by `pynini` / `tensorrt-cu12` build issues; macOS is untested. The checkbox is hidden on those platforms; the policy lives in `videotranslator.platforms.cosyvoice_supported()`.
-- **Opt-in**: enable the *Voice Cloning Pro* checkbox in the GUI. The first time you tick it, a popup offers automatic install (`pip install cosyvoice`); the model is then fetched on-demand at the first run via ModelScope (with a HuggingFace fallback).
-- **Apache 2.0 licensed**, comparable quality to XTTS v2.
-- **Graceful fallback**: if the install or model load fails, the pipeline reverts to XTTS v2, then to Edge-TTS, without aborting the run.
-
 ## Speaker Diarization (pyannote-audio)
 
 When enabled, the app identifies who is speaking in each segment. Combined with Voice Cloning, each speaker's voice is cloned separately — ideal for interviews, podcasts, and multi-person videos.

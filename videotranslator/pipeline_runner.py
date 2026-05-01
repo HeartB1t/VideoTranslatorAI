@@ -44,7 +44,6 @@ class PipelineRuntime:
     resolve_difficulty_profile: Any
     format_profile_log: Any
     translate_segments: Any
-    generate_tts_cosyvoice: Any
     generate_tts_xtts: Any
     generate_tts: Any
     build_dubbed_track: Any
@@ -66,7 +65,7 @@ def translate_video(
     translation_engine: str = "google",
     deepl_key: str = "",
     segments_override: list[dict] | None = None,
-    tts_engine: str = "edge",   # "edge" | "xtts" | "cosyvoice" (v2.3)
+    tts_engine: str = "edge",   # "edge" | "xtts"
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
@@ -120,7 +119,6 @@ def translate_video(
     _resolve_difficulty_profile = runtime.resolve_difficulty_profile
     _format_profile_log = runtime.format_profile_log
     translate_segments = runtime.translate_segments
-    generate_tts_cosyvoice = runtime.generate_tts_cosyvoice
     generate_tts_xtts = runtime.generate_tts_xtts
     generate_tts = runtime.generate_tts
     build_dubbed_track = runtime.build_dubbed_track
@@ -166,17 +164,14 @@ def translate_video(
     output_base = str(Path(output).with_suffix(""))
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
-    if tts_engine in ("xtts", "cosyvoice"):
+    if tts_engine == "xtts":
         # Log esplicito di cosa ha deciso l'autotune. Utile in bug report / debug
-        # di atempo artifacts. CosyVoice riusa lo stesso autotune (lo speed
-        # range è equivalente; il ceiling è speso allo stesso modo nel loop
-        # adattivo per-segmento).
+        # di atempo artifacts.
         if speed_auto:
             _ratio_note = f"auto-tuned for {lang_source}→{lang_target}, ratio={lang_ratio:.2f}"
         else:
             _ratio_note = f"user override (ratio={lang_ratio:.2f})"
-        _engine_label = "XTTS" if tts_engine == "xtts" else "CosyVoice"
-        print(f"[i] {_engine_label} speed={effective_xtts_speed:.2f} ({_ratio_note}){' [aggressive merge]' if merge_aggressive else ''}", flush=True)
+        print(f"[i] XTTS speed={effective_xtts_speed:.2f} ({_ratio_note}){' [aggressive merge]' if merge_aggressive else ''}", flush=True)
 
     with tempfile.TemporaryDirectory(prefix="vidtrans_") as tmp_dir:
         audio_raw = os.path.join(tmp_dir, "audio_raw.wav")
@@ -457,35 +452,11 @@ def translate_video(
                 )
             effective_xtts_speed = _capped
 
-        # TTS generation — Edge-TTS, Coqui XTTS v2 o CosyVoice (v2.3).
-        # Cascata di fallback: cosyvoice → xtts → edge. Se l'utente ha scelto
-        # cosyvoice e fallisce, proviamo XTTS prima di degradare a Edge-TTS,
-        # così l'utente che sceglie un voice-cloning engine non si ritrova
-        # automaticamente con voci sintetiche piatte.
+        # TTS generation — Edge-TTS o Coqui XTTS v2.
+        # Cascata di fallback: xtts → edge. Se l'utente ha scelto voice
+        # cloning e fallisce, degradiamo a Edge-TTS.
         tts_files = None
-        if tts_engine == "cosyvoice":
-            try:
-                tts_files = generate_tts_cosyvoice(
-                    segments, vocals_path, lang_target, tmp_dir,
-                    diar_segments=diar_segments,
-                    speed=effective_xtts_speed,  # ceiling condiviso con XTTS
-                )
-            except Exception as e:
-                print(f"     ! CosyVoice failed ({e}), falling back to XTTS.", flush=True)
-                tts_files = None
-            # Fallback intra-clone: prima di scendere a Edge-TTS, tentiamo XTTS
-            # (l'utente ha esplicitamente chiesto voice cloning).
-            if tts_files is None:
-                try:
-                    tts_files = generate_tts_xtts(
-                        segments, vocals_path, lang_target, tmp_dir,
-                        diar_segments=diar_segments,
-                        speed=effective_xtts_speed,
-                    )
-                except Exception as e:
-                    print(f"     ! XTTS fallback failed ({e}), falling back to Edge-TTS.", flush=True)
-                    tts_files = None
-        elif tts_engine == "xtts":
+        if tts_engine == "xtts":
             try:
                 tts_files = generate_tts_xtts(
                     segments, vocals_path, lang_target, tmp_dir,

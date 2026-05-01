@@ -46,7 +46,6 @@ class PipelineRunnerTests(unittest.TestCase):
                 resolve_difficulty_profile=_unused,
                 format_profile_log=_unused,
                 translate_segments=_unused,
-                generate_tts_cosyvoice=_unused,
                 generate_tts_xtts=_unused,
                 generate_tts=_unused,
                 build_dubbed_track=_unused,

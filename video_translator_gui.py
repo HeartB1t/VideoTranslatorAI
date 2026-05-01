@@ -88,24 +88,6 @@ XTTS_LANGS = {
     "nl": "nl", "pl": "pl", "pt": "pt", "ru": "ru", "tr": "tr",
 }
 
-# Languages supported NATIVAMENTE da CosyVoice (zero-shot / SFT). Per qualsiasi
-# altra lingua usiamo la modalità cross-lingual (passa il prompt scritto + reference
-# audio nella lingua sorgente — il modello lo doppia mantenendo timbro). IT NON è
-# nativa nei pesi 1.x; in 2.x è migliorata ma rimane prudente passare per cross-lingual.
-# Riferimento: https://github.com/FunAudioLLM/CosyVoice (Supported languages section).
-COSYVOICE_NATIVE_LANGS = {"zh-CN", "en", "ja", "ko"}
-
-# Mapping lingua target → token CosyVoice per modalità cross-lingual. La forma
-# attesa dall'API è "<|lang|>" (es. "<|it|>"), embedded come prefix nel prompt.
-# Le lingue NON in questa mappa fallback a "<|en|>" (più rappresentate nel training).
-COSYVOICE_LANG_TAGS = {
-    "it": "<|it|>", "en": "<|en|>", "es": "<|es|>", "fr": "<|fr|>",
-    "de": "<|de|>", "ja": "<|ja|>", "ko": "<|ko|>", "zh-CN": "<|zh|>",
-    "pt": "<|pt|>", "ru": "<|ru|>", "ar": "<|ar|>", "nl": "<|nl|>",
-    "pl": "<|pl|>", "tr": "<|tr|>", "hi": "<|hi|>", "vi": "<|vi|>",
-    "id": "<|id|>", "th": "<|th|>",
-}
-
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 DEFAULT_LANG = "it"
 
@@ -295,15 +277,6 @@ OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "pyannote":      (["pyannote.audio>=3.1,<4.0"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
     "silero_vad":    (["silero-vad"],    "VAD per reference XTTS (selezione speech continuo)"),
     "keyring":       (["keyring"],       "Storage sicuro HF token (Credential Manager / Keychain / Secret Service)"),
-    # CosyVoice (v2.3): NON nel set obbligatorio. Auto-detect on-demand quando
-    # l'utente sceglie il radio "Voice Cloning Pro". Il pacchetto PyPI `cosyvoice`
-    # è il wrapper community (Lucas Jin) attualmente disponibile; il modello
-    # vero (CosyVoice-300M-Instruct, ~1.7 GB) viene scaricato al primo uso via
-    # ModelScope. CosyVoice 2.0 ufficiale (FunAudioLLM) non ha ancora una
-    # release PyPI: quando arriverà, basta cambiare il pin qui sotto.
-    # Nota: NON includiamo questo nel popup "install all optional" perché
-    # la dipendenza è grossa (modelscope, onnxruntime-gpu, hyperpyyaml…) e
-    # vogliamo che l'utente la richieda esplicitamente.
 }
 # Alias per moduli che possono avere nomi diversi a seconda della versione installata
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
@@ -346,18 +319,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice — solo Linux, qualità superiore a XTTS, ~1.7 GB)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 non installato.\n\n"
-            "Installare automaticamente?\n"
-            "  - Pacchetto Python: ~500 MB\n"
-            "  - Modello (al primo Avvia): ~1.7 GB\n\n"
-            "CosyVoice ha tasso di hallucination <2% (vs XTTS 5-15%) "
-            "su long-form, quindi outlier audio molto rari."
-        ),
-        "msg_cosyvoice_installing": "[*] Installazione CosyVoice 2.0 in corso (~500 MB pip + 1.7 GB modello al primo Avvia)...",
-        "hint_cosyvoice":     "Modello: CosyVoice2-0.5B (Instruct) — IT via cross-lingual con prefix <|it|>",
         "label_engine":       "Motore traduzione:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -460,18 +422,7 @@ UI_STRINGS = {
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
         "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
-        "opt_cosyvoice":      "🎤 Voice Cloning Pro (CosyVoice — Linux only, higher quality than XTTS, ~1.7 GB)",
         "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 not installed.\n\n"
-            "Install automatically?\n"
-            "  - Python package: ~500 MB\n"
-            "  - Model (at first Start): ~1.7 GB\n\n"
-            "CosyVoice has <2% hallucination rate (vs XTTS 5-15%) on "
-            "long-form, so outlier audio is very rare."
-        ),
-        "msg_cosyvoice_installing": "[*] Installing CosyVoice 2.0 (~500 MB pip + 1.7 GB model at first Start)...",
-        "hint_cosyvoice":     "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual with <|it|> prefix",
         "label_engine":       "Translation engine:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
@@ -641,18 +592,6 @@ UI_STRINGS = {
             "\n"
             "سيتم استخدام MarianMT/Google كبديل."
         ),
-        "opt_cosyvoice": "🎤 استنساخ صوت احترافي (CosyVoice — لينكس فقط، جودة أعلى من XTTS، ~1.7 جيجابايت)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 غير مثبت.\n"
-            "\n"
-            "هل تريد التثبيت تلقائيًا؟\n"
-            "  - حزمة Python: ~500 ميجابايت\n"
-            "  - النموذج (عند أول بدء): ~1.7 جيجابايت\n"
-            "\n"
-            "معدل هلوسة CosyVoice أقل من 2% (مقابل 5-15% لـ XTTS) في المحتوى الطويل، لذا فإن المخرجات الصوتية الشاذة نادرة جدًا."
-        ),
-        "msg_cosyvoice_installing": "[*] جاري تثبيت CosyVoice 2.0 (~500 ميجابايت pip + 1.7 جيجابايت نموذج عند أول بدء)...",
-        "hint_cosyvoice": "النموذج: CosyVoice2-0.5B (Instruct) — IT عبر متعدد اللغات مع البادئة <|it|>",
         "label_log_panel": "السجل:",
         "btn_log_show": "▼ إظهار السجل",
         "btn_log_hide": "▲ إخفاء السجل",
@@ -752,18 +691,6 @@ UI_STRINGS = {
             "\n"
             "将回退到 MarianMT/Google。"
         ),
-        "opt_cosyvoice": "🎤 专业语音克隆(CosyVoice — 仅 Linux,质量优于 XTTS,~1.7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 未安装。\n"
-            "\n"
-            "是否自动安装?\n"
-            "  - Python 包: ~500 MB\n"
-            "  - 模型(首次启动时): ~1.7 GB\n"
-            "\n"
-            "CosyVoice 在长篇内容中的幻觉率低于 2%(对比 XTTS 的 5-15%),因此异常音频极为罕见。"
-        ),
-        "msg_cosyvoice_installing": "[*] 正在安装 CosyVoice 2.0(~500 MB pip + 首次启动时 1.7 GB 模型)...",
-        "hint_cosyvoice": "模型: CosyVoice2-0.5B (Instruct) — IT 通过跨语言带 <|it|> 前缀",
         "label_log_panel": "日志:",
         "btn_log_show": "▼ 显示日志",
         "btn_log_hide": "▲ 隐藏日志",
@@ -863,18 +790,6 @@ UI_STRINGS = {
             "\n"
             "Bude použit MarianMT/Google jako záloha."
         ),
-        "opt_cosyvoice": "🎤 Pro klonování hlasu (CosyVoice — pouze Linux, vyšší kvalita než XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 není nainstalován.\n"
-            "\n"
-            "Nainstalovat automaticky?\n"
-            "  - Python balíček: ~500 MB\n"
-            "  - Model (při prvním Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice má míru halucinací <2 % (oproti XTTS 5-15 %) u dlouhých nahrávek, takže odlehlé výstupy jsou velmi vzácné."
-        ),
-        "msg_cosyvoice_installing": "[*] Instalace CosyVoice 2.0 probíhá (~500 MB pip + 1,7 GB model při prvním Start)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT přes cross-lingual s prefixem <|it|>",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Zobrazit log",
         "btn_log_hide": "▲ Skrýt log",
@@ -974,18 +889,6 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google bruges som fallback."
         ),
-        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice — kun Linux, højere kvalitet end XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 ikke installeret.\n"
-            "\n"
-            "Installer automatisk?\n"
-            "  - Python-pakke: ~500 MB\n"
-            "  - Model (ved første Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice har en hallucinationsrate på <2 % (mod XTTS 5-15 %) ved lange optagelser, så afvigende lyd er meget sjældent."
-        ),
-        "msg_cosyvoice_installing": "[*] Installerer CosyVoice 2.0 (~500 MB pip + 1,7 GB model ved første Start)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med <|it|>-præfiks",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Vis log",
         "btn_log_hide": "▲ Skjul log",
@@ -1085,18 +988,6 @@ UI_STRINGS = {
             "\n"
             "Terugvallen op MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — alleen Linux, hogere kwaliteit dan XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 niet geïnstalleerd.\n"
-            "\n"
-            "Automatisch installeren?\n"
-            "  - Python-pakket: ~500 MB\n"
-            "  - Model (bij eerste Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice heeft <2% hallucinatiepercentage (vs XTTS 5-15%) bij lange opnames, dus uitschieters zijn zeer zeldzaam."
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 wordt geïnstalleerd (~500 MB pip + 1,7 GB model bij eerste Start)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual met prefix <|it|>",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Log tonen",
         "btn_log_hide": "▲ Log verbergen",
@@ -1196,18 +1087,6 @@ UI_STRINGS = {
             "\n"
             "Käytetään MarianMT/Google varajärjestelmänä."
         ),
-        "opt_cosyvoice": "🎤 Pro-äänikloonaus (CosyVoice — vain Linux, parempi laatu kuin XTTS, ~1,7 Gt)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 ei ole asennettu.\n"
-            "\n"
-            "Asennetaanko automaattisesti?\n"
-            "  - Python-paketti: ~500 MB\n"
-            "  - Malli (ensimmäisellä käynnistyksellä): ~1,7 GB\n"
-            "\n"
-            "CosyVoicen hallusinaatiosuhde on alle 2 % (vrt. XTTS 5-15 %) pitkissä äänitteissä, joten poikkeavat ääniraidat ovat hyvin harvinaisia."
-        ),
-        "msg_cosyvoice_installing": "[*] Asennetaan CosyVoice 2.0 (~500 MB pip + 1,7 GB malli ensimmäisellä käynnistyksellä)...",
-        "hint_cosyvoice": "Malli: CosyVoice2-0.5B (Instruct) — IT cross-lingual <|it|>-etuliitteellä",
         "label_log_panel": "Loki:",
         "btn_log_show": "▼ Näytä loki",
         "btn_log_hide": "▲ Piilota loki",
@@ -1307,18 +1186,6 @@ UI_STRINGS = {
             "\n"
             "Repli vers MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — Linux uniquement, qualité supérieure à XTTS, ~1,7 Go)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 non installé.\n"
-            "\n"
-            "Installer automatiquement ?\n"
-            "  - Paquet Python : ~500 Mo\n"
-            "  - Modèle (au premier Démarrage) : ~1,7 Go\n"
-            "\n"
-            "CosyVoice a un taux d'hallucination <2 % (vs XTTS 5-15 %) sur les contenus longs, donc les sorties audio aberrantes sont très rares."
-        ),
-        "msg_cosyvoice_installing": "[*] Installation de CosyVoice 2.0 en cours (~500 Mo pip + 1,7 Go modèle au premier Démarrage)...",
-        "hint_cosyvoice": "Modèle : CosyVoice2-0.5B (Instruct) — IT via cross-lingual avec préfixe <|it|>",
         "label_log_panel": "Journal :",
         "btn_log_show": "▼ Afficher le journal",
         "btn_log_hide": "▲ Masquer le journal",
@@ -1418,18 +1285,6 @@ UI_STRINGS = {
             "\n"
             "Fallback auf MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — nur Linux, höhere Qualität als XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 nicht installiert.\n"
-            "\n"
-            "Automatisch installieren?\n"
-            "  - Python-Paket: ~500 MB\n"
-            "  - Modell (beim ersten Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice hat eine Halluzinationsrate <2 % (gegenüber XTTS 5-15 %) bei langen Aufnahmen, sodass Ausreißer im Audio sehr selten sind."
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 wird installiert (~500 MB pip + 1,7 GB Modell beim ersten Start)...",
-        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual mit Präfix <|it|>",
         "label_log_panel": "Protokoll:",
         "btn_log_show": "▼ Protokoll anzeigen",
         "btn_log_hide": "▲ Protokoll ausblenden",
@@ -1529,18 +1384,6 @@ UI_STRINGS = {
             "\n"
             "Επιστροφή σε MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro κλωνοποίηση φωνής (CosyVoice — μόνο Linux, υψηλότερη ποιότητα από XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "Το CosyVoice 2.0 δεν είναι εγκατεστημένο.\n"
-            "\n"
-            "Αυτόματη εγκατάσταση;\n"
-            "  - Πακέτο Python: ~500 MB\n"
-            "  - Μοντέλο (στην πρώτη Εκκίνηση): ~1,7 GB\n"
-            "\n"
-            "Το CosyVoice έχει ποσοστό παραισθήσεων <2 % (έναντι XTTS 5-15 %) σε μεγάλο περιεχόμενο, οπότε ακραίες ηχητικές εξόδους είναι πολύ σπάνιες."
-        ),
-        "msg_cosyvoice_installing": "[*] Εγκατάσταση CosyVoice 2.0 σε εξέλιξη (~500 MB pip + 1,7 GB μοντέλο στην πρώτη Εκκίνηση)...",
-        "hint_cosyvoice": "Μοντέλο: CosyVoice2-0.5B (Instruct) — IT μέσω cross-lingual με πρόθεμα <|it|>",
         "label_log_panel": "Καταγραφή:",
         "btn_log_show": "▼ Εμφάνιση καταγραφής",
         "btn_log_hide": "▲ Απόκρυψη καταγραφής",
@@ -1640,18 +1483,6 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google पर वापस जाएगा।"
         ),
-        "opt_cosyvoice": "🎤 प्रो वॉइस क्लोनिंग (CosyVoice — केवल Linux, XTTS से बेहतर गुणवत्ता, ~1.7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 स्थापित नहीं है।\n"
-            "\n"
-            "स्वचालित रूप से स्थापित करें?\n"
-            "  - Python पैकेज: ~500 MB\n"
-            "  - मॉडल (पहली बार Start पर): ~1.7 GB\n"
-            "\n"
-            "CosyVoice की हलूसिनेशन दर <2% है (बनाम XTTS 5-15%) लंबी सामग्री पर, इसलिए ऑडियो आउटलेयर बहुत दुर्लभ हैं।"
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 स्थापित किया जा रहा है (~500 MB pip + पहली बार Start पर 1.7 GB मॉडल)...",
-        "hint_cosyvoice": "मॉडल: CosyVoice2-0.5B (Instruct) — IT क्रॉस-लिंगुअल के माध्यम से <|it|> उपसर्ग के साथ",
         "label_log_panel": "लॉग:",
         "btn_log_show": "▼ लॉग दिखाएं",
         "btn_log_hide": "▲ लॉग छिपाएं",
@@ -1751,18 +1582,6 @@ UI_STRINGS = {
             "\n"
             "Visszaállás MarianMT/Google használatára."
         ),
-        "opt_cosyvoice": "🎤 Pro hangklónozás (CosyVoice — csak Linux, jobb minőség mint XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 nincs telepítve.\n"
-            "\n"
-            "Telepítse automatikusan?\n"
-            "  - Python csomag: ~500 MB\n"
-            "  - Modell (első indításkor): ~1,7 GB\n"
-            "\n"
-            "A CosyVoice hallucinációs aránya <2 % (XTTS 5-15 %) hosszú tartalmaknál, így a kiugró audiok nagyon ritkák."
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 telepítése folyamatban (~500 MB pip + 1,7 GB modell az első indításkor)...",
-        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT cross-lingual módban <|it|> előtaggal",
         "label_log_panel": "Napló:",
         "btn_log_show": "▼ Napló megjelenítése",
         "btn_log_hide": "▲ Napló elrejtése",
@@ -1862,18 +1681,6 @@ UI_STRINGS = {
             "\n"
             "Akan kembali ke MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — hanya Linux, kualitas lebih tinggi dari XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 tidak terinstal.\n"
-            "\n"
-            "Instal otomatis?\n"
-            "  - Paket Python: ~500 MB\n"
-            "  - Model (saat Start pertama): ~1,7 GB\n"
-            "\n"
-            "CosyVoice memiliki tingkat halusinasi <2% (vs XTTS 5-15%) pada konten panjang, sehingga audio outlier sangat jarang."
-        ),
-        "msg_cosyvoice_installing": "[*] Menginstal CosyVoice 2.0 (~500 MB pip + 1,7 GB model saat Start pertama)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual dengan prefiks <|it|>",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Tampilkan log",
         "btn_log_hide": "▲ Sembunyikan log",
@@ -1973,18 +1780,6 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google にフォールバックします。"
         ),
-        "opt_cosyvoice": "🎤 プロボイスクローニング(CosyVoice — Linux 専用、XTTS より高品質、約 1.7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 がインストールされていません。\n"
-            "\n"
-            "自動インストールしますか?\n"
-            "  - Python パッケージ: 約 500 MB\n"
-            "  - モデル(初回 Start 時): 約 1.7 GB\n"
-            "\n"
-            "CosyVoice の幻覚率は 2% 未満(XTTS の 5-15% に対して)で、長尺コンテンツでも異常な音声出力は非常にまれです。"
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 をインストール中(~500 MB pip + 初回 Start 時 1.7 GB モデル)...",
-        "hint_cosyvoice": "モデル: CosyVoice2-0.5B (Instruct) — IT はクロスリンガル経由で <|it|> プレフィックス付き",
         "label_log_panel": "ログ:",
         "btn_log_show": "▼ ログを表示",
         "btn_log_hide": "▲ ログを非表示",
@@ -2084,18 +1879,6 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google로 폴백됩니다."
         ),
-        "opt_cosyvoice": "🎤 프로 보이스 클로닝 (CosyVoice — Linux 전용, XTTS보다 높은 품질, ~1.7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0이 설치되지 않았습니다.\n"
-            "\n"
-            "자동으로 설치하시겠습니까?\n"
-            "  - Python 패키지: ~500 MB\n"
-            "  - 모델 (첫 시작 시): ~1.7 GB\n"
-            "\n"
-            "CosyVoice는 장문 콘텐츠에서 환각률이 2% 미만(XTTS의 5-15% 대비)이므로 이상한 오디오 출력은 매우 드뭅니다."
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 설치 중 (~500 MB pip + 첫 시작 시 1.7 GB 모델)...",
-        "hint_cosyvoice": "모델: CosyVoice2-0.5B (Instruct) — IT는 <|it|> 접두사가 있는 크로스링구얼 경유",
         "label_log_panel": "로그:",
         "btn_log_show": "▼ 로그 표시",
         "btn_log_hide": "▲ 로그 숨기기",
@@ -2195,18 +1978,6 @@ UI_STRINGS = {
             "\n"
             "Faller tilbake til MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro stemmekloning (CosyVoice — kun Linux, høyere kvalitet enn XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 ikke installert.\n"
-            "\n"
-            "Installere automatisk?\n"
-            "  - Python-pakke: ~500 MB\n"
-            "  - Modell (ved første Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice har en hallusinasjonsrate på <2 % (mot XTTS 5-15 %) på lange opptak, så avvikende lyd er svært sjeldent."
-        ),
-        "msg_cosyvoice_installing": "[*] Installerer CosyVoice 2.0 (~500 MB pip + 1,7 GB modell ved første Start)...",
-        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med prefiks <|it|>",
         "label_log_panel": "Logg:",
         "btn_log_show": "▼ Vis logg",
         "btn_log_hide": "▲ Skjul logg",
@@ -2306,18 +2077,6 @@ UI_STRINGS = {
             "\n"
             "Zostanie użyty MarianMT/Google jako rezerwa."
         ),
-        "opt_cosyvoice": "🎤 Pro klonowanie głosu (CosyVoice — tylko Linux, wyższa jakość niż XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 nie jest zainstalowany.\n"
-            "\n"
-            "Zainstalować automatycznie?\n"
-            "  - Pakiet Python: ~500 MB\n"
-            "  - Model (przy pierwszym Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice ma wskaźnik halucynacji <2% (vs XTTS 5-15%) w długich nagraniach, więc nietypowe wyjścia audio są bardzo rzadkie."
-        ),
-        "msg_cosyvoice_installing": "[*] Instalowanie CosyVoice 2.0 (~500 MB pip + 1,7 GB model przy pierwszym Start)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT przez cross-lingual z prefiksem <|it|>",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Pokaż log",
         "btn_log_hide": "▲ Ukryj log",
@@ -2417,18 +2176,6 @@ UI_STRINGS = {
             "\n"
             "Será usado MarianMT/Google como alternativa."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — apenas Linux, qualidade superior ao XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 não instalado.\n"
-            "\n"
-            "Instalar automaticamente?\n"
-            "  - Pacote Python: ~500 MB\n"
-            "  - Modelo (no primeiro Iniciar): ~1,7 GB\n"
-            "\n"
-            "CosyVoice tem taxa de alucinação <2% (vs XTTS 5-15%) em conteúdo longo, então saídas de áudio anômalas são muito raras."
-        ),
-        "msg_cosyvoice_installing": "[*] Instalando CosyVoice 2.0 (~500 MB pip + modelo de 1,7 GB no primeiro Iniciar)...",
-        "hint_cosyvoice": "Modelo: CosyVoice2-0.5B (Instruct) — IT via cross-lingual com prefixo <|it|>",
         "label_log_panel": "Log:",
         "btn_log_show": "▼ Mostrar log",
         "btn_log_hide": "▲ Ocultar log",
@@ -2528,18 +2275,6 @@ UI_STRINGS = {
             "\n"
             "Se va folosi MarianMT/Google ca rezervă."
         ),
-        "opt_cosyvoice": "🎤 Pro voice cloning (CosyVoice — doar Linux, calitate superioară XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 nu este instalat.\n"
-            "\n"
-            "Instalați automat?\n"
-            "  - Pachet Python: ~500 MB\n"
-            "  - Model (la prima pornire): ~1,7 GB\n"
-            "\n"
-            "CosyVoice are rata de halucinații <2 % (față de XTTS 5-15 %) pe conținut lung, deci ieșirile audio aberante sunt foarte rare."
-        ),
-        "msg_cosyvoice_installing": "[*] Se instalează CosyVoice 2.0 (~500 MB pip + 1,7 GB model la prima pornire)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT via cross-lingual cu prefix <|it|>",
         "label_log_panel": "Jurnal:",
         "btn_log_show": "▼ Afișează jurnalul",
         "btn_log_hide": "▲ Ascunde jurnalul",
@@ -2639,18 +2374,6 @@ UI_STRINGS = {
             "\n"
             "Будет использован MarianMT/Google как резервный."
         ),
-        "opt_cosyvoice": "🎤 Pro клонирование голоса (CosyVoice — только Linux, качество выше XTTS, ~1,7 ГБ)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 не установлен.\n"
-            "\n"
-            "Установить автоматически?\n"
-            "  - Пакет Python: ~500 МБ\n"
-            "  - Модель (при первом Старте): ~1,7 ГБ\n"
-            "\n"
-            "Уровень галлюцинаций CosyVoice <2 % (против XTTS 5-15 %) на длинном контенте, поэтому аномальные аудиовыходы очень редки."
-        ),
-        "msg_cosyvoice_installing": "[*] Установка CosyVoice 2.0 (~500 МБ pip + 1,7 ГБ модель при первом Старте)...",
-        "hint_cosyvoice": "Модель: CosyVoice2-0.5B (Instruct) — IT через cross-lingual с префиксом <|it|>",
         "label_log_panel": "Журнал:",
         "btn_log_show": "▼ Показать журнал",
         "btn_log_hide": "▲ Скрыть журнал",
@@ -2750,18 +2473,6 @@ UI_STRINGS = {
             "\n"
             "Se usará MarianMT/Google como alternativa."
         ),
-        "opt_cosyvoice": "🎤 Voice Cloning Pro (CosyVoice — solo Linux, calidad superior a XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 no instalado.\n"
-            "\n"
-            "¿Instalar automáticamente?\n"
-            "  - Paquete Python: ~500 MB\n"
-            "  - Modelo (al primer Iniciar): ~1,7 GB\n"
-            "\n"
-            "CosyVoice tiene una tasa de alucinación <2% (vs XTTS 5-15%) en contenido largo, por lo que las salidas de audio anómalas son muy raras."
-        ),
-        "msg_cosyvoice_installing": "[*] Instalando CosyVoice 2.0 (~500 MB pip + modelo de 1,7 GB al primer Iniciar)...",
-        "hint_cosyvoice": "Modelo: CosyVoice2-0.5B (Instruct) — IT vía cross-lingual con prefijo <|it|>",
         "label_log_panel": "Registro:",
         "btn_log_show": "▼ Mostrar registro",
         "btn_log_hide": "▲ Ocultar registro",
@@ -2861,18 +2572,6 @@ UI_STRINGS = {
             "\n"
             "Faller tillbaka på MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Pro röstkloning (CosyVoice — endast Linux, högre kvalitet än XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 inte installerad.\n"
-            "\n"
-            "Installera automatiskt?\n"
-            "  - Python-paket: ~500 MB\n"
-            "  - Modell (vid första Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice har en hallucinationsfrekvens <2 % (mot XTTS 5-15 %) på långt innehåll, så avvikande ljudutdata är mycket sällsynt."
-        ),
-        "msg_cosyvoice_installing": "[*] Installerar CosyVoice 2.0 (~500 MB pip + 1,7 GB modell vid första Start)...",
-        "hint_cosyvoice": "Modell: CosyVoice2-0.5B (Instruct) — IT via cross-lingual med prefix <|it|>",
         "label_log_panel": "Logg:",
         "btn_log_show": "▼ Visa logg",
         "btn_log_hide": "▲ Dölj logg",
@@ -2972,18 +2671,6 @@ UI_STRINGS = {
             "\n"
             "MarianMT/Google'a geri dönülecek."
         ),
-        "opt_cosyvoice": "🎤 Pro ses klonlama (CosyVoice — yalnızca Linux, XTTS'ten daha yüksek kalite, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 kurulu değil.\n"
-            "\n"
-            "Otomatik olarak kur?\n"
-            "  - Python paketi: ~500 MB\n"
-            "  - Model (ilk Başlat'ta): ~1,7 GB\n"
-            "\n"
-            "CosyVoice'un halüsinasyon oranı <%2'dir (XTTS %5-15'e karşı) uzun içerikte, bu nedenle aykırı ses çıktıları çok nadirdir."
-        ),
-        "msg_cosyvoice_installing": "[*] CosyVoice 2.0 kuruluyor (~500 MB pip + ilk Başlat'ta 1,7 GB model)...",
-        "hint_cosyvoice": "Model: CosyVoice2-0.5B (Instruct) — IT, <|it|> önekiyle cross-lingual üzerinden",
         "label_log_panel": "Günlük:",
         "btn_log_show": "▼ Günlüğü göster",
         "btn_log_hide": "▲ Günlüğü gizle",
@@ -3083,18 +2770,6 @@ UI_STRINGS = {
             "\n"
             "Буде використано MarianMT/Google як резервний варіант."
         ),
-        "opt_cosyvoice": "🎤 Pro клонування голосу (CosyVoice — лише Linux, вища якість ніж XTTS, ~1,7 ГБ)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 не встановлено.\n"
-            "\n"
-            "Встановити автоматично?\n"
-            "  - Пакет Python: ~500 МБ\n"
-            "  - Модель (при першому Старті): ~1,7 ГБ\n"
-            "\n"
-            "Рівень галюцинацій CosyVoice <2 % (проти XTTS 5-15 %) на довгому контенті, тому аномальні аудіовиходи дуже рідкі."
-        ),
-        "msg_cosyvoice_installing": "[*] Встановлення CosyVoice 2.0 (~500 МБ pip + 1,7 ГБ модель при першому Старті)...",
-        "hint_cosyvoice": "Модель: CosyVoice2-0.5B (Instruct) — IT через cross-lingual з префіксом <|it|>",
         "label_log_panel": "Журнал:",
         "btn_log_show": "▼ Показати журнал",
         "btn_log_hide": "▲ Сховати журнал",
@@ -3194,18 +2869,6 @@ UI_STRINGS = {
             "\n"
             "Sẽ chuyển sang MarianMT/Google."
         ),
-        "opt_cosyvoice": "🎤 Nhân bản giọng Pro (CosyVoice — chỉ Linux, chất lượng cao hơn XTTS, ~1,7 GB)",
-        "msg_cosyvoice_unavailable": (
-            "CosyVoice 2.0 chưa được cài đặt.\n"
-            "\n"
-            "Cài đặt tự động?\n"
-            "  - Gói Python: ~500 MB\n"
-            "  - Mô hình (lần đầu Start): ~1,7 GB\n"
-            "\n"
-            "CosyVoice có tỷ lệ ảo giác <2% (so với XTTS 5-15%) trên nội dung dài, vì vậy đầu ra âm thanh bất thường rất hiếm."
-        ),
-        "msg_cosyvoice_installing": "[*] Đang cài CosyVoice 2.0 (~500 MB pip + 1,7 GB mô hình ở lần đầu Start)...",
-        "hint_cosyvoice": "Mô hình: CosyVoice2-0.5B (Instruct) — IT qua cross-lingual với tiền tố <|it|>",
         "label_log_panel": "Nhật ký:",
         "btn_log_show": "▼ Hiển thị nhật ký",
         "btn_log_hide": "▲ Ẩn nhật ký",
@@ -4274,9 +3937,8 @@ from videotranslator.tts_reference import (  # noqa: E402
 from videotranslator.xtts_engine import generate_tts_xtts  # noqa: E402
 
 
-from videotranslator.cosyvoice_engine import generate_tts_cosyvoice  # noqa: E402
-# v2.5.2: seed list for multi-attempt XTTS/CosyVoice retry.
-# Seeds empirici diversi spingono il decoder GPT2 di XTTS/CosyVoice a path
+# v2.5.2: seed list for multi-attempt XTTS retry.
+# Seeds empirici diversi spingono il decoder GPT2 di XTTS a path
 # differenti, riducendo la probabilità che lo stesso testo cada nello stesso
 # loop deterministico di un seed fisso (era 42 in v2.2-2.5.1).
 # L'ultimo seed (42) è mantenuto per retrocompat con i log della v2.2-2.5.1
@@ -4766,7 +4428,6 @@ def _build_pipeline_runtime() -> _PipelineRuntime:
         resolve_difficulty_profile=_resolve_difficulty_profile,
         format_profile_log=_format_profile_log,
         translate_segments=translate_segments,
-        generate_tts_cosyvoice=generate_tts_cosyvoice,
         generate_tts_xtts=generate_tts_xtts,
         generate_tts=generate_tts,
         build_dubbed_track=build_dubbed_track,
@@ -5250,9 +4911,6 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
-        # v2.3: CosyVoice 2.0 come terzo TTS engine. Mutuamente esclusivo con
-        # XTTS — gestito via callback `_on_voice_clone_toggle` sotto.
-        self._use_cosyvoice = tk.BooleanVar(value=False)
         self._use_lipsync = tk.BooleanVar(value=False)
         # Translation engine: "google" | "deepl" | "marian" | "llm_ollama"
         self._translation_engine = tk.StringVar(value="google")
@@ -5931,42 +5589,12 @@ class App(tk.Tk):
         # con XTTS che occupava col 0+1: questo rendeva lipsync invisibile
         # quando il riquadro Ollama (row=6, col 0+1 columnspan=2) si dilatava
         # con il toggle thinking, perché col=2 finiva fuori dall'area visibile.
-        # La selezione del checkbox XTTS resetta CosyVoice (mutuamente esclusivi).
-        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts, self._on_xtts_toggle)
+        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
         self._chk_xtts.grid(row=2, column=0, sticky="w", pady=(8, 0))
         self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
         self._chk_lipsync.grid(row=2, column=1, sticky="w", padx=16, pady=(8, 0))
-        # v2.3: nuovo checkbox CosyVoice in row dedicata sotto XTTS+Lipsync.
-        # Mutual exclusion con XTTS gestita via _on_cosyvoice_toggle. Le row
-        # successive del frame `opts` (translation engine, deepl, hf token,
-        # diarization) sono indicizzate da row=3 in giù: usiamo row=2 con un
-        # pady incrementato che lo stacking visualmente subito sotto _chk_xtts.
-        # Tk gestisce row duplicate concatenandole nello stesso slot logico
-        # ma manteniamo lo sticky="w" per non collidere con le colonne 1-2.
-        self._chk_cosyvoice = cb(opts, "opt_cosyvoice", self._use_cosyvoice, self._on_cosyvoice_toggle)
-        # Riga dedicata fra XTTS (row=2) e translation engine (row=3): scegliamo
-        # un indice intermedio. Tk consente float-equivalenti via gestione
-        # sequenziale solo con interi, quindi shift sotto: spostiamo la
-        # translation engine row a row=4 e successive.
-        self._chk_cosyvoice.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 4))
-        # TASK 4C (2026-04-29) — Linux-only re-enablement.
-        # CosyVoice è disponibile come opt-in solo su Linux. Il blocker storico
-        # (`WeTextProcessing` C++ build hell) è risolto upstream da 2026-04: il
-        # pacchetto PyPI `cosyvoice` ora usa `wetext` (pure-Python) come default.
-        # Su Windows persistono blocker non risolvibili lato nostro:
-        #   - `pynini` richiede MSVC + autotools → no wheel pre-built
-        #   - `tensorrt-cu12` build fallisce fuori da conda
-        #   - install ufficiale FunAudioLLM è conda-only su Linux/macOS
-        # Su macOS il path è untested → checkbox nascosto finché non c'è segnale
-        # CI o feedback utente. La policy è centralizzata in
-        # `videotranslator.platforms.cosyvoice_supported()` per avere una
-        # sola fonte di verità (GUI + CLI + futuri entrypoint headless).
-        from videotranslator.platforms import cosyvoice_supported as _cosy_supported
-        if not _cosy_supported(sys.platform):
-            self._chk_cosyvoice.grid_remove()
 
-        # Translation engine radio group (row=4 dopo l'inserimento di
-        # _chk_cosyvoice in row=3, v2.3).
+        # Translation engine radio group.
         engine_row = tk.Frame(opts, bg=BG)
         engine_row.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
         self._lbl_engine = tk.Label(engine_row, text=self._s("label_engine"),
@@ -6285,7 +5913,6 @@ class App(tk.Tk):
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
-        self._chk_cosyvoice.configure(text=self._s("opt_cosyvoice"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_engine.configure(text=self._s("label_engine"))
         self._rb_eng_google.configure(text=self._s("engine_google"))
@@ -6377,112 +6004,6 @@ class App(tk.Tk):
             self._check_marian_deps()
 
     # ── TTS engine mutual exclusion (v2.3) ────────────────────────────────
-    #
-    # XTTS e CosyVoice sono due engine di voice cloning alternativi: non ha
-    # senso averli entrambi attivi (vincerebbe comunque la dispatch in
-    # `translate_video` che controlla `tts_engine` calcolato in
-    # `_snapshot_params`). Per evitare confusione UI, on toggle di uno
-    # deselezioniamo l'altro. Stessa logica che `_on_subs_only` applica a
-    # subs_only/no_subs.
-
-    def _on_xtts_toggle(self):
-        if self._use_xtts.get() and self._use_cosyvoice.get():
-            self._use_cosyvoice.set(False)
-
-    def _on_cosyvoice_toggle(self):
-        """User ha cliccato su CosyVoice: deseleziona XTTS e gestisce
-        installazione/info modello in modo onesto.
-
-        Stato attuale (TASK 4C, 2026-04-29): su Linux il pacchetto PyPI
-        ``cosyvoice`` è di nuovo installabile (default text-frontend
-        cambiato da WeTextProcessing → wetext, pure-Python). Offriamo
-        auto-install opt-in. Su Windows/macOS il checkbox è normalmente
-        nascosto via ``cosyvoice_supported()`` — se per qualche motivo è
-        comunque visibile (gating bypassato), mantieniamo il fallback
-        informativo che esiste storicamente per non promettere ciò che non
-        possiamo mantenere.
-        """
-        if not self._use_cosyvoice.get():
-            return  # toggle off → niente da fare
-        # Mutual exclusion con XTTS
-        if self._use_xtts.get():
-            self._use_xtts.set(False)
-
-        from videotranslator.platforms import cosyvoice_supported as _cosy_supported
-        from videotranslator.cosyvoice_runtime import (
-            cosyvoice_cache_dir as _cosyvoice_cache_dir,
-            cosyvoice_install as _cosyvoice_install,
-            cosyvoice_is_installed as _cosyvoice_is_installed,
-            cosyvoice_model_present as _cosyvoice_model_present,
-        )
-        platform_ok = _cosy_supported(sys.platform)
-
-        # Già installato? Mostra solo info modello (download on-demand al run)
-        if _cosyvoice_is_installed():
-            cache = _cosyvoice_cache_dir()
-            if _cosyvoice_model_present(cache):
-                self._log_write(f"[+] CosyVoice ready ({cache})\n")
-            else:
-                self._log_write(
-                    f"[i] CosyVoice installato; modello (~1.7 GB) verrà "
-                    f"scaricato al primo Avvia.\n"
-                )
-            return
-
-        # Non installato + piattaforma non supportata: messaggio informativo,
-        # auto-deselezione. Usiamo lo stesso testo i18n già presente.
-        if not platform_ok:
-            messagebox.showinfo(
-                "CosyVoice — Linux only",
-                "CosyVoice è disponibile solo su Linux per ora.\n\n"
-                "Su Windows il setup richiede MSVC + tensorrt + conda\n"
-                "e il path ufficiale upstream non è ancora stabile.\n\n"
-                "La pipeline userà XTTS v2 (raccomandato cross-platform)."
-            )
-            self._log_write(
-                "[i] CosyVoice non supportato su questa piattaforma. "
-                "Userò XTTS per questa sessione.\n"
-            )
-            self._use_cosyvoice.set(False)
-            return
-
-        # Linux + non installato: offri install opt-in. Stesso pattern di
-        # Ollama: popup yes/no, install in background thread, log streaming.
-        ans = messagebox.askyesno(
-            "CosyVoice 2.0 — Installazione",
-            "CosyVoice non è ancora installato.\n\n"
-            "Installazione automatica (~500 MB pip + ~1.7 GB modello al "
-            "primo Avvia, scaricato on-demand)?\n\n"
-            "L'install gira in background, la GUI resta utilizzabile.\n"
-            "Durante l'install il checkbox resta selezionato; se fallisce "
-            "verrà deselezionato con un messaggio chiaro nel log."
-        )
-        if not ans:
-            self._log_write(
-                "[i] CosyVoice install rifiutata. Userò XTTS per questa sessione.\n"
-            )
-            self._use_cosyvoice.set(False)
-            return
-
-        # Background install. Tk operations from worker thread sono
-        # delegate al main loop via self.after().
-        self._log_write("[*] CosyVoice install in background...\n")
-
-        def _do_install():
-            try:
-                ok, msg = _cosyvoice_install(
-                    log_cb=lambda s: self.after(0, self._log_write, s)
-                )
-            except Exception as e:  # pragma: no cover — defensive
-                ok, msg = False, f"unexpected error: {e}"
-            if ok:
-                self.after(0, self._log_write, "[+] CosyVoice installato. Modello sarà scaricato al primo Avvia.\n")
-            else:
-                self.after(0, self._log_write, f"[!] CosyVoice install fallita: {msg}. Userò XTTS.\n")
-                self.after(0, self._use_cosyvoice.set, False)
-
-        threading.Thread(target=_do_install, daemon=True).start()
-
     # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
     #
     # Flusso (tutto off-thread, UI sempre responsive):
@@ -6958,12 +6479,7 @@ class App(tk.Tk):
             "no_subs":    self._no_subs.get(),
             "no_demucs":  self._no_demucs.get(),
             "output":     self._output_var.get().strip(),
-            # v2.3: precedenza cosyvoice > xtts > edge (i due voice-cloning
-            # sono mutually exclusive a livello UI, ma se per qualche motivo
-            # entrambi sono True qui scegliamo cosyvoice — engine "migliore"
-            # per voice cloning secondo il rationale di v2.3).
-            "tts_engine":  ("cosyvoice" if self._use_cosyvoice.get()
-                            else ("xtts" if self._use_xtts.get() else "edge")),
+            "tts_engine":  ("xtts" if self._use_xtts.get() else "edge"),
             "translation_engine": self._translation_engine.get(),
             "deepl_key":          self._deepl_key_var.get().strip(),
             "use_diarization":    self._use_diarization.get(),
@@ -7405,14 +6921,9 @@ def _cli():
                              "correct the translation if needed (~+30%% Ollama "
                              "calls on dense talks, ~+5%% on light content). "
                              "Use this flag on slow CPUs or for A/B testing.")
-    # v2.3: TTS engine choice via CLI. Mutuamente esclusivi a livello GUI
-    # (radio button), qui sono flag indipendenti — l'ultimo specificato vince.
+    # TTS engine choice via CLI.
     parser.add_argument("--xtts", action="store_true",
                         help="Use Coqui XTTS v2 voice cloning (~1.8GB first run)")
-    parser.add_argument("--cosyvoice", action="store_true",
-                        help="Use CosyVoice 2.0 voice cloning — qualità "
-                             "superiore, hallucination rate <2%% vs XTTS 5-15%% "
-                             "(~500MB pkg + ~1.7GB model first run)")
     parser.add_argument(
         "--hotwords", type=str, default=None,
         help="Comma-separated hotwords to bias Whisper decoding "
@@ -7458,14 +6969,8 @@ def _cli():
             xtts_speed_cli = None
     else:
         xtts_speed_cli = None
-    # v2.3: scelta TTS engine. Precedenza: --cosyvoice > --xtts > edge default.
-    # Equivale alla logica del radio in GUI (mutuamente esclusivi).
-    if args.cosyvoice:
-        tts_engine_cli = "cosyvoice"
-    elif args.xtts:
-        tts_engine_cli = "xtts"
-    else:
-        tts_engine_cli = "edge"
+    # Scelta TTS engine: --xtts oppure default Edge-TTS.
+    tts_engine_cli = "xtts" if args.xtts else "edge"
 
     # Hotwords: merge --hotwords (string) and --hotwords-file (JSON). CLI
     # string takes precedence on duplicates (passed first to merge_hotwords,

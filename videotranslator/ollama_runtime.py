@@ -779,39 +779,3 @@ def _ollama_pull_model(
     return True, ""
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CosyVoice 2.0 helpers (v2.3) — additive engine alongside Coqui XTTS v2.
-#
-# Scelta di design: il PyPI ufficiale `cosyvoice` (Lucas Jin, community wrapper)
-# è l'unico path pip-installabile oggi. Wrappa CosyVoice-300M-Instruct (1.x)
-# e scarica i pesi via ModelScope al primo uso. CosyVoice 2.0 ufficiale
-# (FunAudioLLM) richiede tuttora git clone + conda + WeTextProcessing — non
-# fattibile per un installer mainstream. Quando uscirà la 2.x su PyPI, basta
-# aggiornare _COSYVOICE_PIP_PKG e _cosyvoice_load_model più sotto.
-#
-# Per rilevare hallucination (problema strutturale di XTTS che ha motivato il
-# v2.3) riusiamo lo stesso schema retry di v2.2: misura durata effettiva,
-# confronto col predicted, retry una volta. CosyVoice ha tasso di drift molto
-# più basso (~2% vs 5-15% di XTTS su long-form), ma il safety net resta.
-# ─────────────────────────────────────────────────────────────────────────────
-
-from videotranslator.cosyvoice_runtime import (  # noqa: E402
-    cosyvoice_cache_dir as _cosyvoice_cache_dir,
-    cosyvoice_download_model as _cosyvoice_download_model,
-    cosyvoice_is_installed as _cosyvoice_is_installed,
-    cosyvoice_model_present as _cosyvoice_model_present,
-)
-from videotranslator.cosyvoice_runtime import cosyvoice_install as _cosyvoice_install_impl  # noqa: E402
-
-
-def _cosyvoice_install(log_cb=None, timeout_s: int = 1800) -> tuple[bool, str]:
-    return _cosyvoice_install_impl(
-        log_cb=log_cb,
-        timeout_s=timeout_s,
-        register_subprocess=_register_subprocess,
-        unregister_subprocess=_unregister_subprocess,
-        popen=subprocess.Popen,
-        timer_factory=threading.Timer,
-    )
-
-

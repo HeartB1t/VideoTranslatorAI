@@ -1,8 +1,8 @@
 """TTS audio utility helpers.
 
-These helpers are shared by XTTS/CosyVoice generation and final track
-assembly. Keeping them outside the GUI makes the audio policy testable
-without loading Tk, Whisper or the TTS engines.
+These helpers are shared by XTTS generation and final track assembly.
+Keeping them outside the GUI makes the audio policy testable without
+loading Tk, Whisper or the TTS engines.
 """
 
 from __future__ import annotations
