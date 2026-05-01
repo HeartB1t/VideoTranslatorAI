@@ -6409,6 +6409,12 @@ class App(tk.Tk):
             self._use_xtts.set(False)
 
         from videotranslator.platforms import cosyvoice_supported as _cosy_supported
+        from videotranslator.cosyvoice_runtime import (
+            cosyvoice_cache_dir as _cosyvoice_cache_dir,
+            cosyvoice_install as _cosyvoice_install,
+            cosyvoice_is_installed as _cosyvoice_is_installed,
+            cosyvoice_model_present as _cosyvoice_model_present,
+        )
         platform_ok = _cosy_supported(sys.platform)
 
         # Già installato? Mostra solo info modello (download on-demand al run)
