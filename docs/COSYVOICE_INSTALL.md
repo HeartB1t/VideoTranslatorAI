@@ -11,9 +11,9 @@ This document describes the two install paths.
 
 If your system Python is **3.10 or 3.11**, the in-app auto-install may
 work — try the GUI checkbox first. If your system Python is **3.12 or
-newer** (Kali / Debian testing / Arch / Ubuntu 24.04 +) the GUI will
-fail-fast with an explanatory log message and you need to follow Path B
-below to actually try CosyVoice.
+newer** (Debian testing / Ubuntu 24.04 + / Arch / Fedora and similar)
+the GUI will fail-fast with an explanatory log message and you need to
+follow Path B below to actually try CosyVoice.
 
 The pipeline always falls back to **XTTS v2** when CosyVoice is not
 installed, so following this guide is optional — XTTS already produces

@@ -92,7 +92,7 @@ class SanitizeForTtsTests(unittest.TestCase):
 
     def test_clock_time_preserved(self):
         # 10:30 must stay so XTTS reads "ten thirty" / "dieci e trenta".
-        # Regression spotted by Codex review: blanket colon->comma broke clocks.
+        # Regression: blanket colon->comma broke clocks.
         self.assertEqual(
             sanitize_for_tts("L'incontro è alle 10:30 in punto."),
             "L'incontro è alle 10:30 in punto.",

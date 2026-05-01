@@ -38,3 +38,6 @@ CLAUDE.md
 # script dev, backup .bak. Sono tutti dentro `_dev/` che è gitignored.
 # Vedi `_dev/memory/MEMORY.md` per l'indice della memoria.
 _dev/
+
+# Claude Code local session state (notes, settings, scheduled tasks)
+.claude/
