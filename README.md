@@ -219,7 +219,7 @@ python video_translator_gui.py video.mp4 --lang-target en
 | `--lang-source` | Source language (`auto` for auto-detect) | `auto` |
 | `--lang-target` | Target language code (e.g. `it`, `fr`, `de`) | `it` |
 | `--voice` | Edge-TTS voice name | auto |
-| `--model` | Whisper model (`tiny` → `large-v3`) | `small` |
+| `--model` | Whisper model (`tiny` → `large-v3-turbo`) | `small` |
 | `--tts-rate` | TTS speed adjustment (e.g. `+10%`, `-20%`) | `+0%` |
 | `--translation-engine` | `google`, `marian`, or `deepl` | `google` |
 | `--deepl-key` | DeepL Free API key | — |
@@ -258,6 +258,9 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 | small | 465 MB | ⚡⚡ | ★★★☆ |
 | medium | 1.5 GB | ⚡ | ★★★★ |
 | large-v2/v3 | 3 GB | 🐢 | ★★★★★ |
+| large-v3-turbo | 1.6 GB | ⚡⚡ | ★★★★½ |
+
+> `large-v3-turbo` is a distilled version of `large-v3` (4 decoder layers vs 32) — near-large quality at roughly `medium`-tier speed. Recommended default on a modern GPU when transcription speed matters; quality drop on multilingual material is minor.
 
 > Models are downloaded automatically on first use.
 

@@ -88,7 +88,17 @@ XTTS_LANGS = {
     "nl": "nl", "pl": "pl", "pt": "pt", "ru": "ru", "tr": "tr",
 }
 
-WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
+WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3", "large-v3-turbo"]
+
+
+def _pick_default_whisper_model() -> str:
+    # large-v3-turbo (~1.6GB) ha qualità comparabile a large-v3 ma è ~6-8x più
+    # veloce su GPU CUDA. Su CPU il modello è troppo pesante: fallback a small.
+    import shutil as _sh
+    return "large-v3-turbo" if _sh.which("nvidia-smi") else "small"
+
+
+DEFAULT_WHISPER_MODEL = _pick_default_whisper_model()
 DEFAULT_LANG = "it"
 
 # Expansion ratio rispetto all'inglese (≈1.0). Valori >1 = la lingua usa più
@@ -303,7 +313,7 @@ UI_STRINGS = {
         "label_voice":        "Voce:",
         "label_tts_rate":     "Velocità TTS:",
         "label_options":      "Opzioni:",
-        "label_model_hint":   "← veloce / preciso →",
+        "label_model_hint":   "← veloce / preciso → (turbo: qualità large-v3, ~6-8× più veloce su GPU)",
         "label_ui_lang":      "🌐 Lingua UI:",
         "btn_add":            "+ Aggiungi",
         "btn_remove":         "- Rimuovi",
@@ -406,7 +416,7 @@ UI_STRINGS = {
         "label_voice":        "Voice:",
         "label_tts_rate":     "TTS Speed:",
         "label_options":      "Options:",
-        "label_model_hint":   "← fast / accurate →",
+        "label_model_hint":   "← fast / accurate → (turbo: large-v3 quality, ~6-8× faster on GPU)",
         "label_ui_lang":      "🌐 UI Language:",
         "btn_add":            "+ Add",
         "btn_remove":         "- Remove",
@@ -509,7 +519,7 @@ UI_STRINGS = {
         "label_voice": "صوت:",
         "label_tts_rate": "سرعة تحويل النص إلى كلام:",
         "label_options": "خيارات:",
-        "label_model_hint": "← سريع / دقيق →",
+        "label_model_hint": "← سريع / دقيق → (turbo: جودة large-v3، أسرع بـ 6-8× على GPU)",
         "label_ui_lang": "لغة واجهة المستخدم:",
         "btn_add": "+ أضف",
         "btn_remove": "- يزيل",
@@ -608,7 +618,7 @@ UI_STRINGS = {
         "label_voice": "嗓音：",
         "label_tts_rate": "TTS 速度：",
         "label_options": "选项：",
-        "label_model_hint": "← 快速/准确 →",
+        "label_model_hint": "← 快速/准确 → (turbo：large-v3 质量，GPU 上快约 6-8 倍)",
         "label_ui_lang": "用户界面语言：",
         "btn_add": "+ 添加",
         "btn_remove": "- 消除",
@@ -707,7 +717,7 @@ UI_STRINGS = {
         "label_voice": "Hlas:",
         "label_tts_rate": "Rychlost TTS:",
         "label_options": "Možnosti:",
-        "label_model_hint": "← rychlé / přesné →",
+        "label_model_hint": "← rychlé / přesné → (turbo: kvalita large-v3, ~6-8× rychlejší na GPU)",
         "label_ui_lang": "Jazyk uživatelského rozhraní:",
         "btn_add": "+ Přidat",
         "btn_remove": "- Odstraňte",
@@ -806,7 +816,7 @@ UI_STRINGS = {
         "label_voice": "Stemme:",
         "label_tts_rate": "TTS hastighed:",
         "label_options": "Valgmuligheder:",
-        "label_model_hint": "← hurtig / præcis →",
+        "label_model_hint": "← hurtig / præcis → (turbo: large-v3 kvalitet, ~6-8× hurtigere på GPU)",
         "label_ui_lang": "UI sprog:",
         "btn_add": "+ Tilføj",
         "btn_remove": "- Fjern",
@@ -905,7 +915,7 @@ UI_STRINGS = {
         "label_voice": "Stem:",
         "label_tts_rate": "TTS-snelheid:",
         "label_options": "Opties:",
-        "label_model_hint": "← snel / nauwkeurig →",
+        "label_model_hint": "← snel / nauwkeurig → (turbo: large-v3 kwaliteit, ~6-8× sneller op GPU)",
         "label_ui_lang": "UI-taal:",
         "btn_add": "+ Toevoegen",
         "btn_remove": "- Verwijderen",
@@ -1004,7 +1014,7 @@ UI_STRINGS = {
         "label_voice": "Ääni:",
         "label_tts_rate": "TTS nopeus:",
         "label_options": "Vaihtoehdot:",
-        "label_model_hint": "← nopea / tarkka →",
+        "label_model_hint": "← nopea / tarkka → (turbo: large-v3 -laatu, ~6-8× nopeampi GPU:lla)",
         "label_ui_lang": "Käyttöliittymän kieli:",
         "btn_add": "+ Lisää",
         "btn_remove": "- Poista",
@@ -1103,7 +1113,7 @@ UI_STRINGS = {
         "label_voice": "Voix:",
         "label_tts_rate": "Vitesse TTS :",
         "label_options": "Possibilités :",
-        "label_model_hint": "← rapide / précis →",
+        "label_model_hint": "← rapide / précis → (turbo : qualité large-v3, ~6-8× plus rapide sur GPU)",
         "label_ui_lang": "Langue de l'interface utilisateur :",
         "btn_add": "+ Ajouter",
         "btn_remove": "- Retirer",
@@ -1202,7 +1212,7 @@ UI_STRINGS = {
         "label_voice": "Stimme:",
         "label_tts_rate": "TTS-Geschwindigkeit:",
         "label_options": "Optionen:",
-        "label_model_hint": "← schnell / genau →",
+        "label_model_hint": "← schnell / genau → (turbo: large-v3-Qualität, ~6-8× schneller auf GPU)",
         "label_ui_lang": "UI-Sprache:",
         "btn_add": "+ Hinzufügen",
         "btn_remove": "- Entfernen",
@@ -1301,7 +1311,7 @@ UI_STRINGS = {
         "label_voice": "Φωνή:",
         "label_tts_rate": "Ταχύτητα TTS:",
         "label_options": "Επιλογές:",
-        "label_model_hint": "← γρήγορο / ακριβές →",
+        "label_model_hint": "← γρήγορο / ακριβές → (turbo: ποιότητα large-v3, ~6-8× ταχύτερο σε GPU)",
         "label_ui_lang": "Γλώσσα διεπαφής χρήστη:",
         "btn_add": "+ Προσθήκη",
         "btn_remove": "- Αφαιρέστε",
@@ -1400,7 +1410,7 @@ UI_STRINGS = {
         "label_voice": "आवाज़:",
         "label_tts_rate": "टीटीएस स्पीड:",
         "label_options": "विकल्प:",
-        "label_model_hint": "← तेज़/सटीक →",
+        "label_model_hint": "← तेज़/सटीक → (turbo: large-v3 गुणवत्ता, GPU पर ~6-8× तेज़)",
         "label_ui_lang": "यूआई भाषा:",
         "btn_add": "+ जोड़ें",
         "btn_remove": "- निकालना",
@@ -1499,7 +1509,7 @@ UI_STRINGS = {
         "label_voice": "Hang:",
         "label_tts_rate": "TTS sebesség:",
         "label_options": "Opciók:",
-        "label_model_hint": "← gyors / pontos →",
+        "label_model_hint": "← gyors / pontos → (turbo: large-v3 minőség, ~6-8× gyorsabb GPU-n)",
         "label_ui_lang": "UI nyelv:",
         "btn_add": "+ Hozzáadás",
         "btn_remove": "- Távolítsa el",
@@ -1598,7 +1608,7 @@ UI_STRINGS = {
         "label_voice": "Suara:",
         "label_tts_rate": "Kecepatan TTS:",
         "label_options": "Pilihan:",
-        "label_model_hint": "← cepat / akurat →",
+        "label_model_hint": "← cepat / akurat → (turbo: kualitas large-v3, ~6-8× lebih cepat di GPU)",
         "label_ui_lang": "Bahasa UI:",
         "btn_add": "+ Tambahkan",
         "btn_remove": "- Menghapus",
@@ -1697,7 +1707,7 @@ UI_STRINGS = {
         "label_voice": "声：",
         "label_tts_rate": "TTS速度:",
         "label_options": "オプション:",
-        "label_model_hint": "← 速い / 正確 →",
+        "label_model_hint": "← 速い / 正確 → (turbo: large-v3 品質、GPUで約6-8倍高速)",
         "label_ui_lang": "UI言語:",
         "btn_add": "+追加",
         "btn_remove": "- 取り除く",
@@ -1796,7 +1806,7 @@ UI_STRINGS = {
         "label_voice": "목소리:",
         "label_tts_rate": "TTS 속도:",
         "label_options": "옵션:",
-        "label_model_hint": "← 빠르다 / 정확하다 →",
+        "label_model_hint": "← 빠르다 / 정확하다 → (turbo: large-v3 품질, GPU에서 ~6-8배 빠름)",
         "label_ui_lang": "UI 언어:",
         "btn_add": "+ 추가",
         "btn_remove": "- 제거하다",
@@ -1895,7 +1905,7 @@ UI_STRINGS = {
         "label_voice": "Stemme:",
         "label_tts_rate": "TTS hastighet:",
         "label_options": "Alternativer:",
-        "label_model_hint": "← rask / nøyaktig →",
+        "label_model_hint": "← rask / nøyaktig → (turbo: large-v3 kvalitet, ~6-8× raskere på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Legg til",
         "btn_remove": "- Fjern",
@@ -1994,7 +2004,7 @@ UI_STRINGS = {
         "label_voice": "Głos:",
         "label_tts_rate": "Prędkość TTS:",
         "label_options": "Opcje:",
-        "label_model_hint": "← szybki / dokładny →",
+        "label_model_hint": "← szybki / dokładny → (turbo: jakość large-v3, ~6-8× szybsze na GPU)",
         "label_ui_lang": "Język interfejsu:",
         "btn_add": "+ Dodaj",
         "btn_remove": "- Usunąć",
@@ -2093,7 +2103,7 @@ UI_STRINGS = {
         "label_voice": "Voz:",
         "label_tts_rate": "Velocidade TTS:",
         "label_options": "Opções:",
-        "label_model_hint": "← rápido / preciso →",
+        "label_model_hint": "← rápido / preciso → (turbo: qualidade large-v3, ~6-8× mais rápido na GPU)",
         "label_ui_lang": "Idioma da interface do usuário:",
         "btn_add": "+ Adicionar",
         "btn_remove": "- Remover",
@@ -2192,7 +2202,7 @@ UI_STRINGS = {
         "label_voice": "Voce:",
         "label_tts_rate": "Viteza TTS:",
         "label_options": "Opțiuni:",
-        "label_model_hint": "← rapid / precis →",
+        "label_model_hint": "← rapid / precis → (turbo: calitate large-v3, ~6-8× mai rapid pe GPU)",
         "label_ui_lang": "Limba UI:",
         "btn_add": "+ Adăugați",
         "btn_remove": "- Îndepărtează",
@@ -2291,7 +2301,7 @@ UI_STRINGS = {
         "label_voice": "Голос:",
         "label_tts_rate": "Скорость ТТС:",
         "label_options": "Параметры:",
-        "label_model_hint": "← быстро / точно →",
+        "label_model_hint": "← быстро / точно → (turbo: качество large-v3, ~6-8× быстрее на GPU)",
         "label_ui_lang": "Язык пользовательского интерфейса:",
         "btn_add": "+ Добавить",
         "btn_remove": "- Удалять",
@@ -2390,7 +2400,7 @@ UI_STRINGS = {
         "label_voice": "Voz:",
         "label_tts_rate": "Velocidad TTS:",
         "label_options": "Opciones:",
-        "label_model_hint": "← rápido / preciso →",
+        "label_model_hint": "← rápido / preciso → (turbo: calidad large-v3, ~6-8× más rápido en GPU)",
         "label_ui_lang": "Idioma de la interfaz de usuario:",
         "btn_add": "+ Agregar",
         "btn_remove": "- Eliminar",
@@ -2489,7 +2499,7 @@ UI_STRINGS = {
         "label_voice": "Röst:",
         "label_tts_rate": "TTS hastighet:",
         "label_options": "Alternativ:",
-        "label_model_hint": "← snabb / exakt →",
+        "label_model_hint": "← snabb / exakt → (turbo: large-v3-kvalitet, ~6-8× snabbare på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Lägg till",
         "btn_remove": "- Ta bort",
@@ -2588,7 +2598,7 @@ UI_STRINGS = {
         "label_voice": "Ses:",
         "label_tts_rate": "TTS Hızı:",
         "label_options": "Seçenekler:",
-        "label_model_hint": "← hızlı / doğru →",
+        "label_model_hint": "← hızlı / doğru → (turbo: large-v3 kalitesi, GPU'da ~6-8× daha hızlı)",
         "label_ui_lang": "Kullanıcı Arayüzü Dili:",
         "btn_add": "+ Ekle",
         "btn_remove": "- Kaldırmak",
@@ -2687,7 +2697,7 @@ UI_STRINGS = {
         "label_voice": "Голос:",
         "label_tts_rate": "Швидкість TTS:",
         "label_options": "Опції:",
-        "label_model_hint": "← швидко / точно →",
+        "label_model_hint": "← швидко / точно → (turbo: якість large-v3, ~6-8× швидше на GPU)",
         "label_ui_lang": "Мова інтерфейсу користувача:",
         "btn_add": "+ Додати",
         "btn_remove": "- Зняти",
@@ -2786,7 +2796,7 @@ UI_STRINGS = {
         "label_voice": "Tiếng nói:",
         "label_tts_rate": "Tốc độ TTS:",
         "label_options": "Tùy chọn:",
-        "label_model_hint": "← nhanh / chính xác →",
+        "label_model_hint": "← nhanh / chính xác → (turbo: chất lượng large-v3, ~6-8× nhanh hơn trên GPU)",
         "label_ui_lang": "Ngôn ngữ giao diện người dùng:",
         "btn_add": "+ Thêm",
         "btn_remove": "- Di dời",
@@ -4901,7 +4911,7 @@ class App(tk.Tk):
         self._set_window_icon()
 
         self._ui_lang   = tk.StringVar(value="it")
-        self._model     = tk.StringVar(value="small")
+        self._model     = tk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self._lang_src  = tk.StringVar(value="auto")
         self._lang_tgt  = tk.StringVar(value="it")
         self._voice     = tk.StringVar(value=LANGUAGES["it"]["voices"][0])
@@ -6828,7 +6838,7 @@ def _cli():
     parser = argparse.ArgumentParser(description="Video Translator AI")
     parser.add_argument("input", nargs="?", help="Input video")
     parser.add_argument("-o", "--output", help="Output file")
-    parser.add_argument("--model", default="small", choices=WHISPER_MODELS)
+    parser.add_argument("--model", default=DEFAULT_WHISPER_MODEL, choices=WHISPER_MODELS)
     parser.add_argument("--lang-source", default="auto")
     parser.add_argument("--lang-target", default=DEFAULT_LANG, choices=list(LANGUAGES.keys()))
     parser.add_argument("--voice", default=None)
