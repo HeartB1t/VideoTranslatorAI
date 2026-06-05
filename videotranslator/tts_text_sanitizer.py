@@ -58,6 +58,8 @@ _COMMA_BEFORE_PERIOD = re.compile(r",\s*\.")
 _PERIOD_BEFORE_COMMA = re.compile(r"\.\s*,")
 # Collapse runs of whitespace introduced by replacements into single spaces.
 _MULTI_WS = re.compile(r"[ \t]{2,}")
+# Normalize spaces around prosody punctuation after symbol replacement.
+_SPACE_BEFORE_COMMA_PERIOD = re.compile(r"\s+([,.])")
 
 
 def sanitize_for_tts(text: str) -> str:
@@ -78,6 +80,7 @@ def sanitize_for_tts(text: str) -> str:
     out = _COLLAPSE_DOUBLE_PERIOD.sub(".", out)
     out = _COLLAPSE_DOUBLE_COMMA.sub(",", out)
     out = _MULTI_WS.sub(" ", out)
+    out = _SPACE_BEFORE_COMMA_PERIOD.sub(r"\1", out)
     return out.strip()
 
 

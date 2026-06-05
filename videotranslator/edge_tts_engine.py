@@ -7,6 +7,8 @@ import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from videotranslator.tts_text_sanitizer import sanitize_for_tts
+
 
 LogCallback = Callable[..., None]
 SleepCallback = Callable[[float], Awaitable[Any]]
@@ -73,6 +75,7 @@ async def tts_all(
 
     async def run_one(i: int) -> None:
         text = (segments[i].get("text_tgt") or "").strip()
+        text = sanitize_for_tts(text)
         if not text:
             return
         async with sem:

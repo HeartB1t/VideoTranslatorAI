@@ -31,19 +31,19 @@ class SanitizeForTtsTests(unittest.TestCase):
     def test_em_dash_becomes_comma(self):
         self.assertEqual(
             sanitize_for_tts("parola — altra"),
-            "parola , altra",
+            "parola, altra",
         )
 
     def test_en_dash_becomes_comma(self):
         self.assertEqual(
             sanitize_for_tts("parola – altra"),
-            "parola , altra",
+            "parola, altra",
         )
 
     def test_double_hyphen_becomes_comma(self):
         self.assertEqual(
             sanitize_for_tts("parola -- altra"),
-            "parola , altra",
+            "parola, altra",
         )
 
     def test_unicode_ellipsis_becomes_period(self):

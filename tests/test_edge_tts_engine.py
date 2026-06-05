@@ -97,6 +97,27 @@ class EdgeTtsAllTests(unittest.TestCase):
             self.assertEqual([Path(p).name for p in files], ["seg_0000.mp3", "seg_0001.mp3", "seg_0002.mp3"])
             self.assertEqual(seen, [("uno", "voice", "seg_0000.mp3", "+0%"), ("due", "voice", "seg_0002.mp3", "+0%")])
 
+    def test_tts_all_sanitizes_text_before_edge(self):
+        seen = []
+
+        async def fake_runner(text, voice, out_path, rate="+0%"):
+            seen.append(text)
+            Path(out_path).write_text(text, encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            asyncio.run(
+                tts_all(
+                    [{"text_tgt": "americano: l'ho scritto — davvero..."}],
+                    "voice",
+                    tmp_str,
+                    "+0%",
+                    segment_runner=fake_runner,
+                    log=lambda *args, **kwargs: None,
+                )
+            )
+
+        self.assertEqual(seen, ["americano, l'ho scritto, davvero."])
+
     def test_generate_tts_uses_runner_and_logs(self):
         logs = []
 
