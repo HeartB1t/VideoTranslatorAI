@@ -6,10 +6,10 @@ strip = legacy._ollama_strip_preamble
 
 
 class OllamaStripPreambleThinkTests(unittest.TestCase):
-    """Edge case sui blocchi <think> di Qwen3.
+    """Edge cases for Qwen3 <think> blocks.
 
-    Questi sono i casi che, se mal gestiti, producono `keeping source: empty
-    response` durante la traduzione. La logica vive in
+    These are the cases that, if mishandled, produce `keeping source: empty
+    response` during translation. The logic lives in
     `_ollama_strip_preamble()` step 0/0b.
     """
 
@@ -18,9 +18,9 @@ class OllamaStripPreambleThinkTests(unittest.TestCase):
         self.assertEqual(strip(raw), "Buongiorno a tutti.")
 
     def test_orphan_think_only_returns_empty(self):
-        # qwen3 ha esaurito num_predict dentro <think>, niente </think>,
-        # niente risposta. Deve uscire stringa vuota: il chiamante triggera
-        # il retry con num_predict raddoppiato.
+        # qwen3 exhausted num_predict inside <think>, no </think>,
+        # no response. Must return an empty string: the caller triggers
+        # the retry with num_predict doubled.
         raw = "<think>I need to translate this carefully and"
         self.assertEqual(strip(raw), "")
 
@@ -41,8 +41,9 @@ class OllamaStripPreambleThinkTests(unittest.TestCase):
         self.assertEqual(strip(raw), "Salve.")
 
     def test_orphan_think_then_double_newline_then_translation(self):
-        # Caso di output troncato dove dopo il think orfano c'è comunque la
-        # risposta finale separata da doppio newline (rara ma possibile).
+        # Truncated output where after the orphan think block the final
+        # response is still present, separated by a double newline (rare but
+        # possible).
         raw = "<think>incomplete reasoning\n\nBuonasera a tutti."
         self.assertEqual(strip(raw), "Buonasera a tutti.")
 
@@ -65,8 +66,8 @@ class OllamaStripPreambleThinkTests(unittest.TestCase):
         self.assertEqual(once, twice)
 
     def test_orphan_think_does_not_leak_partial_reasoning(self):
-        # Critico: se l'orphan strip lasciasse qualcosa, XTTS sintetizzerebbe
-        # frammenti di reasoning come audio.
+        # Critical: if the orphan strip left anything behind, XTTS would
+        # synthesise reasoning fragments as audio.
         raw = "<think>The user said hello, I should reply with"
         out = strip(raw)
         self.assertNotIn("<think>", out)

@@ -40,10 +40,10 @@ def build_dubbed_track(
     rubberband_available: bool | None = None,
     log=print,
 ) -> str:
-    """Assembla la traccia doppiata in streaming via numpy memmap.
-    Evita di accumulare AudioSegment in RAM (~600 MB per video 1h+): il mix avviene
-    in-place su un file PCM 16-bit 44.1 kHz stereo che coincide 1:1 con il formato
-    di output storico.
+    """Assemble the dubbed track in streaming mode via numpy memmap.
+    Avoids accumulating AudioSegment objects in RAM (~600 MB for 1h+ videos): the
+    mix happens in-place on a 16-bit 44.1 kHz stereo PCM file, matching the
+    historical output format 1:1.
     """
     import numpy as np
     import soundfile as sf
@@ -54,10 +54,10 @@ def build_dubbed_track(
     total_frames = int(total_duration * SR)
     out = os.path.join(tmp_dir, "track_dubbed.wav")
 
-    # DIAGNOSTIC: traccia per-segment metrics — alimenta sia il diagnostic
-    # aggregato (distribuzione bucket + top 10 worst) sia il dump CSV
-    # opzionale per analisi P90/P95 cross-video. Lista di dict invece di
-    # tuple anonime per evolverla senza rompere consumer esistenti.
+    # DIAGNOSTIC: tracks per-segment metrics — feeds both the aggregate
+    # diagnostic (bucket distribution + top 10 worst) and the optional CSV
+    # dump for cross-video P90/P95 analysis. List of dicts instead of
+    # anonymous tuples so it can evolve without breaking existing consumers.
     _atempo_stats: list[dict] = []
 
     # TASK 2G v2: profile orchestrator. None = default MEDIUM quality policy.
@@ -68,12 +68,12 @@ def build_dubbed_track(
     _rb_min = _profile.rubberband_min
     _rb_max = _profile.rubberband_max
 
-    # Tier strategy per stretch audio (TASK 2C-2, TASK 2G v2):
-    # - ratio <= rb_min → atempo (default, ok per stretch leggeri)
-    # - rb_min < ratio <= rb_max → rubberband CLI se disponibile (no chipmunk)
-    # - ratio > rb_max → atempo (rubberband stesso degrada oltre il band)
-    # Probe del binario UNA volta sola: select_stretch_engine() falla cleanly
-    # ad atempo se il binary manca, quindi nessuna regressione.
+    # Tier strategy for audio stretch (TASK 2C-2, TASK 2G v2):
+    # - ratio <= rb_min → atempo (default, fine for light stretches)
+    # - rb_min < ratio <= rb_max → rubberband CLI when available (no chipmunk)
+    # - ratio > rb_max → atempo (rubberband also degrades beyond the band)
+    # Binary probed ONCE: select_stretch_engine() falls back cleanly to
+    # atempo when the binary is missing, so no regression.
     _rubberband_available = (
         shutil.which("rubberband") is not None
         if rubberband_available is None
@@ -98,11 +98,11 @@ def build_dubbed_track(
     overlap_truncate_count = 0   # capped at slot+max_overlap, fade-out
     last_seg_index = len(segments) - 1
 
-    # Raw PCM int32 in memmap: serve headroom per sommare senza saturare durante
-    # gli overlay, si clampa a int16 alla fine.
+    # Raw PCM int32 in memmap: provides headroom to accumulate overlapping
+    # samples without saturation during overlays; clamped to int16 at the end.
     raw_path = os.path.join(tmp_dir, "_track_mix.raw")
     mix = np.memmap(raw_path, dtype=np.int32, mode="w+", shape=(total_frames, CH))
-    # Azzera esplicitamente (memmap 'w+' lo fa, ma su alcuni FS conviene forzare).
+    # Explicitly zero out (memmap 'w+' does this, but force it on some filesystems).
     mix[:] = 0
 
     for i, (seg, tts_file) in enumerate(zip(segments, tts_files)):
@@ -115,7 +115,7 @@ def build_dubbed_track(
         # (rubberband attempted and failed) for the metrics CSV.
         _seg_engine_used = "none"
 
-        # Se il TTS eccede lo slot (più 50 ms di margine), applica atempo via ffmpeg.
+        # If TTS exceeds the slot (with a 50 ms margin), apply atempo via ffmpeg.
         src_path = tts_file
         tts_ms_probed = 0
         ratio_raw = 1.0
@@ -126,11 +126,11 @@ def build_dubbed_track(
             if tts_ms_probed > slot_ms + 50:
                 ratio = max(1.0, min(ratio_raw, _atempo_cap))
                 sped = os.path.join(tmp_dir, f"seg_{i:04d}_sped.wav")
-                # Dispatch: la policy pura sceglie engine in base al ratio
-                # (ed alla disponibilità del binary rubberband). Outside del
-                # range rb_min-rb_max, oppure quando rubberband manca, ricade
-                # su atempo. Il band viene dal Profile e resta quality-first:
-                # meglio segnalare/troncare un outlier che creare scatti a 4x.
+                # Dispatch: the policy selects the engine based on ratio
+                # (and rubberband binary availability). Outside the rb_min-rb_max
+                # range, or when rubberband is missing, falls back to atempo.
+                # The band comes from the Profile and remains quality-first:
+                # better to flag/truncate an outlier than produce chipmunk at 4x.
                 engine = select_stretch_engine(
                     ratio, _rubberband_available,
                     rb_min=_rb_min, rb_max=_rb_max,
@@ -150,17 +150,17 @@ def build_dubbed_track(
                                 f"rubberband seg {i} failed (exit {proc.returncode}):\n"
                                 + "\n".join(err_tail)
                             )
-                        # Rubber Band conserva il sample rate dell'input;
-                        # read_segment_to_pcm gestisce la conversione a SR/CH
-                        # quando differisce, quindi non serve un ffmpeg extra qui.
+                        # Rubber Band preserves the input sample rate;
+                        # read_segment_to_pcm handles resampling to SR/CH
+                        # when they differ, so no extra ffmpeg step is needed here.
                         rubberband_used += 1
                         src_path = sped
                         stretch_ok = True
                         _seg_engine_used = "rubberband"
                     except Exception as e:
-                        # FALLBACK: nessuna regressione vs comportamento legacy.
-                        # Se rubberband fallisce per qualsiasi motivo, riproviamo
-                        # con atempo come se il binary non esistesse.
+                        # FALLBACK: no regression vs legacy behaviour.
+                        # If rubberband fails for any reason, retry with
+                        # atempo as if the binary were absent.
                         print(f"     ! rubberband failed seg {i}: {e}; retrying with atempo", flush=True)
                         engine = "atempo"
 
@@ -181,10 +181,10 @@ def build_dubbed_track(
                         )
                     except Exception as e:
                         print(f"     ! atempo failed seg {i}: {e}", flush=True)
-                # Se entrambi gli engine sono falliti, src_path resta tts_file
-                # (audio non compresso); il successivo hard-truncate con fade-out
-                # gestirà l'overshoot. Comportamento storico.
-                _ = stretch_ok  # lint: variabile usata solo per leggibilità del flow
+                # If both engines failed, src_path stays as tts_file
+                # (uncompressed audio); the subsequent hard-truncate with fade-out
+                # will handle the overshoot. Historical fallback behaviour.
+                _ = stretch_ok  # lint: variable used only for flow readability
 
         pcm = read_segment_to_pcm(
             src_path,
@@ -245,7 +245,7 @@ def build_dubbed_track(
             # fade longer than their content (audible as a click).
             pcm = apply_tail_fade(pcm, fade_len)
 
-        # Diagnostic: registra sempre (anche i segmenti "fit", ratio <=1.0).
+        # Diagnostic: always record (including "fit" segments, ratio <=1.0).
         _atempo_stats.append({
             "segment_index": i,
             "start_s": seg["start"],
@@ -268,7 +268,7 @@ def build_dubbed_track(
         start_frame = int(start_ms * SR / 1000)
         overlay_pcm(mix, pcm, start_frame, total_frames)
 
-    # DIAGNOSTIC: stampa distribuzione atempo (attivo sempre, output sintetico).
+    # DIAGNOSTIC: print atempo distribution (always active, compact output).
     if _atempo_stats:
         _buckets = [
             ("ratio <= 1.00  (no atempo needed):  ", lambda r: r <= 1.00),
@@ -300,9 +300,9 @@ def build_dubbed_track(
                 flush=True,
             )
         print(f"     --- end diagnostic ---", flush=True)
-        # TASK 2C-2: stampa la ripartizione engine usati per stretch.
-        # Utile in produzione per verificare che la tier strategy funzioni
-        # come atteso (rubberband concentrato nel band 1.15–1.50).
+        # TASK 2C-2: print the breakdown of stretch engines used.
+        # Useful in production to verify that the tier strategy behaves
+        # as expected (rubberband concentrated in the 1.15–1.50 band).
         if rubberband_used + atempo_used > 0:
             print(
                 f"     -> Stretch engines: {rubberband_used} rubberband, "
@@ -344,7 +344,7 @@ def build_dubbed_track(
                     flush=True,
                 )
 
-    # Mix background se disponibile (stessa semantica storica: bg_volume in ampiezza).
+    # Mix in background if available (same historical semantics: bg_volume as linear amplitude).
     if bg_path and os.path.exists(bg_path) and bg_volume > 0:
         bg_conv = os.path.join(tmp_dir, "_bg_pcm.wav")
         try:
@@ -352,11 +352,11 @@ def build_dubbed_track(
                 "ffmpeg", "-y", "-i", bg_path,
                 "-ar", str(SR), "-ac", str(CH), "-sample_fmt", "s16", bg_conv,
             ], step="bg pcm conv")
-            # Streaming read/write per tenere il background fuori dalla RAM.
+            # Streaming read/write to keep the background out of RAM.
             CHUNK = SR * 10  # 10s
             with sf.SoundFile(bg_conv, "r") as bgf:
-                # Scala su int32 in-place. Ampiezza lineare: 1.0 = unity,
-                # >1.0 amplifica (coerente con semantica storica pydub+dB).
+                # Scale to int32 in-place. Linear amplitude: 1.0 = unity,
+                # >1.0 amplifies (consistent with historical pydub+dB semantics).
                 scale = float(bg_volume)
                 pos = 0
                 while pos < total_frames:
@@ -374,7 +374,7 @@ def build_dubbed_track(
         except Exception as e:
             print(f"     ! Background mix failed: {e}", flush=True)
 
-    # Clamp int32 → int16 e serializza in WAV.
+    # Clamp int32 → int16 and serialize to WAV.
     with sf.SoundFile(out, "w", samplerate=SR, channels=CH, subtype="PCM_16") as outf:
         CHUNK = SR * 10
         pos = 0
@@ -385,7 +385,7 @@ def build_dubbed_track(
             outf.write(clipped)
             pos = end
 
-    # Libera la memmap prima di unlink per evitare warning su Windows.
+    # Release the memmap before unlinking to avoid warnings on Windows.
     del mix
     try:
         os.remove(raw_path)
@@ -393,10 +393,10 @@ def build_dubbed_track(
         pass
 
     # Normalize to -23 LUFS (EBU R128 broadcast standard).
-    # Leggiamo in float32 (dimezza la RAM rispetto al default float64).
-    # Per video molto lunghi (>30 min o >1.5 GB) logghiamo un warning: l'intero
-    # buffer resta comunque in memoria perché pyln.normalize.loudness richiede
-    # l'array completo, ma almeno con float32 siamo gestibili (~1.2 GB per 1h).
+    # Read as float32 (halves RAM compared to the float64 default).
+    # For very long videos (>30 min or >1.5 GB) log a warning: the full
+    # buffer still stays in memory because pyln.normalize.loudness requires
+    # the complete array, but float32 keeps it manageable (~1.2 GB for 1h).
     try:
         import pyloudnorm as pyln
         try:

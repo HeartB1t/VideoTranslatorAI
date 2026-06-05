@@ -33,10 +33,11 @@ def _unregister_subprocess(proc: Any) -> None:
 
 
 # ── Ollama LLM translation (v2.0) ──────────────────────────────────────────
-# Mapping da codici ISO a nomi umani: il prompt LLM è molto più robusto se
-# riceve "English"/"Italian" invece di "en"/"it". Segue lo stesso set di
-# LANGUAGES + codici sorgente whisper comuni; mancanze cadono sul code raw
-# (gli LLM moderni lo capiscono comunque, con meno accuracy).
+# ISO code → human-readable language name mapping. LLM prompts are far more
+# reliable when given "English"/"Italian" rather than "en"/"it". Covers the
+# same set as LANGUAGES + common Whisper source codes; unknown codes fall back
+# to the raw code (modern LLMs still handle it, just with slightly less
+# accuracy).
 _OLLAMA_LANG_NAMES: dict[str, str] = {
     "auto": "auto-detected",
     "ar": "Arabic", "cs": "Czech", "da": "Danish", "de": "German",
@@ -87,7 +88,7 @@ def _ollama_num_predict_for_segment(
 def _ollama_health_check(
     api_url: str, model: str, timeout: float = 5.0
 ) -> tuple[bool, str, str]:
-    """Verifica che Ollama sia raggiungibile e risolve il modello da usare.
+    """Check that Ollama is reachable and resolve the model to use.
 
     Returns ``(ok, message, resolved_model)``:
     - ``ok=False, message=<human readable>, resolved_model=""`` if the daemon
@@ -152,46 +153,47 @@ def _ollama_health_check(
 
 
 def _ollama_strip_preamble(text: str) -> str:
-    """Rimuove artefatti tipici della risposta LLM per evitare che XTTS
-    sintetizzi preamboli/disclaimer/note come audio (causa outlier atempo).
+    """Strip typical LLM response artifacts so XTTS does not synthesise
+    preambles/disclaimers/notes as audio (which causes atempo outliers).
 
-    Pipeline di pulizia (ordine critico):
-      0. Qwen3 chain-of-thought: blocchi <think>/<thinking>/<reasoning> chiusi
-         o orfani (output troncato). Devono morire PRIMA di tutto: contengono
-         sintassi LLM-specifica che potrebbe matchare i pattern dei passi
-         successivi e generare residui sporchi.
-      1. Blocchi markdown code ```...``` (alcuni modelli wrappano l'output).
-      2. Marcatori grassetto/corsivo **x** *x* ***x***.
-      3. Preamble multi-lingua ("Ecco la traduzione:", "Here's the translation:",
-         "Sure!", 好的/这是/翻译, ecc.) — case-insensitive, multiline.
-      4. Commentary note tra parentesi tonde con parole chiave tipiche di
-         self-commentary del modello (kept natural, fits within, ho mantenuto…).
-         Parentesi legittime del testo originale NON sono toccate.
-      5. Note tra parentesi quadre [note: ...], [spoken, ...].
-      6. Righe "Note: ...", "Nota: ...", "N.B. ..." su riga isolata.
-      7. Virgolette esterne "..." '...' «...» „…” “…”.
-      8. Collasso whitespace/newline multipli → singolo spazio (evita pause
-         lunghe durante la sintesi XTTS).
+    Cleaning pipeline (order is critical):
+      0. Qwen3 chain-of-thought: closed or orphaned <think>/<thinking>/
+         <reasoning> blocks (orphaned = output truncated by num_predict).
+         Must be removed FIRST — they contain LLM-specific syntax that can
+         match patterns in later steps and leave dirty residues.
+      1. Markdown code fences ```...``` (some models wrap their output).
+      2. Bold/italic markers **x** *x* ***x***.
+      3. Multi-language preambles (“Ecco la traduzione:”, “Here's the
+         translation:”, “Sure!”, 好的/这是/翻译, etc.) — case-insensitive,
+         multiline.
+      4. Parenthetical commentary notes with keywords typical of model
+         self-commentary (kept natural, fits within, ho mantenuto…).
+         Legitimate parentheses in the original text are NOT touched.
+      5. Square-bracket notes [note: ...], [spoken, ...].
+      6. Standalone “Note: ...”, “Nota: ...”, “N.B. ...” lines.
+      7. Outer quotation marks “...” '...' «...» „…” “…”.
+      8. Collapse multiple whitespace/newlines → single space (avoids long
+         pauses during XTTS synthesis).
     """
     if not text:
         return ""
     import re as _re
     t = text.strip()
 
-    # 0. Qwen3 chain-of-thought: rimuovi blocchi <think>...</think> che
-    #    possono arrivare se /no_think è stato ignorato (es. fine-tuning
-    #    Qwen3 che bypassa il toggle, o versione vecchia di Ollama che
-    #    ignora `think:false`). Cattura sia tag standard che varianti
-    #    comuni (<thinking>, <reasoning>) usate da derivati Qwen3.
+    # 0. Qwen3 chain-of-thought: strip <think>...</think> blocks that can
+    #    appear when /no_think is ignored (e.g. fine-tuned Qwen3 that bypasses
+    #    the toggle, or an old Ollama version that ignores `think:false`).
+    #    Captures both the standard tag and common variants (<thinking>,
+    #    <reasoning>) used by Qwen3-derived models.
     THINK_BLOCK_RE = _re.compile(
         r"<\s*(think|thinking|reasoning)\s*>[\s\S]*?<\s*/\s*\1\s*>",
         flags=_re.IGNORECASE,
     )
     t = THINK_BLOCK_RE.sub("", t)
-    # 0b. Tag aperti senza chiusura (output troncato per num_predict raggiunto):
-    #     se trovi <think> senza </think>, taglia tutto fino al doppio newline
-    #     o a fine stringa. Evita di consegnare a XTTS un blocco di reasoning
-    #     a metà.
+    # 0b. Unclosed opening tags (output truncated by num_predict): if a
+    #     <think> has no matching </think>, strip everything up to the next
+    #     double newline or end of string. Prevents handing a half-finished
+    #     reasoning block to XTTS.
     ORPHAN_THINK_RE = _re.compile(
         r"<\s*(think|thinking|reasoning)\s*>[\s\S]*?(?=\n\n|$)",
         flags=_re.IGNORECASE,
@@ -199,18 +201,18 @@ def _ollama_strip_preamble(text: str) -> str:
     t = ORPHAN_THINK_RE.sub("", t)
     t = t.strip()
 
-    # 1. Unwrap blocchi markdown code ```...``` conservando il contenuto.
-    #    Alcuni modelli wrappano il testo tradotto in un code fence.
+    # 1. Unwrap markdown code fences ```...```, preserving the inner content.
+    #    Some models wrap the translated text inside a code fence.
     t = _re.sub(r"```[a-zA-Z0-9]*\n?([\s\S]*?)```", r"\1", t)
-    # 2. Rimuovi marcatori markdown grassetto/corsivo (conserva il contenuto)
+    # 2. Strip markdown bold/italic markers (preserve the inner content)
     t = _re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", t)
-    # 3. Preamble multi-lingua (IT, EN, FR, ES, DE, ZH). Applichiamo i pattern
-    #    in loop fixed-point (max 6 passate) così prefissi concatenati come
-    #    "Sure! Here's the translation:" o "好的这是翻译：" vengono mangiati in
-    #    sequenza. Ogni pattern termina con `\s*` / `:?\s*` per attaccarsi al
-    #    successivo senza spazi residui.
+    # 3. Multi-language preambles (IT, EN, FR, ES, DE, ZH). Applied in a
+    #    fixed-point loop (max 6 passes) so concatenated prefixes like
+    #    "Sure! Here's the translation:" or "好的这是翻译：" are consumed one
+    #    by one. Each pattern ends with `\s*` / `:?\s*` to absorb trailing
+    #    whitespace before the next prefix.
     PREAMBLE_PATTERNS = [
-        # EN/IT "Here's the translation:" — con varianti "concisa", "tradotta"
+        # EN/IT "Here's the translation:" — including variants "concisa", "tradotta"
         r"^(?:here'?s?|this is|the|la|le|il)\s+(?:the\s+)?(?:concise\s+)?translation(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
         # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:"
         r"^ecco(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
@@ -222,9 +224,9 @@ def _ollama_strip_preamble(text: str) -> str:
         r"^好的\s*[，,:：]?\s*",
         r"^这是\s*[，,:：]?\s*",
         r"^翻译\s*[：:]\s*",
-        # "Per favore" (acknowledgment) — NOTA: "N.B.", "Note:", "Nota bene:",
-        # "Please note:" sono gestiti al step 6 come riga intera (mangiano
-        # tutta la frase di disclaimer, non solo il prefisso).
+        # "Per favore" (acknowledgment) — NOTE: "N.B.", "Note:", "Nota bene:",
+        # "Please note:" are handled at step 6 as whole lines (they consume
+        # the entire disclaimer sentence, not just the prefix).
         r"^per favore\s*[,:.\-]?\s*",
     ]
     for _ in range(6):
@@ -233,9 +235,9 @@ def _ollama_strip_preamble(text: str) -> str:
             t = _re.sub(pat, "", t, count=1, flags=_re.IGNORECASE | _re.MULTILINE)
         if t == prev:
             break
-    # 4. Note/disclaimer tra parentesi tonde con keyword di commentary.
-    #    Volutamente conservativo: evitiamo false positive su parentesi di
-    #    contenuto (es. "(2020)", "(diretto da Nolan)"). Match non-greedy.
+    # 4. Parenthetical notes/disclaimers with model self-commentary keywords.
+    #    Deliberately conservative: avoids false positives on content
+    #    parentheses (e.g. "(2020)", "(directed by Nolan)"). Non-greedy match.
     COMMENTARY_RE = _re.compile(
         r"\(\s*(?:note|n\.?\s*b\.?|nota|hint|tip|keeping|"
         r"kept|fits?\s+(?:well\s+)?within|target\s+reading|"
@@ -245,15 +247,15 @@ def _ollama_strip_preamble(text: str) -> str:
         flags=_re.IGNORECASE,
     )
     t = COMMENTARY_RE.sub("", t)
-    # 5. Note tra parentesi quadre [note:...], [spoken, natural], ecc.
+    # 5. Square-bracket notes [note:...], [spoken, natural], etc.
     BRACKET_NOTE_RE = _re.compile(
         r"\[\s*(?:note|nota|comment|spoken|dubbing)[^\]]*?\]",
         flags=_re.IGNORECASE,
     )
     t = BRACKET_NOTE_RE.sub("", t)
     # 6. Riga isolata "Note: ..." / "Nota: ..." / "Disclaimer: ..." / "N.B. ..."
-    #    Mangia anche il newline precedente per non lasciare doppi spazi dopo
-    #    il whitespace collapse (step 8).
+    #    Also consumes the preceding newline to avoid double spaces after
+    #    whitespace collapse (step 8).
     FINAL_NOTE_LINE_RE = _re.compile(
         r"(?:^|\n)[ \t]*"
         r"(?:note|nota|nota\s+bene|n\.?\s*b\.?|please\s+note|disclaimer|observation)"
@@ -261,8 +263,8 @@ def _ollama_strip_preamble(text: str) -> str:
         flags=_re.IGNORECASE,
     )
     t = FINAL_NOTE_LINE_RE.sub("", t)
-    # 7. Virgolette esterne a coppie (open/close). Prima applicazione: un loop
-    #    perché potremmo avere layer multipli tipo "\"«testo»\"".
+    # 7. Strip outer paired quotation marks (open/close). Loop applied because
+    #    there can be multiple nested layers like "\"«testo»\"".
     QUOTE_PAIRS = [
         ("\"", "\""), ("'", "'"),
         ("«", "»"), ("“", "”"), ("„", "”"), ("„", "“"),
@@ -277,21 +279,21 @@ def _ollama_strip_preamble(text: str) -> str:
                 break
         if not peeled:
             break
-    # 8. Collassa whitespace multipli e newline → spazio singolo (evita pause
-    #    lunghe durante la sintesi XTTS)
+    # 8. Collapse multiple whitespace and newlines → single space (avoids long
+    #    pauses during XTTS synthesis)
     t = _re.sub(r"\s+", " ", t)
 
-    # 9. Punteggiatura "isolata" / orfana che XTTS pronuncerebbe letteralmente
-    #    come "punto", "virgola", o emetterebbe colpi acustici secchi udibili
-    #    ("dice il punto alla fine"). Casi reali osservati su output Qwen3:
-    #      ".  Buongiorno a tutti."   (preamble strippato che lascia il "." iniziale)
-    #      "Buongiorno a tutti . . ."  (Qwen ripete punteggiatura di chiusura)
-    #      ".\nBuongiorno"             (riga vuota con sola punteggiatura)
-    #      "Buongiorno , a tutti"      (spazio prima della virgola)
+    # 9. "Isolated" / orphaned punctuation that XTTS would pronounce literally
+    #    as "dot", "comma", or emit as sharp audible clicks ("says the dot
+    #    out loud at the end"). Real cases observed in Qwen3 output:
+    #      ".  Buongiorno a tutti."   (stripped preamble leaves a leading ".")
+    #      "Buongiorno a tutti . . ."  (Qwen repeats closing punctuation)
+    #      ".\nBuongiorno"             (blank line containing only punctuation)
+    #      "Buongiorno , a tutti"      (space before comma)
     #
     # Sequence: leading isolated punct → multiple consecutive marks → space
-    # before punct → final tidy. Eseguito DOPO il collasso whitespace così
-    # opera su una stringa già normalizzata ai singoli spazi.
+    # before punct → final tidy. Run AFTER the whitespace collapse so it
+    # operates on an already single-space-normalised string.
     LEADING_PUNCT_RE   = _re.compile(r"^[\s.,;:!?\-–—…]+")
     REPEATED_PUNCT_RE  = _re.compile(r"([.,;:!?])(?:\s*\1)+")
     SPACE_BEFORE_RE    = _re.compile(r"\s+([.,;:!?])")
@@ -299,25 +301,25 @@ def _ollama_strip_preamble(text: str) -> str:
     t = LEADING_PUNCT_RE.sub("", t)
     t = REPEATED_PUNCT_RE.sub(r"\1", t)
     t = SPACE_BEFORE_RE.sub(r"\1", t)
-    t = DANGLING_PUNCT_RE.sub(".", t)  # se la fine ha punct orfano, lascia un solo "."
+    t = DANGLING_PUNCT_RE.sub(".", t)  # if the tail has orphan punct, replace with a single "."
 
     return t.strip()
 
 
 # ── Ollama auto-setup (v2.0.1) ─────────────────────────────────────────────
-# Obiettivo: zero manual setup per l'utente finale. Stessa strategia già usata
-# per ffmpeg (download on-demand) e Git for Windows (installer auto). Le
-# funzioni qui sotto sono puri helper — nessun Tk, nessuno stato globale:
-# accettano un log_cb opzionale per streamare output alla GUI, e registrano
-# i subprocess nel registry globale così `_on_close` li può terminare.
+# Goal: zero manual setup for the end user. Same strategy already used for
+# ffmpeg (on-demand download) and Git for Windows (auto-installer). The
+# functions below are pure helpers — no Tk, no global state: they accept an
+# optional log_cb to stream output to the GUI, and register subprocesses in
+# the global registry so `_on_close` can terminate them.
 
 def _ollama_find_binary() -> str | None:
-    """Ritorna il path all'eseguibile `ollama` se trovato, altrimenti None.
+    """Return the path to the `ollama` binary if found, otherwise None.
 
-    Linux/macOS: `shutil.which`. Windows: `shutil.which` + fallback sui path
-    di default dell'installer ufficiale (`%LOCALAPPDATA%\\Programs\\Ollama` e
-    `%ProgramFiles%\\Ollama`). Necessario perché su Windows subito dopo
-    un'install silent il PATH del processo corrente non è ancora aggiornato.
+    Linux/macOS: uses `shutil.which`. Windows: `shutil.which` + fallback to
+    the official installer's default paths (`%LOCALAPPDATA%\\Programs\\Ollama`
+    and `%ProgramFiles%\\Ollama`). Necessary because on Windows, immediately
+    after a silent install the current process PATH is not yet updated.
     """
     p = shutil.which("ollama")
     if p:
@@ -325,13 +327,13 @@ def _ollama_find_binary() -> str | None:
     if sys.platform.startswith("win"):
         local_app_data = os.environ.get("LOCALAPPDATA", "")
         candidates = [
-            # Installer ufficiale Ollama (per-user install)
+            # Official Ollama installer (per-user install)
             Path(local_app_data) / "Programs" / "Ollama" / "ollama.exe",
-            # Installer ufficiale system-wide (raro, richiede admin)
+            # Official Ollama installer system-wide (rare, requires admin)
             Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Ollama" / "ollama.exe",
             Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "Ollama" / "ollama.exe",
-            # winget install Ollama.Ollama → symlink in WinGet/Links (Win11
-            # default in PATH, Win10 spesso no — quindi serve fallback esplicito)
+            # winget install Ollama.Ollama → symlink in WinGet/Links (on Win11
+            # this is in PATH by default; on Win10 often not — explicit fallback needed)
             Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "ollama.exe",
         ]
         for c in candidates:
@@ -344,7 +346,7 @@ def _ollama_find_binary() -> str | None:
 
 
 def _ollama_is_daemon_running(api_url: str, timeout: float = 2.0) -> bool:
-    """Probe `/api/tags` con timeout corto. True se il daemon risponde 2xx."""
+    """Probe `/api/tags` with a short timeout. Returns True if the daemon responds 2xx."""
     import requests
     base = api_url.rstrip("/")
     try:
@@ -356,12 +358,12 @@ def _ollama_is_daemon_running(api_url: str, timeout: float = 2.0) -> bool:
 
 def _ollama_wait_for_daemon(api_url: str, wait_seconds: float = 12.0,
                             poll_interval: float = 1.0) -> bool:
-    """Polla `_ollama_is_daemon_running` per `wait_seconds`. True se risponde.
+    """Poll `_ollama_is_daemon_running` for up to `wait_seconds`. Returns True if it responds.
 
-    Usato dopo l'install di Ollama Desktop su Windows: l'installer avvia il
-    proprio daemon embedded ma con 5-10s di delay rispetto al completamento
-    dell'install stesso. Senza questa attesa il nostro fallback `ollama serve`
-    parte e fallisce con port-already-in-use.
+    Used after installing Ollama Desktop on Windows: the installer starts its
+    own embedded daemon but with a 5–10 s delay after the install completes.
+    Without this wait our fallback `ollama serve` would start and fail with
+    port-already-in-use.
     """
     import time
     deadline = time.monotonic() + wait_seconds
@@ -378,16 +380,16 @@ def _ollama_start_daemon(
     wait_seconds: float = 15.0,
     log_cb=None,
 ) -> tuple[bool, str]:
-    """Avvia `ollama serve` detached e aspetta che `/api/tags` risponda.
+    """Start `ollama serve` detached and wait for `/api/tags` to respond.
 
-    Ritorna (ok, message). `message` è il path al log tempfile su fallimento,
-    stringa vuota su successo. Il subprocess è registrato in
-    `_active_subprocesses` per permettere a `_on_close` di terminarlo.
+    Returns (ok, message). `message` is the path to the log tempfile on
+    failure, empty string on success. The subprocess is registered in
+    `_active_subprocesses` so `_on_close` can terminate it.
     """
     log = log_cb or (lambda s: None)
 
-    # Log file per debug: su Windows senza console, altrimenti perdiamo lo
-    # stderr del daemon se parte e poi crasha.
+    # Log file for debugging: on Windows there is no console, so without this
+    # we lose the daemon's stderr if it starts and then crashes.
     log_file = tempfile.NamedTemporaryFile(
         prefix="ollama-serve-", suffix=".log", delete=False, mode="w",
         encoding="utf-8",
@@ -396,17 +398,17 @@ def _ollama_start_daemon(
     log_file.close()
     fh = open(log_path, "w", encoding="utf-8")
 
-    # start_new_session/CREATE_NEW_PROCESS_GROUP: detach dal main process
-    # così la chiusura della GUI non killa il daemon (a meno che _on_close
-    # lo faccia esplicitamente via registry).
+    # start_new_session/CREATE_NEW_PROCESS_GROUP: detach from the main process
+    # so closing the GUI does not kill the daemon (unless `_on_close`
+    # explicitly does so via the registry).
     kwargs = {
         "stdin": subprocess.DEVNULL,
         "stdout": fh,
         "stderr": subprocess.STDOUT,
     }
     if sys.platform.startswith("win"):
-        # CREATE_NEW_PROCESS_GROUP = 0x00000200. Su Windows non esiste
-        # start_new_session; usiamo il flag creationflags.
+        # CREATE_NEW_PROCESS_GROUP = 0x00000200. On Windows `start_new_session`
+        # does not exist; use the creationflags equivalent instead.
         kwargs["creationflags"] = 0x00000200
     else:
         kwargs["start_new_session"] = True
@@ -419,13 +421,13 @@ def _ollama_start_daemon(
 
     _register_subprocess(proc)
 
-    # Polling: aspetta wait_seconds al massimo. Exit-code check: se il daemon
-    # muore subito (porta già occupata, config rotta), smettiamo di attendere.
+    # Polling: wait at most wait_seconds. Exit-code check: if the daemon dies
+    # immediately (port already in use, broken config), stop waiting early.
     import time
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            # Daemon morto prima di rispondere
+            # Daemon died before responding
             fh.close()
             _unregister_subprocess(proc)
             try:
@@ -436,8 +438,8 @@ def _ollama_start_daemon(
             return False, f"ollama serve exited (rc={proc.returncode}). Log: {log_path}"
         if _ollama_is_daemon_running(api_url, timeout=1.5):
             log(f"     [+] Ollama daemon attivo su {api_url}\n")
-            # NB: il fh resta aperto intenzionalmente — il daemon scrive
-            # lì per tutta la sessione. Sarà chiuso quando proc termina.
+            # NB: fh is intentionally left open — the daemon keeps writing
+            # to it for the entire session and it will be closed when proc exits.
             return True, ""
         time.sleep(0.5)
 
@@ -447,10 +449,10 @@ def _ollama_start_daemon(
 
 
 def _ollama_install_linux(log_cb=None, timeout_s: int = 300) -> tuple[bool, str]:
-    """Installa Ollama via lo script ufficiale `curl -fsSL … | sh`.
+    """Install Ollama via the official `curl -fsSL … | sh` script.
 
-    Richiede sudo per scrivere in /usr/local/bin. Se sudo non è presente,
-    ritorna messaggio actionable invece di appendere a silenzio.
+    Requires sudo to write to /usr/local/bin. If sudo is not available,
+    returns an actionable message instead of failing silently.
     """
     log = log_cb or (lambda s: None)
 
@@ -460,13 +462,13 @@ def _ollama_install_linux(log_cb=None, timeout_s: int = 300) -> tuple[bool, str]
             "e riprova, oppure installa Ollama manualmente da https://ollama.com/download"
         )
 
-    # Lo script ufficiale richiede privilegi root. Usiamo pkexec o sudo.
+    # The official script requires root privileges. Try pkexec then sudo.
     prefixes: list[list[str]] = []
     if shutil.which("pkexec"):
         prefixes.append(["pkexec", "sh", "-c"])
     if shutil.which("sudo"):
         prefixes.append(["sudo", "sh", "-c"])
-    prefixes.append(["sh", "-c"])  # root-less fallback (funzionerà solo se root)
+    prefixes.append(["sh", "-c"])  # root-less fallback (works only if already root)
 
     install_cmd = "curl -fsSL https://ollama.com/install.sh | sh"
     last_err = ""
@@ -512,21 +514,21 @@ def _ollama_install_linux(log_cb=None, timeout_s: int = 300) -> tuple[bool, str]
 
 
 def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]:
-    """Scarica OllamaSetup.exe e lo lancia in modalità completamente silent.
+    """Download OllamaSetup.exe and launch it in fully silent mode.
 
-    L'installer di Ollama è basato su Inno Setup. Usiamo il set di flag
+    The Ollama installer is based on Inno Setup. We use the flag set
     `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL`:
-      - `/VERYSILENT`: niente wizard, niente progress UI (`/SILENT` da solo
-        mostrerebbe ancora una progress bar che può richiedere input);
-      - `/SUPPRESSMSGBOXES`: sopprime le message box di default;
-      - `/NORESTART`: non riavviare la macchina a fine install;
-      - `/NOCANCEL`: l'utente non può abortire via tasto.
-    Senza questo set completo il subprocess può bloccarsi sull'attesa di
-    input utente fino allo scadere del timeout.
+      - `/VERYSILENT`: no wizard, no progress UI (`/SILENT` alone still
+        shows a progress bar that may require user input);
+      - `/SUPPRESSMSGBOXES`: suppresses default message boxes;
+      - `/NORESTART`: do not reboot after installation;
+      - `/NOCANCEL`: the user cannot abort via the cancel button.
+    Without this complete flag set the subprocess can block waiting for
+    user input until the timeout expires.
 
-    Post-install, aggiorniamo il PATH del processo corrente aggiungendo il
-    path di default dell'installer, così `_ollama_find_binary` funziona
-    senza dover riavviare la GUI.
+    Post-install, we update the current process PATH by appending the
+    installer's default directory so `_ollama_find_binary` works without
+    restarting the GUI.
     """
     log = log_cb or (lambda s: None)
     url = "https://ollama.com/download/OllamaSetup.exe"
@@ -549,7 +551,7 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
                 downloaded += len(buf)
                 if total > 0:
                     pct = min(100, downloaded * 100 // total)
-                    # Log ogni 5% per non inondare la GUI
+                    # Log every 5% to avoid flooding the GUI
                     if pct // 5 != last_pct // 5:
                         log(f"     Download... {pct}%\n")
                         last_pct = pct
@@ -592,10 +594,10 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
             setup_path.unlink(missing_ok=True)
 
     if proc.returncode != 0:
-        # rc=1223 = ERROR_CANCELLED su Windows (utente ha cliccato "No" sul
-        # prompt UAC dell'installer Ollama). Il messaggio criptico "rc=1223"
-        # è inutile per l'utente finale → tradurre in linguaggio umano.
-        # rc=1602 = ERROR_INSTALL_USEREXIT (cancel volontario senza UAC).
+        # rc=1223 = ERROR_CANCELLED on Windows (user clicked "No" on the
+        # UAC prompt for the Ollama installer). The cryptic "rc=1223" message
+        # is meaningless to end users — translate it into plain language.
+        # rc=1602 = ERROR_INSTALL_USEREXIT (voluntary cancel without UAC).
         if proc.returncode in (1223, 1602):
             return False, (
                 "Installazione annullata dall'utente (UAC negato o annullato). "
@@ -607,8 +609,8 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
             f"Scarica e installa manualmente da https://ollama.com/download"
         )
 
-    # Post-install: aggiorniamo PATH del processo corrente col path di default
-    # dell'installer Ollama. Questo evita di dover riavviare la GUI.
+    # Post-install: update the current process PATH with the Ollama installer's
+    # default directory. This avoids having to restart the GUI.
     default_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama"
     if default_dir.is_dir():
         cur_path = os.environ.get("PATH", "")
@@ -618,9 +620,9 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
 
 
 def _ollama_install_macos(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]:
-    """Prova `brew install ollama` se Homebrew è presente, altrimenti messaggio
-    manuale con link al .dmg. Non scarichiamo automaticamente il .dmg perché
-    richiede interazione utente per il drag-and-drop.
+    """Try `brew install ollama` if Homebrew is available, otherwise return a
+    manual install message with a link to the .dmg. We do not auto-download
+    the .dmg because it requires user interaction for the drag-and-drop.
     """
     log = log_cb or (lambda s: None)
     if shutil.which("brew"):
@@ -661,7 +663,7 @@ def _ollama_install_macos(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]
 
 
 def _ollama_install(log_cb=None) -> tuple[bool, str]:
-    """Dispatch cross-platform dell'installazione di Ollama."""
+    """Cross-platform dispatch for the Ollama installation."""
     if sys.platform.startswith("win"):
         return _ollama_install_windows(log_cb=log_cb)
     if sys.platform == "darwin":
@@ -676,11 +678,11 @@ def _ollama_pull_model(
     log_cb=None,
     timeout_s: int = 1200,
 ) -> tuple[bool, str]:
-    """Esegue `ollama pull <model>` streamando l'output alla GUI.
+    """Run `ollama pull <model>`, streaming the output to the GUI.
 
-    `timeout_s` è generoso (20 min default) perché i modelli sono grossi
-    (~4 GB) e le connessioni possono essere lente. Il subprocess è registrato
-    nel registry globale per la pulizia su _on_close.
+    `timeout_s` is generous (20 min default) because models are large
+    (~4 GB) and connections can be slow. The subprocess is registered in
+    the global registry for cleanup on `_on_close`.
     """
     log = log_cb or (lambda s: None)
     ollama_bin = binary or _ollama_find_binary()

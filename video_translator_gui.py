@@ -92,8 +92,8 @@ WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3", "la
 
 
 def _pick_default_whisper_model() -> str:
-    # large-v3-turbo (~1.6GB) ha qualità comparabile a large-v3 ma è ~6-8x più
-    # veloce su GPU CUDA. Su CPU il modello è troppo pesante: fallback a small.
+    # large-v3-turbo (~1.6 GB) has comparable quality to large-v3 but is ~6-8x
+    # faster on CUDA GPU. On CPU it is too heavy: fall back to small.
     import shutil as _sh
     return "large-v3-turbo" if _sh.which("nvidia-smi") else "small"
 
@@ -101,10 +101,10 @@ def _pick_default_whisper_model() -> str:
 DEFAULT_WHISPER_MODEL = _pick_default_whisper_model()
 DEFAULT_LANG = "it"
 
-# Expansion ratio rispetto all'inglese (≈1.0). Valori >1 = la lingua usa più
-# caratteri/sillabe/secondi di EN per esprimere lo stesso contenuto; <1 il
-# contrario. Fonti: corpora multilingual (UN Parallel, TED, Europarl, OPUS),
-# approssimazioni usate per autotune XTTS speed su coppie asimmetriche.
+# Expansion ratio relative to English (≈1.0). Values >1 mean the language uses
+# more characters/syllables/seconds than EN to express the same content; <1
+# the opposite. Sources: multilingual corpora (UN Parallel, TED, Europarl,
+# OPUS), used as approximations for XTTS speed autotune on asymmetric pairs.
 LANG_EXPANSION: dict[str, float] = {
     "en": 1.00,
     "zh-CN": 0.70, "zh": 0.70, "ja": 0.85, "ko": 0.90,
@@ -121,27 +121,27 @@ def _suggest_xtts_speed(
     lang_target: str,
     user_override: float | None = None,
 ) -> tuple[float, float, bool]:
-    """Autotune dello speed XTTS v2 in funzione dell'asimmetria fra lingue.
+    """Autotune XTTS v2 speed based on the asymmetry between source and target languages.
 
-    Ritorna (speed, ratio, auto) dove:
-    - speed: valore da passare a `generate_tts_xtts`, nel range [1.10, 1.40];
-    - ratio: expansion del target rispetto alla source (target/source);
-    - auto: True se il valore è stato calcolato, False se è un override utente.
+    Returns (speed, ratio, auto) where:
+    - speed: value to pass to `generate_tts_xtts`, in the range [1.10, 1.40];
+    - ratio: expansion of the target relative to the source (target/source);
+    - auto: True if the value was computed, False if it is a user override.
 
-    Se `user_override` è fornito (da CLI --xtts-speed o config JSON con chiave
-    esplicita), viene rispettato senza modifiche — ci fidiamo che l'utente sappia
-    cosa sta facendo. Con `user_override=None` l'euristica sceglie uno speed più
-    alto quando il target è significativamente più lungo del source (caso EN→IT,
-    EN→FR…) per dare a XTTS più margine e ridurre l'atempo post-processing.
-    Source "auto" o sconosciuta viene trattata come EN (ratio base 1.0).
+    If `user_override` is provided (via CLI --xtts-speed or an explicit JSON
+    config key), it is honoured without modification — we trust the user knows
+    what they are doing. With `user_override=None` the heuristic picks a higher
+    speed when the target is significantly longer than the source (EN→IT, EN→FR…)
+    to give XTTS more headroom and reduce audible atempo post-processing.
+    An unknown or "auto" source is treated as EN (base ratio 1.0).
     """
     def _norm(code: str) -> str:
         c = (code or "").strip()
         if not c or c.lower() == "auto":
             return "en"
-        # cinese: mappa tutte le varianti su "zh" della tabella
+        # Chinese: map all variants to the "zh" entry in the table.
         if c.lower().startswith("zh"):
-            # Accetta sia "zh" sia "zh-CN" (entrambi in tabella)
+            # Accept both "zh" and "zh-CN" (both present in the table)
             return c if c in LANG_EXPANSION else "zh"
         return c
 
@@ -149,38 +149,39 @@ def _suggest_xtts_speed(
     tgt = _norm(lang_target)
     src_exp = LANG_EXPANSION.get(src, 1.0)
     tgt_exp = LANG_EXPANSION.get(tgt, 1.0)
-    # Guard: se una delle due è 0 (non dovrebbe succedere) evita div/0
+    # Guard: if either value is 0 (should not happen) avoid div/0.
     ratio = (tgt_exp / src_exp) if src_exp > 0 else 1.0
 
     if user_override is not None:
-        # Rispetta sempre la scelta esplicita, ma restituisci comunque il ratio
-        # per log/debug del chiamante.
+        # Always honour the explicit choice, but still return the ratio
+        # for the caller's log/debug purposes.
         return float(user_override), ratio, False
 
     if ratio >= 1.20:
-        speed = 1.35   # target molto più lungo (es. EN→IT, EN→FR)
+        speed = 1.35   # target much longer (e.g. EN→IT, EN→FR)
     elif ratio >= 1.10:
-        speed = 1.30   # target moderatamente più lungo
+        speed = 1.30   # target moderately longer
     elif ratio <= 0.75:
-        # target decisamente più corto (es. EN→ZH 0.70). Soglia 0.75 (non 0.90
-        # come prima stesura) per NON toccare IT→EN (ratio 0.80) che il tuning
-        # empirico v1.4 ha già fissato a 1.25. Con 0.90 avremmo retrocesso IT→EN
-        # a 1.15, violando il vincolo "non rompere nulla che funziona".
+        # Target noticeably shorter (e.g. EN→ZH 0.70). Threshold 0.75 (not 0.90
+        # as in the first draft) so that IT→EN (ratio 0.80) is NOT touched — the
+        # v1.4 empirical tuning already locked it at 1.25. With 0.90 we would
+        # have regressed IT→EN to 1.15, violating the "don't break what works"
+        # constraint.
         speed = 1.15
     else:
-        speed = 1.25   # caso simmetrico / quasi (es. IT→EN 0.80, IT→ES, EN→JA 0.85)
+        speed = 1.25   # symmetric / near-symmetric (e.g. IT→EN 0.80, IT→ES, EN→JA 0.85)
 
-    # Cap di sicurezza nel range utile (sotto 1.10 XTTS suona lento, sopra 1.40
-    # inizia a perdere prosodia anche nativamente).
+    # Safety cap within the useful range (below 1.10 XTTS sounds sluggish;
+    # above 1.40 prosody starts to degrade even natively).
     speed = max(1.10, min(speed, 1.40))
     return speed, ratio, True
 
 
-# Chars/sec baseline per XTTS v2 a speed=1.0 (stima empirica aggregata su
-# segmenti reali v1.4-v1.6). Serve per calcolare il tempo che XTTS impiegherebbe
-# a pronunciare un testo senza time-stretch e decidere quanto speed nativo serve
-# per farlo stare in uno slot temporale. Lingue sillabiche/logografiche (ja/zh)
-# hanno chars/sec molto più bassi perché 1 carattere = 1 sillaba o concetto.
+# Chars/sec baseline for XTTS v2 at speed=1.0 (empirical aggregate from real
+# segments in v1.4-v1.6). Used to estimate how long XTTS would take to speak a
+# text without time-stretching, and to decide how much native speed is needed
+# to fit it into a time slot. Syllabic/logographic languages (ja/zh) have much
+# lower chars/sec because 1 character = 1 syllable or concept.
 _XTTS_CHARS_PER_SEC = {
     "en": 16.0, "it": 15.0, "es": 15.5, "fr": 15.0, "de": 14.5,
     "pt": 15.0, "nl": 15.0, "ja": 10.0, "zh-CN": 8.0, "zh": 8.0, "ko": 10.5,
@@ -192,16 +193,17 @@ _XTTS_CHARS_PER_SEC = {
 
 
 def _estimate_tts_duration_s(text: str, lang: str) -> float:
-    """Stima durata (secondi) che XTTS impiegherebbe a pronunciare `text` in
-    `lang` a speed=1.0. Usa la tabella `_XTTS_CHARS_PER_SEC`; fallback a 14.0
-    chars/sec (media europea) per lingue fuori tabella. Minimo 0.5s per evitare
-    divisioni degeneri su testi molto corti.
+    """Estimate the duration (seconds) XTTS would need to speak `text` in
+    `lang` at speed=1.0. Uses the `_XTTS_CHARS_PER_SEC` table; falls back to
+    14.0 chars/sec (European average) for languages not in the table. Minimum
+    0.5 s to avoid degenerate division on very short texts.
 
-    Il lookup è **case-insensitive** perché la chiamante passa il codice nella
-    forma attesa da XTTS (`zh-cn` lowercase) mentre la tabella usa `zh-CN` con
-    variante breve `zh`. Senza normalizzazione il cinese cadrebbe al default
-    14.0 (media europea) sottostimando la durata di ~1.75x e annullando
-    l'adaptive speed proprio sulla lingua con gap chars/sec più estremo.
+    The lookup is **case-insensitive** because callers pass the code in the
+    form expected by XTTS (`zh-cn` lowercase) while the table uses `zh-CN`
+    with the short variant `zh`. Without normalisation Chinese would fall
+    through to the 14.0 default (European average), underestimating the
+    duration by ~1.75x and defeating adaptive speed on the language with the
+    most extreme chars/sec gap.
     """
     key = (lang or "").strip()
     rate = _XTTS_CHARS_PER_SEC.get(key)
@@ -220,20 +222,20 @@ def _compute_segment_speed(
     lang_target: str,
     ceiling: float = 1.40,
 ) -> float:
-    """Calcola lo speed XTTS v2 adattivo per un singolo segmento.
+    """Compute the adaptive XTTS v2 speed for a single segment.
 
-    Idea: se il testo ci sta già comodo nello slot a speed=1.0 lascia lo speed
-    basso (meno artefatti), se invece richiederebbe >40% di compressione alza
-    fino al `ceiling` per ridurre l'atempo post-processing che è l'origine
-    principale del suono "metallico".
+    Idea: if the text already fits comfortably in the slot at speed=1.0, keep
+    the speed low (fewer artifacts); if it would need >40% compression, raise
+    it up to `ceiling` to reduce the atempo post-processing that is the main
+    source of "metallic" audio.
 
-    Parametri:
-      text        : testo target da sintetizzare (può essere vuoto)
-      slot_s      : durata dello slot sorgente in secondi
-      lang_target : codice lingua per lookup in `_XTTS_CHARS_PER_SEC`
-      ceiling     : tetto superiore (tipicamente lo speed globale autotune)
+    Parameters:
+      text        : target text to synthesise (may be empty)
+      slot_s      : duration of the source slot in seconds
+      lang_target : language code for lookup in `_XTTS_CHARS_PER_SEC`
+      ceiling     : upper cap (typically the global autotune speed)
 
-    Ritorno: speed nel range [1.05, min(1.40, ceiling)]. Guard su slot_s<=0.
+    Returns: speed in the range [1.05, min(1.40, ceiling)]. Guard on slot_s<=0.
     """
     hard_cap = min(1.40, max(1.05, ceiling))
     if not text or slot_s <= 0:
@@ -263,37 +265,37 @@ REQUIRED_PACKAGES = {
     "demucs":         "demucs",
     "yt_dlp":         "yt-dlp",
     "torchcodec":     "torchcodec",
-    # `requests` è usato da DeepL e dal nuovo engine Ollama (v2.0). È già
-    # dipendenza transitiva di deep-translator, ma lo dichiariamo esplicito
-    # così check_dependencies lo segnala immediatamente in caso di install
-    # rotto.
+    # `requests` is used by DeepL and the new Ollama engine (v2.0). It is
+    # already a transitive dependency of deep-translator, but declaring it
+    # explicitly ensures check_dependencies reports it immediately if the
+    # install is broken.
     "requests":       "requests",
 }
 if sys.version_info >= (3, 13):
     REQUIRED_PACKAGES["audioop"] = "audioop-lts"
 
-# Pacchetti opzionali: migliorano la qualità ma non bloccano l'avvio.
-# chiave = modulo Python, valore = (lista pip requirements, descrizione UI)
-# Fork mantenuto (Idiap): pure-Python wheel universale per Py ≥3.10, evita il
-# setup.py rotto del pacchetto originale `TTS` su Windows. Pin transformers<5.1
-# (5.x rimuove isin_mps_friendly; 5.1 rompe coqui-tts — issue #558).
+# Optional packages: improve quality but do not block startup.
+# key = Python module name, value = (list of pip requirements, UI description)
+# Maintained fork (Idiap): universal pure-Python wheel for Py ≥3.10, avoids
+# the broken setup.py of the original `TTS` package on Windows. Pin
+# transformers<5.1 (5.x removes isin_mps_friendly; 5.1 breaks coqui-tts — issue #558).
 _TTS_PKGS = ["coqui-tts", "transformers<5.1"]
 OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "sacremoses":    (["sacremoses"],    "MarianMT tokenizer (traduzione offline)"),
     "sentencepiece": (["sentencepiece"], "MarianMT tokenizer (traduzione offline)"),
     "TTS":           (_TTS_PKGS,         "XTTS v2 (sintesi vocale alta qualità, ~2 GB)"),
-    # chiave "pyannote" (namespace parent) invece di "pyannote.audio": find_spec
-    # su un dotted-name solleva ModuleNotFoundError se il parent non è installato
-    # invece di ritornare None, rompendo _check_optional_deps. Il namespace parent
-    # esiste solo se pyannote.audio è installato.
-    # Upper bound <4.0 allineato a install_windows.bat: pyannote 4.x richiede
-    # torch>=2.8 (CUDA 13), incompatibile con il pin torch 2.6 del progetto
-    # (testato: senza upper bound, pip installa 4.x e rompe l'ambiente CUDA).
+    # Key "pyannote" (parent namespace) instead of "pyannote.audio": find_spec
+    # on a dotted name raises ModuleNotFoundError when the parent is not
+    # installed instead of returning None, which breaks _check_optional_deps.
+    # The parent namespace only exists when pyannote.audio is installed.
+    # Upper bound <4.0 aligned with install_windows.bat: pyannote 4.x requires
+    # torch>=2.8 (CUDA 13), incompatible with the project's torch 2.6 pin
+    # (tested: without the upper bound pip installs 4.x and breaks the CUDA env).
     "pyannote":      (["pyannote.audio>=3.1,<4.0"], "Diarization multi-speaker (pyannote, richiede HF token gratuito)"),
     "silero_vad":    (["silero-vad"],    "VAD per reference XTTS (selezione speech continuo)"),
     "keyring":       (["keyring"],       "Storage sicuro HF token (Credential Manager / Keychain / Secret Service)"),
 }
-# Alias per moduli che possono avere nomi diversi a seconda della versione installata
+# Aliases for modules that may have different names depending on the installed version
 _OPTIONAL_ALIASES: dict[str, list[str]] = {
     "TTS": ["TTS", "coqui_tts"],
 }
@@ -2994,9 +2996,9 @@ from videotranslator.platforms import (  # noqa: E402
 )
 
 
-# Punteggiatura forte di fine-frase — ASCII + CJK full-width + interrogativo arabo.
-# Usata da _split_on_punctuation per riallineare i segmenti Whisper a confini
-# sintattici naturali, anche in cinese/giapponese/arabo.
+# Strong sentence-ending punctuation — ASCII + CJK full-width + Arabic question mark.
+# Used by _split_on_punctuation to re-align Whisper segments at natural
+# syntactic boundaries, including Chinese/Japanese/Arabic.
 _END_PUNCT_CHARS = r".?!;。？！；؟"
 _END_PUNCT_SET = frozenset(_END_PUNCT_CHARS)
 
@@ -3005,18 +3007,19 @@ def _split_on_punctuation(
     segments: list[dict],
     min_duration: float = 1.0,
 ) -> list[dict]:
-    """Re-splits each Whisper segment su punteggiatura forte (. ? ! ; 。 ？ ！ ； ؟),
-    opzionalmente seguita da whitespace. Timestamps riproporzionati sul numero
-    di caratteri. Non splitta sulle virgole. Non produce sotto-segmenti di
-    durata <min_duration. Preserva 'speaker' se presente.
+    """Re-splits each Whisper segment on strong punctuation (. ? ! ; 。 ？ ！ ； ؟),
+    optionally followed by whitespace. Timestamps are re-proportioned by
+    character count. Does not split on commas. Does not produce sub-segments
+    shorter than min_duration. Preserves 'speaker' if present.
 
-    Il lookahead è `\\S` (non spazio): così funziona anche per script che non
-    separano le frasi con uno spazio (cinese, giapponese). Per le lingue
-    latine il filtro "uppercase/digit" sul char successivo conserva il
-    comportamento precedente; per CJK/arabo qualunque char non-punct è
-    considerato un boundary valido (non hanno case distinction).
+    The lookahead is `\\S` (non-space): this also handles scripts that do not
+    separate sentences with a space (Chinese, Japanese). For Latin scripts the
+    "uppercase/digit" filter on the next character preserves previous behaviour;
+    for CJK/Arabic any non-punctuation character is treated as a valid boundary
+    (those scripts have no case distinction).
 
-    Riduce hallucinations XTTS dando frasi complete invece di tagli mid-sentence.
+    Reduces XTTS hallucinations by feeding complete sentences instead of
+    mid-sentence cuts.
     """
     import re as _re
     pattern = _re.compile(
@@ -3033,30 +3036,29 @@ def _split_on_punctuation(
             out.append(seg)
             continue
 
-        # Costruisce lista di candidate cut positions.
+        # Build list of candidate cut positions.
         cuts: list[int] = []
         for m in pattern.finditer(text):
             next_idx = m.end()
             if next_idx < len(text):
                 next_ch = text[next_idx]
                 ws_between = m.group(2)  # whitespace consumed between punct and next_ch
-                # Latin scripts: richiede (whitespace obbligatorio) AND
-                # (maiuscola/cifra) per non splittare su abbreviazioni
-                # ("U.S.", "e.g.", "p.m."), dove dopo il punto c'è zero
-                # whitespace prima della lettera successiva. Questo replica
-                # il vecchio comportamento `\\s+` per lo script latino.
-                # Non-latin (CJK, arabo, …): qualunque char non-punct va
-                # bene anche senza whitespace, perché queste lingue non
-                # hanno case distinction e spesso non separano frasi con
-                # spazio (giapponese, cinese).
+                # Latin scripts: require (mandatory whitespace) AND
+                # (uppercase/digit) to avoid splitting on abbreviations
+                # ("U.S.", "e.g.", "p.m."), where there is zero whitespace
+                # between the dot and the next letter. This replicates the
+                # old `\\s+` behaviour for the Latin script.
+                # Non-latin (CJK, Arabic, …): any non-punct character is
+                # acceptable even without whitespace, because those scripts
+                # have no case distinction and often do not separate sentences
+                # with a space (Japanese, Chinese).
                 is_latin = next_ch.isascii() and next_ch.isalpha()
-                # Gate non-latin su `not isascii()`: un digit/punct ASCII
-                # dopo un punto ASCII appartiene sempre a testo latino
-                # (decimali "3.14", quote chiuse "'yes.'") e non dev'essere
-                # un cut-point. Solo i veri caratteri non-ASCII (CJK, arabo,
-                # devanagari, ecc.) beneficiano del `\\s*` (whitespace
-                # opzionale), perché queste lingue non separano le frasi
-                # con spazio.
+                # Non-latin gate on `not isascii()`: an ASCII digit/punct
+                # after an ASCII dot always belongs to Latin text (decimals
+                # "3.14", closing quotes "'yes.'") and must not be a
+                # cut-point. Only truly non-ASCII characters (CJK, Arabic,
+                # Devanagari, etc.) benefit from `\\s*` (optional whitespace)
+                # because those scripts do not separate sentences with a space.
                 if is_latin:
                     if ws_between and next_ch.isupper():
                         cuts.append(next_idx)
@@ -3066,7 +3068,7 @@ def _split_on_punctuation(
             out.append(seg)
             continue
 
-        # Costruisce sotto-frasi e timestamp proporzionali ai caratteri.
+        # Build sub-sentences and character-proportional timestamps.
         pieces: list[tuple[str, int]] = []  # (piece_text, char_end_abs)
         prev = 0
         for c in cuts:
@@ -3089,8 +3091,9 @@ def _split_on_punctuation(
             sub_start = start + duration * (prev_char / total_chars)
             sub_end = start + duration * (char_end / total_chars)
             if sub_end - sub_start < min_duration:
-                # Invece di creare un micro-segment inutile, merge col precedente
-                # (se esiste) o ritorna al segmento originale se nessuno split ha senso.
+                # Instead of creating a useless micro-segment, merge with the
+                # previous one (if it exists) or fall back to the original
+                # segment if no split makes sense.
                 if sub_segments:
                     sub_segments[-1]["end"] = sub_end
                     sub_segments[-1]["text"] = (sub_segments[-1]["text"] + " " + piece_text).strip()
@@ -3121,38 +3124,38 @@ def _merge_short_segments(
     aggressive: bool = False,
     verbose: bool = False,
 ) -> list[dict]:
-    """Unisce segmenti consecutivi brevi (<min_duration) con il successivo se:
-    - gap tra fine precedente e inizio successivo < max_gap
-    - lo stesso speaker (se presente l'informazione)
-    - la durata risultante non supera max_merged_duration
-    Riduce hallucinations di XTTS e compressione atempo (meno slot piccoli con
-    TTS inglese più lungo → meno atempo > 1.5 udibili).
-    Parametri tarati 2026-04-24 dopo diagnostic su video IT→EN: 60% segmenti
-    avevano ratio > 1.30 con i vecchi default (1.5/0.4/12.0).
+    """Merge consecutive short segments (<min_duration) with the next one when:
+    - gap between the end of the previous and the start of the next < max_gap
+    - same speaker (if that information is present)
+    - the resulting duration does not exceed max_merged_duration
+    Reduces XTTS hallucinations and atempo compression (fewer small slots
+    with a longer English TTS → fewer audible atempo > 1.5 ratios).
+    Parameters tuned 2026-04-24 after diagnostic on an IT→EN video: 60% of
+    segments had ratio > 1.30 with the old defaults (1.5/0.4/12.0).
 
-    Default `max_gap=2.0` (bumpato 2026-04-27): tara permette di assorbire pause
-    respiro umane normali (1-2s) che Whisper interpreta erroneamente come
-    boundaries semantiche, evitando di spezzare frasi continue in frammenti.
+    Default `max_gap=2.0` (bumped 2026-04-27): the wider tolerance absorbs
+    normal human breath pauses (1-2 s) that Whisper incorrectly treats as
+    semantic boundaries, preventing continuous sentences from being broken
+    into fragments.
 
-    Secondo passaggio "orfani" (2026-04-27): dopo il merge primario, rileva
-    segmenti molto corti (≤5 parole) che terminano con punteggiatura forte
-    (.?!) e che sono frammenti di coda di una frase Whisper-spezzata su pausa
-    respiro. Li forza nel precedente con vincoli più larghi (gap≤3s, dur
-    totale≤25s) ma stesso speaker e tetto stretto per evitare megaframmenti.
+    Second "orphan" pass (2026-04-27): after the primary merge, detects very
+    short segments (≤5 words) that end with strong punctuation (.?!) and are
+    tail fragments of a Whisper sentence broken on a breath pause. Forces them
+    into the previous segment with looser constraints (gap≤3 s, total≤25 s)
+    but the same speaker and a tight ceiling to prevent mega-fragments.
 
-    `aggressive=True` alza i bound (min 4.0, gap 1.5, max 30.0) per dare più
-    spazio al TTS quando il target è molto più lungo del source (es. EN→IT):
-    segmenti più lunghi hanno margine maggiore per assorbire l'espansione della
-    lingua. Trade-off: picchi massimi più alti, compensati dallo speed XTTS
-    auto-tuned più aggressivo. Nota: con il nuovo default max_gap=2.0,
-    aggressive=True non bumpa più il gap (max(1.5, 2.0)=2.0) — comportamento
-    voluto, conservativo per i caller esistenti.
+    `aggressive=True` raises the bounds (min 4.0, gap 1.5, max 30.0) to give
+    TTS more room when the target is much longer than the source (e.g. EN→IT):
+    longer segments have more headroom to absorb language expansion. Trade-off:
+    higher maximum peaks, offset by a more aggressive auto-tuned XTTS speed.
+    Note: with the new default max_gap=2.0, aggressive=True no longer bumps the
+    gap (max(1.5, 2.0)=2.0) — intentional, conservative for existing callers.
 
-    `verbose=True` stampa ogni orfano fuso (debugging della tara).
+    `verbose=True` prints each merged orphan (useful for tuning debugging).
     """
     if aggressive:
-        # Override forzato dei parametri: il chiamante può anche essere passato
-        # i default (quando non sa che è un caso espanso). Qui bumpa sempre.
+        # Force-override the parameters: the caller may have passed the
+        # defaults (not knowing it is an expanded case). Always bump here.
         min_duration = max(min_duration, 4.0)
         max_gap = max(max_gap, 1.5)
         max_merged_duration = max(max_merged_duration, 30.0)
@@ -3168,9 +3171,9 @@ def _merge_short_segments(
         gap = seg["start"] - prev["end"]
         same_speaker = prev.get("speaker") == seg.get("speaker")
         new_dur = seg["end"] - prev["start"]
-        # Guard: se i segmenti sono significativamente sovrapposti (diarization con
-        # overlap) `gap` è molto negativo; in tal caso non fondere per evitare di
-        # inglobare un turno di altro speaker o un overlap spurio.
+        # Guard: if segments overlap significantly (diarization with overlap)
+        # `gap` is very negative; in that case do not merge, to avoid absorbing
+        # another speaker's turn or a spurious overlap.
         if (
             prev_dur < min_duration
             and gap <= max_gap
@@ -3178,7 +3181,7 @@ def _merge_short_segments(
             and same_speaker
             and new_dur <= max_merged_duration
         ):
-            # guard: se segmenti overlapping preserva il max end
+            # guard: if segments overlap, preserve the max end
             prev["end"] = max(prev["end"], seg["end"])
             prev["text"] = (prev.get("text", "") + " " + seg.get("text", "")).strip()
             # preserva eventuali metadati per-word (Whisper word_timestamps)
@@ -3187,12 +3190,12 @@ def _merge_short_segments(
         else:
             merged.append(dict(seg))
 
-    # Secondo passaggio: orfani (frammenti corti terminali che Whisper ha
-    # staccato dalla frase precedente per via di una pausa respiro). Iteriamo
-    # su `merged` e costruiamo `final` decidendo per ogni elemento se è un
-    # orfano da fondere col precedente o un segmento autonomo. Più orfani
-    # consecutivi vengono fusi tutti nel primo non-orfano (a catena su `prev`
-    # in `final[-1]`).
+    # Second pass: orphans (short terminal fragments that Whisper detached from
+    # the preceding sentence due to a breath pause). Iterate over `merged` and
+    # build `final`, deciding for each element whether it is an orphan to merge
+    # into the previous or a standalone segment. Multiple consecutive orphans
+    # are all fused into the first non-orphan (chained through `prev` in
+    # `final[-1]`).
     final: list[dict] = []
     for idx, seg in enumerate(merged):
         if idx == 0 or not final:
@@ -3320,40 +3323,39 @@ def translate_with_ollama(
     difficulty_profile: _DifficultyProfile | None = None,
     use_cove: bool = True,
 ) -> list[dict]:
-    """Traduce i segmenti tramite Ollama locale usando un prompt slot-aware che
-    impone concisione per il doppiaggio.
+    """Translate segments via a local Ollama daemon using a slot-aware prompt
+    that enforces conciseness for dubbing.
 
     Args:
-        segments: lista di dict con chiavi `start`, `end`, `text`, opz `speaker`.
-        source_lang: codice ISO della lingua sorgente (es. "en"). "auto" accettato.
-        target_lang: codice ISO della lingua target (es. "it").
-        model: nome del modello Ollama (default "qwen3:8b"). Per Qwen3 il
-               thinking mode viene disabilitato automaticamente (think=False
-               + suffisso /no_think) per evitare blocchi <think>...</think>
-               che XTTS pronuncerebbe come outlier.
-        api_url: base URL del daemon Ollama (default "http://localhost:11434").
-        slot_aware: se True, include il reading time nel prompt (consigliato).
-        batch_size: numero di segmenti da accorpare in un singolo prompt. 1 = safe
-                    (parsing banale), >1 = più veloce ma parsing brittle. Per
-                    v2.0 teniamo 1 di default e lasciamo il parametro come hook
-                    futuro (il codice supporta >1 con fallback automatico su
-                    per-segment se il parsing dell'output fallisce).
-        fallback_fn: callable opzionale `(seg) -> str` invocata per il singolo
-                     segmento quando Ollama solleva. Se None, il testo sorgente
-                     è usato as-is (degrada a "no translation").
-        difficulty_profile: profilo TASK 2G v2 (easy/medium/hard) che configura
-                     budget, soglia e iterazioni del length re-prompt. Se None
-                     usa il profilo qualità MEDIUM.
-        use_cove: se True (default), abilita il second-pass Chain-of-Verification
-                     (TASK 2U) sui segmenti che contengono pattern rischiosi
-                     (negazioni, quantifiers). Il modello verifica con domande
-                     yes/no isolate se la prima traduzione preserva negazioni
-                     e quantifiers e può correggerla. Coperto dal Profile
-                     (EASY=False, MEDIUM/HARD=True) ma il caller può forzare
-                     il flag (CLI ``--no-cove`` per disabilitare globalmente).
+        segments: list of dicts with keys `start`, `end`, `text`, opt `speaker`.
+        source_lang: ISO code of the source language (e.g. "en"). "auto" accepted.
+        target_lang: ISO code of the target language (e.g. "it").
+        model: Ollama model name (default "qwen3:8b"). For Qwen3, thinking mode
+               is disabled automatically (think=False + /no_think suffix) to
+               prevent <think>...</think> blocks that XTTS would speak as outliers.
+        api_url: base URL of the Ollama daemon (default "http://localhost:11434").
+        slot_aware: if True, includes reading time in the prompt (recommended).
+        batch_size: number of segments to pack into a single prompt. 1 = safe
+                    (trivial parsing), >1 = faster but brittle parsing. In v2.0
+                    we keep the default at 1 and leave the parameter as a future
+                    hook (the code supports >1 with automatic per-segment fallback
+                    if output parsing fails).
+        fallback_fn: optional callable `(seg) -> str` invoked for a single
+                     segment when Ollama raises. If None, the source text is
+                     used as-is (degrades to "no translation").
+        difficulty_profile: TASK 2G v2 profile (easy/medium/hard) that configures
+                     the budget, threshold, and iteration count for the length
+                     re-prompt. If None, the MEDIUM quality profile is used.
+        use_cove: if True (default), enables the second-pass Chain-of-Verification
+                     (TASK 2U) on segments containing risky patterns (negations,
+                     quantifiers). The model verifies with isolated yes/no
+                     questions whether the first translation preserves negations
+                     and quantifiers, and can correct it. Covered by the Profile
+                     (EASY=False, MEDIUM/HARD=True) but the caller can override
+                     the flag (CLI ``--no-cove`` to disable globally).
 
-    Ritorna la lista di segmenti con `text_src` e `text_tgt` popolati, identica
-    nello schema a quella prodotta da `translate_segments` per gli altri engine.
+    Returns the list of segments with `text_src` and `text_tgt` populated,
+    using the same schema produced by `translate_segments` for other engines.
     """
     import re as _re
     import requests
@@ -3369,8 +3371,9 @@ def translate_with_ollama(
     # about the orchestrator.
     _profile = difficulty_profile or _DIFFICULTY_PROFILE_MEDIUM
 
-    # Health check upfront — così se Ollama è down solleviamo subito invece di
-    # fallire 300 volte nel loop. TASK 2J: if the requested model is missing
+    # Health check upfront — if Ollama is down we raise immediately instead of
+    # failing 300 times in the loop.
+    # TASK 2J: if the requested model is missing
     # but the daemon has another usable model, the selector returns it via
     # `resolved_model` and we proceed with it instead of falling through to
     # Google. Surface the warning so the user sees what happened.
@@ -3388,28 +3391,28 @@ def translate_with_ollama(
     # Sampling parameters tuned per Qwen team's official recommendations:
     #   - Qwen3 non-thinking: T=0.7, TopP=0.8, TopK=20 (avoids endless loops)
     #   - Qwen2.x and others: stricter T=0.3, TopP=0.9 for translation
-    # Doppia protezione: payload `think:false` (Ollama API ≥2025) +
-    # suffix `/no_think` nel prompt (vince anche su versioni vecchie).
+    # Double protection: payload `think:false` (Ollama API ≥2025) +
+    # /no_think suffix in the prompt (also works on older versions).
     is_qwen3 = model.lower().startswith("qwen3")
-    # `thinking` è significativo solo per Qwen3 (gli altri modelli ignorano il
-    # flag). Per modelli non-Qwen3 il log resta "standard"; per Qwen3 riflette
-    # la scelta utente — thinking=True abilita la deliberazione step-by-step
-    # (~10x più lento, riduce errori idiomi/grammatica), False mantiene il
-    # comportamento veloce con prompt /no_think.
+    # `thinking` is only meaningful for Qwen3 (other models ignore the flag).
+    # For non-Qwen3 models the log label stays "standard"; for Qwen3 it reflects
+    # the user's choice — thinking=True enables step-by-step deliberation
+    # (~10x slower, reduces idiom/grammar errors), False keeps fast behaviour
+    # with the /no_think prompt.
     if is_qwen3:
         _mode_label = f"Qwen3 {'thinking' if thinking else 'non-thinking'} (think={thinking})"
     else:
         _mode_label = "standard"
     print(f"     → Mode: {_mode_label}", flush=True)
 
-    # Debug opt-in: se settato, logga sorgente + output finale per ogni segmento.
-    # Utile per indagare residui di preamble/commentary senza re-runnare pipeline.
+    # Debug opt-in: when set, logs source + final output for every segment.
+    # Useful for investigating preamble/commentary residues without re-running the pipeline.
     _ollama_debug = os.environ.get("VIDEOTRANSLATORAI_OLLAMA_DEBUG") == "1"
 
-    # Length safeguard: calcoliamo una volta sola il fattore expansion atteso
-    # (target/source) dalla tabella LANG_EXPANSION. Usato per stimare la
-    # lunghezza massima plausibile per ogni segmento. Cap 1.8× = margine
-    # permissivo per LLM verbose ma catturante per outlier da commentary.
+    # Length safeguard: compute the expected expansion factor (target/source)
+    # from the LANG_EXPANSION table once, before the segment loop. Used to
+    # estimate the maximum plausible length for each segment. Cap 1.8× =
+    # permissive margin for verbose LLMs but catches commentary outliers.
     _src_key = (source_lang or "").split("-")[0] if source_lang != "auto" else ""
     _tgt_key = target_lang.split("-")[0] if target_lang else ""
     _exp_tgt = LANG_EXPANSION.get(target_lang, LANG_EXPANSION.get(_tgt_key, 1.0))
@@ -3444,10 +3447,10 @@ def translate_with_ollama(
     total_tgt_chars = 0
     failed = 0
     truncated_count = 0
-    # TASK 2C-1: re-prompt iterativo per length control. `rewrite_attempts`
-    # conta i segmenti per cui la prima traduzione era oltre budget e abbiamo
-    # chiesto un retry "rewrite shorter". `rewrite_success` conta quanti di
-    # quei retry hanno effettivamente prodotto una versione più corta.
+    # TASK 2C-1: iterative re-prompt for length control. `rewrite_attempts`
+    # counts the segments whose first translation was over budget and for which
+    # we requested a "rewrite shorter" retry. `rewrite_success` counts how many
+    # of those retries actually produced a shorter version.
     rewrite_attempts = 0
     rewrite_success = 0
     # TASK 2U: Chain-of-Verification counters. Kept in a small shared object
@@ -3501,17 +3504,17 @@ def translate_with_ollama(
             "stream": False,
             "options": options,
         }
-        # Toggle thinking mode su Qwen3 via flag API nativa (Ollama supporta
-        # `think` dal 2025+). Se l'API ignora il flag su versioni vecchie, il
-        # suffisso `/no_think` nel prompt (quando thinking=False) fa da safety.
-        # Con thinking=True il modello delibera step-by-step: ~10x più lento
-        # ma riduce errori idiomi/grammatica.
+        # Toggle thinking mode on Qwen3 via the native API flag (Ollama
+        # supports `think` from 2025+). If the API ignores the flag on older
+        # versions, the `/no_think` suffix in the prompt (when thinking=False)
+        # acts as a safety fallback. With thinking=True the model deliberates
+        # step-by-step: ~10x slower but reduces idiom/grammar errors.
         if is_qwen3:
             payload["think"] = bool(thinking)
-        # Timeout generoso: qwen3:8b / qwen2.5:7b su RTX 3090 produce
-        # ~40-80 tok/s, ma su CPU-only può arrivare a 2-5 tok/s. Con thinking
-        # attivo il modello produce 3-5x più tokens (chain-of-thought interno
-        # + risposta) quindi alziamo il timeout a 360s per evitare cut-off.
+        # Generous timeout: qwen3:8b / qwen2.5:7b on an RTX 3090 produces
+        # ~40-80 tok/s, but on CPU-only it can drop to 2-5 tok/s. With thinking
+        # enabled the model produces 3-5x more tokens (internal chain-of-thought
+        # + answer), so we raise the timeout to 360 s to avoid cut-off.
         _timeout = 360 if (is_qwen3 and thinking) else 120
         r = requests.post(f"{base}/api/generate", json=payload, timeout=_timeout)
         r.raise_for_status()
@@ -3618,19 +3621,19 @@ def translate_with_ollama(
                                 flush=True,
                             )
                     if not tr:
-                        # Risposta vuota = considera fallita, fallback
+                        # Empty response — treat as failure and fall back.
                         raise RuntimeError("empty response")
                 # ── Length re-prompt (TASK 2C-1, 2G v2) ─────────────────
-                # Se la prima traduzione è significativamente sopra il budget
-                # ammesso per lo slot audio, chiediamo al modello di
-                # riscriverla più corta. Questo abbatte la zona "strong/severe"
-                # dell'atempo diagnostic (>1.50x) senza penalizzare i segmenti
-                # già a misura. Costo: +N chiamate Ollama solo sugli outlier
-                # (N = profile.length_retry_max_iter, 2 su MEDIUM, 3 su HARD).
+                # If the first translation is significantly over the budget
+                # allowed for the audio slot, ask the model to rewrite it
+                # shorter. This reduces the "strong/severe" zone of the atempo
+                # diagnostic (>1.50x) without penalising segments already within
+                # budget. Cost: +N Ollama calls only for outliers
+                # (N = profile.length_retry_max_iter, 2 for MEDIUM, 3 for HARD).
                 #
-                # TASK 2G v2: budget, soglia e iterazioni vengono dal Profile.
-                # I profili più densi chiedono frasi più corte prima di lasciare
-                # che atempo/rubberband comprimano l'audio.
+                # TASK 2G v2: budget, threshold, and iteration count come from
+                # the Profile. Denser profiles demand shorter sentences before
+                # letting atempo/rubberband compress the audio.
                 target_chars = _compute_target_chars(
                     slot_s,
                     target_lang,
@@ -3693,11 +3696,11 @@ def translate_with_ollama(
                         )
                         tr = tr_short
                     elif tr_short:
-                        # Modello ha risposto ma non ha accorciato. Tracciamo
-                        # solo se _ollama_debug, per non rumorizzare i log,
-                        # e fermiamo il loop: una seconda iterazione con la
-                        # stessa traduzione punterebbe allo stesso minimo
-                        # locale del modello, sprecando budget.
+                        # Model responded but did not shorten. Log only when
+                        # _ollama_debug to avoid cluttering the output, and
+                        # stop the loop: a second iteration with the same
+                        # translation would hit the same local minimum of the
+                        # model, wasting budget.
                         if _ollama_debug:
                             print(
                                 f"     [ollama-debug] length retry seg #{i} "
@@ -3720,20 +3723,20 @@ def translate_with_ollama(
                 ):
                     _add_quality_flag(seg, _FLAG_LENGTH_UNFIT)
                 # ── Length safeguard ────────────────────────────────────
-                # Se l'output residuo dopo strip_preamble è >> del sorgente
-                # rispetto all'expansion atteso, il modello ha quasi
-                # certamente incluso commentary non-catturato. Tronchiamo
-                # alla prima frase completa (o a char cap con word-boundary)
-                # per evitare che XTTS sintetizzi 20+ secondi di disclaimer.
-                # v2.2: cap stretto 1.5x (era 1.8x) per catturare più aggressivamente
-                # gli outlier Ollama da commentary/disclaimer non-strippato.
+                # If the residual output after strip_preamble is >> the source
+                # relative to the expected expansion, the model almost certainly
+                # included unstripped commentary. Truncate to the first complete
+                # sentence (or to a char cap with word-boundary) to prevent
+                # XTTS from synthesising 20+ seconds of disclaimer.
+                # v2.2: tighter cap 1.5x (was 1.8x) to catch Ollama outliers
+                # from unstripped commentary/disclaimers more aggressively.
                 max_reasonable_chars = max(
                     50, int(len(text) * _expansion_factor * 1.5)
                 )
                 if len(tr) > max_reasonable_chars:
-                    # v2.2: log sempre il SRC e l'OUT troncati, così l'utente può
-                    # diagnosticare quali segmenti hanno triggato il safety senza
-                    # dover impostare VIDEOTRANSLATORAI_OLLAMA_DEBUG.
+                    # v2.2: always log the truncated SRC and OUT so the user can
+                    # diagnose which segments triggered the safety without having
+                    # to set VIDEOTRANSLATORAI_OLLAMA_DEBUG.
                     src_preview = text[:120] + ("..." if len(text) > 120 else "")
                     cleaned_preview = tr[:200] + ("..." if len(tr) > 200 else "")
                     print(
@@ -3744,8 +3747,8 @@ def translate_with_ollama(
                     )
                     print(f"       SRC: {src_preview!r}", flush=True)
                     print(f"       OUT: {cleaned_preview!r}", flush=True)
-                    # Strategia: prima frase completa (.?!。？！ seguito da
-                    # spazio/fine). Fallback: cap con word-boundary.
+                    # Strategy: first complete sentence (.?!。？！ followed by
+                    # space/end). Fallback: cap with word-boundary.
                     m = _re.search(r"^(.+?[.?!。？！])(?:\s|$)", tr)
                     if m and len(m.group(1)) <= max_reasonable_chars * 1.1:
                         tr = m.group(1)
@@ -3753,15 +3756,15 @@ def translate_with_ollama(
                         tr = tr[:max_reasonable_chars].rsplit(" ", 1)[0] + "..."
                     truncated_count += 1
                 # ── Chain-of-Verification (TASK 2U) ────────────────────
-                # Second-pass opt-in che attacca gli errori semantici
-                # qwen3 sui segmenti rischiosi (negazioni, quantifiers).
-                # Riferimento: paper ACL 2024 'Chain-of-Verification
+                # Second-pass opt-in that targets semantic errors by qwen3
+                # on risky segments (negations, quantifiers).
+                # Reference: ACL 2024 paper 'Chain-of-Verification
                 # Reduces Hallucination in Large Language Models'.
-                # Triggata SOLO se: (a) flag use_cove True (controllato
-                # da Profile + CLI --no-cove), (b) source contiene
-                # pattern a rischio, (c) traduzione candidata non vuota.
-                # Failure best-effort: la prima traduzione resta valida
-                # se la verifica HTTP fallisce o l'output è inutilizzabile.
+                # Triggered ONLY if: (a) flag use_cove True (controlled
+                # by Profile + CLI --no-cove), (b) source contains a
+                # risky pattern, (c) candidate translation is non-empty.
+                # Failure is best-effort: the first translation remains
+                # valid if the HTTP check fails or the output is unusable.
                 if use_cove and tr:
                     _cove_needs, _cove_reasons = _cove_needs_verification(text)
                     if _cove_needs:
@@ -3799,9 +3802,9 @@ def translate_with_ollama(
                                 cove_metrics.record_rejected()
                         except Exception as _cove_err:
                             cove_metrics.record_failure()
-                            # CoVe è opt-in best-effort: un errore HTTP o
-                            # un parse failure non deve bloccare il
-                            # segmento. La prima traduzione resta valida.
+                            # CoVe is opt-in best-effort: an HTTP error or
+                            # a parse failure must not block the segment.
+                            # The first translation remains valid.
                             if _ollama_debug:
                                 print(
                                     f"     ! CoVe seg #{i} failed: {_cove_err}",
@@ -3867,13 +3870,13 @@ def translate_with_ollama(
         if (i + 1) % 4 == 0 or i + 1 == total:
             print(f"     {i+1}/{total}...", end="\r", flush=True)
 
-    # Statistica shrinkage: quanto più conciso è l'output Ollama rispetto
-    # al sorgente (approssimazione per caratteri). Utile a diagnosticare se
-    # il prompt "CONCISE" sta funzionando (atteso ratio ~0.9-1.1 vs naïf
-    # 1.25 per EN→IT con deep-translator).
+    # Shrinkage statistic: how much more concise the Ollama output is relative
+    # to the source (character-count approximation). Useful for diagnosing
+    # whether the "CONCISE" prompt is working (expected ratio ~0.9-1.1 vs the
+    # naïve 1.25 for EN→IT with deep-translator).
     if total_src_chars > 0:
         ratio = total_tgt_chars / total_src_chars
-        # expansion naïf atteso dalla tabella LANG_EXPANSION (baseline letterale)
+        # Naïve expansion expected from the LANG_EXPANSION table (literal baseline)
         exp_tgt = LANG_EXPANSION.get(target_lang, LANG_EXPANSION.get(target_lang.split("-")[0], 1.0))
         exp_src = LANG_EXPANSION.get(source_lang, LANG_EXPANSION.get((source_lang or "").split("-")[0], 1.0))
         baseline = (exp_tgt / exp_src) if exp_src > 0 else 1.0
@@ -3961,11 +3964,11 @@ from videotranslator.xtts_engine import generate_tts_xtts  # noqa: E402
 
 
 # v2.5.2: seed list for multi-attempt XTTS retry.
-# Seeds empirici diversi spingono il decoder GPT2 di XTTS a path
-# differenti, riducendo la probabilità che lo stesso testo cada nello stesso
-# loop deterministico di un seed fisso (era 42 in v2.2-2.5.1).
-# L'ultimo seed (42) è mantenuto per retrocompat con i log della v2.2-2.5.1
-# in caso di confronti di regression test.
+# Using different empirical seeds pushes the XTTS GPT2 decoder down different
+# paths, reducing the probability that the same text falls into the same
+# deterministic loop of a fixed seed (was 42 in v2.2-2.5.1).
+# The last seed (42) is kept for backwards-compatibility with v2.2-2.5.1 logs
+# in case regression-test comparisons are needed.
 RETRY_SEEDS = (7, 1337, 42)
 
 
@@ -4354,9 +4357,9 @@ def load_config() -> dict:
 
 
 def _write_config_raw(cfg: dict) -> None:
-    """Scrive il dict cfg (intero, non in merge) con permessi 0600 atomicamente.
-    Usare questa quando serve rimuovere chiavi; save_config fa merge e non
-    cancellerebbe nulla.
+    """Write the cfg dict (whole, not merged) atomically with 0600 permissions.
+    Use this when keys need to be deleted; save_config merges and would never
+    remove existing keys.
     """
     _write_json_config(CONFIG_PATH, cfg)
 
@@ -4369,12 +4372,12 @@ def save_config(data: dict) -> None:
 
 
 def _keyring_available():
-    """Ritorna il modulo keyring se disponibile, altrimenti None."""
+    """Return the keyring module if available, otherwise None."""
     return _import_keyring_backend()
 
 
 def load_hf_token() -> str:
-    """Legge il token HF: prima dal keyring, poi (migrazione) dal JSON legacy."""
+    """Read the HF token: first from the keyring, then (migration) from the legacy JSON."""
     return _load_secret_token(
         keyring_backend=_keyring_available(),
         config_path=CONFIG_PATH,
@@ -4384,7 +4387,7 @@ def load_hf_token() -> str:
 
 
 def save_hf_token(token: str) -> None:
-    """Salva il token HF nel system keyring. Fallback JSON se keyring manca."""
+    """Save the HF token to the system keyring. Falls back to JSON if keyring is unavailable."""
     token = (token or "").strip()
     if not token:
         return
@@ -4404,8 +4407,8 @@ def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
     """Run pyannote speaker-diarization-3.1. Returns [{start,end,speaker}, ...]."""
     from pyannote.audio import Pipeline
     print("[3b] Running speaker diarization (pyannote)...", flush=True)
-    # Inizializza pipeline a None prima del try così il finally non crasha
-    # con NameError se from_pretrained solleva.
+    # Initialise pipeline to None before the try so the finally block does not
+    # crash with NameError if from_pretrained raises.
     pipeline = None
     try:
         pipeline = Pipeline.from_pretrained(
@@ -4971,13 +4974,13 @@ class App(tk.Tk):
         self._ollama_slot_aware  = tk.BooleanVar(
             value=_ocfg.get("ollama_slot_aware", True)
         )
-        # Thinking mode su Qwen3: default OFF (veloce). Se True il modello
-        # delibera step-by-step (~10x più lento, riduce errori idiomi/grammatica).
+        # Thinking mode on Qwen3: default OFF (fast). When True the model
+        # deliberates step-by-step (~10x slower, reduces idiom/grammar errors).
         self._ollama_thinking    = tk.BooleanVar(
             value=_ocfg.get("ollama_thinking", False)
         )
-        # Diarization: il token HF è persistito nel system keyring (con migrazione
-        # automatica dal vecchio JSON legacy).
+        # Diarization: the HF token is persisted in the system keyring (with
+        # automatic migration from the old legacy JSON).
         self._use_diarization = tk.BooleanVar(value=False)
         self._hf_token_var    = tk.StringVar(value=load_hf_token())
         # Hotwords: comma-separated list of brand/proper nouns/jargon to bias
@@ -4987,10 +4990,10 @@ class App(tk.Tk):
         )
         self._running    = False
         self._destroying = False
-        # Guard re-entrancy: durante il setup async di Ollama (detect / install
-        # / start daemon / pull model) blocchiamo doppi trigger da Start /
-        # Download. Non usiamo `_running` perché quello scatta solo quando
-        # parte la pipeline vera, non durante il pre-flight.
+        # Guard re-entrancy: during the async Ollama setup (detect / install
+        # / start daemon / pull model) block duplicate triggers from Start /
+        # Download. We do not use `_running` because that flag fires only when
+        # the real pipeline starts, not during the pre-flight.
         self._ollama_setup_in_flight = False
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
@@ -5078,9 +5081,9 @@ class App(tk.Tk):
 
     def _s(self, key: str) -> str:
         # Fallback chain: current UI lang → it → en → key (literal)
-        # Necessario quando una chiave è stata aggiunta solo a it/en (es. nuove
-        # feature introdotte incrementalmente) per evitare che gli utenti delle
-        # altre 24 lingue vedano nomi di chiavi raw al posto della label tradotta.
+        # Required when a key was added only to it/en (e.g. incrementally
+        # introduced features) to prevent users of the other 24 languages from
+        # seeing raw key names instead of a translated label.
         lang = self._ui_lang.get()
         for bucket in (UI_STRINGS.get(lang, {}), UI_STRINGS["it"], UI_STRINGS["en"]):
             if key in bucket:
@@ -5276,10 +5279,10 @@ class App(tk.Tk):
             ok = True
             # 10-minute ceiling: covers large Torch wheels on slow mirrors
             # without letting the GUI freeze forever if pip stalls.
-            # NB: proc.wait(timeout=…) non scatta se pip si blocca senza
-            # chiudere stdout, perché il for-loop su proc.stdout si ferma lì.
-            # Un Timer che killa il processo garantisce lo sblocco (l'iteratore
-            # su stdout solleva o ritorna EOF appena il processo muore).
+            # NB: proc.wait(timeout=…) does not fire if pip stalls without
+            # closing stdout, because the for-loop on proc.stdout blocks there.
+            # A Timer that kills the process guarantees the unblock (the
+            # stdout iterator raises or returns EOF as soon as the process dies).
             PIP_TIMEOUT = 600
             timed_out = {"fired": False}
 
@@ -5312,9 +5315,9 @@ class App(tk.Tk):
                 else:
                     ok = proc.returncode == 0
             except Exception:
-                # Se il timeout watchdog ha chiuso stdout, l'iteratore qui
-                # solleva — stampiamo comunque il messaggio di timeout così
-                # l'utente vede la causa invece di un generico "Installation failed".
+                # If the timeout watchdog closed stdout the iterator raises
+                # here — still print the timeout message so the user sees the
+                # cause instead of a generic "Installation failed".
                 if timed_out["fired"]:
                     self.after(0, self._log_write,
                                f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
@@ -5343,9 +5346,9 @@ class App(tk.Tk):
     def _upgrade_ytdlp_in_background(self):
         """Silently upgrade yt-dlp in a daemon thread; logs only if a new version is installed.
 
-        Rispetta il flag `yt_dlp_auto_upgrade` in config (default True). Se l'utente
-        lo imposta a False (es. su sistemi PEP 668 dove non vuole che l'env venga
-        modificato), l'upgrade è skippato silenziosamente.
+        Respects the `yt_dlp_auto_upgrade` flag in config (default True). If the user
+        sets it to False (e.g. on PEP 668 systems where they do not want the env
+        modified), the upgrade is skipped silently.
         """
         # Check user consent via config flag (default: enabled for backwards compat)
         try:
@@ -5367,7 +5370,7 @@ class App(tk.Tk):
                 )
                 for line in (result.stdout or "").splitlines():
                     if "Successfully installed" in line:
-                        # m3: regex che evita trailing dot (es. "yt-dlp-2024.10.")
+                        # m3: regex that avoids a trailing dot (e.g. "yt-dlp-2024.10.")
                         m = _re.search(r"yt[-_]dlp-([0-9]+(?:\.[0-9]+)+)", line)
                         if m and not self._destroying:
                             self.after(0, self._log_write,
@@ -5384,10 +5387,10 @@ class App(tk.Tk):
             return
         self._optional_checked = True
 
-        # TASK 2C-2: suggerimento non-bloccante per Rubber Band CLI su Linux.
-        # È un binario di sistema (apt/dnf/pacman), non installabile via pip,
-        # quindi non rientra nel popup di OPTIONAL_PACKAGES. Loggiamo solo:
-        # se manca, build_dubbed_track userà comunque atempo (no regressione).
+        # TASK 2C-2: non-blocking hint for Rubber Band CLI on Linux.
+        # It is a system binary (apt/dnf/pacman), not installable via pip,
+        # so it does not belong in the OPTIONAL_PACKAGES popup. Log only:
+        # if missing, build_dubbed_track will still use atempo (no regression).
         if sys.platform.startswith("linux") and shutil.which("rubberband") is None:
             self._log_write(
                 "[i] Optional: install Rubber Band CLI for higher-quality "
@@ -5630,11 +5633,11 @@ class App(tk.Tk):
         self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16, **_opy)
         self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
         self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
-        # XTTS + Lipsync su row 2 in layout 2-colonne coerente con i checkbox
-        # sopra (col 0 / col 1). La versione precedente metteva lipsync in col=2
-        # con XTTS che occupava col 0+1: questo rendeva lipsync invisibile
-        # quando il riquadro Ollama (row=6, col 0+1 columnspan=2) si dilatava
-        # con il toggle thinking, perché col=2 finiva fuori dall'area visibile.
+        # XTTS + Lipsync on row 2 in a 2-column layout consistent with the
+        # checkboxes above (col 0 / col 1). The previous version put lipsync
+        # in col=2 while XTTS spanned col 0+1: this made lipsync invisible
+        # when the Ollama frame (row=6, col 0+1 columnspan=2) expanded with
+        # the thinking toggle because col=2 ended up outside the visible area.
         self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
         self._chk_xtts.grid(row=2, column=0, sticky="w", pady=(8, 0))
         self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
@@ -5665,8 +5668,8 @@ class App(tk.Tk):
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
 
-        # Ollama LLM radio (v2.0). Nota: la label è lunga (descrive la feature)
-        # perciò occupa una riga a sé sotto il row dei tre radio "classici".
+        # Ollama LLM radio (v2.0). Note: the label is long (describes the
+        # feature) so it occupies its own row below the three "classic" radios.
         engine_row2 = tk.Frame(opts, bg=BG)
         engine_row2.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._rb_eng_ollama = tk.Radiobutton(
@@ -5682,21 +5685,21 @@ class App(tk.Tk):
         self._lbl_ollama_model = tk.Label(self._ollama_row, text=self._s("label_ollama_model"),
                                           bg=BG, fg=FG2, font=("Helvetica", 8))
         self._lbl_ollama_model.pack(side="left")
-        # Combobox: solo modelli testati end-to-end (TASK 2T 2026-04-29).
-        # Power user che vuole un tag diverso può scriverlo a mano nel campo
-        # (combobox NON è readonly) o usare --ollama-model da CLI. Plus,
-        # smart fallback (TASK 2J) auto-resolve a qwen3:* se l'utente ha
-        # un tag legacy non installato.
-        # qwen3:4b incluso come 'leggero' anche se non profondamente testato:
-        # stessa famiglia qwen3, sampling parameters e thinking-mode identici,
-        # plausibilmente compatibile su GPU con VRAM ridotte (<6 GB).
+        # Combobox: only end-to-end tested models (TASK 2T 2026-04-29).
+        # A power user who wants a different tag can type it directly in the
+        # field (combobox is NOT readonly) or use --ollama-model from CLI.
+        # Plus, smart fallback (TASK 2J) auto-resolves to qwen3:* if the user
+        # has a legacy tag that is no longer installed.
+        # qwen3:4b included as 'lightweight' even though not deeply tested:
+        # same qwen3 family, identical sampling parameters and thinking-mode,
+        # plausibly compatible on GPUs with limited VRAM (<6 GB).
         self._ollama_model_combo = ttk.Combobox(
             self._ollama_row, textvariable=self._ollama_model_var, width=28,
             values=[
-                "qwen3:8b",                  # Default raccomandato (~5.2 GB) — tested
-                "qwen3:14b",                 # Qualità superiore (~9 GB)     — tested
-                "qwen2.5:7b-instruct",       # Fallback compat legacy         — tested
-                "qwen3:4b",                  # Leggero (~3 GB) — qwen3 family OK
+                "qwen3:8b",                  # Recommended default (~5.2 GB) — tested
+                "qwen3:14b",                 # Higher quality (~9 GB)        — tested
+                "qwen2.5:7b-instruct",       # Legacy compat fallback         — tested
+                "qwen3:4b",                  # Lightweight (~3 GB) — qwen3 family OK
             ],
             font=("Monospace", 8),
         )
@@ -5716,13 +5719,13 @@ class App(tk.Tk):
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
         self._ollama_row.grid_remove()  # hidden until llm_ollama selected
 
-        # Ollama thinking row (riga dedicata): tenere il toggle thinking sulla
-        # stessa riga di model+url+slot-aware ingrossava troppo `_ollama_row`,
-        # spingendo lipsync (col=2 di `opts`) fuori dall'area visibile e
-        # rendendo poco leggibile l'hint. Riga separata = label larga ok,
-        # nessun impatto sulla larghezza delle altre colonne. Il toggle
-        # disabilita il suffix `/no_think` nel prompt e invia `think:True` al
-        # daemon. Solo Qwen3 risponde al flag (altri modelli lo ignorano).
+        # Ollama thinking row (dedicated row): keeping the thinking toggle on
+        # the same row as model+url+slot-aware made `_ollama_row` too wide,
+        # pushing lipsync (col=2 of `opts`) out of the visible area and making
+        # the hint hard to read. A separate row = wide label is fine,
+        # no impact on the width of other columns. The toggle disables the
+        # `/no_think` suffix in the prompt and sends `think:True` to the daemon.
+        # Only Qwen3 responds to the flag (other models ignore it).
         self._ollama_row2 = tk.Frame(opts, bg=BG)
         self._ollama_row2.grid(row=7, column=0, columnspan=2, sticky="w", pady=(2, 0))
         self._chk_ollama_thinking = tk.Checkbutton(
@@ -6048,7 +6051,7 @@ class App(tk.Tk):
             self._ollama_row.grid()
             self._ollama_row2.grid()
             # Auto-setup: binary detection → install → daemon → model pull.
-            # Tutto in thread daemon, popup via self.after per thread safety.
+            # All in a daemon thread; popups routed via self.after for thread safety.
             # Respect `ollama_auto_install` config flag (default True).
             self._ensure_ollama_ready_async(on_ready=None)
         else:
@@ -6060,24 +6063,24 @@ class App(tk.Tk):
     # ── TTS engine mutual exclusion (v2.3) ────────────────────────────────
     # ── Ollama auto-setup (v2.0.1) ────────────────────────────────────────
     #
-    # Flusso (tutto off-thread, UI sempre responsive):
-    #   1. Binary → se manca: popup [Sì/No] → _ollama_install
-    #   2. Daemon → se down: start in background, wait fino a 15s
-    #   3. Modello → se manca: popup [Sì/No/Cambia modello] → ollama pull
+    # Flow (all off-thread, UI always responsive):
+    #   1. Binary → if missing: popup [Yes/No] → _ollama_install
+    #   2. Daemon → if down: start in background, wait up to 15 s
+    #   3. Model → if missing: popup [Yes/No/Change model] → ollama pull
     #   4. Ready
-    # Edge: se config `ollama_auto_install=false`, salta install/pull e
-    # cade sul fallback Google senza popup.
+    # Edge: if config `ollama_auto_install=false`, skip install/pull and
+    # fall back to Google without a popup.
     #
-    # `on_ready` è un callback opzionale invocato su main thread quando
-    # Ollama è pronto (utile per chainare la pipeline di traduzione).
-    # Se Ollama non è pronto al termine, `on_ready(False)` viene chiamato.
+    # `on_ready` is an optional callback invoked on the main thread when
+    # Ollama is ready (useful for chaining the translation pipeline).
+    # If Ollama is not ready at the end, `on_ready(False)` is called.
 
     def _ensure_ollama_ready_async(self, on_ready=None):
-        """Entry point: spawn il worker di setup in thread daemon.
+        """Entry point: spawn the setup worker in a daemon thread.
 
-        `on_ready`: callback(bool) invocato su main thread; True se Ollama è
-        pronto (daemon up + modello disponibile), False altrimenti. Se None,
-        la funzione serve solo a "warm up" Ollama (caso radio select).
+        `on_ready`: callback(bool) invoked on the main thread; True if Ollama is
+        ready (daemon up + model available), False otherwise. If None,
+        the function is used only to "warm up" Ollama (radio select case).
         """
         model = self._ollama_model_var.get().strip() or "qwen3:8b"
         url = self._ollama_url_var.get().strip() or "http://localhost:11434"
@@ -6097,12 +6100,12 @@ class App(tk.Tk):
             self.after(0, self._log_write, text)
 
     def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
-        """Worker thread: esegue gli step 1-4. Ritorna True se Ollama è pronto.
+        """Worker thread: runs steps 1-4. Returns True if Ollama is ready.
 
-        Questo è il cuore del flusso — ogni step ha un early-exit puntuale
-        così da non accumulare state, e ogni popup è inoltrato al main
-        thread tramite `_ask_yes_no_sync` (blocca il worker finché l'utente
-        risponde, ma la GUI resta fluida).
+        This is the heart of the flow — each step has a precise early-exit
+        so that no state accumulates, and every popup is forwarded to the main
+        thread via `_ask_yes_no_sync` (blocks the worker until the user
+        responds, but the GUI stays fluid).
         """
         # Step 1: binary detection
         binary = _ollama_find_binary()
@@ -6187,8 +6190,8 @@ class App(tk.Tk):
         if health_ok and health_msg and resolved_model and resolved_model != model:
             self._log_async(f"[!] {health_msg}\n")
         elif not health_ok:
-            # Heuristic: è un problema di "modello mancante", "daemon giù"
-            # o "nessun modello installato"?
+            # Heuristic: is this a "missing model", "daemon down",
+            # or "no model installed" problem?
             msg_lower = (health_msg or "").lower()
             if "not reachable" in msg_lower or "invalid json" in msg_lower:
                 self._log_async(f"[x] Ollama non raggiungibile: {health_msg}\n")
@@ -6221,8 +6224,8 @@ class App(tk.Tk):
         return True
 
     def _ask_yes_no_sync(self, title: str, message: str) -> bool:
-        """Chiama messagebox.askyesno sul main thread e blocca il worker
-        finché l'utente risponde. Usa un Event per il rendezvous.
+        """Call messagebox.askyesno on the main thread and block the worker
+        until the user responds. Uses an Event for the rendezvous.
         """
         if self._destroying:
             return False
@@ -6236,7 +6239,7 @@ class App(tk.Tk):
                 done.set()
 
         self.after(0, _prompt)
-        # Attendi max 5 minuti — oltre significa che il dialogo è stato perso.
+        # Wait up to 5 minutes — beyond that the dialog has likely been lost.
         done.wait(timeout=300)
         return result["v"]
 
@@ -6301,7 +6304,7 @@ class App(tk.Tk):
         if not urls:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_url"))
             return
-        # Ollama auto-setup prima del download (stessa logica di _start)
+        # Ollama auto-setup before download (same logic as _start)
         if self._translation_engine.get() == "llm_ollama":
             self._ollama_setup_in_flight = True
             self._btn.configure(state="disabled")
@@ -6318,11 +6321,11 @@ class App(tk.Tk):
         self._dispatch_download(urls)
 
     def _start_download_after_ollama(self, ok: bool, urls: list[str]) -> None:
-        # Rilasciamo il guard pre-flight sia se procediamo (dispatch lo
-        # riabiliterà a fine pipeline) sia se torniamo in idle.
+        # Release the pre-flight guard whether we proceed (dispatch will
+        # re-enable at end of pipeline) or return to idle.
         self._ollama_setup_in_flight = False
         if self._destroying or self._running:
-            # GUI chiusa o pipeline già avviata altrove → ripristina stato UI.
+            # GUI closed or pipeline already started elsewhere → restore UI state.
             try:
                 self._btn.configure(state="normal", text=self._s("btn_start"))
                 self._btn_download.configure(state="normal",
@@ -6344,8 +6347,8 @@ class App(tk.Tk):
         self._log.configure(state="disabled")
         p = self._snapshot_params()
 
-        # Editor sottotitoli supportato solo su URL singolo (pipeline a 2 fasi
-        # con UI bloccante: in batch su più URL non avrebbe senso).
+        # Subtitle editor is only supported for a single URL (2-phase pipeline
+        # with a blocking UI: it would not make sense in batch mode with multiple URLs).
         editor_requested = bool(self._edit_subs.get())
         use_editor_for_single_url = editor_requested and len(urls) == 1
         if editor_requested and len(urls) > 1:
@@ -6373,11 +6376,11 @@ class App(tk.Tk):
                             fd, stable = tempfile.mkstemp(suffix=".mp4", prefix="yt_")
                             os.close(fd)
                             shutil.move(video_path, stable)
-                        # Branch editor: schedula la fase 1 (transcribe+translate)
-                        # sul main thread, lascia che _start_with_editor /
-                        # _run_with_segments / _open_editor (cancel) si occupino
-                        # del cleanup di `stable`. Salta _on_done qui — sarà
-                        # invocato dal flusso editor quando completato/abortito.
+                        # Editor branch: schedule phase 1 (transcribe+translate)
+                        # on the main thread and let _start_with_editor /
+                        # _run_with_segments / _open_editor (cancel) take care
+                        # of cleaning up `stable`. Skip _on_done here — it will
+                        # be called by the editor flow when done/aborted.
                         if use_editor_for_single_url:
                             self.after(0, self._log_write,
                                        "[i] Opening subtitle editor — "
@@ -6465,10 +6468,10 @@ class App(tk.Tk):
         if not self._batch_files:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_video"))
             return
-        # Se engine = llm_ollama, esegui il setup prima di partire con la
-        # pipeline vera. In caso di fallimento (utente rifiuta install,
-        # download abortito, daemon non avviabile) translate_segments cade
-        # automaticamente su Google — quindi procediamo comunque.
+        # If engine = llm_ollama, run the setup before starting the real
+        # pipeline. On failure (user refuses install, download aborted,
+        # daemon won't start) translate_segments automatically falls back
+        # to Google — so we proceed regardless.
         if self._translation_engine.get() == "llm_ollama":
             self._ollama_setup_in_flight = True
             self._btn.configure(state="disabled", text=self._s("btn_installing"))
@@ -6482,8 +6485,9 @@ class App(tk.Tk):
         self._dispatch_start()
 
     def _start_after_ollama(self, ok: bool) -> None:
-        """Callback dopo il setup Ollama: procedi comunque (fallback Google
-        gestito nella pipeline). Se l'utente ha chiuso nel frattempo, skip.
+        """Callback after Ollama setup: proceed regardless (Google fallback
+        is handled inside the pipeline). If the user closed the window in the
+        meantime, skip.
         """
         self._ollama_setup_in_flight = False
         if self._destroying or self._running:
@@ -6499,7 +6503,7 @@ class App(tk.Tk):
         self._dispatch_start()
 
     def _dispatch_start(self) -> None:
-        """Instrada verso editor o batch — parte comune a _start e
+        """Route to editor or batch — common entry point for _start and
         _start_after_ollama."""
         if self._edit_subs.get() and len(self._batch_files) == 1:
             self._start_with_editor(self._batch_files[0])
@@ -6513,9 +6517,9 @@ class App(tk.Tk):
         except (ValueError, tk.TclError):
             rate = 0
         cfg = load_config()
-        # xtts_speed: se la chiave esiste nel config JSON è un override utente
-        # esplicito; se è assente passiamo None per lasciare che l'autotune
-        # scelga in base alla coppia di lingue.
+        # xtts_speed: if the key exists in the JSON config it is an explicit
+        # user override; if absent we pass None so that autotune chooses
+        # based on the language pair.
         if "xtts_speed" in cfg:
             try:
                 xtts_speed = float(cfg["xtts_speed"])
@@ -6553,8 +6557,8 @@ class App(tk.Tk):
         # Persist HF token for next launch
         if snap["hf_token"] and snap["use_diarization"]:
             save_hf_token(snap["hf_token"])
-        # Persist Ollama prefs (model/url/slot_aware/thinking) quando l'utente ha
-        # selezionato l'engine — così al prossimo avvio i campi sono precompilati.
+        # Persist Ollama prefs (model/url/slot_aware/thinking) when the user
+        # has selected this engine — so the fields are pre-filled on next launch.
         if snap["translation_engine"] == "llm_ollama":
             try:
                 save_config({
@@ -6571,10 +6575,11 @@ class App(tk.Tk):
                            cleanup_path: str | None = None):
         """Phase 1: transcribe + translate, then open subtitle editor.
 
-        ``cleanup_path``: percorso di un file temporaneo (tipicamente il
-        download YouTube spostato su path stabile) che il flusso editor deve
-        rimuovere a fine pipeline (sia su confirm che su cancel/errore).
-        Per file locali aperti dall'utente è ``None`` — il file resta intatto.
+        ``cleanup_path``: path of a temporary file (typically the YouTube
+        download moved to a stable path) that the editor flow must remove
+        at the end of the pipeline (both on confirm and on cancel/error).
+        For local files opened by the user it is ``None`` — the file is
+        left untouched.
         """
         self._log_write("Phase 1: Transcription + translation (no dubbing)...\n")
         self._running = True
@@ -6615,7 +6620,7 @@ class App(tk.Tk):
                            result["segments"], cleanup_path)
             except Exception as e:
                 self.after(0, self._log_write, f"[x] Error: {e}\n{traceback.format_exc()}\n")
-                # Pulisci il temp scaricato anche su errore in fase 1
+                # Clean up the downloaded temp file even on phase-1 error
                 self._cleanup_editor_tempfile(cleanup_path)
                 self.after(0, self._on_done, False)
             finally:
@@ -6624,8 +6629,8 @@ class App(tk.Tk):
         threading.Thread(target=phase1, daemon=True).start()
 
     def _cleanup_editor_tempfile(self, cleanup_path: str | None) -> None:
-        """Rimuove il file temporaneo associato al flusso editor (download URL).
-        Safe-no-op se ``cleanup_path`` è None o non esiste."""
+        """Remove the temporary file associated with the editor flow (URL download).
+        Safe no-op if ``cleanup_path`` is None or does not exist."""
         if not cleanup_path:
             return
         try:
@@ -6646,10 +6651,10 @@ class App(tk.Tk):
             self._cleanup_editor_tempfile(cleanup_path)
             return
 
-        # Stato condiviso fra il callback _confirm e l'handler di chiusura
-        # finestra: serve a non duplicare il cleanup quando l'utente conferma
-        # (in quel caso il cleanup spetta a _run_with_segments) e a non
-        # rimuovere il file mentre la fase 2 lo sta ancora usando.
+        # Shared state between the _confirm callback and the window close
+        # handler: prevents duplicate cleanup when the user confirms
+        # (in that case cleanup is owned by _run_with_segments) and avoids
+        # removing the file while phase 2 is still using it.
         confirmed = {"flag": False}
 
         def on_confirm(edited):
@@ -6659,9 +6664,9 @@ class App(tk.Tk):
 
         editor = SubtitleEditor(self, segments, on_confirm, ui_s=self._s)
 
-        # Tkinter propaga <Destroy> a tutti i widget figli; filtriamo per
-        # reagire solo alla distruzione del Toplevel stesso (idempotenza
-        # garantita anche dal flag `confirmed`).
+        # Tkinter propagates <Destroy> to all child widgets; we filter to
+        # react only to the destruction of the Toplevel itself (idempotency
+        # is also guaranteed by the `confirmed` flag).
         def on_editor_destroyed(evt):
             if evt.widget is not editor:
                 return
@@ -6676,8 +6681,8 @@ class App(tk.Tk):
                            cleanup_path: str | None = None):
         """Phase 2: dubbing with editor segments.
 
-        ``cleanup_path`` viene rimosso nel ``finally`` del worker: il file
-        scaricato non serve più dopo il mux finale.
+        ``cleanup_path`` is removed in the worker's ``finally`` block: the
+        downloaded file is no longer needed after the final mux.
         """
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_dubbing"))
@@ -7081,8 +7086,8 @@ def _cli():
 
     cfg_cli = load_config()
     hf_token_cli = args.hf_token or load_hf_token() or cfg_cli.get("hf_token", "")
-    # CLI ha la priorità, poi config JSON (se la chiave esiste), altrimenti None
-    # → autotune kicks-in dentro translate_video().
+    # CLI takes priority, then JSON config (if the key exists), otherwise None
+    # → autotune kicks in inside translate_video().
     if args.xtts_speed is not None:
         xtts_speed_cli: float | None = args.xtts_speed
     elif "xtts_speed" in cfg_cli:
@@ -7092,7 +7097,7 @@ def _cli():
             xtts_speed_cli = None
     else:
         xtts_speed_cli = None
-    # Scelta TTS engine: --xtts oppure default Edge-TTS.
+    # TTS engine selection: --xtts flag or default Edge-TTS.
     tts_engine_cli = "xtts" if args.xtts else "edge"
 
     # Hotwords: merge --hotwords (string) and --hotwords-file (JSON). CLI

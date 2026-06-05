@@ -90,11 +90,11 @@ def translate_video(
     Main pipeline. Returns dict with output paths and segments.
     segments_override: skip transcription+translation and use these segments (GUI editor).
 
-    `xtts_speed`: se None (default) viene calcolato via `_suggest_xtts_speed`
-    in base alla coppia (lang_source, lang_target). Se fornito esplicitamente
-    (config JSON con chiave presente / CLI --xtts-speed / parametro GUI futuro)
-    viene rispettato senza modifiche. Questa è la leva principale per ridurre
-    l'atempo post-processing su coppie asimmetriche tipo EN→IT.
+    `xtts_speed`: if None (default) it is computed via `_suggest_xtts_speed`
+    based on the (lang_source, lang_target) pair. When provided explicitly
+    (JSON config key present / CLI --xtts-speed / future GUI parameter) the
+    value is used as-is. This is the primary lever for reducing atempo
+    post-processing on asymmetric pairs such as EN→IT.
     """
 
     LANGUAGES = runtime.languages
@@ -130,19 +130,19 @@ def translate_video(
     if not os.path.exists(video_in):
         raise FileNotFoundError(f"Video not found: {video_in}")
 
-    # Autotune dello speed XTTS in base alla coppia di lingue. Rispetta sempre
-    # un override esplicito (xtts_speed non-None). Calcolato qui, una sola volta
-    # per chiamata, così sia il log iniziale sia l'invocazione di generate_tts_xtts
-    # usano lo stesso valore.
+    # Autotune XTTS speed based on the language pair. An explicit override
+    # (xtts_speed non-None) is always respected. Computed once per call so
+    # both the initial log line and the generate_tts_xtts invocation use the
+    # same value.
     effective_xtts_speed, lang_ratio, speed_auto = _suggest_xtts_speed(
         lang_source, lang_target, xtts_speed,
     )
-    # Caso "target molto più lungo del source" (ratio >= 1.20): oltre allo speed
-    # auto-tuned, rendiamo anche il merge dei segmenti più aggressivo, così
-    # l'italiano/francese tradotto ha slot più capienti da riempire. Il
-    # gate `speed_auto` assicura che un utente v1.4 con `xtts_speed` pinnato
-    # in config non veda cambiare silenziosamente anche il merge (i due dial
-    # si muovono insieme: o entrambi auto, o entrambi a default).
+    # "Target much longer than source" case (ratio >= 1.20): alongside the
+    # auto-tuned speed, we also make segment merging more aggressive so that
+    # translated Italian/French has roomier slots to fill. The `speed_auto`
+    # gate ensures that a v1.4 user with a pinned `xtts_speed` in their config
+    # does not silently see the merge behaviour change too (the two dials move
+    # together: either both are auto, or both stay at their defaults).
     merge_aggressive = speed_auto and lang_ratio >= 1.20
 
     voice = voice or LANGUAGES[lang_target]["voices"][0]
@@ -165,8 +165,8 @@ def translate_video(
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)
     if tts_engine == "xtts":
-        # Log esplicito di cosa ha deciso l'autotune. Utile in bug report / debug
-        # di atempo artifacts.
+        # Explicit log of what the autotune decided. Useful in bug reports and
+        # debugging of atempo artifacts.
         if speed_auto:
             _ratio_note = f"auto-tuned for {lang_source}→{lang_target}, ratio={lang_ratio:.2f}"
         else:
@@ -249,8 +249,8 @@ def translate_video(
                 vocals_path, model, lang_source, hotwords=hotwords,
             )
             effective_src = detected_lang if lang_source == "auto" else lang_source
-            # Re-split su punteggiatura forte: dà a XTTS frasi complete invece di
-            # cut mid-sentence di Whisper. Riduce hallucinations.
+            # Re-split on strong punctuation: gives XTTS complete sentences instead
+            # of Whisper's mid-sentence cuts. Reduces hallucinations.
             pre_split = len(raw_segs)
             raw_segs = _split_on_punctuation(raw_segs)
             if len(raw_segs) > pre_split:
@@ -263,19 +263,19 @@ def translate_video(
                 except Exception as e:
                     print(f"     ! Diarization failed ({e.__class__.__name__}: {e}), continuing without speaker info.", flush=True)
                     diar_segments = []
-            # Merge dei segmenti troppo brevi per ridurre hallucinations XTTS
-            # e produrre frasi più naturali per la traduzione. Su coppie con
-            # target molto più lungo della source (ratio >= 1.20, es. EN→IT)
-            # usiamo bound più generosi per dare al TTS slot più capienti.
+            # Merge overly short segments to reduce XTTS hallucinations and
+            # produce more natural phrases for translation. On pairs where the
+            # target is much longer than the source (ratio >= 1.20, e.g. EN→IT)
+            # we use looser bounds to give the TTS roomier slots.
             pre_merge = len(raw_segs)
             raw_segs = _merge_short_segments(raw_segs, aggressive=merge_aggressive)
             if len(raw_segs) < pre_merge:
                 _note = " (aggressive)" if merge_aggressive else ""
                 print(f"     → Merged short segments{_note}: {pre_merge} → {len(raw_segs)}", flush=True)
-            # TASK 2L: ricompone frasi spezzate da Whisper (es. "sto per." +
-            # "Parlare di...") prima della traduzione, così qwen3 vede frasi
-            # coerenti invece di frammenti. Pure function, ritorna nuova lista.
-            # Disabilitabile con --no-sentence-repair per A/B test.
+            # TASK 2L: reassembles sentences broken by Whisper (e.g. "about to." +
+            # "Talk about...") before translation, so qwen3 sees coherent sentences
+            # instead of fragments. Pure function, returns a new list.
+            # Disable with --no-sentence-repair for A/B testing.
             if sentence_repair:
                 _pre_repair = len(raw_segs)
                 raw_segs = _repair_split_sentences(
@@ -288,11 +288,11 @@ def translate_video(
                         flush=True,
                     )
             # TASK 2E: smart slot expansion / time borrowing. Tight segments
-            # (expected pre_stretch_ratio > 1.50) "rubano" tempo dai gap
-            # silenziosi successivi e — se il vicino è sotto-utilizzato —
-            # anche dall'inizio del suo slot. Riduce l'atempo udibile senza
-            # toccare il testo o la traduzione. Disabilitabile con
-            # --no-slot-expansion per A/B test in caso di regressioni.
+            # (expected pre_stretch_ratio > 1.50) steal time from subsequent
+            # silent gaps and — if the neighbouring segment is under-utilised —
+            # also from the beginning of its slot. Reduces audible atempo without
+            # touching text or translation. Disable with --no-slot-expansion
+            # for A/B testing in case of regressions.
             if slot_expansion:
                 _exp_tgt = LANG_EXPANSION.get(
                     lang_target,
@@ -317,12 +317,11 @@ def translate_video(
                         f"by borrowing silence",
                         flush=True,
                     )
-            # TASK 2M: post-Whisper sanity check. Flag segments con token
-            # sospetti (parole inglesi non standard di 1-3 char, ripetizioni
-            # immediate). NON corregge automaticamente — stamparli a console
-            # aiuta l'utente a sapere quali segmenti rivedere nell'editor
-            # sottotitoli prima del doppiaggio. Disabilitabile con
-            # --no-whisper-sanity per pipeline silenziosa.
+            # TASK 2M: post-Whisper sanity check. Flags segments with suspicious
+            # tokens (non-standard 1-3 char English words, immediate repetitions).
+            # Does NOT auto-correct — printing them to the console helps the user
+            # know which segments to review in the subtitle editor before dubbing.
+            # Disable with --no-whisper-sanity for a silent pipeline.
             if whisper_sanity:
                 try:
                     from videotranslator.whisper_sanity import (
@@ -434,12 +433,11 @@ def translate_video(
         # TASK 2G v2: clamp the autotuned XTTS ceiling by the resolved
         # Profile's xtts_speed_cap. EASY keeps the voice very natural,
         # MEDIUM allows moderate compression, HARD gives a little more room.
-        # Si applica solo
-        # quando l'utente NON ha pinnato xtts_speed esplicitamente
-        # (speed_auto=True) — un override CLI/config viene rispettato
-        # come prima per non sorprendere chi ha tuning manuale. Log
-        # esplicito quando il cap effettivamente cambia, così il
-        # diagnostic XTTS adaptive speed coincide con l'aspettativa.
+        # Applied only when the user has NOT explicitly pinned xtts_speed
+        # (speed_auto=True) — a CLI/config override is honoured as before
+        # to avoid surprising users with manual tuning. Logged explicitly
+        # when the cap actually changes, so the XTTS adaptive speed
+        # diagnostic matches expectations.
         if speed_auto and _resolved_profile is not None:
             _orig_speed = effective_xtts_speed
             _capped = min(effective_xtts_speed, _resolved_profile.xtts_speed_cap)
@@ -452,9 +450,9 @@ def translate_video(
                 )
             effective_xtts_speed = _capped
 
-        # TTS generation — Edge-TTS o Coqui XTTS v2.
-        # Cascata di fallback: xtts → edge. Se l'utente ha scelto voice
-        # cloning e fallisce, degradiamo a Edge-TTS.
+        # TTS generation — Edge-TTS or Coqui XTTS v2.
+        # Fallback cascade: xtts → edge. If the user chose voice cloning
+        # and it fails, we gracefully degrade to Edge-TTS.
         tts_files = None
         if tts_engine == "xtts":
             try:

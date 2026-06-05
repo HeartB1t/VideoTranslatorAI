@@ -35,13 +35,14 @@ def translate_segments(
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
 
     # ── Ollama LLM translation (v2.0) ──────────────────────────────────────
-    # Leva strutturale contro gli atempo artifacts: l'LLM capisce il vincolo
-    # temporale e comprime la traduzione alla sorgente, invece di lasciare che
-    # MarianMT/Google producano output letterali +25% più lunghi.
+    # Structural lever against atempo artifacts: the LLM understands the
+    # timing constraint and compresses the translation to match the source
+    # duration, instead of letting MarianMT/Google produce literal output
+    # that is +25% longer.
     if engine == "llm_ollama":
-        # TASK 2U: il Profile può forzare CoVe off (EASY) ma il flag
-        # esplicito del caller (CLI --no-cove) ha priorità. Quando il
-        # caller passa False, manteniamo l'override anche su MEDIUM/HARD.
+        # TASK 2U: the Profile can force CoVe off (EASY) but the explicit
+        # caller flag (CLI --no-cove) takes priority. When the caller passes
+        # False, we keep the override even on MEDIUM/HARD.
         _effective_use_cove = ollama_use_cove
         if difficulty_profile is not None and not difficulty_profile.use_cove:
             _effective_use_cove = False
@@ -140,7 +141,7 @@ def translate_segments(
         # fall through to Google if MarianMT failed
         engine = "google"
 
-    # ── DeepL: batch API con retry/backoff ──────────────────────────────────
+    # ── DeepL: batch API with retry/backoff ─────────────────────────────────
     if engine == "deepl" and deepl_key.strip():
         key = deepl_key.strip()
         endpoint = "https://api-free.deepl.com/v2/translate" if key.endswith(":fx") else "https://api.deepl.com/v2/translate"

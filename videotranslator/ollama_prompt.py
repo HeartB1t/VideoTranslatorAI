@@ -181,11 +181,11 @@ def build_translation_prompt(
         f"{tgt_name} translation (spoken, concise{slot_hint}):\n"
     )
 
-    # Doppia safety: se l'API Ollama non interpreta `think:false` (versioni
-    # pre-2025), il suffisso `/no_think` nel prompt è il toggle ufficiale
-    # documentato da Qwen e vince comunque. Quando l'utente sceglie
-    # esplicitamente la modalità thinking lo OMETTIAMO (altrimenti il toggle
-    # `/no_think` annulla il think richiesto via API).
+    # Double safety: if the Ollama API does not honour `think:false` (pre-2025
+    # versions), the `/no_think` suffix in the prompt is the official Qwen-
+    # documented toggle and wins regardless. When the user explicitly opts into
+    # thinking mode we OMIT it (otherwise `/no_think` would cancel the thinking
+    # requested via the API).
     if is_qwen3 and not thinking:
         prompt = prompt.rstrip() + "\n\n/no_think"
 
