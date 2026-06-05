@@ -108,6 +108,9 @@ DEFAULT_OPTIONAL_PACKAGES: tuple[PackageProbe, ...] = (
     ),
     PackageProbe("silero_vad", "silero-vad", False, "XTTS speech reference VAD"),
     PackageProbe("keyring", "keyring", False, "secure token storage"),
+    PackageProbe("dlib", "dlib", False, "Wav2Lip face detector backend"),
+    PackageProbe("facexlib", "facexlib", False, "Wav2Lip face helpers"),
+    PackageProbe("basicsr", "new-basicsr", False, "Wav2Lip BasicSR-compatible package"),
 )
 
 DEFAULT_OPTIONAL_BINARIES: tuple[BinaryProbe, ...] = (

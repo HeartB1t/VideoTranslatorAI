@@ -3342,8 +3342,8 @@ def translate_with_ollama(
                      segmento quando Ollama solleva. Se None, il testo sorgente
                      è usato as-is (degrada a "no translation").
         difficulty_profile: profilo TASK 2G v2 (easy/medium/hard) che configura
-                     soglia ed iterazioni del length re-prompt. Se None il
-                     comportamento ricalca v1.7 / pre-2G v2 (MEDIUM).
+                     budget, soglia e iterazioni del length re-prompt. Se None
+                     usa il profilo qualità MEDIUM.
         use_cove: se True (default), abilita il second-pass Chain-of-Verification
                      (TASK 2U) sui segmenti che contengono pattern rischiosi
                      (negazioni, quantifiers). Il modello verifica con domande
@@ -3361,8 +3361,8 @@ def translate_with_ollama(
     src_name = _ollama_lang_name(source_lang)
     tgt_name = _ollama_lang_name(target_lang)
 
-    # TASK 2G v2: profile orchestrator. None = legacy MEDIUM behaviour
-    # (1.10 retry threshold, 1 retry iteration). The caller is expected
+    # TASK 2G v2: profile orchestrator. None = default MEDIUM quality policy.
+    # The caller is expected
     # to pass a resolved Profile when --no-difficulty-profile is OFF;
     # we fall back to MEDIUM here so the public function stays usable
     # standalone (CLI, notebooks) without forcing every caller to know
@@ -3626,16 +3626,16 @@ def translate_with_ollama(
                 # riscriverla più corta. Questo abbatte la zona "strong/severe"
                 # dell'atempo diagnostic (>1.50x) senza penalizzare i segmenti
                 # già a misura. Costo: +N chiamate Ollama solo sugli outlier
-                # (N = profile.length_retry_max_iter, 1 di default, 2 su HARD).
+                # (N = profile.length_retry_max_iter, 2 su MEDIUM, 3 su HARD).
                 #
-                # TASK 2G v2: la soglia (legacy 1.10) e il numero di iter (legacy
-                # 1) ora vengono dal Profile. EASY alza la soglia a 1.20 (meno
-                # retry); HARD la abbassa a 1.05 e permette 2 iter consecutive
-                # così video con P90 > 1.80 hanno una seconda chance prima del
-                # safety truncation. Backward-compat: senza Profile passato dal
-                # caller, _profile = MEDIUM == comportamento storico identico.
+                # TASK 2G v2: budget, soglia e iterazioni vengono dal Profile.
+                # I profili più densi chiedono frasi più corte prima di lasciare
+                # che atempo/rubberband comprimano l'audio.
                 target_chars = _compute_target_chars(
-                    slot_s, target_lang, slack=1.10
+                    slot_s,
+                    target_lang,
+                    slack=_profile.target_chars_slack,
+                    min_chars=_profile.target_chars_floor,
                 )
                 _seg_target_chars = target_chars
                 _retry_threshold = _profile.length_retry_threshold
@@ -4082,7 +4082,13 @@ WAV2LIP_TIMEOUT = 3600  # seconds before Wav2Lip subprocess is forcibly killed
 
 # Base deps needed by Wav2Lip on all platforms; dlib + face-detection extras
 # are handled separately below (different install strategy per OS).
-WAV2LIP_BASE_PKGS = ["opencv-python", "librosa", "tqdm"]
+from videotranslator.wav2lip_runtime import (  # noqa: E402
+    WAV2LIP_BASE_REQUIREMENTS,
+    missing_wav2lip_base_packages as _missing_wav2lip_base_packages,
+    missing_wav2lip_face_packages as _missing_wav2lip_face_packages,
+)
+
+WAV2LIP_BASE_PKGS = [req.pip_name for req in WAV2LIP_BASE_REQUIREMENTS]
 # Face-detection stack required by Wav2Lip's inference.py. On Windows the
 # installer ships pre-built dlib wheels; on Linux dlib must compile from
 # source (needs cmake + a C++ toolchain), so we attempt it best-effort and
@@ -4124,6 +4130,21 @@ def _snapshot_active_subprocesses() -> list[subprocess.Popen]:
 _set_ollama_subprocess_hooks(_register_subprocess, _unregister_subprocess)
 
 
+def _install_wav2lip_base_stack() -> None:
+    """Install missing base packages imported by Wav2Lip inference.py."""
+    missing = _missing_wav2lip_base_packages()
+    if not missing:
+        return
+    print(f"     Installing Wav2Lip base deps: {', '.join(missing)}", flush=True)
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--quiet",
+         "--break-system-packages"] + missing,
+        check=False,
+    )
+    if result.returncode != 0:
+        print("     ! Some Wav2Lip base deps failed to install — lipsync may not work.", flush=True)
+
+
 def _install_wav2lip_face_stack_linux() -> None:
     """Install dlib + new-basicsr + facexlib on Linux with a cmake pre-check.
 
@@ -4139,13 +4160,17 @@ def _install_wav2lip_face_stack_linux() -> None:
     """
     # new-basicsr + facexlib are cheap (wheel + pure python), install them
     # first so lipsync can at least attempt to run even if dlib is missing.
-    res = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--quiet",
-         "--break-system-packages"] + WAV2LIP_FACE_PKGS,
-        check=False,
-    )
-    if res.returncode != 0:
-        print("     ! new-basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
+    missing_face = set(_missing_wav2lip_face_packages())
+    light_pkgs = [pkg for pkg in WAV2LIP_FACE_PKGS if pkg in missing_face]
+    if light_pkgs:
+        print(f"     Installing Wav2Lip face deps: {', '.join(light_pkgs)}", flush=True)
+        res = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet",
+             "--break-system-packages"] + light_pkgs,
+            check=False,
+        )
+        if res.returncode != 0:
+            print("     ! new-basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
 
     # dlib: short-circuit if already importable (system package or prior install).
     try:
@@ -4178,6 +4203,23 @@ def _install_wav2lip_face_stack_linux() -> None:
         )
 
 
+def _ensure_wav2lip_python_deps() -> None:
+    """Ensure Python packages imported by Wav2Lip are present."""
+    _install_wav2lip_base_stack()
+    missing_face = _missing_wav2lip_face_packages()
+    if not missing_face:
+        return
+    names = ", ".join(missing_face)
+    if sys.platform.startswith("win"):
+        print(
+            f"     ! Wav2Lip face deps missing: {names}. "
+            "Run setup_windows.bat to install the Windows face stack.",
+            flush=True,
+        )
+        return
+    _install_wav2lip_face_stack_linux()
+
+
 def _ensure_wav2lip_assets():
     """Ensure Wav2Lip repo and GAN weights are available locally.
 
@@ -4185,13 +4227,14 @@ def _ensure_wav2lip_assets():
     ``%ProgramFiles%`` on Windows) that is read-only for unprivileged users.
     The pure path resolver guarantees that if assets are NOT yet present we
     landed on a writable fallback, so a plain ``mkdir`` here is safe in
-    "fresh install" mode. The branch below short-circuits when the system
-    install is already complete: no mkdir, no patching attempts.
+    "fresh install" mode. Even when repo+model are already present we still
+    verify Python runtime deps: users can have a populated asset cache but a
+    fresh Python environment.
     """
     repo_present = WAV2LIP_REPO.exists() and (WAV2LIP_REPO / "inference.py").exists()
     model_present = WAV2LIP_MODEL.exists()
     if repo_present and model_present:
-        # Fully populated (typical Windows installer path) — nothing to do.
+        _ensure_wav2lip_python_deps()
         return
 
     WAV2LIP_DIR.mkdir(parents=True, exist_ok=True)
@@ -4200,7 +4243,11 @@ def _ensure_wav2lip_assets():
     except (OSError, PermissionError):
         pass
 
-    if not WAV2LIP_REPO.exists():
+    if not repo_present:
+        if WAV2LIP_REPO.exists():
+            raise RuntimeError(
+                f"Incomplete Wav2Lip repo at {WAV2LIP_REPO}: missing inference.py"
+            )
         print(f"     Cloning Wav2Lip repo → {WAV2LIP_REPO}", flush=True)
         if not shutil.which("git"):
             raise RuntimeError("git not found: required to clone Wav2Lip repo")
@@ -4208,22 +4255,6 @@ def _ensure_wav2lip_assets():
             ["git", "clone", "--depth", "1", WAV2LIP_REPO_URL, str(WAV2LIP_REPO)],
             check=True, capture_output=True,
         )
-        # Install only the packages Wav2Lip needs that aren't already present
-        # (skip the repo's requirements.txt — it pins ancient versions incompatible with Python 3.13+)
-        print(f"     Installing Wav2Lip base deps: {', '.join(WAV2LIP_BASE_PKGS)}", flush=True)
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet",
-             "--break-system-packages"] + WAV2LIP_BASE_PKGS,
-            check=False,
-        )
-        if result.returncode != 0:
-            print("     ! Some Wav2Lip base deps failed to install — lipsync may not work.", flush=True)
-
-        # Face-detection stack (dlib + basicsr + facexlib). On Windows we rely
-        # on install_windows.bat to ship pre-built dlib wheels; here on Linux
-        # we install them at first use.
-        if not sys.platform.startswith("win"):
-            _install_wav2lip_face_stack_linux()
 
         # Patch audio.py: librosa>=0.9 changed filters.mel() to keyword-only args
         audio_py = WAV2LIP_REPO / "audio.py"
@@ -4236,6 +4267,8 @@ def _ensure_wav2lip_assets():
             if patched != txt:
                 audio_py.write_text(patched, encoding="utf-8")
                 print("     Patched audio.py for librosa>=0.9 compatibility.", flush=True)
+
+    _ensure_wav2lip_python_deps()
 
     if not WAV2LIP_MODEL.exists():
         print("     Downloading Wav2Lip GAN model (~416MB)...", flush=True)
@@ -6992,10 +7025,9 @@ def _cli():
                              "source content profile (e.g. fast comedy → hard).")
     parser.add_argument("--no-difficulty-profile", action="store_true",
                         help="Disable the TASK 2G v2 profile orchestrator and "
-                             "use the legacy v1.7 hard-coded constants "
-                             "(equivalent to MEDIUM profile). Default OFF: the "
-                             "pipeline auto-tunes length retry threshold, "
-                             "atempo cap, Rubber Band band and XTTS speed cap "
+                             "fall back to the default MEDIUM quality profile. "
+                             "Default OFF: the pipeline auto-tunes length retry "
+                             "budget, atempo cap, Rubber Band band and XTTS speed cap "
                              "based on the predicted P90 stretch ratio.")
     # TASK 2U: Chain-of-Verification opt-out.
     parser.add_argument("--no-cove", action="store_true",

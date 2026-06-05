@@ -68,22 +68,26 @@ def compute_target_chars(
     slot_s: float,
     target_lang_code: str,
     slack: float = 1.10,
+    min_chars: int = 50,
 ) -> int:
     """Character budget that fits the spoken audio in ``slot_s`` seconds.
 
     The budget is ``slot_s × chars_per_second(target_lang) × slack``,
-    floored at 50 to avoid retrying on micro-segments where any small
-    rounding would otherwise trigger.
+    floored at ``min_chars`` to avoid retrying on micro-segments where any
+    small rounding would otherwise trigger. Quality profiles can lower the
+    floor for dense content so 1-2 second slots are not allowed to carry text
+    that would require obvious speed-up.
 
     ``slack`` is a tolerance multiplier (default 1.10 = +10% over the
     natural-rate budget); paired with :func:`should_reprompt_for_length`'s
     own threshold it controls how aggressively re-prompts fire. Returns
-    50 if any input is non-positive (defensive default).
+    ``min_chars`` if any input is non-positive (defensive default).
     """
+    floor = max(1, int(min_chars))
     if slot_s <= 0 or slack <= 0:
-        return 50
+        return floor
     cps = chars_per_second_for(target_lang_code)
-    return max(50, int(slot_s * cps * slack))
+    return max(floor, int(slot_s * cps * slack))
 
 
 def should_reprompt_for_length(

@@ -3,17 +3,15 @@
 Maps the (easy|medium|hard) classification produced by
 ``videotranslator.difficulty_detector`` into concrete pipeline parameter
 overrides. The runtime then uses the resolved :class:`Profile` instead
-of the hardcoded constants previously spread across
-``translate_with_ollama`` (length re-prompt threshold) and
-``build_dubbed_track`` (atempo cap, Rubber Band band, XTTS speed cap).
+of hardcoded knobs spread across ``translate_with_ollama`` (length
+re-prompt budget), ``build_dubbed_track`` (post-stretch cap, Rubber Band
+band) and XTTS generation (native speed cap).
 
-The MEDIUM profile reproduces the legacy v1.7 / pre-2G v2 behaviour
-exactly — passing ``--no-difficulty-profile`` (or feeding a
-classification not in :data:`PROFILES`) leaves the pipeline indistinct
-from the old hard-coded path. EASY relaxes the knobs (less retry, more
-margin) while HARD makes them stricter (more retry, larger atempo cap,
-extended Rubber Band band, higher XTTS native speed cap) so that videos
-classified as audibly accelerated still degrade gracefully.
+The profiles are quality-first: as density rises, the pipeline spends
+more effort rewriting translations shorter and keeps post-stretch
+compression inside a bounded, audible-quality range. The older policy
+allowed very high ``atempo`` factors to avoid truncation; that completed
+more renders, but produced sudden speed jumps on dense videos.
 
 Pure module: no I/O, no Tk, no subprocess. Easy to unit test.
 """
@@ -35,14 +33,20 @@ class Profile:
         more retries (more aggressive shortening).
     length_retry_max_iter:
         Maximum number of "rewrite shorter" attempts per segment. The
-        legacy code path runs at most one retry; HARD profile bumps it
-        to two so videos that overshoot even after the first rewrite
-        get one more chance before falling back to safety truncation.
+        denser the source, the more chances the LLM gets before audio
+        stretch is allowed to solve the problem.
+    target_chars_slack:
+        Tolerance multiplier used when computing the spoken character
+        budget for a slot. Lower values force shorter dubbing lines
+        before TTS, reducing later speed spikes.
+    target_chars_floor:
+        Minimum character budget for very short segments. Lower floors
+        make 1-2 second slots eligible for rewrite instead of silently
+        accepting lines that can only fit by speeding up audio.
     atempo_cap:
         Upper clamp passed to :func:`_build_atempo_chain` (and used as
-        the runtime hard cap on raw stretch ratio). Higher caps allow
-        more aggressive compression on HARD videos at the price of more
-        audible artefacts.
+        the runtime hard cap on raw stretch ratio). Kept deliberately
+        low: anything far above ~1.5x sounds like a sudden speed-up.
     rubberband_min, rubberband_max:
         Inclusive band where :func:`select_stretch_engine` prefers
         Rubber Band CLI over ``ffmpeg atempo``. Outside this band atempo
@@ -66,6 +70,8 @@ class Profile:
 
     length_retry_threshold: float
     length_retry_max_iter: int
+    target_chars_slack: float
+    target_chars_floor: int
     atempo_cap: float
     rubberband_min: float
     rubberband_max: float
@@ -74,48 +80,45 @@ class Profile:
 
 
 # Calibration baseline:
-#   - MEDIUM reproduces the legacy v1.7 / pre-2G v2 hard-coded constants
-#     (1.10 retry threshold in _translate_with_ollama, atempo cap 4.0 in
-#     _build_atempo_chain default, rubberband band 1.15-1.50 in
-#     select_stretch_engine default, XTTS ceiling 1.35 effective via
-#     _compute_segment_speed hard_cap and _suggest_xtts_speed cap).
-#   - EASY relaxes everything: a video already comfortable in its slots
-#     does not need aggressive retry or extended bands; this saves
-#     Ollama calls and keeps stretch artefacts minimal.
-#   - HARD widens the knobs: lower retry threshold (1.05) catches more
-#     overshoots, max_iter=2 gives a second chance, atempo cap goes to
-#     5.0 (still within ffmpeg's safe practical range with chained
-#     instances), rubberband band extended to 1.80 to avoid falling
-#     back to atempo for ratios that Rubber Band still handles
-#     acceptably, and XTTS cap 1.45 lets synthesis absorb more of the
-#     compression burden.
+#   - EASY keeps a little room and avoids needless extra LLM calls.
+#   - MEDIUM is the default quality profile for dense but recoverable
+#     videos: retry more, tighten the budget, cap speed jumps at 1.5x.
+#   - HARD is strict on text length, not permissive on speed. It gives
+#     one more rewrite attempt and allows only a modest extra post-stretch
+#     ceiling for otherwise impossible segments.
 EASY = Profile(
-    length_retry_threshold=1.20,
+    length_retry_threshold=1.10,
     length_retry_max_iter=1,
-    atempo_cap=3.0,
+    target_chars_slack=1.10,
+    target_chars_floor=50,
+    atempo_cap=1.35,
     rubberband_min=1.15,
-    rubberband_max=1.50,
-    xtts_speed_cap=1.30,
+    rubberband_max=1.35,
+    xtts_speed_cap=1.25,
     # EASY videos are low-density and the in-prompt PRESERVE NEGATIONS
     # rule is enough; skip the CoVe per-segment cost.
     use_cove=False,
 )
 MEDIUM = Profile(
-    length_retry_threshold=1.10,
-    length_retry_max_iter=1,
-    atempo_cap=4.0,
+    length_retry_threshold=1.00,
+    length_retry_max_iter=2,
+    target_chars_slack=1.05,
+    target_chars_floor=35,
+    atempo_cap=1.50,
     rubberband_min=1.15,
     rubberband_max=1.50,
-    xtts_speed_cap=1.35,
+    xtts_speed_cap=1.30,
     use_cove=True,
 )
 HARD = Profile(
-    length_retry_threshold=1.05,
-    length_retry_max_iter=2,
-    atempo_cap=5.0,
+    length_retry_threshold=0.98,
+    length_retry_max_iter=3,
+    target_chars_slack=1.00,
+    target_chars_floor=25,
+    atempo_cap=1.65,
     rubberband_min=1.15,
-    rubberband_max=1.80,
-    xtts_speed_cap=1.45,
+    rubberband_max=1.65,
+    xtts_speed_cap=1.35,
     use_cove=True,
 )
 
@@ -131,7 +134,7 @@ def resolve_profile(classification: str) -> Profile:
 
     Falls back to :data:`MEDIUM` for unknown / empty / ``None`` inputs
     so a typo or future classification value never crashes the pipeline
-    — at worst the runtime keeps the legacy behaviour.
+    — at worst the runtime keeps the default quality profile.
     """
     if not classification:
         return MEDIUM
@@ -153,6 +156,8 @@ def format_profile_log(
         f"[difficulty] {classification.upper()} profile applied "
         f"(P90 ~{p90:.2f}): "
         f"retry threshold {profile.length_retry_threshold}, "
+        f"target slack {profile.target_chars_slack}, "
+        f"target floor {profile.target_chars_floor}, "
         f"atempo cap {profile.atempo_cap}, "
         f"rubberband {profile.rubberband_min}-{profile.rubberband_max}, "
         f"xtts cap {profile.xtts_speed_cap}"

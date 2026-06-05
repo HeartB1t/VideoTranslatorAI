@@ -59,10 +59,7 @@ class ProfileImmutabilityTests(unittest.TestCase):
 
 
 class ProfileMonotonicityTests(unittest.TestCase):
-    """HARD must be strictly more aggressive than MEDIUM, EASY strictly
-    more conservative. These invariants guard against accidental
-    regressions if someone tunes a single number without re-checking
-    the full triplet."""
+    """HARD must be stricter on text length while keeping stretch bounded."""
 
     def test_hard_more_aggressive_than_medium_on_retry(self):
         # Lower threshold = catches more overshoots = more aggressive.
@@ -72,15 +69,24 @@ class ProfileMonotonicityTests(unittest.TestCase):
         self.assertGreater(
             HARD.length_retry_max_iter, MEDIUM.length_retry_max_iter
         )
+        self.assertLess(
+            HARD.target_chars_slack, MEDIUM.target_chars_slack
+        )
+        self.assertLess(
+            HARD.target_chars_floor, MEDIUM.target_chars_floor
+        )
 
-    def test_hard_more_aggressive_than_medium_on_stretch(self):
-        # Higher cap = more compression headroom on dense videos.
+    def test_hard_stretch_is_still_quality_bounded(self):
+        # HARD gets modest extra headroom, but never the old 4x/5x jumps.
         self.assertGreater(HARD.atempo_cap, MEDIUM.atempo_cap)
+        self.assertLessEqual(HARD.atempo_cap, 1.65)
         # Wider rubberband window = stays on the high-quality engine
         # for higher ratios before falling back to atempo.
         self.assertGreater(HARD.rubberband_max, MEDIUM.rubberband_max)
-        # Higher XTTS cap = synthesis absorbs more of the compression.
+        self.assertLessEqual(HARD.rubberband_max, 1.65)
+        # Higher XTTS cap = synthesis absorbs a little more of the compression.
         self.assertGreater(HARD.xtts_speed_cap, MEDIUM.xtts_speed_cap)
+        self.assertLessEqual(HARD.xtts_speed_cap, 1.35)
 
     def test_easy_more_conservative_than_medium(self):
         self.assertGreater(
@@ -89,20 +95,25 @@ class ProfileMonotonicityTests(unittest.TestCase):
         self.assertLessEqual(
             EASY.length_retry_max_iter, MEDIUM.length_retry_max_iter
         )
+        self.assertGreater(
+            EASY.target_chars_slack, MEDIUM.target_chars_slack
+        )
+        self.assertGreater(
+            EASY.target_chars_floor, MEDIUM.target_chars_floor
+        )
         self.assertLess(EASY.atempo_cap, MEDIUM.atempo_cap)
         self.assertLessEqual(EASY.rubberband_max, MEDIUM.rubberband_max)
         self.assertLess(EASY.xtts_speed_cap, MEDIUM.xtts_speed_cap)
 
-    def test_medium_matches_legacy_constants(self):
-        # MEDIUM must reproduce the v1.7 / pre-2G v2 hard-coded values
-        # so --no-difficulty-profile (and unknown classifications) get
-        # exact behavioural parity with the legacy code path.
-        self.assertAlmostEqual(MEDIUM.length_retry_threshold, 1.10)
-        self.assertEqual(MEDIUM.length_retry_max_iter, 1)
-        self.assertAlmostEqual(MEDIUM.atempo_cap, 4.0)
+    def test_medium_matches_default_quality_policy(self):
+        self.assertAlmostEqual(MEDIUM.length_retry_threshold, 1.00)
+        self.assertEqual(MEDIUM.length_retry_max_iter, 2)
+        self.assertAlmostEqual(MEDIUM.target_chars_slack, 1.05)
+        self.assertEqual(MEDIUM.target_chars_floor, 35)
+        self.assertAlmostEqual(MEDIUM.atempo_cap, 1.50)
         self.assertAlmostEqual(MEDIUM.rubberband_min, 1.15)
         self.assertAlmostEqual(MEDIUM.rubberband_max, 1.50)
-        self.assertAlmostEqual(MEDIUM.xtts_speed_cap, 1.35)
+        self.assertAlmostEqual(MEDIUM.xtts_speed_cap, 1.30)
 
     def test_easy_disables_cove_medium_hard_enable(self):
         # TASK 2U policy: EASY skips CoVe (legacy PRESERVE NEGATIONS in
@@ -129,6 +140,8 @@ class FormatProfileLogTests(unittest.TestCase):
         # Spot-check every knob shows up in the rendered log so a
         # future refactor that drops a field gets caught here.
         self.assertIn(str(HARD.length_retry_threshold), msg)
+        self.assertIn(str(HARD.target_chars_slack), msg)
+        self.assertIn(str(HARD.target_chars_floor), msg)
         self.assertIn(str(HARD.atempo_cap), msg)
         self.assertIn(str(HARD.rubberband_min), msg)
         self.assertIn(str(HARD.rubberband_max), msg)

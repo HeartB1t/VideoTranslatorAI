@@ -55,6 +55,10 @@ class ComputeTargetCharsTests(unittest.TestCase):
         self.assertEqual(compute_target_chars(4.0, "it", slack=0), 50)
         self.assertEqual(compute_target_chars(4.0, "it", slack=-1), 50)
 
+    def test_custom_floor_for_short_quality_slots(self):
+        self.assertEqual(compute_target_chars(1.0, "it", min_chars=25), 25)
+        self.assertEqual(compute_target_chars(0.0, "it", min_chars=25), 25)
+
     def test_unknown_language_falls_back_to_default(self):
         # 4s × 14 × 1.10 = 61
         self.assertEqual(compute_target_chars(4.0, "xx"), 61)

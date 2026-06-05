@@ -380,8 +380,7 @@ def translate_video(
             # know the source content profile (e.g. fast comedy).
             #
             # --no-difficulty-profile (difficulty_profile_enabled=False)
-            # forces MEDIUM, reproducing the v1.7 / pre-2G v2 hardcoded
-            # constants exactly.
+            # keeps the default MEDIUM quality profile downstream.
             if difficulty_profile_enabled:
                 _exp_tgt_p = LANG_EXPANSION.get(
                     lang_target,
@@ -433,8 +432,9 @@ def translate_video(
             return {"srt": output_base + ".srt", "segments": segments}
 
         # TASK 2G v2: clamp the autotuned XTTS ceiling by the resolved
-        # Profile's xtts_speed_cap. EASY: 1.30 cap (ridotto da 1.40),
-        # MEDIUM: 1.35 (legacy), HARD: 1.45 (esteso). Si applica solo
+        # Profile's xtts_speed_cap. EASY keeps the voice very natural,
+        # MEDIUM allows moderate compression, HARD gives a little more room.
+        # Si applica solo
         # quando l'utente NON ha pinnato xtts_speed esplicitamente
         # (speed_auto=True) — un override CLI/config viene rispettato
         # come prima per non sorprendere chi ha tuning manuale. Log

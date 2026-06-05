@@ -94,7 +94,7 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 
 > **ffmpeg and all Python packages are installed automatically** on first launch if missing. No manual setup required.
 
-**Optional system dependency** — `rubberband-cli` (Linux: `sudo apt install rubberband-cli`, macOS: `brew install rubberband`). When installed it is used for pitch-preserving time-stretching in the 1.15-1.50 ratio band, removing the residual "chipmunk" effect on cloned XTTS voices. The pipeline runs unchanged without it (auto-fallback to ffmpeg `atempo`).
+**Optional system dependency** — `rubberband-cli` (Linux: `sudo apt install rubberband-cli`, macOS: `brew install rubberband`). When installed it is used for pitch-preserving time-stretching in the profile-controlled quality band (default 1.15-1.50, up to 1.65 for hard content), removing the residual "chipmunk" effect on cloned XTTS voices. The pipeline runs unchanged without it (auto-fallback to ffmpeg `atempo`). Quality profiles now prefer extra short-translation retries over extreme audio speed-up.
 
 ### GPU support
 
@@ -183,7 +183,7 @@ No dedicated uninstaller — remove manually:
 # Python packages installed by the GUI's auto-installer
 pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub \
     yt-dlp pyloudnorm sentencepiece sacremoses pyannote.audio torchcodec \
-    coqui-tts transformers torch torchaudio torchvision basicsr facexlib dlib ctranslate2
+    coqui-tts transformers torch torchaudio torchvision new-basicsr basicsr facexlib dlib ctranslate2
 
 # User data and model caches
 rm -rf ~/.cache/huggingface/hub/models--*whisper*

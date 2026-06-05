@@ -60,10 +60,9 @@ def build_dubbed_track(
     # tuple anonime per evolverla senza rompere consumer esistenti.
     _atempo_stats: list[dict] = []
 
-    # TASK 2G v2: profile orchestrator. None = legacy MEDIUM behaviour
-    # (atempo cap 4.0, rubberband band 1.15-1.50). Caller passes a Profile
-    # resolved from the difficulty classification when profile orchestration
-    # is enabled (translate_video → here).
+    # TASK 2G v2: profile orchestrator. None = default MEDIUM quality policy.
+    # Caller passes a Profile resolved from the difficulty classification when
+    # profile orchestration is enabled (translate_video → here).
     _profile = difficulty_profile or MEDIUM
     _atempo_cap = _profile.atempo_cap
     _rb_min = _profile.rubberband_min
@@ -130,8 +129,8 @@ def build_dubbed_track(
                 # Dispatch: la policy pura sceglie engine in base al ratio
                 # (ed alla disponibilità del binary rubberband). Outside del
                 # range rb_min-rb_max, oppure quando rubberband manca, ricade
-                # su atempo. Il band viene dal Profile (default 1.15-1.50,
-                # esteso a 1.15-1.80 su HARD).
+                # su atempo. Il band viene dal Profile e resta quality-first:
+                # meglio segnalare/troncare un outlier che creare scatti a 4x.
                 engine = select_stretch_engine(
                     ratio, _rubberband_available,
                     rb_min=_rb_min, rb_max=_rb_max,
@@ -424,5 +423,4 @@ def build_dubbed_track(
 
     print(f"     → Track: {out}", flush=True)
     return out
-
 

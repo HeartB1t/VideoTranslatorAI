@@ -53,6 +53,79 @@ class LegacySecretsBridgeTests(unittest.TestCase):
 
 
 class LegacyWav2LipBridgeTests(unittest.TestCase):
+    def test_wav2lip_assets_check_python_deps_when_assets_are_present(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            repo = tmp / "Wav2Lip"
+            model = tmp / "wav2lip_gan.pth"
+            work = tmp / "work"
+            repo.mkdir()
+            (repo / "inference.py").write_text("# stub", encoding="utf-8")
+            model.write_bytes(b"model")
+
+            with (
+                mock.patch.object(legacy, "WAV2LIP_DIR", tmp),
+                mock.patch.object(legacy, "WAV2LIP_REPO", repo),
+                mock.patch.object(legacy, "WAV2LIP_MODEL", model),
+                mock.patch.object(legacy, "WAV2LIP_WORK_DIR", work),
+                mock.patch.object(legacy, "_ensure_wav2lip_python_deps") as ensure_deps,
+            ):
+                legacy._ensure_wav2lip_assets()
+
+        ensure_deps.assert_called_once_with()
+
+    def test_wav2lip_assets_raise_on_incomplete_existing_repo(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            repo = tmp / "Wav2Lip"
+            model = tmp / "wav2lip_gan.pth"
+            work = tmp / "work"
+            repo.mkdir()
+
+            with (
+                mock.patch.object(legacy, "WAV2LIP_DIR", tmp),
+                mock.patch.object(legacy, "WAV2LIP_REPO", repo),
+                mock.patch.object(legacy, "WAV2LIP_MODEL", model),
+                mock.patch.object(legacy, "WAV2LIP_WORK_DIR", work),
+                mock.patch.object(legacy, "_ensure_wav2lip_python_deps") as ensure_deps,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "missing inference.py"):
+                    legacy._ensure_wav2lip_assets()
+
+        ensure_deps.assert_not_called()
+
+    def test_wav2lip_python_deps_install_face_stack_on_linux_when_missing(self):
+        with (
+            mock.patch.object(legacy, "_install_wav2lip_base_stack") as base_stack,
+            mock.patch.object(
+                legacy,
+                "_missing_wav2lip_face_packages",
+                return_value=["dlib", "facexlib"],
+            ),
+            mock.patch.object(legacy, "_install_wav2lip_face_stack_linux") as face_stack,
+            mock.patch.object(legacy.sys, "platform", "linux"),
+        ):
+            legacy._ensure_wav2lip_python_deps()
+
+        base_stack.assert_called_once_with()
+        face_stack.assert_called_once_with()
+
+    def test_wav2lip_python_deps_do_not_install_linux_face_stack_on_windows(self):
+        with (
+            mock.patch.object(legacy, "_install_wav2lip_base_stack") as base_stack,
+            mock.patch.object(
+                legacy,
+                "_missing_wav2lip_face_packages",
+                return_value=["dlib"],
+            ),
+            mock.patch.object(legacy, "_install_wav2lip_face_stack_linux") as face_stack,
+            mock.patch.object(legacy.sys, "platform", "win32"),
+        ):
+            legacy._ensure_wav2lip_python_deps()
+
+        base_stack.assert_called_once_with()
+        face_stack.assert_not_called()
+
     def test_apply_lipsync_runs_subprocess_in_work_dir(self):
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
