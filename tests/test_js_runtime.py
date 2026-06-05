@@ -165,7 +165,7 @@ class EnsureJsRuntimeTests(unittest.TestCase):
             finder=lambda: None, installer=boom, log_cb=logs.append
         )
         self.assertIsNone(result)
-        self.assertTrue(any("fallito" in line for line in logs))
+        self.assertTrue(any("failed" in line for line in logs))
 
 
 if __name__ == "__main__":

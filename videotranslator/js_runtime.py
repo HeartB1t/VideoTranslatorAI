@@ -226,17 +226,17 @@ def ensure_js_runtime(
 
     if log_cb:
         log_cb(
-            "[!] Nessun JS runtime trovato — yt-dlp lo richiede per YouTube. "
-            "Installo deno automaticamente (binario singolo, nessun admin)..."
+            "[!] No JS runtime found — yt-dlp needs one for YouTube. "
+            "Installing deno automatically (single binary, no admin)..."
         )
     try:
         path = installer(log_cb=log_cb)
     except Exception as exc:  # network, unsupported arch, extraction, fs
         if log_cb:
             log_cb(
-                f"[!] Auto-install di deno fallito: {exc}. "
-                "Installa manualmente un runtime (es. 'curl -fsSL "
-                "https://deno.land/install.sh | sh') e riprova."
+                f"[!] deno auto-install failed: {exc}. "
+                "Install a runtime manually (e.g. 'curl -fsSL "
+                "https://deno.land/install.sh | sh') and retry."
             )
         return None
     return {"deno": {"path": path}}

@@ -30,10 +30,10 @@ def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
         return
 
     log_cb(
-        "[!] YouTube può richiedere autenticazione anti-bot ('Sign in to "
-        "confirm you're not a bot'). Il blocco è spesso legato alla reputazione "
-        "dell'IP: cambiare IP con una VPN può sbloccarlo. Aiuta anche essere "
-        "loggati su YouTube nel browser (i cookie vengono letti in automatico)."
+        "[!] YouTube may require anti-bot authentication ('Sign in to "
+        "confirm you're not a bot'). The block is usually tied to IP "
+        "reputation: switching IP with a VPN often clears it. Being logged "
+        "into YouTube in your browser also helps (cookies are read automatically)."
     )
 
 
