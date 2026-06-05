@@ -250,6 +250,11 @@ from videotranslator.timing import (  # noqa: E402
     estimate_tts_duration_s as _estimate_tts_duration_s,
     suggest_xtts_speed as _suggest_xtts_speed,
 )
+from videotranslator.preflight import (  # noqa: E402
+    find_missing_dependencies as _find_missing_dependencies,
+    format_preflight_report as _format_preflight_report,
+    run_preflight as _run_preflight,
+)
 REQUIRED_PACKAGES = {
     "faster_whisper": "faster-whisper",
     "edge_tts":       "edge-tts",
@@ -406,6 +411,10 @@ UI_STRINGS = {
         "btn_log_copy":       "Copia",
         "btn_log_save":       "Salva...",
         "btn_log_clear":      "Pulisci",
+        "btn_preflight":      "Diagnostica",
+        "msg_preflight_title": "Diagnostica",
+        "msg_preflight_ok":    "Diagnostica completata. Report nel log.",
+        "msg_preflight_failed": "Diagnostica completata con problemi richiesti. Controlla il log.",
     },
     "en": {
         "label_video":        "Video:",
@@ -509,6 +518,10 @@ UI_STRINGS = {
         "btn_log_copy":       "Copy",
         "btn_log_save":       "Save...",
         "btn_log_clear":      "Clear",
+        "btn_preflight":      "Diagnostics",
+        "msg_preflight_title": "Diagnostics",
+        "msg_preflight_ok":    "Diagnostics complete. Report written to the log.",
+        "msg_preflight_failed": "Diagnostics found required issues. Check the log.",
     },
     "ar": {
         "label_video": "فيديو:",
@@ -4084,20 +4097,19 @@ WAV2LIP_BASE_PKGS = ["opencv-python", "librosa", "tqdm"]
 # `import basicsr...` in Wav2Lip / facexlib keeps working unchanged.
 WAV2LIP_FACE_PKGS = ["new-basicsr", "facexlib"]
 
-_active_subprocesses: set[subprocess.Popen] = set()
-_active_subprocesses_lock = threading.Lock()
+from videotranslator.subprocess_utils import ActiveSubprocessRegistry  # noqa: E402
+
+_active_subprocesses = ActiveSubprocessRegistry()
 
 
 def _register_subprocess(proc: subprocess.Popen) -> None:
     """Add a running subprocess to the global registry under a lock."""
-    with _active_subprocesses_lock:
-        _active_subprocesses.add(proc)
+    _active_subprocesses.register(proc)
 
 
 def _unregister_subprocess(proc: subprocess.Popen) -> None:
     """Remove a subprocess from the global registry under a lock."""
-    with _active_subprocesses_lock:
-        _active_subprocesses.discard(proc)
+    _active_subprocesses.unregister(proc)
 
 
 def _snapshot_active_subprocesses() -> list[subprocess.Popen]:
@@ -4106,8 +4118,7 @@ def _snapshot_active_subprocesses() -> list[subprocess.Popen]:
     Iteration / .terminate() happens outside the lock so we never block
     worker threads trying to register a new subprocess on a slow kill.
     """
-    with _active_subprocesses_lock:
-        return list(_active_subprocesses)
+    return _active_subprocesses.snapshot()
 
 
 _set_ollama_subprocess_hooks(_register_subprocess, _unregister_subprocess)
@@ -4521,16 +4532,7 @@ def translate_video(
 # ═══════════════════════════════════════════════════════════
 
 def check_dependencies():
-    missing_pkgs = []
-    for mod, pip in REQUIRED_PACKAGES.items():
-        try:
-            found = importlib.util.find_spec(mod) is not None
-        except (ValueError, ModuleNotFoundError):
-            found = False
-        if not found:
-            missing_pkgs.append(pip)
-    missing_bins = [b for b in ["ffmpeg", "ffprobe"] if not shutil.which(b)]
-    return missing_pkgs, missing_bins
+    return _find_missing_dependencies(REQUIRED_PACKAGES)
 
 
 _thread_local = threading.local()
@@ -4960,6 +4962,7 @@ class App(tk.Tk):
         self._batch_files: list[str] = []
         self._url_placeholder_active = True
         self._pending_pkgs_after_ffmpeg: list[str] = []
+        self._preflight_running = False
 
         self._build_ui()
         # Restore log panel visibility from config (default True)
@@ -5809,6 +5812,13 @@ class App(tk.Tk):
             relief="flat", padx=8, pady=2, cursor="hand2",
             activebackground=ACC, activeforeground=BG)
         self._btn_log_copy.pack(side="right", padx=(0, 4))
+        self._btn_preflight = tk.Button(
+            log_header, text=self._s("btn_preflight"),
+            command=self._run_gui_preflight,
+            bg=SEL, fg=FG, font=("Helvetica", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_preflight.pack(side="right", padx=(0, 4))
 
         self._log_container = tk.Frame(log_frame, bg=BG)
         self._log_container.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
@@ -5947,6 +5957,7 @@ class App(tk.Tk):
         self._btn_log_copy.configure(text=self._s("btn_log_copy"))
         self._btn_log_save.configure(text=self._s("btn_log_save"))
         self._btn_log_clear.configure(text=self._s("btn_log_clear"))
+        self._btn_preflight.configure(text=self._s("btn_preflight"))
         # Update source language combo labels
         lang = self._ui_lang.get()
         src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
@@ -6758,6 +6769,66 @@ class App(tk.Tk):
             self._log.see("end")
         self._log.configure(state="disabled")
 
+    def _run_gui_preflight(self):
+        if self._preflight_running:
+            return
+        self._preflight_running = True
+        with contextlib.suppress(Exception):
+            self._btn_preflight.configure(state="disabled")
+        if not getattr(self, "_log_visible", True):
+            self._log_visible = True
+            self._log_container.grid()
+            self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
+            with contextlib.suppress(Exception):
+                save_config({"ui_log_visible": True})
+        self._log_write("\n[*] Running diagnostics...\n")
+
+        def worker():
+            try:
+                report = _run_preflight(required_packages=REQUIRED_PACKAGES)
+                text = "\n" + _format_preflight_report(report) + "\n"
+                ok = report.ok
+                failed = report.required_failures
+                error_message = ""
+            except Exception as exc:
+                text = f"\n[!] Diagnostics failed: {exc}\n{traceback.format_exc()}\n"
+                ok = False
+                failed = ()
+                error_message = str(exc)
+
+            def done():
+                if self._destroying:
+                    return
+                self._preflight_running = False
+                with contextlib.suppress(Exception):
+                    self._btn_preflight.configure(
+                        state="normal", text=self._s("btn_preflight")
+                    )
+                self._log_write(text)
+                try:
+                    if error_message:
+                        messagebox.showerror(
+                            self._s("msg_preflight_title"), error_message, parent=self
+                        )
+                    elif ok:
+                        messagebox.showinfo(
+                            self._s("msg_preflight_title"),
+                            self._s("msg_preflight_ok"),
+                            parent=self,
+                        )
+                    elif failed:
+                        messagebox.showwarning(
+                            self._s("msg_preflight_title"),
+                            self._s("msg_preflight_failed"),
+                            parent=self,
+                        )
+                except Exception:
+                    pass
+
+            self.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _log_copy(self):
         try:
             self.clipboard_clear()
@@ -6838,6 +6909,11 @@ def _cli():
     parser = argparse.ArgumentParser(description="Video Translator AI")
     parser.add_argument("input", nargs="?", help="Input video")
     parser.add_argument("-o", "--output", help="Output file")
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Run local diagnostics and exit without starting translation",
+    )
     parser.add_argument("--model", default=DEFAULT_WHISPER_MODEL, choices=WHISPER_MODELS)
     parser.add_argument("--lang-source", default="auto")
     parser.add_argument("--lang-target", default=DEFAULT_LANG, choices=list(LANGUAGES.keys()))
@@ -6950,6 +7026,11 @@ def _cli():
     )
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     args = parser.parse_args()
+
+    if args.preflight:
+        report = _run_preflight(required_packages=REQUIRED_PACKAGES)
+        print(_format_preflight_report(report))
+        sys.exit(0 if report.ok else 1)
 
     files = args.batch if args.batch else ([args.input] if args.input else [])
     if not files:

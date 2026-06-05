@@ -21,6 +21,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--translation-engine", proc.stdout)
         self.assertIn("--no-cove", proc.stdout)
         self.assertIn("--hotwords", proc.stdout)
+        self.assertIn("--preflight", proc.stdout)
 
 
 if __name__ == "__main__":

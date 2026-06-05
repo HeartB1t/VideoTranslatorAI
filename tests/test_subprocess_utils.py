@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from videotranslator.subprocess_utils import (
+    ActiveSubprocessRegistry,
     command_for_log,
     common_subprocess_kwargs,
     normalize_command,
@@ -73,6 +74,23 @@ class SubprocessUtilsTests(unittest.TestCase):
         self.assertIs(kwargs["stdout"], subprocess.PIPE)
         self.assertNotIn("stdin", kwargs)
         self.assertNotIn("stderr", kwargs)
+
+    def test_active_subprocess_registry_registers_and_unregisters(self):
+        registry = ActiveSubprocessRegistry()
+        proc = object()
+
+        registry.register(proc)
+        self.assertEqual(registry.snapshot(), [proc])
+
+        registry.unregister(proc)
+        self.assertEqual(registry.snapshot(), [])
+
+    def test_active_subprocess_registry_unregister_missing_is_noop(self):
+        registry = ActiveSubprocessRegistry()
+
+        registry.unregister(object())
+
+        self.assertEqual(registry.snapshot(), [])
 
 
 if __name__ == "__main__":

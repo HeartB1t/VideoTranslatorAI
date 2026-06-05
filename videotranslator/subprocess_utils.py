@@ -9,8 +9,9 @@ from __future__ import annotations
 import locale
 import shlex
 import subprocess
+import threading
 from os import PathLike
-from typing import Sequence
+from typing import Any, Sequence
 
 
 CommandPart = str | PathLike[str]
@@ -58,3 +59,23 @@ def common_subprocess_kwargs(
     if stderr_pipe:
         kwargs["stderr"] = subprocess.PIPE
     return kwargs
+
+
+class ActiveSubprocessRegistry:
+    """Thread-safe registry for subprocesses that should be stopped on exit."""
+
+    def __init__(self) -> None:
+        self._items: set[Any] = set()
+        self._lock = threading.Lock()
+
+    def register(self, proc: Any) -> None:
+        with self._lock:
+            self._items.add(proc)
+
+    def unregister(self, proc: Any) -> None:
+        with self._lock:
+            self._items.discard(proc)
+
+    def snapshot(self) -> list[Any]:
+        with self._lock:
+            return list(self._items)

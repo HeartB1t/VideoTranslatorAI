@@ -181,6 +181,16 @@ rm -f  ~/.videotranslatorai_config.json
 
 ## Usage
 
+### Diagnostics
+
+```bash
+python video_translator_gui.py --preflight
+```
+
+Runs local environment diagnostics without starting translation or installing
+anything. The GUI exposes the same check from the log panel's **Diagnostics**
+button.
+
 ### GUI
 
 ```bash
