@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
@@ -15,10 +16,42 @@ class _YoutubeDLLike(Protocol):
     def prepare_filename(self, info: dict[str, Any]) -> str: ...
 
 
-def build_ytdlp_options(out_dir: str | os.PathLike[str]) -> dict[str, Any]:
-    """Return the project's standard yt-dlp options for one URL."""
+def _detect_browser() -> tuple[str, ...] | None:
+    """Return (browser_name,) for yt-dlp cookiesfrombrowser, or None if not found."""
+    for browser in ("firefox", "chromium", "chrome", "brave", "librewolf", "vivaldi"):
+        if shutil.which(browser):
+            return (browser,)
+    return None
+
+
+def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
+    """Emit advisory warnings before a URL download (anti-bot / VPN advice)."""
+    if log_cb is None:
+        return
+
+    log_cb(
+        "[!] YouTube può richiedere autenticazione anti-bot ('Sign in to "
+        "confirm you're not a bot'). Il blocco è spesso legato alla reputazione "
+        "dell'IP: cambiare IP con una VPN può sbloccarlo. Aiuta anche essere "
+        "loggati su YouTube nel browser (i cookie vengono letti in automatico)."
+    )
+
+
+def build_ytdlp_options(
+    out_dir: str | os.PathLike[str],
+    *,
+    js_runtimes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return the project's standard yt-dlp options for one URL.
+
+    ``js_runtimes`` overrides runtime selection; when None we auto-detect an
+    already-available runtime (PATH or app-local bin) so yt-dlp can solve the
+    YouTube signature challenge instead of falling back to bot-blocked clients.
+    """
+    from videotranslator.js_runtime import resolve_js_runtimes
+
     out_template = os.path.join(str(out_dir), "%(title).80s.%(ext)s")
-    return {
+    opts: dict[str, Any] = {
         "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
         "outtmpl": out_template,
         "quiet": True,
@@ -28,8 +61,16 @@ def build_ytdlp_options(out_dir: str | os.PathLike[str]) -> dict[str, Any]:
         "restrictfilenames": True,
         "socket_timeout": 30,
         "retries": 5,
-        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
+        "extractor_args": {"youtube": {"player_client": ["web", "ios", "android"]}},
     }
+    browser = _detect_browser()
+    if browser:
+        opts["cookiesfrombrowser"] = browser
+
+    runtimes = js_runtimes if js_runtimes is not None else resolve_js_runtimes()
+    if runtimes:
+        opts["js_runtimes"] = runtimes
+    return opts
 
 
 def resolve_downloaded_filename(prepared_filename: str | os.PathLike[str]) -> str:
@@ -64,7 +105,12 @@ def download_url(
 
         ytdlp_cls = yt_dlp.YoutubeDL
 
-    opts = build_ytdlp_options(out_dir)
+    from videotranslator.js_runtime import ensure_js_runtime
+
+    emit_download_warnings(log_cb)
+    # Lazy: make sure yt-dlp has a JS runtime (auto-install deno if none).
+    js_runtimes = ensure_js_runtime(log_cb=log_cb)
+    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes)
     with ytdlp_cls(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = resolve_downloaded_filename(ydl.prepare_filename(info))

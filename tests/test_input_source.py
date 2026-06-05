@@ -1,10 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from videotranslator.input_source import (
     build_ytdlp_options,
     download_url,
+    emit_download_warnings,
     is_probable_url,
     normalize_input_path,
     resolve_downloaded_filename,
@@ -13,12 +15,23 @@ from videotranslator.input_source import (
 
 class InputSourceTests(unittest.TestCase):
     def test_build_ytdlp_options_contains_project_policy(self):
-        opts = build_ytdlp_options("/tmp/videos")
+        with mock.patch(
+            "videotranslator.js_runtime.resolve_js_runtimes", return_value=None
+        ):
+            opts = build_ytdlp_options("/tmp/videos")
 
         self.assertEqual(opts["merge_output_format"], "mp4")
         self.assertTrue(opts["noplaylist"])
         self.assertIn("player_client", opts["extractor_args"]["youtube"])
         self.assertIn("%(title).80s.%(ext)s", opts["outtmpl"])
+        self.assertNotIn("js_runtimes", opts)
+
+    def test_build_ytdlp_options_injects_js_runtimes(self):
+        opts = build_ytdlp_options(
+            "/tmp/videos", js_runtimes={"node": {"path": "/usr/bin/node"}}
+        )
+
+        self.assertEqual(opts["js_runtimes"], {"node": {"path": "/usr/bin/node"}})
 
     def test_resolve_downloaded_filename_returns_existing_prepared_file(self):
         with tempfile.TemporaryDirectory() as tmp_str:
@@ -70,16 +83,34 @@ class InputSourceTests(unittest.TestCase):
                 def prepare_filename(self, info):
                     return str(Path(tmp_str) / "clip.webm")
 
-            result = download_url(
-                "https://youtu.be/example",
-                tmp_str,
-                ytdlp_cls=FakeYoutubeDL,
-                log_cb=logs.append,
-            )
+            # Keep the test hermetic: never resolve/install a real JS runtime.
+            with mock.patch(
+                "videotranslator.js_runtime.ensure_js_runtime", return_value=None
+            ), mock.patch(
+                "videotranslator.js_runtime.resolve_js_runtimes", return_value=None
+            ):
+                result = download_url(
+                    "https://youtu.be/example",
+                    tmp_str,
+                    ytdlp_cls=FakeYoutubeDL,
+                    log_cb=logs.append,
+                )
 
         self.assertEqual(result, str(final))
         self.assertEqual(seen_opts["merge_output_format"], "mp4")
-        self.assertEqual(logs, [f"[+] Downloaded: {final}"])
+        # Final download line is the contract; advisory warnings precede it.
+        self.assertEqual(logs[-1], f"[+] Downloaded: {final}")
+        self.assertTrue(any("anti-bot" in line for line in logs))
+
+    def test_emit_download_warnings_is_noop_without_callback(self):
+        # Must not raise when there is no log sink.
+        emit_download_warnings(None)
+
+    def test_emit_download_warnings_advises_on_vpn(self):
+        logs: list[str] = []
+        emit_download_warnings(logs.append)
+
+        self.assertTrue(any("VPN" in line for line in logs))
 
 
 if __name__ == "__main__":
