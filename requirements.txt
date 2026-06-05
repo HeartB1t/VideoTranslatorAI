@@ -1,22 +1,9 @@
-faster-whisper
-yt-dlp
-demucs
-soundfile
-edge-tts
-deep-translator
-requests
-pydub
-pyloudnorm
-coqui-tts>=0.27.5
-transformers>=4.40.0,<5.1
-sentencepiece>=0.2.0
-sacremoses>=0.1.1
-pyannote.audio>=3.1,<4.0
-silero-vad
-keyring
-audioop-lts; python_version >= "3.13"
-torch>=2.6.0,<2.8
-torchaudio==2.6.0
-torchvision==0.21.0
-torchcodec
-numpy>=2.0,<2.4
+# Backward-compatible full install.
+#
+# This intentionally includes the same runtime families as the historical
+# single requirements file. Prefer installing the profile files directly when
+# you want a smaller or more explicit environment.
+
+-r requirements-core.txt
+-r requirements-optional.txt
+-r requirements-gpu-cu124.txt

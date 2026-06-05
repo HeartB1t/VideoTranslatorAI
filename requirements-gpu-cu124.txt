@@ -1,0 +1,11 @@
+# PyTorch stack used by the GPU/CUDA 12.4 profile.
+#
+# For NVIDIA CUDA wheels, install this profile with:
+#   pip install --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+#
+# The top-level requirements.txt includes this file without forcing an index so
+# old `pip install -r requirements.txt` workflows keep their previous behavior.
+
+torch>=2.6.0,<2.8
+torchaudio==2.6.0
+torchvision==0.21.0

@@ -1,0 +1,10 @@
+# Lightweight dependencies needed by CI/unit tests.
+#
+# The test suite uses unittest and mocks heavy AI components, so it does not
+# need the full runtime stack.
+# The e2e-lite media smoke test also needs system ffmpeg/ffprobe and skips
+# itself when those binaries are unavailable.
+
+opencv-python-headless
+numpy>=2.0,<2.4
+soundfile

@@ -1,0 +1,20 @@
+# Optional quality / advanced engines.
+#
+# These are not all needed for the default Edge-TTS + Google/Marian flow, but
+# are part of the full local feature set.
+
+# XTTS v2 voice cloning. transformers<5.1 avoids known Coqui breakage.
+coqui-tts>=0.27.5
+transformers>=4.40.0,<5.1
+
+# MarianMT local/offline translation tokenizer dependencies.
+sentencepiece>=0.2.0
+sacremoses>=0.1.1
+
+# Multi-speaker diarization. Keep <4.0: pyannote 4.x requires torch>=2.8,
+# which is outside this project's CUDA 12.4-tested range.
+pyannote.audio>=3.1,<4.0
+
+# Better XTTS reference extraction and secure HF token storage.
+silero-vad
+keyring

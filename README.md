@@ -138,14 +138,28 @@ The pipeline uses five GPU-accelerated components (faster-whisper, Demucs, XTTS,
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
-# Install PyTorch with CUDA 12.4 (NVIDIA GPU) — skip for CPU only
-pip install --break-system-packages torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+# Optional: install the tested NVIDIA CUDA 12.4 PyTorch stack up front
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
 
-# Launch — everything else installs automatically on first run
+# Optional: pre-install all Python runtime packages instead of letting the GUI
+# install missing packages on first run
+pip install --break-system-packages -r requirements.txt
+
+# Launch
 python video_translator_gui.py
 ```
 
 > On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows).
+
+### Requirement profiles
+
+| File | Purpose |
+|------|---------|
+| `requirements.txt` | Full, backward-compatible runtime install. |
+| `requirements-core.txt` | Default pipeline packages used by GUI/CLI. |
+| `requirements-optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, keyring. |
+| `requirements-gpu-cu124.txt` | PyTorch stack tested with NVIDIA CUDA 12.4 wheels. |
+| `requirements-dev.txt` | Lightweight dependencies used by CI/unit tests. |
 
 ## Uninstall
 

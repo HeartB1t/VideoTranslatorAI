@@ -1,0 +1,20 @@
+# Core runtime used by the default local/GUI pipeline.
+#
+# Install together with a PyTorch profile (for example
+# requirements-gpu-cu124.txt) so packages like Demucs and torchcodec do not
+# drift to an untested transitive torch version.
+
+faster-whisper
+yt-dlp
+demucs
+soundfile
+edge-tts
+deep-translator
+# Used directly by DeepL and the local Ollama LLM engine. It is often a
+# transitive dependency, but keeping it explicit makes broken installs obvious.
+requests
+pydub
+pyloudnorm
+torchcodec
+numpy>=2.0,<2.4
+audioop-lts; python_version >= "3.13"
