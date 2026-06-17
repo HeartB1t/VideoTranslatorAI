@@ -157,6 +157,7 @@ def run_preflight(
     *,
     required_packages: Mapping[str, str] | None = None,
     optional_packages: Sequence[PackageProbe] = DEFAULT_OPTIONAL_PACKAGES,
+    required_optional_modules: Sequence[str] = (),
     required_binaries: Sequence[str] = ("ffmpeg", "ffprobe"),
     optional_binaries: Sequence[BinaryProbe] = DEFAULT_OPTIONAL_BINARIES,
     min_free_gb: float = 20.0,
@@ -189,8 +190,18 @@ def run_preflight(
             )
         )
 
+    required_optional = set(required_optional_modules)
     for probe in optional_packages:
-        checks.append(_package_check(probe, find_spec=find_spec))
+        effective_probe = probe
+        if probe.module in required_optional:
+            effective_probe = PackageProbe(
+                probe.module,
+                probe.pip_name,
+                True,
+                probe.description,
+                probe.aliases,
+            )
+        checks.append(_package_check(effective_probe, find_spec=find_spec))
 
     for binary in required_binaries:
         checks.append(_binary_check(BinaryProbe(binary, True), which=which))

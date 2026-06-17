@@ -5,3 +5,4 @@ This package is introduced as a migration layer. The legacy
 gradually moved into importable, testable modules.
 """
 
+__version__ = "2.0.0"

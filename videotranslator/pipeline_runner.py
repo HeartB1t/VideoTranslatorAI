@@ -423,12 +423,15 @@ def translate_video(
                 ollama_use_cove=ollama_use_cove,
             )
 
-        if not no_subs:
-            save_subtitles(segments, output_base)
+        srt_path = None
+        if not no_subs or subs_only:
+            # In --subs-only mode the subtitle file is the requested artifact,
+            # so it takes precedence over a contradictory no_subs flag.
+            srt_path = save_subtitles(segments, output_base)
 
         if subs_only:
             print("\n[+] --subs-only mode complete.")
-            return {"srt": output_base + ".srt", "segments": segments}
+            return {"srt": srt_path, "segments": segments}
 
         # TASK 2G v2: clamp the autotuned XTTS ceiling by the resolved
         # Profile's xtts_speed_cap. EASY keeps the voice very natural,
@@ -510,4 +513,7 @@ def translate_video(
                     print(f"     ! Lip sync failed ({e.__class__.__name__}: {e}), keeping video without lip sync.", flush=True)
 
     print(f"\n[✓] Done: {output}")
-    return {"video": output, "srt": output_base + ".srt", "segments": segments}
+    result = {"video": output, "segments": segments}
+    if srt_path is not None:
+        result["srt"] = srt_path
+    return result
