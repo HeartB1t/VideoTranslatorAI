@@ -5506,7 +5506,7 @@ class App(tk.Tk):
 
         arrow_lbl = tk.Label(hdr, text="▸", bg=BG, fg=ACC, font=_MONO_B, width=2)
         arrow_lbl.pack(side="left")
-        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG2, font=_MONO_B).pack(side="left", padx=(4, 0))
+        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG, font=_MONO_B).pack(side="left", padx=(4, 0))
 
         # Collapsible body
         body = tk.Frame(outer, bg=CARD, padx=10, pady=6)
