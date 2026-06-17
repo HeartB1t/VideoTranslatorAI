@@ -301,18 +301,24 @@ _OPTIONAL_ALIASES: dict[str, list[str]] = {
     "TTS": ["TTS", "coqui_tts"],
 }
 
-# ── GUI colours ──────────────────────────────────────────────
-BG  = "#1e1e2e"
-FG  = "#cdd6f4"
-FG2 = "#6c7086"
-ACC = "#89b4fa"
-SEL = "#313244"
-RED = "#f38ba8"
-GRN = "#a6e3a1"
-# ── Modern "creative studio" surface palette ─────────────────
-CARD   = "#181825"   # Card/section background (darker than BG)
-BORDER = "#45475a"   # Subtle borders
-PILL   = "#313244"   # Pill/chip background
+# ── GUI colours — Neon Dark theme ────────────────────────────
+BG     = "#060612"   # near-black background
+FG     = "#e0e0ff"   # off-white text
+FG2    = "#6060a0"   # dim secondary text
+ACC    = "#00ff88"   # neon green accent
+ACC2   = "#ff00aa"   # neon magenta (GPU badge, warnings)
+SEL    = "#0d0d2a"   # selection background
+RED    = "#ff4466"   # neon red for errors
+GRN    = "#00ff88"   # same as ACC
+CARD   = "#0d0d1f"   # card background
+BORDER = "#1a1a3a"   # subtle border
+PILL   = "#1a1a3a"   # pill/chip background
+
+# ── Monospace font constants ──────────────────────────────────
+_MONO    = ("Courier", 9)
+_MONO_B  = ("Courier", 9, "bold")
+_MONO_SM = ("Courier", 8)
+_MONO_LG = ("Courier", 11, "bold")
 
 # ── UI translation strings ───────────────────────────────────
 UI_STRINGS = {
@@ -5010,6 +5016,27 @@ class App(tk.Tk):
         self._pending_pkgs_after_ffmpeg: list[str] = []
         self._preflight_running = False
 
+        # ── ttk Style — Neon Dark ─────────────────────────────────────────
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("TCombobox",
+            fieldbackground=CARD, background=CARD,
+            foreground=FG, selectbackground=SEL,
+            selectforeground=ACC,
+            arrowcolor=ACC,
+            bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
+            insertcolor=FG,
+            font=("Courier", 9),
+        )
+        style.map("TCombobox",
+            fieldbackground=[("readonly", CARD)],
+            foreground=[("readonly", FG)],
+        )
+        style.configure("Vertical.TScrollbar",
+            background=BORDER, troughcolor=CARD,
+            arrowcolor=ACC, bordercolor=BG,
+        )
+
         self._build_ui()
         # Restore log panel visibility from config (default collapsed in the
         # modernized GUI — the log starts hidden unless config opts in).
@@ -5448,20 +5475,20 @@ class App(tk.Tk):
 
     # ── GUI style helpers ──────────────────────────────────────────────────
 
-    def _pill_badge(self, parent, text, color):
-        """Tiny colored pill Label for status badges in the header."""
+    def _pill_badge(self, parent, text, border_color):
+        """Pill badge: white text, colored neon border for visibility."""
         return tk.Label(
-            parent, text=text, bg=PILL, fg=color,
-            font=("Helvetica", 8, "bold"),
+            parent, text=text, bg=PILL, fg=FG,
+            font=_MONO_SM,
             relief="flat", padx=6, pady=2,
+            highlightthickness=1, highlightbackground=border_color,
         )
 
     def _section_title(self, parent, text):
-        """Section title with a left colored accent bar."""
+        """Section title with neon green accent marker."""
         f = tk.Frame(parent, bg=BG)
-        tk.Frame(f, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
-        tk.Label(f, text=text.upper(), bg=BG, fg=ACC,
-                 font=("Helvetica", 9, "bold")).pack(side="left")
+        tk.Label(f, text=f"▸ {text.upper()}", bg=BG, fg=ACC,
+                 font=_MONO_B).pack(side="left")
         return f
 
     def _make_accordion_section(self, parent, title_text):
@@ -5471,42 +5498,33 @@ class App(tk.Tk):
         The section starts collapsed (body hidden).
         """
         outer = tk.Frame(parent, bg=BG)
-        # 1-px top border for visual separation between sections
-        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
+        outer.pack(fill="x", pady=2)
 
-        header = tk.Frame(outer, bg=CARD, cursor="hand2", relief="flat")
-        header.pack(fill="x")
+        # Header row
+        hdr = tk.Frame(outer, bg=BG, cursor="hand2")
+        hdr.pack(fill="x")
 
-        arrow_lbl = tk.Label(
-            header, text="▶", bg=CARD, fg=FG2,
-            font=("Helvetica", 8), width=2, padx=4)
-        arrow_lbl.pack(side="left", pady=4)
+        arrow_lbl = tk.Label(hdr, text="▸", bg=BG, fg=ACC, font=_MONO_B, width=2)
+        arrow_lbl.pack(side="left")
+        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG2, font=_MONO_B).pack(side="left", padx=(4, 0))
 
-        # Thin accent bar
-        tk.Frame(header, bg=ACC, width=2).pack(side="left", fill="y", pady=6)
+        # Collapsible body
+        body = tk.Frame(outer, bg=CARD, padx=10, pady=6)
+        # Start collapsed
 
-        title_lbl = tk.Label(
-            header, text=title_text.upper(), bg=CARD, fg=FG,
-            font=("Helvetica", 9, "bold"), padx=8, pady=6, anchor="w")
-        title_lbl.pack(side="left", fill="x", expand=True)
-
-        # Re-use the arrow label as the "toggle_btn" for API compat
-        toggle_btn = arrow_lbl
-
-        body = tk.Frame(outer, bg=BG)
-
-        def _toggle(*_):
-            if body.winfo_manager():  # body is currently managed (visible)
+        def toggle(e=None):
+            if body.winfo_manager():
                 body.pack_forget()
-                arrow_lbl.configure(text="▶")
+                arrow_lbl.configure(text="▸")
             else:
-                body.pack(fill="x", padx=12, pady=(2, 8))
+                body.pack(fill="x")
                 arrow_lbl.configure(text="▼")
 
-        for w in (header, arrow_lbl, title_lbl):
-            w.bind("<Button-1>", _toggle)
+        hdr.bind("<Button-1>", toggle)
+        for w in hdr.winfo_children():
+            w.bind("<Button-1>", toggle)
 
-        return outer, body, toggle_btn
+        return outer, body, arrow_lbl
 
     def _apply_profile(self, name):
         """Apply a quality preset by setting existing Tk vars."""
@@ -5552,9 +5570,11 @@ class App(tk.Tk):
         active = self._active_profile.get()
         for name, btn in self._profile_btns.items():
             if name == active:
-                btn.configure(bg=ACC, fg=BG)
+                btn.configure(bg=BORDER, fg=ACC,
+                              highlightthickness=1, highlightbackground=ACC)
             else:
-                btn.configure(bg=SEL, fg=FG2)
+                btn.configure(bg=CARD, fg=FG,
+                              highlightthickness=1, highlightbackground=BORDER)
         if hasattr(self, "_lbl_profile_hint"):
             self._lbl_profile_hint.configure(
                 text=_HINTS.get(active, ""))
@@ -5608,10 +5628,10 @@ class App(tk.Tk):
         tk.Frame(logo_inner, bg=ACC, width=4).pack(side="left", fill="y", padx=(0, 8))
         title_col = tk.Frame(logo_inner, bg=BG)
         title_col.pack(side="left")
-        tk.Label(title_col, text="Video Translator AI",
-                 font=("Helvetica", 20, "bold"), bg=BG, fg=FG).pack(anchor="w")
-        tk.Label(title_col, text="Local AI  ·  Open Source Dubbing Studio",
-                 font=("Helvetica", 9, "italic"), bg=BG, fg=FG2).pack(anchor="w")
+        tk.Label(title_col, text="◈  VIDEO TRANSLATOR AI",
+                 font=("Courier", 18, "bold"), bg=BG, fg=ACC).pack(anchor="w")
+        tk.Label(title_col, text="local ai  ·  open source dubbing studio",
+                 font=_MONO_SM, bg=BG, fg=FG2).pack(anchor="w")
 
         # ── Status badges + lang selector (right) ─────────────────────────
         right = tk.Frame(header, bg=BG)
@@ -5623,12 +5643,12 @@ class App(tk.Tk):
         gpu_ok = bool(shutil.which("nvidia-smi"))
         self._pill_badge(badges,
                          "  GPU ✓ " if gpu_ok else "  CPU ",
-                         GRN if gpu_ok else "#fab387").pack(side="left", padx=(0, 4))
+                         ACC2 if gpu_ok else FG2).pack(side="left", padx=(0, 4))
         self._pill_badge(badges, "  Ollama ? ", FG2).pack(side="left", padx=(0, 4))
         has_wav2lip = importlib.util.find_spec("dlib") is not None
         self._pill_badge(badges,
                          "  Wav2Lip ✓ " if has_wav2lip else "  Wav2Lip ○ ",
-                         GRN if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
+                         ACC if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
 
         # UI language selector
         lang_sel = tk.Frame(right, bg=BG)
@@ -5661,9 +5681,8 @@ class App(tk.Tk):
         # Section title inside card
         title_row = tk.Frame(inner, bg=CARD)
         title_row.pack(fill="x", pady=(0, 8))
-        tk.Frame(title_row, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
-        tk.Label(title_row, text="INPUT", bg=CARD, fg=ACC,
-                 font=("Helvetica", 9, "bold")).pack(side="left")
+        tk.Label(title_row, text="▸ INPUT", bg=CARD, fg=ACC,
+                 font=_MONO_B).pack(side="left")
 
         # Hidden label refs required by _apply_lang (configure(text=...))
         self._lbl_video  = tk.Label(inner, text="", bg=CARD)
@@ -5691,18 +5710,21 @@ class App(tk.Tk):
         btn_col.pack(side="left", padx=(6, 0), anchor="n")
         self._btn_add = tk.Button(
             btn_col, text=self._s("btn_add"), command=self._add_files,
-            bg=SEL, fg=FG, relief="flat", width=10, cursor="hand2",
+            bg=BORDER, fg=ACC, relief="flat", width=10, cursor="hand2",
+            font=_MONO_SM,
             activebackground=ACC, activeforeground=BG)
         self._btn_add.pack(pady=2)
         self._btn_remove = tk.Button(
             btn_col, text=self._s("btn_remove"), command=self._remove_file,
-            bg=SEL, fg=FG, relief="flat", width=10, cursor="hand2",
+            bg=BORDER, fg=FG, relief="flat", width=10, cursor="hand2",
+            font=_MONO_SM,
             activebackground=RED, activeforeground=BG)
         self._btn_remove.pack(pady=2)
         self._btn_clear = tk.Button(
             btn_col, text=self._s("btn_clear"), command=self._clear_files,
-            bg=SEL, fg=FG2, relief="flat", width=10, cursor="hand2",
-            activebackground=SEL, activeforeground=FG)
+            bg=BORDER, fg=FG, relief="flat", width=10, cursor="hand2",
+            font=_MONO_SM,
+            activebackground=RED, activeforeground=BG)
         self._btn_clear.pack(pady=2)
 
         # ── Output path ────────────────────────────────────────────────────
@@ -5986,20 +6008,18 @@ class App(tk.Tk):
         # Card title
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Frame(title, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
-        tk.Label(title, text="TRANSLATION", bg=CARD, fg=ACC,
-                 font=("Helvetica", 9, "bold")).pack(side="left")
+        tk.Label(title, text="▸ TRADUZIONE", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
 
         # Source language
         from_row = tk.Frame(inner, bg=CARD)
         from_row.pack(fill="x", pady=2)
         self._lbl_from = tk.Label(
             from_row, text=self._s("label_from"),
-            bg=CARD, fg=FG2, font=("Helvetica", 8), width=6, anchor="e")
+            bg=CARD, fg=FG2, font=_MONO_SM, width=6, anchor="e")
         self._lbl_from.pack(side="left")
         self._src_combo = ttk.Combobox(
             from_row, values=list(SOURCE_LANGS.values()),
-            state="readonly", width=22, font=("Helvetica", 9))
+            state="readonly", width=22, font=("Courier", 9))
         self._src_combo.current(0)
         self._src_combo.pack(side="left", padx=(4, 0))
         src_keys = list(SOURCE_LANGS.keys())
@@ -6013,11 +6033,11 @@ class App(tk.Tk):
         to_row.pack(fill="x", pady=2)
         self._lbl_to = tk.Label(
             to_row, text=self._s("label_to"),
-            bg=CARD, fg=FG2, font=("Helvetica", 8), width=6, anchor="e")
+            bg=CARD, fg=FG2, font=_MONO_SM, width=6, anchor="e")
         self._lbl_to.pack(side="left")
         self._tgt_combo = ttk.Combobox(
             to_row, values=[v["name"] for v in LANGUAGES.values()],
-            state="readonly", width=22, font=("Helvetica", 9))
+            state="readonly", width=22, font=("Courier", 9))
         self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
         self._tgt_combo.pack(side="left", padx=(4, 0))
         self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
@@ -6027,7 +6047,7 @@ class App(tk.Tk):
         voice_lbl_row.pack(fill="x", pady=(8, 2))
         self._lbl_voice = tk.Label(
             voice_lbl_row, text=self._s("label_voice"),
-            bg=CARD, fg=FG2, font=("Helvetica", 8))
+            bg=CARD, fg=FG2, font=_MONO_SM)
         self._lbl_voice.pack(side="left")
 
         self._voice_frame = tk.Frame(inner, bg=CARD)
@@ -6039,20 +6059,20 @@ class App(tk.Tk):
         rate_title_row.pack(fill="x", pady=(4, 2))
         self._lbl_tts_rate = tk.Label(
             rate_title_row, text=self._s("label_tts_rate"),
-            bg=CARD, fg=FG2, font=("Helvetica", 8))
+            bg=CARD, fg=FG2, font=_MONO_SM)
         self._lbl_tts_rate.pack(side="left")
 
         rate_frame = tk.Frame(inner, bg=CARD)
         rate_frame.pack(fill="x", pady=(0, 4))
         tk.Label(rate_frame, text="-50%", bg=CARD, fg=FG2,
-                 font=("Helvetica", 8)).pack(side="left")
+                 font=_MONO_SM).pack(side="left")
         ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
                   orient="horizontal", length=180).pack(side="left", padx=6)
         tk.Label(rate_frame, text="+50%", bg=CARD, fg=FG2,
-                 font=("Helvetica", 8)).pack(side="left")
+                 font=_MONO_SM).pack(side="left")
         self._rate_lbl = tk.Label(
             rate_frame, text="+0%", bg=CARD, fg=ACC,
-            font=("Helvetica", 9, "bold"), width=6)
+            font=_MONO_B, width=6)
         self._rate_lbl.pack(side="left", padx=4)
         self._tts_rate.trace_add("write", self._update_rate_label)
 
@@ -6067,9 +6087,7 @@ class App(tk.Tk):
 
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Frame(title, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
-        tk.Label(title, text="WORKFLOW PROFILE", bg=CARD, fg=ACC,
-                 font=("Helvetica", 9, "bold")).pack(side="left")
+        tk.Label(title, text="▸ WORKFLOW PROFILE", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
 
         btn_row = tk.Frame(inner, bg=CARD)
         btn_row.pack(fill="x")
@@ -6084,10 +6102,11 @@ class App(tk.Tk):
         for name, (label, icon) in _PROFILE_LABELS.items():
             btn = tk.Button(
                 btn_row, text=f"{icon} {label}",
-                bg=SEL, fg=FG,
-                font=("Helvetica", 8, "bold"),
+                bg=CARD, fg=FG2,
+                font=_MONO_SM,
                 relief="flat", padx=6, pady=6,
                 cursor="hand2",
+                highlightthickness=1, highlightbackground=BORDER,
                 activebackground=ACC, activeforeground=BG,
                 command=lambda n=name: self._apply_profile(n),
             )
@@ -6097,7 +6116,7 @@ class App(tk.Tk):
         # Hint text (updates when profile changes)
         self._lbl_profile_hint = tk.Label(
             inner, text="", bg=CARD, fg=FG2,
-            font=("Helvetica", 8, "italic"), wraplength=280,
+            font=_MONO_SM, wraplength=280,
             anchor="w", justify="left")
         self._lbl_profile_hint.pack(fill="x", pady=(6, 0))
 
@@ -6114,33 +6133,31 @@ class App(tk.Tk):
 
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Frame(title, bg=GRN, width=3).pack(side="left", fill="y", padx=(0, 6))
-        tk.Label(title, text="START", bg=CARD, fg=GRN,
-                 font=("Helvetica", 9, "bold")).pack(side="left")
+        tk.Label(title, text="▸ START", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = tk.Label(
             inner, textvariable=self._summary_var,
-            bg=CARD, fg=FG2, font=("Helvetica", 8, "italic"),
+            bg=CARD, fg=FG2, font=_MONO_SM,
             wraplength=280, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
         # Start button — full-width, prominent
         self._btn = tk.Button(
             inner, text=self._s("btn_start"), command=self._start,
-            bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
+            bg=ACC, fg=BG, font=("Courier", 12, "bold"),
             relief="flat", padx=24, pady=14, cursor="hand2",
-            activebackground="#74c7ec", activeforeground=BG)
+            activebackground=GRN, activeforeground=BG)
         self._btn.pack(fill="x")
 
         # Status row below button
         status_row = tk.Frame(inner, bg=CARD)
         status_row.pack(fill="x", pady=(8, 0))
-        tk.Label(status_row, text="⚡", bg=CARD, fg=GRN,
-                 font=("Helvetica", 9)).pack(side="left")
+        tk.Label(status_row, text="⚡", bg=CARD, fg=ACC,
+                 font=_MONO_SM).pack(side="left")
         self._lbl_status = tk.Label(
             status_row, text="Ready",
-            bg=CARD, fg=GRN, font=("Helvetica", 8, "bold"))
+            bg=CARD, fg=ACC, font=_MONO_SM)
         self._lbl_status.pack(side="left", padx=(2, 0))
 
     # ── Main _build_ui entry point ─────────────────────────────────────────
