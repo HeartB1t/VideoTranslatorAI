@@ -16,6 +16,10 @@ network access, Tkinter, ffmpeg, or platform-specific installers.
 - `videotranslator.secrets`: keyring-first token migration with JSON fallback.
 - `videotranslator.preflight`: side-effect-free environment diagnostics shared
   by CLI `--preflight` and the GUI log-panel diagnostics button.
+- `videotranslator.cli`: installable command entry point (`videotranslatorai`,
+  `python -m videotranslator`) that preserves the legacy no-args GUI behavior.
+- `pyproject.toml`: PEP 517/621 package metadata, console scripts, extras and
+  editable-install validation in CI.
 
 ## Migration Rule
 
@@ -38,7 +42,11 @@ the old names until call sites are moved.
 
 ## Next Safe Steps
 
-1. Wire the legacy HF token functions to `videotranslator.secrets`.
-2. Move translation engines one at a time.
-3. Add broader optional e2e checks around real short clips / GPU profiles.
-4. Leave Tkinter GUI as the last large extraction.
+1. Move CLI parser and job construction out of `video_translator_gui.py` into
+   `videotranslator.cli`, so `--help` no longer imports Tk/config side effects.
+2. Make the GUI construct `TranslationJobConfig` directly and pass every field
+   through the same runner used by the CLI.
+3. Inject output helpers (`save_subtitles`, `get_duration`, `mux_video`) through
+   the pipeline runtime to complete the testable boundary.
+4. Move translation engines one at a time.
+5. Keep Tkinter layout and widgets as the final large extraction.
