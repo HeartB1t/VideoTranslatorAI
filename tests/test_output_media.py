@@ -13,7 +13,10 @@ from videotranslator.output_media import (
 
 class OutputMediaTests(unittest.TestCase):
     def test_format_srt_timestamp(self):
-        self.assertEqual(format_srt_timestamp(3661.234), "01:01:01,233")
+        self.assertEqual(format_srt_timestamp(3661.234), "01:01:01,234")
+
+    def test_format_srt_timestamp_rounds_with_rollover(self):
+        self.assertEqual(format_srt_timestamp(1.9995), "00:00:02,000")
 
     def test_save_subtitles_writes_srt(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
