@@ -60,7 +60,11 @@ class TranslationJobResult:
 
     @property
     def output_path(self) -> str | None:
-        value = self.outputs.get("output") or self.outputs.get("video_out")
+        value = (
+            self.outputs.get("output")
+            or self.outputs.get("video")
+            or self.outputs.get("video_out")
+        )
         return str(value) if value else None
 
 

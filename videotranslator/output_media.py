@@ -11,10 +11,11 @@ from videotranslator.media import run_ffmpeg
 
 def format_srt_timestamp(seconds: float) -> str:
     """Format seconds as an SRT timestamp."""
-    h, rem = divmod(seconds, 3600)
+    total_ms = max(0, int(round(seconds * 1000)))
+    total_seconds, ms = divmod(total_ms, 1000)
+    h, rem = divmod(total_seconds, 3600)
     m, sec = divmod(rem, 60)
-    ms = int((sec % 1) * 1000)
-    return f"{int(h):02d}:{int(m):02d}:{int(sec):02d},{ms:03d}"
+    return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
 
 
 def save_subtitles(
