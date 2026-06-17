@@ -40,6 +40,17 @@ class PipelineWrapperTests(unittest.TestCase):
         self.assertEqual(seen["model"], "base")
         self.assertEqual(result.output_path, "dubbed.mp4")
 
+    def test_result_output_path_accepts_legacy_video_key(self):
+        def runner(**_kwargs):
+            return {"video": "translated.mp4"}
+
+        result = run_translation_job(
+            TranslationJobConfig(video_in="input.mp4"),
+            runner=runner,
+        )
+
+        self.assertEqual(result.output_path, "translated.mp4")
+
     def test_run_translation_job_emits_start_and_done_events(self):
         events: list[PipelineProgressEvent] = []
 

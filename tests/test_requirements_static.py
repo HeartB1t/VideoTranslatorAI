@@ -23,6 +23,7 @@ class RequirementsStaticTests(unittest.TestCase):
             [
                 "requirements-core.txt",
                 "requirements-optional.txt",
+                "requirements-wav2lip.txt",
                 "requirements-gpu-cu124.txt",
             ],
         )
@@ -39,6 +40,7 @@ class RequirementsStaticTests(unittest.TestCase):
     def test_core_and_optional_profiles_keep_expected_runtime_families(self):
         core = set(_requirement_lines(ROOT / "requirements-core.txt"))
         optional = set(_requirement_lines(ROOT / "requirements-optional.txt"))
+        wav2lip = set(_requirement_lines(ROOT / "requirements-wav2lip.txt"))
         gpu = set(_requirement_lines(ROOT / "requirements-gpu-cu124.txt"))
 
         self.assertIn("faster-whisper", core)
@@ -46,6 +48,9 @@ class RequirementsStaticTests(unittest.TestCase):
         self.assertIn("requests", core)
         self.assertIn("coqui-tts>=0.27.5", optional)
         self.assertIn("pyannote.audio>=3.1,<4.0", optional)
+        self.assertIn("new-basicsr", wav2lip)
+        self.assertIn("facexlib", wav2lip)
+        self.assertIn("dlib", wav2lip)
         self.assertIn("torch>=2.6.0,<2.8", gpu)
         self.assertIn("torchaudio==2.6.0", gpu)
 

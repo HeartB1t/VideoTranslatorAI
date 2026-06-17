@@ -110,6 +110,32 @@ class PreflightReportTests(unittest.TestCase):
         self.assertIn("[MISSING] python:missing_mod", text)
         self.assertIn("Result: FAILED", text)
 
+    def test_required_optional_modules_fail_report_when_missing(self):
+        def fake_find_spec(_name):
+            return None
+
+        def fake_which(_name):
+            return "/usr/bin/tool"
+
+        def fake_disk_usage(_path):
+            return SimpleNamespace(free=30 * GB)
+
+        report = run_preflight(
+            required_packages={},
+            optional_packages=(PackageProbe("dlib", "dlib", False, "face stack"),),
+            required_optional_modules=("dlib",),
+            required_binaries=(),
+            optional_binaries=(),
+            version_info=(3, 11, 8),
+            sys_platform="linux",
+            find_spec=fake_find_spec,
+            which=fake_which,
+            disk_usage=fake_disk_usage,
+        )
+
+        self.assertFalse(report.ok)
+        self.assertEqual([check.name for check in report.required_failures], ["python:dlib"])
+
 
 if __name__ == "__main__":
     unittest.main()
