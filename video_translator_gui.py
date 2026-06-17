@@ -308,6 +308,10 @@ ACC = "#89b4fa"
 SEL = "#313244"
 RED = "#f38ba8"
 GRN = "#a6e3a1"
+# ── Modern "creative studio" surface palette ─────────────────
+CARD   = "#181825"   # Card/section background (darker than BG)
+BORDER = "#45475a"   # Subtle borders
+PILL   = "#313244"   # Pill/chip background
 
 # ── UI translation strings ───────────────────────────────────
 UI_STRINGS = {
@@ -4988,6 +4992,11 @@ class App(tk.Tk):
         self._hotwords_var    = tk.StringVar(
             value=str(_ocfg.get("hotwords", ""))
         )
+        # Active quality preset (Fast / Balanced / Studio / Cinematic) — maps
+        # onto the existing Tk vars; no new pipeline state is introduced.
+        self._active_profile = tk.StringVar(value="balanced")
+        # Summary line shown in the START card (lang pair + engine + profile).
+        self._summary_var = tk.StringVar(value="")
         self._running    = False
         self._destroying = False
         # Guard re-entrancy: during the async Ollama setup (detect / install
@@ -5001,8 +5010,9 @@ class App(tk.Tk):
         self._preflight_running = False
 
         self._build_ui()
-        # Restore log panel visibility from config (default True)
-        self._log_visible = bool(_ocfg.get("ui_log_visible", True))
+        # Restore log panel visibility from config (default collapsed in the
+        # modernized GUI — the log starts hidden unless config opts in).
+        self._log_visible = bool(_ocfg.get("ui_log_visible", False))
         if not self._log_visible:
             self._log_container.grid_remove()
             self._btn_log_toggle.configure(text=self._s("btn_log_show"))
@@ -5435,22 +5445,716 @@ class App(tk.Tk):
 
     # ── UI builder ───────────────────────────────────────────────────────────
 
-    def _build_ui(self):
-        pad = {"padx": 16, "pady": 5}
+    # ── GUI style helpers ──────────────────────────────────────────────────
 
-        # ── Outer layout (3 rows on the root window) ─────────────────────
-        # row 0: scrollable canvas hosting the entire form
-        # row 1: log panel (always visible, outside the canvas so the user
-        #        can keep watching pipeline output while scrolling the form)
-        # row 2: progress bar
-        # The canvas approach lets the GUI stay usable on small displays
-        # (1366×768, 1280×720) and on Windows 125%/150% scaling without
-        # truncating the Start button or the option rows.
+    def _pill_badge(self, parent, text, color):
+        """Tiny colored pill Label for status badges in the header."""
+        return tk.Label(
+            parent, text=text, bg=PILL, fg=color,
+            font=("Helvetica", 8, "bold"),
+            relief="flat", padx=6, pady=2,
+        )
+
+    def _section_title(self, parent, text):
+        """Section title with a left colored accent bar."""
+        f = tk.Frame(parent, bg=BG)
+        tk.Frame(f, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
+        tk.Label(f, text=text.upper(), bg=BG, fg=ACC,
+                 font=("Helvetica", 9, "bold")).pack(side="left")
+        return f
+
+    def _make_accordion_section(self, parent, title_text):
+        """Return (outer_frame, body_frame, toggle_btn).
+
+        Clicking the header row shows/hides body_frame.
+        The section starts collapsed (body hidden).
+        """
+        outer = tk.Frame(parent, bg=BG)
+        # 1-px top border for visual separation between sections
+        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
+
+        header = tk.Frame(outer, bg=CARD, cursor="hand2", relief="flat")
+        header.pack(fill="x")
+
+        arrow_lbl = tk.Label(
+            header, text="▶", bg=CARD, fg=FG2,
+            font=("Helvetica", 8), width=2, padx=4)
+        arrow_lbl.pack(side="left", pady=4)
+
+        # Thin accent bar
+        tk.Frame(header, bg=ACC, width=2).pack(side="left", fill="y", pady=6)
+
+        title_lbl = tk.Label(
+            header, text=title_text.upper(), bg=CARD, fg=FG,
+            font=("Helvetica", 9, "bold"), padx=8, pady=6, anchor="w")
+        title_lbl.pack(side="left", fill="x", expand=True)
+
+        # Re-use the arrow label as the "toggle_btn" for API compat
+        toggle_btn = arrow_lbl
+
+        body = tk.Frame(outer, bg=BG)
+
+        def _toggle(*_):
+            if body.winfo_manager():  # body is currently managed (visible)
+                body.pack_forget()
+                arrow_lbl.configure(text="▶")
+            else:
+                body.pack(fill="x", padx=12, pady=(2, 8))
+                arrow_lbl.configure(text="▼")
+
+        for w in (header, arrow_lbl, title_lbl):
+            w.bind("<Button-1>", _toggle)
+
+        return outer, body, toggle_btn
+
+    def _apply_profile(self, name):
+        """Apply a quality preset by setting existing Tk vars."""
+        self._active_profile.set(name)
+        if name == "fast":
+            self._no_demucs.set(True)
+            self._use_xtts.set(False)
+            self._use_lipsync.set(False)
+            self._model.set("small")
+            self._translation_engine.set("google")
+        elif name == "balanced":
+            self._no_demucs.set(False)
+            self._use_xtts.set(False)
+            self._use_lipsync.set(False)
+            self._model.set(DEFAULT_WHISPER_MODEL)
+            self._translation_engine.set("google")
+        elif name == "studio":
+            self._no_demucs.set(False)
+            self._use_xtts.set(False)
+            self._use_lipsync.set(False)
+            self._model.set("large-v3")
+            self._translation_engine.set("marian")
+        elif name == "cinematic":
+            self._no_demucs.set(False)
+            self._use_xtts.set(True)
+            self._use_lipsync.set(False)
+            self._model.set("large-v3-turbo")
+            self._translation_engine.set("google")
+        self._on_engine_change()
+        self._update_profile_buttons()
+        self._update_start_summary()
+
+    def _update_profile_buttons(self):
+        """Refresh profile button highlight and hint text for the active preset."""
+        if not hasattr(self, "_profile_btns"):
+            return
+        _HINTS = {
+            "fast":      "No voice separation · Edge-TTS · small model · fastest",
+            "balanced":  "Demucs + Edge-TTS · GPU-tuned model · recommended",
+            "studio":    "Demucs · MarianMT offline · large-v3 · no internet",
+            "cinematic": "XTTS v2 voice clone · large-v3-turbo · speaker match",
+        }
+        active = self._active_profile.get()
+        for name, btn in self._profile_btns.items():
+            if name == active:
+                btn.configure(bg=ACC, fg=BG)
+            else:
+                btn.configure(bg=SEL, fg=FG2)
+        if hasattr(self, "_lbl_profile_hint"):
+            self._lbl_profile_hint.configure(
+                text=_HINTS.get(active, ""))
+
+    def _update_start_summary(self):
+        """Rebuild the summary line shown in the START card."""
+        if not hasattr(self, "_summary_var"):
+            return
+        try:
+            src_key  = self._lang_src.get()
+            tgt_key  = self._lang_tgt.get()
+            src_name = SOURCE_LANGS.get(src_key, src_key)
+            tgt_name = LANGUAGES.get(tgt_key, {}).get("name", tgt_key)
+            eng = self._translation_engine.get()
+            eng_label = {
+                "google":     "Google Translate",
+                "deepl":      "DeepL",
+                "marian":     "MarianMT",
+                "llm_ollama": "Ollama LLM",
+            }.get(eng, eng)
+            tts     = "XTTS v2" if self._use_xtts.get() else "Edge-TTS"
+            profile = self._active_profile.get().capitalize()
+            self._summary_var.set(
+                f"{src_name} → {tgt_name}  ·  {eng_label}"
+                f"  ·  {tts}  ·  {profile}"
+            )
+        except Exception:
+            pass
+
+    # ── _build_ui sub-methods ───────────────────────────────────────────────
+
+    def _build_header(self, parent):
+        """Top header bar: logo, subtitle, status badges, UI lang selector."""
+        # Outer header frame — spans both columns
+        header_wrap = tk.Frame(parent, bg=BG)
+        header_wrap.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header_wrap.columnconfigure(1, weight=1)
+
+        header = tk.Frame(header_wrap, bg=BG)
+        header.grid(row=0, column=0, columnspan=2, sticky="ew",
+                    padx=20, pady=(16, 10))
+        header.columnconfigure(1, weight=1)
+
+        # ── Logo block (left) ─────────────────────────────────────────────
+        logo_block = tk.Frame(header, bg=BG)
+        logo_block.grid(row=0, column=0, sticky="w")
+
+        # Accent mark before logo
+        logo_inner = tk.Frame(logo_block, bg=BG)
+        logo_inner.pack(anchor="w")
+        tk.Frame(logo_inner, bg=ACC, width=4).pack(side="left", fill="y", padx=(0, 8))
+        title_col = tk.Frame(logo_inner, bg=BG)
+        title_col.pack(side="left")
+        tk.Label(title_col, text="Video Translator AI",
+                 font=("Helvetica", 20, "bold"), bg=BG, fg=FG).pack(anchor="w")
+        tk.Label(title_col, text="Local AI  ·  Open Source Dubbing Studio",
+                 font=("Helvetica", 9, "italic"), bg=BG, fg=FG2).pack(anchor="w")
+
+        # ── Status badges + lang selector (right) ─────────────────────────
+        right = tk.Frame(header, bg=BG)
+        right.grid(row=0, column=1, sticky="e")
+
+        badges = tk.Frame(right, bg=BG)
+        badges.pack(side="left", padx=(0, 12))
+
+        gpu_ok = bool(shutil.which("nvidia-smi"))
+        self._pill_badge(badges,
+                         "  GPU ✓ " if gpu_ok else "  CPU ",
+                         GRN if gpu_ok else "#fab387").pack(side="left", padx=(0, 4))
+        self._pill_badge(badges, "  Ollama ? ", FG2).pack(side="left", padx=(0, 4))
+        has_wav2lip = importlib.util.find_spec("dlib") is not None
+        self._pill_badge(badges,
+                         "  Wav2Lip ✓ " if has_wav2lip else "  Wav2Lip ○ ",
+                         GRN if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
+
+        # UI language selector
+        lang_sel = tk.Frame(right, bg=BG)
+        lang_sel.pack(side="left")
+        self._lbl_ui_lang = tk.Label(
+            lang_sel, text=self._s("label_ui_lang"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_ui_lang.pack(side="left", padx=(0, 4))
+        self._ui_lang_combo = ttk.Combobox(
+            lang_sel,
+            values=[lbl for _, lbl in UI_LANG_OPTIONS],
+            state="readonly", width=20, font=("Helvetica", 8))
+        self._ui_lang_combo.current(0)
+        self._ui_lang_combo.pack(side="left")
+        self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
+
+        # Thin accent line under header
+        tk.Frame(header_wrap, bg=ACC, height=2).grid(
+            row=1, column=0, columnspan=2, sticky="ew")
+
+    def _build_input_section(self, parent):
+        """Left-pane INPUT card: batch list, output path, URL download."""
+        # Card wrapper with top accent border
+        tk.Frame(parent, bg=ACC, height=2).pack(fill="x")
+        card = tk.Frame(parent, bg=CARD, relief="flat")
+        card.pack(fill="x", pady=(0, 8))
+        inner = tk.Frame(card, bg=CARD, padx=14, pady=10)
+        inner.pack(fill="both")
+
+        # Section title inside card
+        title_row = tk.Frame(inner, bg=CARD)
+        title_row.pack(fill="x", pady=(0, 8))
+        tk.Frame(title_row, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
+        tk.Label(title_row, text="INPUT", bg=CARD, fg=ACC,
+                 font=("Helvetica", 9, "bold")).pack(side="left")
+
+        # Hidden label refs required by _apply_lang (configure(text=...))
+        self._lbl_video  = tk.Label(inner, text="", bg=CARD)
+        self._lbl_output = tk.Label(inner, text="", bg=CARD)
+        self._lbl_url    = tk.Label(inner, text="", bg=CARD)
+
+        # ── Batch file list ────────────────────────────────────────────────
+        batch_outer = tk.Frame(inner, bg=CARD)
+        batch_outer.pack(fill="x", pady=(0, 4))
+        batch_frame = tk.Frame(batch_outer, bg=CARD)
+        batch_frame.pack(side="left", fill="both", expand=True)
+        self._batch_listbox = tk.Listbox(
+            batch_frame, height=4,
+            bg=SEL, fg=FG, selectbackground=ACC,
+            selectforeground=BG,
+            font=("Monospace", 8), relief="flat",
+            highlightthickness=1,
+            highlightbackground=BORDER, highlightcolor=ACC,
+            activestyle="none")
+        self._batch_listbox.pack(side="left", fill="both", expand=True)
+        _sb = tk.Scrollbar(batch_frame, command=self._batch_listbox.yview)
+        self._batch_listbox.configure(yscrollcommand=_sb.set)
+        _sb.pack(side="left", fill="y")
+        btn_col = tk.Frame(batch_outer, bg=CARD)
+        btn_col.pack(side="left", padx=(6, 0), anchor="n")
+        self._btn_add = tk.Button(
+            btn_col, text=self._s("btn_add"), command=self._add_files,
+            bg=SEL, fg=FG, relief="flat", width=10, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_add.pack(pady=2)
+        self._btn_remove = tk.Button(
+            btn_col, text=self._s("btn_remove"), command=self._remove_file,
+            bg=SEL, fg=FG, relief="flat", width=10, cursor="hand2",
+            activebackground=RED, activeforeground=BG)
+        self._btn_remove.pack(pady=2)
+        self._btn_clear = tk.Button(
+            btn_col, text=self._s("btn_clear"), command=self._clear_files,
+            bg=SEL, fg=FG2, relief="flat", width=10, cursor="hand2",
+            activebackground=SEL, activeforeground=FG)
+        self._btn_clear.pack(pady=2)
+
+        # ── Output path ────────────────────────────────────────────────────
+        tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(4, 6))
+        out_row = tk.Frame(inner, bg=CARD)
+        out_row.pack(fill="x", pady=(0, 6))
+        tk.Label(out_row, text=self._s("label_output"),
+                 bg=CARD, fg=FG2, font=("Helvetica", 8)).pack(side="left", padx=(0, 6))
+        self._output_var = tk.StringVar()
+        tk.Entry(out_row, textvariable=self._output_var,
+                 bg=SEL, fg=FG, insertbackground=FG,
+                 relief="flat", font=("Helvetica", 9)).pack(
+            side="left", fill="x", expand=True, padx=(0, 6))
+        self._btn_browse = tk.Button(
+            out_row, text=self._s("btn_browse"), command=self._browse_output,
+            bg=SEL, fg=FG2, relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=ACC, activeforeground=BG)
+        self._btn_browse.pack(side="left")
+
+        # ── URL download ───────────────────────────────────────────────────
+        tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
+        tk.Label(inner, text=self._s("label_url"),
+                 bg=CARD, fg=FG2, font=("Helvetica", 8)).pack(anchor="w", pady=(0, 2))
+        url_row = tk.Frame(inner, bg=CARD)
+        url_row.pack(fill="x", pady=(0, 2))
+        self._url_text = tk.Text(
+            url_row, height=2,
+            bg=SEL, fg=FG, insertbackground=FG,
+            font=("Monospace", 8), relief="flat", wrap="none")
+        self._url_text.insert("1.0", self._s("url_placeholder"))
+        self._url_text.configure(fg=FG2)
+        self._url_text.bind("<FocusIn>",  self._url_focus_in)
+        self._url_text.bind("<FocusOut>", self._url_focus_out)
+        self._url_text.pack(side="left", fill="both", expand=True)
+        self._btn_download = tk.Button(
+            url_row, text=self._s("btn_download"),
+            command=self._start_download,
+            bg=GRN, fg=BG, font=("Helvetica", 9, "bold"),
+            relief="flat", padx=10, pady=4, cursor="hand2",
+            activebackground="#b6f2c9", activeforeground=BG)
+        self._btn_download.pack(side="left", padx=(6, 0))
+
+    def _build_advanced_panel(self, parent):
+        """Left-pane: collapsible accordion sections for all advanced options."""
+
+        def cb(par, text_key, var, cmd=None):
+            w = tk.Checkbutton(
+                par, text=self._s(text_key), variable=var, command=cmd,
+                bg=BG, fg=FG, selectcolor=SEL,
+                activebackground=BG, font=("Helvetica", 9))
+            w._text_key = text_key
+            return w
+
+        # ── 1. WHISPER MODEL ──────────────────────────────────────────────
+        sect, body, _ = self._make_accordion_section(
+            parent, self._s("label_model"))
+        sect.pack(fill="x")
+        mf = tk.Frame(body, bg=BG)
+        mf.pack(anchor="w", pady=4)
+        for m in WHISPER_MODELS:
+            tk.Radiobutton(
+                mf, text=m, variable=self._model, value=m,
+                bg=BG, fg=RED if "large" in m else FG,
+                selectcolor=SEL, activebackground=BG,
+                font=("Helvetica", 9)).pack(side="left", padx=3)
+        # Hidden label refs required by _apply_lang
+        self._lbl_model      = tk.Label(body, text="", bg=BG)
+        self._lbl_model_hint = tk.Label(
+            body, text=self._s("label_model_hint"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_model_hint.pack(anchor="w", padx=4, pady=(0, 4))
+
+        # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
+        # body2 uses grid layout so _ollama_row/_deepl_row work with
+        # grid_remove()/grid() as called by _on_engine_change().
+        sect2, body2, _ = self._make_accordion_section(
+            parent, self._s("label_engine"))
+        sect2.pack(fill="x")
+        body2.columnconfigure(0, weight=1)
+
+        engine_row = tk.Frame(body2, bg=BG)
+        engine_row.grid(row=0, column=0, sticky="w", pady=(4, 0))
+        self._lbl_engine = tk.Label(
+            engine_row, text=self._s("label_engine"),
+            bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+        self._lbl_engine.pack(side="left")
+        self._rb_eng_google = tk.Radiobutton(
+            engine_row, text=self._s("engine_google"),
+            variable=self._translation_engine, value="google",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 9))
+        self._rb_eng_google.pack(side="left", padx=(6, 0))
+        self._rb_eng_deepl = tk.Radiobutton(
+            engine_row, text=self._s("engine_deepl"),
+            variable=self._translation_engine, value="deepl",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 9))
+        self._rb_eng_deepl.pack(side="left", padx=(6, 0))
+        self._rb_eng_marian = tk.Radiobutton(
+            engine_row, text=self._s("engine_marian"),
+            variable=self._translation_engine, value="marian",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 9))
+        self._rb_eng_marian.pack(side="left", padx=(6, 0))
+
+        engine_row2 = tk.Frame(body2, bg=BG)
+        engine_row2.grid(row=1, column=0, sticky="w", pady=(2, 0))
+        self._rb_eng_ollama = tk.Radiobutton(
+            engine_row2, text=self._s("engine_ollama"),
+            variable=self._translation_engine, value="llm_ollama",
+            command=self._on_engine_change,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 9))
+        self._rb_eng_ollama.pack(side="left")
+
+        # Ollama config row (toggled by _on_engine_change)
+        self._ollama_row = tk.Frame(body2, bg=BG)
+        self._ollama_row.grid(row=2, column=0, sticky="w", pady=(2, 0))
+        self._lbl_ollama_model = tk.Label(
+            self._ollama_row, text=self._s("label_ollama_model"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_ollama_model.pack(side="left")
+        self._ollama_model_combo = ttk.Combobox(
+            self._ollama_row, textvariable=self._ollama_model_var, width=28,
+            values=[
+                "qwen3:8b",
+                "qwen3:14b",
+                "qwen2.5:7b-instruct",
+                "qwen3:4b",
+            ],
+            font=("Monospace", 8),
+        )
+        self._ollama_model_combo.pack(side="left", padx=(4, 8))
+        self._lbl_ollama_url = tk.Label(
+            self._ollama_row, text=self._s("label_ollama_url"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_ollama_url.pack(side="left")
+        self._ollama_url_entry = tk.Entry(
+            self._ollama_row, textvariable=self._ollama_url_var, width=24,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8))
+        self._ollama_url_entry.pack(side="left", padx=(4, 8))
+        self._chk_ollama_slot = tk.Checkbutton(
+            self._ollama_row, text="slot-aware",
+            variable=self._ollama_slot_aware,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 8))
+        self._chk_ollama_slot.pack(side="left", padx=(4, 0))
+        self._ollama_row.grid_remove()
+
+        # Ollama thinking row (toggled by _on_engine_change)
+        self._ollama_row2 = tk.Frame(body2, bg=BG)
+        self._ollama_row2.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        self._chk_ollama_thinking = tk.Checkbutton(
+            self._ollama_row2, text=self._s("opt_ollama_thinking"),
+            variable=self._ollama_thinking,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 8))
+        self._chk_ollama_thinking.pack(side="left")
+        self._lbl_ollama_thinking_hint = tk.Label(
+            self._ollama_row2,
+            text="  " + self._s("hint_ollama_thinking"),
+            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_ollama_thinking_hint.pack(side="left")
+        self._ollama_row2.grid_remove()
+
+        # DeepL key row (toggled by _on_engine_change)
+        self._deepl_row = tk.Frame(body2, bg=BG)
+        self._deepl_row.grid(row=4, column=0, sticky="w", pady=(2, 4))
+        self._lbl_deepl_key = tk.Label(
+            self._deepl_row, text=self._s("label_deepl_key"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_deepl_key.pack(side="left")
+        self._deepl_key_entry = tk.Entry(
+            self._deepl_row, textvariable=self._deepl_key_var, width=32,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8), show="*")
+        self._deepl_key_entry.pack(side="left", padx=(4, 0))
+        self._deepl_row.grid_remove()
+
+        # ── 3. AUDIO ──────────────────────────────────────────────────────
+        sect3, body3, _ = self._make_accordion_section(parent, "Audio")
+        sect3.pack(fill="x")
+        self._chk_no_demucs = cb(body3, "opt_no_demucs", self._no_demucs)
+        self._chk_no_demucs.pack(anchor="w", pady=4)
+
+        # ── 4. VOICE CLONING ──────────────────────────────────────────────
+        sect4, body4, _ = self._make_accordion_section(parent, "Voice Cloning")
+        sect4.pack(fill="x")
+        self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts)
+        self._chk_xtts.pack(anchor="w", pady=4)
+
+        # ── 5. LIP SYNC ───────────────────────────────────────────────────
+        sect5, body5, _ = self._make_accordion_section(parent, "Lip Sync")
+        sect5.pack(fill="x")
+        self._chk_lipsync = cb(body5, "opt_lipsync", self._use_lipsync)
+        self._chk_lipsync.pack(anchor="w", pady=4)
+
+        # ── 6. DIARIZATION ────────────────────────────────────────────────
+        # body6 uses grid layout so _hf_row works with grid_remove()/grid().
+        sect6, body6, _ = self._make_accordion_section(parent, "Diarization")
+        sect6.pack(fill="x")
+        body6.columnconfigure(0, weight=1)
+
+        diar_f = tk.Frame(body6, bg=BG)
+        diar_f.grid(row=0, column=0, sticky="w", pady=(4, 0))
+        self._chk_diar = tk.Checkbutton(
+            diar_f, text=self._s("opt_diarization"),
+            variable=self._use_diarization,
+            command=self._on_diarization_toggle,
+            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            font=("Helvetica", 9))
+        self._chk_diar.pack(side="left")
+
+        self._hf_row = tk.Frame(body6, bg=BG)
+        self._hf_row.grid(row=1, column=0, sticky="w", pady=(2, 4))
+        self._lbl_hf_token = tk.Label(
+            self._hf_row, text=self._s("label_hf_token"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_hf_token.pack(side="left")
+        self._hf_token_entry = tk.Entry(
+            self._hf_row, textvariable=self._hf_token_var, width=40,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8), show="*")
+        self._hf_token_entry.pack(side="left", padx=(4, 0))
+        self._lbl_hf_hint = tk.Label(
+            self._hf_row, text="  " + self._s("hint_hf_token"),
+            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_hf_hint.pack(side="left")
+        self._hf_row.grid_remove()
+
+        # ── 7. SUBTITLES ──────────────────────────────────────────────────
+        sect7, body7, _ = self._make_accordion_section(
+            parent, self._s("label_options"))
+        sect7.pack(fill="x")
+        # Hidden ref for _apply_lang
+        self._lbl_options = tk.Label(body7, text="", bg=BG)
+        _opy = {"pady": (4, 0)}
+        self._chk_subs_only = cb(body7, "opt_subs_only",
+                                 self._subs_only, self._on_subs_only)
+        self._chk_subs_only.pack(anchor="w", **_opy)
+        self._chk_no_subs = cb(body7, "opt_no_subs",
+                               self._no_subs, self._on_no_subs)
+        self._chk_no_subs.pack(anchor="w", **_opy)
+        self._chk_edit_subs = cb(body7, "opt_edit_subs", self._edit_subs)
+        self._chk_edit_subs.pack(anchor="w", pady=(4, 4))
+
+        # ── 8. HOTWORDS ───────────────────────────────────────────────────
+        sect8, body8, _ = self._make_accordion_section(
+            parent, self._s("label_hotwords"))
+        sect8.pack(fill="x")
+        self._hotwords_row = tk.Frame(body8, bg=BG)
+        self._hotwords_row.pack(anchor="w", pady=4)
+        self._lbl_hotwords = tk.Label(
+            self._hotwords_row, text=self._s("label_hotwords"),
+            bg=BG, fg=FG2, font=("Helvetica", 8))
+        self._lbl_hotwords.pack(side="left")
+        self._hotwords_entry = tk.Entry(
+            self._hotwords_row, textvariable=self._hotwords_var, width=40,
+            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            font=("Monospace", 8))
+        self._hotwords_entry.pack(side="left", padx=(4, 0))
+        self._lbl_hotwords_hint = tk.Label(
+            self._hotwords_row,
+            text="  " + self._s("hint_hotwords"),
+            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+        self._lbl_hotwords_hint.pack(side="left")
+
+    def _build_lang_voice_section(self, parent):
+        """Right-pane card: language pair + voice chips + TTS rate slider."""
+        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
+        card = tk.Frame(parent, bg=CARD, relief="flat")
+        card.pack(fill="x", padx=4, pady=(0, 8))
+
+        inner = tk.Frame(card, bg=CARD)
+        inner.pack(fill="x", padx=12, pady=8)
+
+        # Card title
+        title = tk.Frame(inner, bg=CARD)
+        title.pack(fill="x", pady=(0, 8))
+        tk.Frame(title, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
+        tk.Label(title, text="TRANSLATION", bg=CARD, fg=ACC,
+                 font=("Helvetica", 9, "bold")).pack(side="left")
+
+        # Source language
+        from_row = tk.Frame(inner, bg=CARD)
+        from_row.pack(fill="x", pady=2)
+        self._lbl_from = tk.Label(
+            from_row, text=self._s("label_from"),
+            bg=CARD, fg=FG2, font=("Helvetica", 8), width=6, anchor="e")
+        self._lbl_from.pack(side="left")
+        self._src_combo = ttk.Combobox(
+            from_row, values=list(SOURCE_LANGS.values()),
+            state="readonly", width=22, font=("Helvetica", 9))
+        self._src_combo.current(0)
+        self._src_combo.pack(side="left", padx=(4, 0))
+        src_keys = list(SOURCE_LANGS.keys())
+        self._src_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda e, k=src_keys: self._lang_src.set(
+                k[self._src_combo.current()]))
+
+        # Target language
+        to_row = tk.Frame(inner, bg=CARD)
+        to_row.pack(fill="x", pady=2)
+        self._lbl_to = tk.Label(
+            to_row, text=self._s("label_to"),
+            bg=CARD, fg=FG2, font=("Helvetica", 8), width=6, anchor="e")
+        self._lbl_to.pack(side="left")
+        self._tgt_combo = ttk.Combobox(
+            to_row, values=[v["name"] for v in LANGUAGES.values()],
+            state="readonly", width=22, font=("Helvetica", 9))
+        self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
+        self._tgt_combo.pack(side="left", padx=(4, 0))
+        self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
+
+        # Voice label + chips
+        voice_lbl_row = tk.Frame(inner, bg=CARD)
+        voice_lbl_row.pack(fill="x", pady=(8, 2))
+        self._lbl_voice = tk.Label(
+            voice_lbl_row, text=self._s("label_voice"),
+            bg=CARD, fg=FG2, font=("Helvetica", 8))
+        self._lbl_voice.pack(side="left")
+
+        self._voice_frame = tk.Frame(inner, bg=CARD)
+        self._voice_frame.pack(fill="x", pady=(0, 6))
+        self._build_voice_buttons()
+
+        # TTS rate slider
+        rate_title_row = tk.Frame(inner, bg=CARD)
+        rate_title_row.pack(fill="x", pady=(4, 2))
+        self._lbl_tts_rate = tk.Label(
+            rate_title_row, text=self._s("label_tts_rate"),
+            bg=CARD, fg=FG2, font=("Helvetica", 8))
+        self._lbl_tts_rate.pack(side="left")
+
+        rate_frame = tk.Frame(inner, bg=CARD)
+        rate_frame.pack(fill="x", pady=(0, 4))
+        tk.Label(rate_frame, text="-50%", bg=CARD, fg=FG2,
+                 font=("Helvetica", 8)).pack(side="left")
+        ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
+                  orient="horizontal", length=180).pack(side="left", padx=6)
+        tk.Label(rate_frame, text="+50%", bg=CARD, fg=FG2,
+                 font=("Helvetica", 8)).pack(side="left")
+        self._rate_lbl = tk.Label(
+            rate_frame, text="+0%", bg=CARD, fg=ACC,
+            font=("Helvetica", 9, "bold"), width=6)
+        self._rate_lbl.pack(side="left", padx=4)
+        self._tts_rate.trace_add("write", self._update_rate_label)
+
+    def _build_profile_section(self, parent):
+        """Right-pane card: Fast / Balanced / Studio / Cinematic presets."""
+        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
+        card = tk.Frame(parent, bg=CARD, relief="flat")
+        card.pack(fill="x", padx=4, pady=(0, 8))
+
+        inner = tk.Frame(card, bg=CARD)
+        inner.pack(fill="x", padx=12, pady=8)
+
+        title = tk.Frame(inner, bg=CARD)
+        title.pack(fill="x", pady=(0, 8))
+        tk.Frame(title, bg=ACC, width=3).pack(side="left", fill="y", padx=(0, 6))
+        tk.Label(title, text="WORKFLOW PROFILE", bg=CARD, fg=ACC,
+                 font=("Helvetica", 9, "bold")).pack(side="left")
+
+        btn_row = tk.Frame(inner, bg=CARD)
+        btn_row.pack(fill="x")
+
+        _PROFILE_LABELS = {
+            "fast":      ("Fast",     "⚡"),
+            "balanced":  ("Balanced", "⚖"),
+            "studio":    ("Studio",   "🎙"),
+            "cinematic": ("Cinema",   "🎬"),
+        }
+        self._profile_btns = {}
+        for name, (label, icon) in _PROFILE_LABELS.items():
+            btn = tk.Button(
+                btn_row, text=f"{icon} {label}",
+                bg=SEL, fg=FG,
+                font=("Helvetica", 8, "bold"),
+                relief="flat", padx=6, pady=6,
+                cursor="hand2",
+                activebackground=ACC, activeforeground=BG,
+                command=lambda n=name: self._apply_profile(n),
+            )
+            btn.pack(side="left", padx=(0, 4), fill="x", expand=True)
+            self._profile_btns[name] = btn
+
+        # Hint text (updates when profile changes)
+        self._lbl_profile_hint = tk.Label(
+            inner, text="", bg=CARD, fg=FG2,
+            font=("Helvetica", 8, "italic"), wraplength=280,
+            anchor="w", justify="left")
+        self._lbl_profile_hint.pack(fill="x", pady=(6, 0))
+
+        self._update_profile_buttons()
+
+    def _build_start_section(self, parent):
+        """Right-pane card: summary line + big Start button + status row."""
+        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
+        card = tk.Frame(parent, bg=CARD, relief="flat")
+        card.pack(fill="x", padx=4, pady=(0, 8))
+
+        inner = tk.Frame(card, bg=CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        title = tk.Frame(inner, bg=CARD)
+        title.pack(fill="x", pady=(0, 8))
+        tk.Frame(title, bg=GRN, width=3).pack(side="left", fill="y", padx=(0, 6))
+        tk.Label(title, text="START", bg=CARD, fg=GRN,
+                 font=("Helvetica", 9, "bold")).pack(side="left")
+
+        # Summary line (auto-updated on lang/voice/profile changes)
+        self._lbl_summary = tk.Label(
+            inner, textvariable=self._summary_var,
+            bg=CARD, fg=FG2, font=("Helvetica", 8, "italic"),
+            wraplength=280, justify="left")
+        self._lbl_summary.pack(anchor="w", pady=(0, 10))
+
+        # Start button — full-width, prominent
+        self._btn = tk.Button(
+            inner, text=self._s("btn_start"), command=self._start,
+            bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
+            relief="flat", padx=24, pady=14, cursor="hand2",
+            activebackground="#74c7ec", activeforeground=BG)
+        self._btn.pack(fill="x")
+
+        # Status row below button
+        status_row = tk.Frame(inner, bg=CARD)
+        status_row.pack(fill="x", pady=(8, 0))
+        tk.Label(status_row, text="⚡", bg=CARD, fg=GRN,
+                 font=("Helvetica", 9)).pack(side="left")
+        self._lbl_status = tk.Label(
+            status_row, text="Ready",
+            bg=CARD, fg=GRN, font=("Helvetica", 8, "bold"))
+        self._lbl_status.pack(side="left", padx=(2, 0))
+
+    # ── Main _build_ui entry point ─────────────────────────────────────────
+
+    def _build_ui(self):
+        # ── Root grid layout ──────────────────────────────────────────────
+        # row 0 = scrollable canvas (entire form)
+        # row 1 = log panel (always visible, outside canvas)
+        # row 2 = progress bar
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0)
         self.grid_rowconfigure(2, weight=0)
         self.grid_columnconfigure(0, weight=1)
 
+        # ── Scrollable canvas ─────────────────────────────────────────────
         self._main_canvas = tk.Canvas(self, bg=BG, highlightthickness=0)
         self._main_canvas.grid(row=0, column=0, sticky="nsew")
         main_vsb = tk.Scrollbar(self, orient="vertical",
@@ -5474,354 +6178,53 @@ class App(tk.Tk):
             lambda e: self._main_canvas.itemconfig(
                 self._main_canvas_window, width=e.width))
 
-        # Header: title + UI language selector
-        header = tk.Frame(self._main_frame, bg=BG)
-        header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=16, pady=(16, 2))
-        header.columnconfigure(0, weight=1)
+        # ── Two-column content layout ─────────────────────────────────────
+        # row 0: header (spans both cols)
+        # row 1: separator
+        # row 2: content frame (left = input+advanced, right = lang+profile+start)
+        self._main_frame.columnconfigure(0, weight=1)
+        self._main_frame.columnconfigure(1, weight=0)
 
-        tk.Label(header, text="🎬 Video Translator AI",
-                 font=("Helvetica", 16, "bold"), bg=BG, fg=FG).grid(row=0, column=0, sticky="w")
+        # Header (row 0 — includes its own accent bottom line)
+        self._build_header(self._main_frame)
 
-        lang_sel = tk.Frame(header, bg=BG)
-        lang_sel.grid(row=0, column=1, sticky="e")
-        self._lbl_ui_lang = tk.Label(lang_sel, text=self._s("label_ui_lang"),
-                                     bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_ui_lang.pack(side="left", padx=(0, 4))
-        self._ui_lang_combo = ttk.Combobox(lang_sel,
-                                            values=[lbl for _, lbl in UI_LANG_OPTIONS],
-                                            state="readonly", width=22, font=("Helvetica", 8))
-        self._ui_lang_combo.current(0)
-        self._ui_lang_combo.pack(side="left")
-        self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
+        # Content frame (row 1 — header accent line at bottom of row 0 acts as separator)
+        self._main_frame.rowconfigure(1, weight=1)
+        content = tk.Frame(self._main_frame, bg=BG)
+        content.grid(row=1, column=0, columnspan=2, sticky="nsew",
+                     padx=16, pady=(8, 8))
+        content.columnconfigure(0, weight=1)
+        content.columnconfigure(1, minsize=320, weight=0)
 
-        tk.Label(self._main_frame, text="faster-whisper  •  Demucs  •  Google Translate  •  Edge-TTS / XTTS v2",
-                 font=("Helvetica", 9), bg=BG, fg=FG2).grid(row=1, column=0, columnspan=3)
+        # Left pane
+        left = tk.Frame(content, bg=BG)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
+        self._build_input_section(left)
+        self._build_advanced_panel(left)
 
-        ttk.Separator(self._main_frame, orient="horizontal").grid(
-            row=2, column=0, columnspan=3, sticky="ew", padx=16, pady=6)
+        # Right pane
+        right = tk.Frame(content, bg=BG)
+        right.grid(row=0, column=1, sticky="n")
+        self._build_lang_voice_section(right)
+        self._build_profile_section(right)
+        self._build_start_section(right)
 
-        # Batch file list
-        self._lbl_video = self._row_label(3, self._s("label_video"))
-        batch_frame = tk.Frame(self._main_frame, bg=BG)
-        batch_frame.grid(row=3, column=1, columnspan=2, sticky="ew", **pad)
-        self._batch_listbox = tk.Listbox(batch_frame, height=4, width=52,
-                                         bg=SEL, fg=FG, selectbackground=ACC,
-                                         font=("Monospace", 8), relief="flat")
-        self._batch_listbox.pack(side="left", fill="both", expand=True)
-        sb = tk.Scrollbar(batch_frame, command=self._batch_listbox.yview)
-        self._batch_listbox.configure(yscrollcommand=sb.set)
-        sb.pack(side="left", fill="y")
-        btn_col = tk.Frame(batch_frame, bg=BG)
-        btn_col.pack(side="left", padx=(6, 0))
-        self._btn_add    = tk.Button(btn_col, text=self._s("btn_add"),
-                                     command=self._add_files, bg=SEL, fg=FG, relief="flat", width=10)
-        self._btn_add.pack(pady=2)
-        self._btn_remove = tk.Button(btn_col, text=self._s("btn_remove"),
-                                     command=self._remove_file, bg=SEL, fg=FG, relief="flat", width=10)
-        self._btn_remove.pack(pady=2)
-        self._btn_clear  = tk.Button(btn_col, text=self._s("btn_clear"),
-                                     command=self._clear_files, bg=SEL, fg=FG, relief="flat", width=10)
-        self._btn_clear.pack(pady=2)
-
-        # Output
-        self._lbl_output = self._row_label(4, self._s("label_output"))
-        self._output_var = tk.StringVar()
-        tk.Entry(self._main_frame, textvariable=self._output_var, width=42,
-                 bg=SEL, fg=FG, insertbackground=FG,
-                 relief="flat", font=("Helvetica", 9)).grid(
-            row=4, column=1, sticky="ew", padx=(0, 6), pady=5)
-        self._btn_browse = tk.Button(self._main_frame, text=self._s("btn_browse"),
-                                     command=self._browse_output, bg="#45475a", fg=FG, relief="flat")
-        self._btn_browse.grid(row=4, column=2, padx=(0, 16))
-
-        # URL download field
-        self._lbl_url = self._row_label(5, self._s("label_url"))
-        url_frame = tk.Frame(self._main_frame, bg=BG)
-        url_frame.grid(row=5, column=1, columnspan=2, sticky="ew", **pad)
-        self._url_text = tk.Text(url_frame, height=2, width=52,
-                                  bg=SEL, fg=FG, insertbackground=FG,
-                                  font=("Monospace", 8), relief="flat", wrap="none")
-        self._url_text.insert("1.0", self._s("url_placeholder"))
-        self._url_text.configure(fg=FG2)
-        self._url_text.bind("<FocusIn>",  self._url_focus_in)
-        self._url_text.bind("<FocusOut>", self._url_focus_out)
-        self._url_text.pack(side="left", fill="both", expand=True)
-        self._btn_download = tk.Button(url_frame, text=self._s("btn_download"),
-                                        command=self._start_download,
-                                        bg=GRN, fg=BG, font=("Helvetica", 9, "bold"),
-                                        relief="flat", padx=8, cursor="hand2")
-        self._btn_download.pack(side="left", padx=(6, 0))
-
-        ttk.Separator(self._main_frame, orient="horizontal").grid(
-            row=6, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
-
-        # Whisper model
-        self._lbl_model = self._row_label(7, self._s("label_model"))
-        mf = tk.Frame(self._main_frame, bg=BG)
-        mf.grid(row=7, column=1, columnspan=2, sticky="w", **pad)
-        for m in WHISPER_MODELS:
-            tk.Radiobutton(mf, text=m, variable=self._model, value=m,
-                           bg=BG, fg=RED if "large" in m else FG,
-                           selectcolor=SEL, activebackground=BG,
-                           font=("Helvetica", 9)).pack(side="left", padx=3)
-        self._lbl_model_hint = tk.Label(mf, text=self._s("label_model_hint"),
-                                         bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_model_hint.pack(side="left", padx=6)
-
-        # Source language
-        self._lbl_from = self._row_label(8, self._s("label_from"))
-        src_frame = tk.Frame(self._main_frame, bg=BG)
-        src_frame.grid(row=8, column=1, columnspan=2, sticky="w", **pad)
-        self._src_combo = ttk.Combobox(src_frame, values=list(SOURCE_LANGS.values()),
-                                        state="readonly", width=22, font=("Helvetica", 9))
-        self._src_combo.current(0)
-        self._src_combo.pack(side="left")
-        src_keys = list(SOURCE_LANGS.keys())
-        self._src_combo.bind("<<ComboboxSelected>>",
-                              lambda e, k=src_keys: self._lang_src.set(k[self._src_combo.current()]))
-
-        # Target language
-        self._lbl_to = self._row_label(9, self._s("label_to"))
-        tgt_frame = tk.Frame(self._main_frame, bg=BG)
-        tgt_frame.grid(row=9, column=1, columnspan=2, sticky="w", **pad)
-        self._tgt_combo = ttk.Combobox(tgt_frame, values=[v["name"] for v in LANGUAGES.values()],
-                                        state="readonly", width=22, font=("Helvetica", 9))
-        self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
-        self._tgt_combo.pack(side="left")
-        self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
-
-        # Voice
-        self._lbl_voice = self._row_label(10, self._s("label_voice"))
-        self._voice_frame = tk.Frame(self._main_frame, bg=BG)
-        self._voice_frame.grid(row=10, column=1, columnspan=2, sticky="w", **pad)
-        self._build_voice_buttons()
-
-        # TTS rate
-        self._lbl_tts_rate = self._row_label(11, self._s("label_tts_rate"))
-        rate_frame = tk.Frame(self._main_frame, bg=BG)
-        rate_frame.grid(row=11, column=1, columnspan=2, sticky="w", **pad)
-        tk.Label(rate_frame, text="-50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
-        ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
-                  orient="horizontal", length=200).pack(side="left", padx=6)
-        tk.Label(rate_frame, text="+50%", bg=BG, fg=FG2, font=("Helvetica", 8)).pack(side="left")
-        self._rate_lbl = tk.Label(rate_frame, text="+0%", bg=BG, fg=ACC,
-                                   font=("Helvetica", 9, "bold"), width=6)
-        self._rate_lbl.pack(side="left", padx=4)
-        self._tts_rate.trace_add("write", self._update_rate_label)
-
-        ttk.Separator(self._main_frame, orient="horizontal").grid(
-            row=12, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
-
-        # Options
-        self._lbl_options = self._row_label(13, self._s("label_options"))
-        opts = tk.Frame(self._main_frame, bg=BG)
-        opts.grid(row=13, column=1, columnspan=2, sticky="w", **pad)
-
-        def cb(parent, text_key, var, cmd=None):
-            w = tk.Checkbutton(parent, text=self._s(text_key), variable=var, command=cmd,
-                               bg=BG, fg=FG, selectcolor=SEL,
-                               activebackground=BG, font=("Helvetica", 9))
-            w._text_key = text_key
-            return w
-
-        _opy = {"pady": (4, 0)}
-        self._chk_subs_only = cb(opts, "opt_subs_only", self._subs_only, self._on_subs_only)
-        self._chk_subs_only.grid(row=0, column=0, sticky="w", **_opy)
-        self._chk_no_subs   = cb(opts, "opt_no_subs",   self._no_subs,   self._on_no_subs)
-        self._chk_no_subs.grid(row=1, column=0, sticky="w", **_opy)
-        self._chk_no_demucs = cb(opts, "opt_no_demucs", self._no_demucs)
-        self._chk_no_demucs.grid(row=0, column=1, sticky="w", padx=16, **_opy)
-        self._chk_edit_subs = cb(opts, "opt_edit_subs", self._edit_subs)
-        self._chk_edit_subs.grid(row=1, column=1, sticky="w", padx=16, **_opy)
-        # XTTS + Lipsync on row 2 in a 2-column layout consistent with the
-        # checkboxes above (col 0 / col 1). The previous version put lipsync
-        # in col=2 while XTTS spanned col 0+1: this made lipsync invisible
-        # when the Ollama frame (row=6, col 0+1 columnspan=2) expanded with
-        # the thinking toggle because col=2 ended up outside the visible area.
-        self._chk_xtts = cb(opts, "opt_xtts", self._use_xtts)
-        self._chk_xtts.grid(row=2, column=0, sticky="w", pady=(8, 0))
-        self._chk_lipsync = cb(opts, "opt_lipsync", self._use_lipsync)
-        self._chk_lipsync.grid(row=2, column=1, sticky="w", padx=16, pady=(8, 0))
-
-        # Translation engine radio group.
-        engine_row = tk.Frame(opts, bg=BG)
-        engine_row.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        self._lbl_engine = tk.Label(engine_row, text=self._s("label_engine"),
-                                    bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
-        self._lbl_engine.pack(side="left")
-        self._rb_eng_google = tk.Radiobutton(
-            engine_row, text=self._s("engine_google"),
-            variable=self._translation_engine, value="google",
-            command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._rb_eng_google.pack(side="left", padx=(6, 0))
-        self._rb_eng_deepl = tk.Radiobutton(
-            engine_row, text=self._s("engine_deepl"),
-            variable=self._translation_engine, value="deepl",
-            command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._rb_eng_deepl.pack(side="left", padx=(6, 0))
-        self._rb_eng_marian = tk.Radiobutton(
-            engine_row, text=self._s("engine_marian"),
-            variable=self._translation_engine, value="marian",
-            command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._rb_eng_marian.pack(side="left", padx=(6, 0))
-
-        # Ollama LLM radio (v2.0). Note: the label is long (describes the
-        # feature) so it occupies its own row below the three "classic" radios.
-        engine_row2 = tk.Frame(opts, bg=BG)
-        engine_row2.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._rb_eng_ollama = tk.Radiobutton(
-            engine_row2, text=self._s("engine_ollama"),
-            variable=self._translation_engine, value="llm_ollama",
-            command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._rb_eng_ollama.pack(side="left")
-
-        # Ollama config row (visible only when llm_ollama selected)
-        self._ollama_row = tk.Frame(opts, bg=BG)
-        self._ollama_row.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._lbl_ollama_model = tk.Label(self._ollama_row, text=self._s("label_ollama_model"),
-                                          bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_ollama_model.pack(side="left")
-        # Combobox: only end-to-end tested models (TASK 2T 2026-04-29).
-        # A power user who wants a different tag can type it directly in the
-        # field (combobox is NOT readonly) or use --ollama-model from CLI.
-        # Plus, smart fallback (TASK 2J) auto-resolves to qwen3:* if the user
-        # has a legacy tag that is no longer installed.
-        # qwen3:4b included as 'lightweight' even though not deeply tested:
-        # same qwen3 family, identical sampling parameters and thinking-mode,
-        # plausibly compatible on GPUs with limited VRAM (<6 GB).
-        self._ollama_model_combo = ttk.Combobox(
-            self._ollama_row, textvariable=self._ollama_model_var, width=28,
-            values=[
-                "qwen3:8b",                  # Recommended default (~5.2 GB) — tested
-                "qwen3:14b",                 # Higher quality (~9 GB)        — tested
-                "qwen2.5:7b-instruct",       # Legacy compat fallback         — tested
-                "qwen3:4b",                  # Lightweight (~3 GB) — qwen3 family OK
-            ],
-            font=("Monospace", 8),
-        )
-        self._ollama_model_combo.pack(side="left", padx=(4, 8))
-        self._lbl_ollama_url = tk.Label(self._ollama_row, text=self._s("label_ollama_url"),
-                                        bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_ollama_url.pack(side="left")
-        self._ollama_url_entry = tk.Entry(
-            self._ollama_row, textvariable=self._ollama_url_var, width=24,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8))
-        self._ollama_url_entry.pack(side="left", padx=(4, 8))
-        self._chk_ollama_slot = tk.Checkbutton(
-            self._ollama_row, text="slot-aware",
-            variable=self._ollama_slot_aware,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
-        self._chk_ollama_slot.pack(side="left", padx=(4, 0))
-        self._ollama_row.grid_remove()  # hidden until llm_ollama selected
-
-        # Ollama thinking row (dedicated row): keeping the thinking toggle on
-        # the same row as model+url+slot-aware made `_ollama_row` too wide,
-        # pushing lipsync (col=2 of `opts`) out of the visible area and making
-        # the hint hard to read. A separate row = wide label is fine,
-        # no impact on the width of other columns. The toggle disables the
-        # `/no_think` suffix in the prompt and sends `think:True` to the daemon.
-        # Only Qwen3 responds to the flag (other models ignore it).
-        self._ollama_row2 = tk.Frame(opts, bg=BG)
-        self._ollama_row2.grid(row=7, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._chk_ollama_thinking = tk.Checkbutton(
-            self._ollama_row2, text=self._s("opt_ollama_thinking"),
-            variable=self._ollama_thinking,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 8))
-        self._chk_ollama_thinking.pack(side="left")
-        self._lbl_ollama_thinking_hint = tk.Label(
-            self._ollama_row2, text="  " + self._s("hint_ollama_thinking"),
-            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
-        self._lbl_ollama_thinking_hint.pack(side="left")
-        self._ollama_row2.grid_remove()  # hidden until llm_ollama selected
-
-        # DeepL API key row (visible only when DeepL selected)
-        self._deepl_row = tk.Frame(opts, bg=BG)
-        self._deepl_row.grid(row=8, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._lbl_deepl_key = tk.Label(self._deepl_row, text=self._s("label_deepl_key"),
-                                       bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_deepl_key.pack(side="left")
-        self._deepl_key_entry = tk.Entry(
-            self._deepl_row, textvariable=self._deepl_key_var, width=32,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8), show="*")
-        self._deepl_key_entry.pack(side="left", padx=(4, 0))
-        self._deepl_row.grid_remove()  # hidden until DeepL selected
-
-        # Diarization row
-        diar_row = tk.Frame(opts, bg=BG)
-        diar_row.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
-        self._chk_diar = tk.Checkbutton(
-            diar_row, text=self._s("opt_diarization"),
-            variable=self._use_diarization,
-            command=self._on_diarization_toggle,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG, font=("Helvetica", 9))
-        self._chk_diar.pack(side="left")
-
-        self._hf_row = tk.Frame(opts, bg=BG)
-        self._hf_row.grid(row=10, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._lbl_hf_token = tk.Label(self._hf_row, text=self._s("label_hf_token"),
-                                      bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_hf_token.pack(side="left")
-        self._hf_token_entry = tk.Entry(
-            self._hf_row, textvariable=self._hf_token_var, width=40,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8), show="*")
-        self._hf_token_entry.pack(side="left", padx=(4, 0))
-        self._lbl_hf_hint = tk.Label(self._hf_row, text="  " + self._s("hint_hf_token"),
-                                     bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
-        self._lbl_hf_hint.pack(side="left")
-        self._hf_row.grid_remove()  # hidden until diarization enabled
-
-        # Hotwords row: always visible. Bias Whisper decoding toward
-        # user-supplied brand names / proper nouns / technical jargon.
-        # Empty string = no biasing (decoder default behavior).
-        self._hotwords_row = tk.Frame(opts, bg=BG)
-        self._hotwords_row.grid(row=11, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        self._lbl_hotwords = tk.Label(
-            self._hotwords_row, text=self._s("label_hotwords"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
-        self._lbl_hotwords.pack(side="left")
-        self._hotwords_entry = tk.Entry(
-            self._hotwords_row, textvariable=self._hotwords_var, width=40,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8))
-        self._hotwords_entry.pack(side="left", padx=(4, 0))
-        self._lbl_hotwords_hint = tk.Label(
-            self._hotwords_row, text="  " + self._s("hint_hotwords"),
-            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
-        self._lbl_hotwords_hint.pack(side="left")
-
-        ttk.Separator(self._main_frame, orient="horizontal").grid(
-            row=14, column=0, columnspan=3, sticky="ew", padx=16, pady=4)
-
-        # Start button
-        self._btn = tk.Button(self._main_frame, text=self._s("btn_start"), command=self._start,
-                              bg=ACC, fg=BG, font=("Helvetica", 12, "bold"),
-                              relief="flat", padx=20, pady=8, cursor="hand2",
-                              activebackground="#74c7ec")
-        self._btn.grid(row=15, column=0, columnspan=3, pady=8)
-
-        # Log panel — toolbar + collapsible Text widget.
-        # Stays a direct child of the root window (NOT inside the scrollable
-        # canvas) so pipeline output remains visible while the user scrolls
-        # the form above. Sits in row=1 of the root grid (canvas is row=0).
+        # ── Log panel (root row 1, outside canvas) ────────────────────────
         log_frame = tk.Frame(self, bg=BG)
-        log_frame.grid(row=1, column=0, columnspan=2, padx=16, pady=(0, 4), sticky="nsew")
+        log_frame.grid(row=1, column=0, columnspan=2, padx=16,
+                       pady=(0, 4), sticky="nsew")
         log_frame.rowconfigure(1, weight=1)
         log_frame.columnconfigure(0, weight=1)
 
         log_header = tk.Frame(log_frame, bg=BG)
         log_header.grid(row=0, column=0, sticky="ew")
-        self._lbl_log_panel = tk.Label(log_header, text=self._s("label_log_panel"),
-                                       bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+        self._lbl_log_panel = tk.Label(
+            log_header, text=self._s("label_log_panel"),
+            bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
         self._lbl_log_panel.pack(side="left")
+        # Default collapsed — log starts hidden (btn_log_show text)
         self._btn_log_toggle = tk.Button(
-            log_header, text=self._s("btn_log_hide"),
+            log_header, text=self._s("btn_log_show"),
             command=self._toggle_log,
             bg=SEL, fg=FG, font=("Helvetica", 8),
             relief="flat", padx=8, pady=2, cursor="hand2",
@@ -5860,27 +6263,26 @@ class App(tk.Tk):
         self._log_container.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
         self._log_container.rowconfigure(0, weight=1)
         self._log_container.columnconfigure(0, weight=1)
-        self._log = tk.Text(self._log_container, height=12, width=76,
-                            bg="#11111b", fg=GRN, font=("Monospace", 8),
-                            relief="flat", state="disabled", wrap="word")
+        self._log = tk.Text(
+            self._log_container, height=12, width=76,
+            bg="#11111b", fg=GRN, font=("Monospace", 8),
+            relief="flat", state="disabled", wrap="word")
         vsb = tk.Scrollbar(self._log_container, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
         self._log.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
 
-        # Progress bar — root child, row=2 (under the log panel).
+        # ── Progress bar (root row 2) ─────────────────────────────────────
         self._progress = ttk.Progressbar(self, mode="indeterminate", length=500)
-        self._progress.grid(row=2, column=0, columnspan=2, padx=16, pady=(0, 12))
+        self._progress.grid(row=2, column=0, columnspan=2,
+                            padx=16, pady=(0, 12))
 
-        # Inner-frame column weight so form widgets stretch horizontally
-        # (column 1 hosts entries / combos / wrap frames).
-        self._main_frame.columnconfigure(1, weight=1)
-
-        # Cross-platform mouse wheel scrolling. Tk does not propagate the
-        # MouseWheel event to children automatically, so we walk the tree
-        # and bind on every descendant of the canvas + main frame.
+        # ── Mouse-wheel scrolling ──────────────────────────────────────────
         self._bind_mousewheel(self._main_canvas)
         self._bind_mousewheel(self._main_frame)
+
+        # Initial summary line
+        self._update_start_summary()
 
     def _row_label(self, row, text):
         # All form rows live inside `self._main_frame` (a child of the
@@ -6004,31 +6406,70 @@ class App(tk.Tk):
             self._src_combo.current(src_keys.index(cur_key))
         except ValueError:
             self._src_combo.current(0)
-        self._src_combo.bind("<<ComboboxSelected>>",
-                              lambda e, k=src_keys: self._lang_src.set(k[self._src_combo.current()]))
+        self._src_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda e, k=src_keys: (
+                self._lang_src.set(k[self._src_combo.current()]),
+                self._update_start_summary(),
+            ))
+        self._update_start_summary()
 
     # ── Voice buttons ────────────────────────────────────────────────────────
 
     def _build_voice_buttons(self):
+        """Rebuild voice pill-buttons for the selected target language."""
+        # Detect parent bg (CARD when inside the lang/voice card, BG otherwise)
+        try:
+            parent_bg = self._voice_frame.master.cget("bg")
+        except Exception:
+            parent_bg = BG
+
         for w in self._voice_frame.winfo_children():
             w.destroy()
         lang_key = list(LANGUAGES.keys())[self._tgt_combo.current()]
         voices   = LANGUAGES[lang_key]["voices"]
         self._voice.set(voices[0])
+
+        def _refresh_pills(*_):
+            """Re-color all pill buttons to reflect selection."""
+            cur = self._voice.get()
+            for btn_v, btn_w in _pill_map.items():
+                if btn_v == cur:
+                    btn_w.configure(bg=ACC, fg=BG)
+                else:
+                    btn_w.configure(bg=PILL, fg=FG2)
+
+        _pill_map = {}
         for v in voices:
             label = v.split("-")[2].replace("Neural", "").replace("Multilingual", "ML")
-            tk.Radiobutton(self._voice_frame, text=label, variable=self._voice, value=v,
-                           bg=BG, fg=FG, selectcolor=SEL,
-                           activebackground=BG, font=("Helvetica", 9)).pack(side="left", padx=3)
+            btn = tk.Radiobutton(
+                self._voice_frame, text=label,
+                variable=self._voice, value=v,
+                indicatoron=False,
+                bg=PILL, fg=FG2,
+                selectcolor=ACC,
+                activebackground=ACC, activeforeground=BG,
+                font=("Helvetica", 9),
+                relief="flat", padx=8, pady=4,
+                cursor="hand2",
+                command=_refresh_pills,
+            )
+            btn.pack(side="left", padx=(0, 4))
+            _pill_map[v] = btn
+
+        # Apply initial coloring
+        _refresh_pills()
+        self._update_start_summary()
 
     def _on_lang_tgt_change(self, _=None):
         self._lang_tgt.set(list(LANGUAGES.keys())[self._tgt_combo.current()])
         self._build_voice_buttons()
-        # Re-bind mousewheel to newly created voice radio buttons
+        # Re-bind mousewheel to newly created voice pill buttons
         try:
             self._bind_mousewheel(self._voice_frame)
         except Exception:
             pass
+        self._update_start_summary()
 
     def _update_rate_label(self, *_):
         try:
@@ -6952,6 +7393,12 @@ def _cli():
         action="store_true",
         help="Run local diagnostics and exit without starting translation",
     )
+    parser.add_argument(
+        "--preflight-lipsync",
+        action="store_true",
+        help="When used with --preflight, require Wav2Lip lip-sync packages "
+             "(dlib, facexlib, basicsr) instead of reporting them as optional warnings",
+    )
     parser.add_argument("--model", default=DEFAULT_WHISPER_MODEL, choices=WHISPER_MODELS)
     parser.add_argument("--lang-source", default="auto")
     parser.add_argument("--lang-target", default=DEFAULT_LANG, choices=list(LANGUAGES.keys()))
@@ -6963,13 +7410,13 @@ def _cli():
     parser.add_argument("--translation-engine", default="google",
                         choices=["google", "deepl", "marian", "llm_ollama"])
     parser.add_argument("--deepl-key", default="")
-    parser.add_argument("--ollama-model", default="qwen3:8b",
+    parser.add_argument("--ollama-model", default=None,
                         help="Ollama model tag (default: qwen3:8b — Qwen3 with thinking mode "
                              "auto-disabled to avoid <think> blocks. Use qwen2.5:7b-instruct "
                              "for legacy behaviour)")
-    parser.add_argument("--ollama-url", default="http://localhost:11434",
+    parser.add_argument("--ollama-url", default=None,
                         help="Ollama daemon URL (default: http://localhost:11434)")
-    parser.add_argument("--ollama-no-slot-aware", action="store_true",
+    parser.add_argument("--ollama-no-slot-aware", action="store_true", default=None,
                         help="Disable slot-aware prompting (faster, less constrained)")
     parser.add_argument("--ollama-thinking", action="store_true",
                         help="Enable Qwen3 thinking mode: deliberates step-by-step "
@@ -7065,7 +7512,11 @@ def _cli():
     args = parser.parse_args()
 
     if args.preflight:
-        report = _run_preflight(required_packages=REQUIRED_PACKAGES)
+        report = _run_preflight(
+            required_packages=REQUIRED_PACKAGES,
+            required_optional_modules=("dlib", "facexlib", "basicsr")
+            if args.preflight_lipsync else (),
+        )
         print(_format_preflight_report(report))
         sys.exit(0 if report.ok else 1)
 
@@ -7099,6 +7550,11 @@ def _cli():
         xtts_speed_cli = None
     # TTS engine selection: --xtts flag or default Edge-TTS.
     tts_engine_cli = "xtts" if args.xtts else "edge"
+    ollama_slot_aware_cli = (
+        False
+        if args.ollama_no_slot_aware is True
+        else bool(cfg_cli.get("ollama_slot_aware", True))
+    )
 
     # Hotwords: merge --hotwords (string) and --hotwords-file (JSON). CLI
     # string takes precedence on duplicates (passed first to merge_hotwords,
@@ -7148,9 +7604,9 @@ def _cli():
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,
             xtts_speed=xtts_speed_cli,
-            ollama_model=args.ollama_model or cfg_cli.get("ollama_model", "qwen3:8b"),
-            ollama_url=args.ollama_url or cfg_cli.get("ollama_url", "http://localhost:11434"),
-            ollama_slot_aware=not args.ollama_no_slot_aware,
+            ollama_model=args.ollama_model or cfg_cli.get("ollama_model") or "qwen3:8b",
+            ollama_url=args.ollama_url or cfg_cli.get("ollama_url") or "http://localhost:11434",
+            ollama_slot_aware=ollama_slot_aware_cli,
             ollama_thinking=args.ollama_thinking or bool(cfg_cli.get("ollama_thinking", False)),
             ollama_document_context=not args.no_document_context,
             slot_expansion=not args.no_slot_expansion,
