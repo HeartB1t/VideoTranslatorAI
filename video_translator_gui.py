@@ -11,6 +11,7 @@ Run with arguments for CLI mode, without for GUI mode.
 
 import argparse
 import asyncio
+import dataclasses
 import contextlib
 import importlib.util
 import io
@@ -6832,30 +6833,12 @@ class App(tk.Tk):
                             # Don't delete `stable` in finally: editor owns it.
                             stable = None
                             return
-                        translate_video(
+                        cfg = dataclasses.replace(
+                            p,
                             video_in=stable,
-                            output=p["output"] if len(urls) == 1 else None,
-                            model=p["model"],
-                            lang_source=p["lang_src"],
-                            lang_target=p["lang_tgt"],
-                            voice=p["voice"],
-                            tts_rate=p["tts_rate"],
-                            no_subs=p["no_subs"],
-                            subs_only=p["subs_only"],
-                            no_demucs=p["no_demucs"],
-                            tts_engine=p["tts_engine"],
-                            translation_engine=p["translation_engine"],
-                            deepl_key=p["deepl_key"],
-                            use_diarization=p["use_diarization"],
-                            hf_token=p["hf_token"],
-                            use_lipsync=p["use_lipsync"],
-                            xtts_speed=p["xtts_speed"],
-                            ollama_model=p["ollama_model"],
-                            ollama_url=p["ollama_url"],
-                            ollama_slot_aware=p["ollama_slot_aware"],
-                            ollama_thinking=p["ollama_thinking"],
-                            hotwords=p["hotwords"],
+                            output=p.output if len(urls) == 1 else None,
                         )
+                        translate_video(**cfg.to_translate_video_kwargs())
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {type(e).__name__}: {e}\n{traceback.format_exc()}\n")
@@ -6951,8 +6934,9 @@ class App(tk.Tk):
         else:
             self._run_batch(self._batch_files)
 
-    def _snapshot_params(self) -> dict:
-        """Reads all Tk vars on the main thread (thread-safe snapshot)."""
+    def _snapshot_params(self, video_in: str = "") -> "TranslationJobConfig":
+        """Reads all Tk vars on the main thread and returns an immutable TranslationJobConfig."""
+        from videotranslator.jobs import TranslationJobConfig
         try:
             rate = int(round(self._tts_rate.get()))
         except (ValueError, tk.TclError):
@@ -6968,49 +6952,54 @@ class App(tk.Tk):
                 xtts_speed = None
         else:
             xtts_speed = None
-        snap = {
-            "model":      self._model.get(),
-            "lang_src":   self._lang_src.get(),
-            "lang_tgt":   self._lang_tgt.get(),
-            "voice":      self._voice.get(),
-            "tts_rate":   f"{rate:+d}%",
-            "subs_only":  self._subs_only.get(),
-            "no_subs":    self._no_subs.get(),
-            "no_demucs":  self._no_demucs.get(),
-            "output":     self._output_var.get().strip(),
-            "tts_engine":  ("xtts" if self._use_xtts.get() else "edge"),
-            "translation_engine": self._translation_engine.get(),
-            "deepl_key":          self._deepl_key_var.get().strip(),
-            "use_diarization":    self._use_diarization.get(),
-            "hf_token":           self._hf_token_var.get().strip(),
-            "use_lipsync":        self._use_lipsync.get(),
-            "xtts_speed":         xtts_speed,
-            # Hotwords parsed to normalized list (None if empty), so
-            # translate_video keeps the unbiased decoder default.
-            "hotwords":           (
-                _parse_hotwords_gui(self._hotwords_var.get()) or None
-            ),
-            "ollama_model":       self._ollama_model_var.get().strip() or "qwen3:8b",
-            "ollama_url":         self._ollama_url_var.get().strip() or "http://localhost:11434",
-            "ollama_slot_aware":  bool(self._ollama_slot_aware.get()),
-            "ollama_thinking":    bool(self._ollama_thinking.get()),
-        }
+        hf_token = self._hf_token_var.get().strip()
+        use_diarization = self._use_diarization.get()
+        translation_engine = self._translation_engine.get()
+        ollama_model = self._ollama_model_var.get().strip() or "qwen3:8b"
+        ollama_url = self._ollama_url_var.get().strip() or "http://localhost:11434"
+        ollama_slot_aware = bool(self._ollama_slot_aware.get())
+        ollama_thinking = bool(self._ollama_thinking.get())
         # Persist HF token for next launch
-        if snap["hf_token"] and snap["use_diarization"]:
-            save_hf_token(snap["hf_token"])
+        if hf_token and use_diarization:
+            save_hf_token(hf_token)
         # Persist Ollama prefs (model/url/slot_aware/thinking) when the user
         # has selected this engine — so the fields are pre-filled on next launch.
-        if snap["translation_engine"] == "llm_ollama":
+        if translation_engine == "llm_ollama":
             try:
                 save_config({
-                    "ollama_model": snap["ollama_model"],
-                    "ollama_url": snap["ollama_url"],
-                    "ollama_slot_aware": snap["ollama_slot_aware"],
-                    "ollama_thinking": snap["ollama_thinking"],
+                    "ollama_model": ollama_model,
+                    "ollama_url": ollama_url,
+                    "ollama_slot_aware": ollama_slot_aware,
+                    "ollama_thinking": ollama_thinking,
                 })
             except Exception as e:
                 print(f"[i] Warning: could not persist Ollama prefs: {e}", flush=True)
-        return snap
+        return TranslationJobConfig(
+            video_in=video_in,
+            output=self._output_var.get().strip() or None,
+            model=self._model.get(),
+            lang_source=self._lang_src.get(),
+            lang_target=self._lang_tgt.get(),
+            voice=self._voice.get(),
+            tts_rate=f"{rate:+d}%",
+            subs_only=self._subs_only.get(),
+            no_subs=self._no_subs.get(),
+            no_demucs=self._no_demucs.get(),
+            tts_engine="xtts" if self._use_xtts.get() else "edge",
+            translation_engine=translation_engine,
+            deepl_key=self._deepl_key_var.get().strip(),
+            use_diarization=use_diarization,
+            hf_token=hf_token,
+            use_lipsync=self._use_lipsync.get(),
+            xtts_speed=xtts_speed,
+            # Hotwords parsed to normalized list (None if empty), so
+            # translate_video keeps the unbiased decoder default.
+            hotwords=_parse_hotwords_gui(self._hotwords_var.get()) or None,
+            ollama_model=ollama_model,
+            ollama_url=ollama_url,
+            ollama_slot_aware=ollama_slot_aware,
+            ollama_thinking=ollama_thinking,
+        )
 
     def _start_with_editor(self, video_path: str,
                            cleanup_path: str | None = None):
@@ -7032,31 +7021,13 @@ class App(tk.Tk):
         def phase1():
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             try:
-                result = translate_video(
-                    video_in=video_path,
-                    model=p["model"],
-                    lang_source=p["lang_src"],
-                    lang_target=p["lang_tgt"],
-                    # voice passed even though phase 1 is subs_only (no TTS):
-                    # avoids the misleading log "[i] yt_xxx | auto->it |
-                    # it-IT-ElsaNeural" that defaulted to LANGUAGES[lang]["voices"][0]
-                    # when voice was None. Now phase 1 log reflects user's actual
-                    # voice selection (used for real in phase 2 _run_with_segments).
-                    voice=p["voice"],
-                    subs_only=True,
-                    no_demucs=p["no_demucs"],
-                    tts_engine=p["tts_engine"],
-                    translation_engine=p["translation_engine"],
-                    deepl_key=p["deepl_key"],
-                    use_diarization=p["use_diarization"],
-                    hf_token=p["hf_token"],
-                    xtts_speed=p["xtts_speed"],
-                    ollama_model=p["ollama_model"],
-                    ollama_url=p["ollama_url"],
-                    ollama_slot_aware=p["ollama_slot_aware"],
-                    ollama_thinking=p["ollama_thinking"],
-                    hotwords=p["hotwords"],
-                )
+                # voice passed even though phase 1 is subs_only (no TTS):
+                # avoids the misleading log "[i] yt_xxx | auto->it |
+                # it-IT-ElsaNeural" that defaulted to LANGUAGES[lang]["voices"][0]
+                # when voice was None. Now phase 1 log reflects user's actual
+                # voice selection (used for real in phase 2 _run_with_segments).
+                cfg = dataclasses.replace(p, video_in=video_path, subs_only=True)
+                result = translate_video(**cfg.to_translate_video_kwargs())
                 self.after(0, self._open_editor, video_path,
                            result["segments"], cleanup_path)
             except Exception as e:
@@ -7134,30 +7105,12 @@ class App(tk.Tk):
         def do():
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             try:
-                translate_video(
+                cfg = dataclasses.replace(
+                    p,
                     video_in=video_path,
-                    output=p["output"] or None,
-                    model=p["model"],
-                    lang_source=p["lang_src"],
-                    lang_target=p["lang_tgt"],
-                    voice=p["voice"],
-                    tts_rate=p["tts_rate"],
-                    no_subs=p["no_subs"],
-                    no_demucs=p["no_demucs"],
                     segments_override=segments,
-                    tts_engine=p["tts_engine"],
-                    translation_engine=p["translation_engine"],
-                    deepl_key=p["deepl_key"],
-                    use_diarization=p["use_diarization"],
-                    hf_token=p["hf_token"],
-                    use_lipsync=p["use_lipsync"],
-                    xtts_speed=p["xtts_speed"],
-                    ollama_model=p["ollama_model"],
-                    ollama_url=p["ollama_url"],
-                    ollama_slot_aware=p["ollama_slot_aware"],
-                    ollama_thinking=p["ollama_thinking"],
-                    hotwords=p["hotwords"],
                 )
+                translate_video(**cfg.to_translate_video_kwargs())
                 self.after(0, self._on_done, True)
             except Exception as e:
                 self.after(0, self._log_write, f"[x] {e}\n{traceback.format_exc()}\n")
@@ -7186,32 +7139,13 @@ class App(tk.Tk):
                 for i, f in enumerate(files):
                     self.after(0, self._log_write,
                                f"\n{'-'*50}\n[{i+1}/{total}] {Path(f).name}\n{'-'*50}\n")
-                    out = p["output"] if len(files) == 1 else None
                     try:
-                        translate_video(
+                        cfg = dataclasses.replace(
+                            p,
                             video_in=f,
-                            output=out,
-                            model=p["model"],
-                            lang_source=p["lang_src"],
-                            lang_target=p["lang_tgt"],
-                            voice=p["voice"],
-                            tts_rate=p["tts_rate"],
-                            no_subs=p["no_subs"],
-                            subs_only=p["subs_only"],
-                            no_demucs=p["no_demucs"],
-                            tts_engine=p["tts_engine"],
-                            translation_engine=p["translation_engine"],
-                            deepl_key=p["deepl_key"],
-                            use_diarization=p["use_diarization"],
-                            hf_token=p["hf_token"],
-                            use_lipsync=p["use_lipsync"],
-                            xtts_speed=p["xtts_speed"],
-                            ollama_model=p["ollama_model"],
-                            ollama_url=p["ollama_url"],
-                            ollama_slot_aware=p["ollama_slot_aware"],
-                            ollama_thinking=p["ollama_thinking"],
-                            hotwords=p["hotwords"],
+                            output=p.output if len(files) == 1 else None,
                         )
+                        translate_video(**cfg.to_translate_video_kwargs())
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {e}\n{traceback.format_exc()}\n")
@@ -7385,240 +7319,8 @@ class App(tk.Tk):
 # ═══════════════════════════════════════════════════════════
 
 def _cli():
-    parser = argparse.ArgumentParser(description="Video Translator AI")
-    parser.add_argument("input", nargs="?", help="Input video")
-    parser.add_argument("-o", "--output", help="Output file")
-    parser.add_argument(
-        "--preflight",
-        action="store_true",
-        help="Run local diagnostics and exit without starting translation",
-    )
-    parser.add_argument(
-        "--preflight-lipsync",
-        action="store_true",
-        help="When used with --preflight, require Wav2Lip lip-sync packages "
-             "(dlib, facexlib, basicsr) instead of reporting them as optional warnings",
-    )
-    parser.add_argument("--model", default=DEFAULT_WHISPER_MODEL, choices=WHISPER_MODELS)
-    parser.add_argument("--lang-source", default="auto")
-    parser.add_argument("--lang-target", default=DEFAULT_LANG, choices=list(LANGUAGES.keys()))
-    parser.add_argument("--voice", default=None)
-    parser.add_argument("--tts-rate", default="+0%")
-    parser.add_argument("--no-subs", action="store_true")
-    parser.add_argument("--subs-only", action="store_true")
-    parser.add_argument("--no-demucs", action="store_true")
-    parser.add_argument("--translation-engine", default="google",
-                        choices=["google", "deepl", "marian", "llm_ollama"])
-    parser.add_argument("--deepl-key", default="")
-    parser.add_argument("--ollama-model", default=None,
-                        help="Ollama model tag (default: qwen3:8b — Qwen3 with thinking mode "
-                             "auto-disabled to avoid <think> blocks. Use qwen2.5:7b-instruct "
-                             "for legacy behaviour)")
-    parser.add_argument("--ollama-url", default=None,
-                        help="Ollama daemon URL (default: http://localhost:11434)")
-    parser.add_argument("--ollama-no-slot-aware", action="store_true", default=None,
-                        help="Disable slot-aware prompting (faster, less constrained)")
-    parser.add_argument("--ollama-thinking", action="store_true",
-                        help="Enable Qwen3 thinking mode: deliberates step-by-step "
-                             "(~10x slower, fewer idiom/grammar errors). Default off.")
-    parser.add_argument("--no-document-context", action="store_true",
-                        help="Disable TASK 2K document-level context. By default the "
-                             "Ollama engine generates one summary of the whole "
-                             "transcript up front and injects it as GLOBAL CONTEXT "
-                             "into every per-segment prompt to anchor terminology "
-                             "and tone across long videos. Disable for fastest runs "
-                             "on short clips.")
-    parser.add_argument("--diarize", action="store_true",
-                        help="Enable pyannote speaker diarization")
-    parser.add_argument("--hf-token", default="",
-                        help="HuggingFace token (falls back to the platform "
-                             "config file, e.g. "
-                             "~/.config/videotranslatorai/config.json on Linux)")
-    parser.add_argument("--lipsync", action="store_true",
-                        help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
-    parser.add_argument("--xtts-speed", type=float, default=None,
-                        help="XTTS v2 native speed factor (0.5–2.0). "
-                             "If omitted, auto-tuned per language pair "
-                             "(e.g. EN→IT=1.35, IT→EN=1.25).")
-    parser.add_argument("--no-slot-expansion", action="store_true",
-                        help="Disable smart slot expansion / time borrowing for "
-                             "tight segments (TASK 2E). Default ON: tight segments "
-                             "borrow time from neighbouring silence/easy slots so "
-                             "ffmpeg atempo can stay below audible thresholds.")
-    parser.add_argument("--no-sentence-repair", action="store_true",
-                        help="Disable smart sentence-boundary repair (TASK 2L). "
-                             "Default ON: pairs of segments where the first ends "
-                             "with a connector (to/for/della/...) and the second "
-                             "starts in lowercase are re-joined before translation, "
-                             "so the LLM sees full sentences instead of mid-clause "
-                             "fragments.")
-    parser.add_argument("--no-whisper-sanity", action="store_true",
-                        help="Disable post-Whisper sanity check (TASK 2M). "
-                             "Default ON: scans transcribed segments for "
-                             "suspicious 1-3 char tokens (e.g. 'ay' in place "
-                             "of 'okay') and immediate word repetitions, "
-                             "logging the segment indexes so the user knows "
-                             "what to review in the subtitle editor.")
-    parser.add_argument("--no-overlap-fade", action="store_true",
-                        help="Disable TASK 2P overlap fade and revert to legacy "
-                             "hard-truncate when the TTS still overshoots its "
-                             "slot after atempo/rubberband. Default OFF: tails "
-                             "are allowed to spill up to 400 ms into the next "
-                             "slot and crossfade via the memmap mix, which "
-                             "drops audible 'audio mozzato' artefacts on dense "
-                             "voice-only content.")
-    # TASK 2G v2: difficulty profile orchestrator.
-    parser.add_argument("--difficulty-override",
-                        choices=("easy", "medium", "hard"),
-                        default=None,
-                        help="Force the TASK 2G v2 difficulty profile instead "
-                             "of computing it from the segment density. Useful "
-                             "for A/B testing or when you already know the "
-                             "source content profile (e.g. fast comedy → hard).")
-    parser.add_argument("--no-difficulty-profile", action="store_true",
-                        help="Disable the TASK 2G v2 profile orchestrator and "
-                             "fall back to the default MEDIUM quality profile. "
-                             "Default OFF: the pipeline auto-tunes length retry "
-                             "budget, atempo cap, Rubber Band band and XTTS speed cap "
-                             "based on the predicted P90 stretch ratio.")
-    # TASK 2U: Chain-of-Verification opt-out.
-    parser.add_argument("--no-cove", action="store_true",
-                        help="Disable TASK 2U Chain-of-Verification second-pass "
-                             "for the Ollama LLM engine. Default OFF: when the "
-                             "source segment contains a negation or a quantifier "
-                             "(all/some/none/every), a second Ollama call asks "
-                             "the model to verify those specific aspects and "
-                             "correct the translation if needed (~+30%% Ollama "
-                             "calls on dense talks, ~+5%% on light content). "
-                             "Use this flag on slow CPUs or for A/B testing.")
-    # TTS engine choice via CLI.
-    parser.add_argument("--xtts", action="store_true",
-                        help="Use Coqui XTTS v2 voice cloning (~1.8GB first run)")
-    parser.add_argument(
-        "--hotwords", type=str, default=None,
-        help="Comma-separated hotwords to bias Whisper decoding "
-             "(proper nouns, brand names, technical jargon). "
-             "Reduces Biased-WER ~43%% on rare words. "
-             "Example: --hotwords \"Strix, pipx, Docker\"",
-    )
-    parser.add_argument(
-        "--hotwords-file", type=str, default=None,
-        help="Path to JSON file with hotwords. Accepts a flat list "
-             "[\"Strix\", \"pipx\"] or a per-language dict "
-             "{\"en\": [...], \"it\": [...]}. Merged with --hotwords "
-             "(both can be passed; CLI string wins on duplicates).",
-    )
-    parser.add_argument("--batch", nargs="+", metavar="FILE")
-    args = parser.parse_args()
-
-    if args.preflight:
-        report = _run_preflight(
-            required_packages=REQUIRED_PACKAGES,
-            required_optional_modules=("dlib", "facexlib", "basicsr")
-            if args.preflight_lipsync else (),
-        )
-        print(_format_preflight_report(report))
-        sys.exit(0 if report.ok else 1)
-
-    files = args.batch if args.batch else ([args.input] if args.input else [])
-    if not files:
-        parser.print_help()
-        sys.exit(0)
-
-    missing_pkgs, missing_bins = check_dependencies()
-    if missing_pkgs or missing_bins:
-        all_missing = missing_pkgs + missing_bins
-        print(f"[!] Missing dependencies: {', '.join(all_missing)}", file=sys.stderr)
-        print("    Install with: pip install -r requirements.txt", file=sys.stderr)
-        sys.exit(1)
-
-    from videotranslator.jobs import TranslationJobConfig
-    from videotranslator.pipeline import run_translation_job
-
-    cfg_cli = load_config()
-    hf_token_cli = args.hf_token or load_hf_token() or cfg_cli.get("hf_token", "")
-    # CLI takes priority, then JSON config (if the key exists), otherwise None
-    # → autotune kicks in inside translate_video().
-    if args.xtts_speed is not None:
-        xtts_speed_cli: float | None = args.xtts_speed
-    elif "xtts_speed" in cfg_cli:
-        try:
-            xtts_speed_cli = float(cfg_cli["xtts_speed"])
-        except (TypeError, ValueError):
-            xtts_speed_cli = None
-    else:
-        xtts_speed_cli = None
-    # TTS engine selection: --xtts flag or default Edge-TTS.
-    tts_engine_cli = "xtts" if args.xtts else "edge"
-    ollama_slot_aware_cli = (
-        False
-        if args.ollama_no_slot_aware is True
-        else bool(cfg_cli.get("ollama_slot_aware", True))
-    )
-
-    # Hotwords: merge --hotwords (string) and --hotwords-file (JSON). CLI
-    # string takes precedence on duplicates (passed first to merge_hotwords,
-    # which preserves first-seen order).
-    hotwords_cli: list[str] | None = None
-    try:
-        from videotranslator.hotwords import (
-            load_hotwords_file,
-            merge_hotwords,
-            parse_hotwords_string,
-        )
-        cli_list = parse_hotwords_string(args.hotwords)
-        file_list: list[str] = []
-        if args.hotwords_file:
-            file_list = load_hotwords_file(
-                args.hotwords_file, src_lang=args.lang_source,
-            )
-        merged = merge_hotwords(cli_list, file_list)
-        hotwords_cli = merged or None
-        if hotwords_cli:
-            print(
-                f"[whisper] hotwords loaded: {len(hotwords_cli)} entries",
-                flush=True,
-            )
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"[!] Hotwords config error: {exc}", flush=True)
-        sys.exit(2)
-    for f in files:
-        if not os.path.exists(f):
-            print(f"[!] File not found: {f}")
-            continue
-        job = TranslationJobConfig(
-            video_in=f,
-            output=args.output if len(files) == 1 else None,
-            model=args.model,
-            lang_source=args.lang_source,
-            lang_target=args.lang_target,
-            voice=args.voice,
-            tts_rate=args.tts_rate,
-            no_subs=args.no_subs,
-            subs_only=args.subs_only,
-            no_demucs=args.no_demucs,
-            translation_engine=args.translation_engine,
-            deepl_key=args.deepl_key,
-            tts_engine=tts_engine_cli,
-            use_diarization=args.diarize,
-            hf_token=hf_token_cli,
-            use_lipsync=args.lipsync,
-            xtts_speed=xtts_speed_cli,
-            ollama_model=args.ollama_model or cfg_cli.get("ollama_model") or "qwen3:8b",
-            ollama_url=args.ollama_url or cfg_cli.get("ollama_url") or "http://localhost:11434",
-            ollama_slot_aware=ollama_slot_aware_cli,
-            ollama_thinking=args.ollama_thinking or bool(cfg_cli.get("ollama_thinking", False)),
-            ollama_document_context=not args.no_document_context,
-            slot_expansion=not args.no_slot_expansion,
-            sentence_repair=not args.no_sentence_repair,
-            overlap_fade_enabled=not args.no_overlap_fade,
-            whisper_sanity=not args.no_whisper_sanity,
-            difficulty_profile_enabled=not args.no_difficulty_profile,
-            difficulty_override=args.difficulty_override,
-            hotwords=hotwords_cli,
-            ollama_use_cove=not args.no_cove,
-        )
-        run_translation_job(job, runner=translate_video)
+    from videotranslator.cli import _cli as _real_cli
+    _real_cli()
 
 
 if __name__ == "__main__":
