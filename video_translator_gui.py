@@ -5735,17 +5735,17 @@ class App(tk.Tk):
         w, self._btn_add = self._glow_btn(
             btn_col, glow=ACC,
             text=self._s("btn_add"), command=self._add_files,
-            fg=ACC, width=10, cursor="hand2", font=_MONO_SM)
+            fg=ACC, width=10, cursor="hand2", font=_MONO_B)
         w.pack(pady=2)
         w, self._btn_remove = self._glow_btn(
             btn_col, glow=RED,
             text=self._s("btn_remove"), command=self._remove_file,
-            fg=FG, width=10, cursor="hand2", font=_MONO_SM)
+            fg=FG, width=10, cursor="hand2", font=_MONO_B)
         w.pack(pady=2)
         w, self._btn_clear = self._glow_btn(
             btn_col, glow=BORDER,
             text=self._s("btn_clear"), command=self._clear_files,
-            fg=FG, width=10, cursor="hand2", font=_MONO_SM)
+            fg=FG, width=10, cursor="hand2", font=_MONO_B)
         w.pack(pady=2)
 
         # ── Output path ────────────────────────────────────────────────────
@@ -5762,7 +5762,7 @@ class App(tk.Tk):
         _w, self._btn_browse = self._glow_btn(
             out_row, glow=BORDER,
             text=self._s("btn_browse"), command=self._browse_output,
-            fg=FG, padx=8, pady=2, cursor="hand2", font=_MONO_SM)
+            fg=FG, padx=8, pady=2, cursor="hand2", font=_MONO_B)
         _w.pack(side="left")
 
         # ── URL download ───────────────────────────────────────────────────
@@ -6266,27 +6266,27 @@ class App(tk.Tk):
         _wt, self._btn_log_toggle = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_show"), command=self._toggle_log,
-            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
         _wt.pack(side="left", padx=(8, 0))
         _wc, self._btn_log_clear = self._glow_btn(
             log_header, glow=RED,
             text=self._s("btn_log_clear"), command=self._log_clear,
-            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
         _wc.pack(side="right")
         _ws2, self._btn_log_save = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_save"), command=self._log_save,
-            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
         _ws2.pack(side="right", padx=(0, 4))
         _wcp, self._btn_log_copy = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_copy"), command=self._log_copy,
-            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
         _wcp.pack(side="right", padx=(0, 4))
         _wpf, self._btn_preflight = self._glow_btn(
             log_header, glow=ACC2,
             text=self._s("btn_preflight"), command=self._run_gui_preflight,
-            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
         _wpf.pack(side="right", padx=(0, 4))
 
         self._log_container = tk.Frame(log_frame, bg=BG)
