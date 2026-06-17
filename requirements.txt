@@ -6,4 +6,5 @@
 
 -r requirements-core.txt
 -r requirements-optional.txt
+-r requirements-wav2lip.txt
 -r requirements-gpu-cu124.txt

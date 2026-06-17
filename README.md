@@ -4,7 +4,7 @@
 
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages — 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
 
-> **v1.7** — modular package, Phase 2 quality release. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) and the commit history for the full list of changes.
+> **v2.0** — modular package, local Ollama translation, quality-profile orchestration, installable Python metadata, and opt-in heavy smoke tests. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) and the commit history for the full list of changes.
 
 ## How it works
 
@@ -42,6 +42,17 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 Arabic, Chinese, Czech, Danish, Dutch, English, Finnish, French, German, Greek,
 Hindi, Hungarian, Indonesian, Italian, Japanese, Korean, Norwegian, Polish,
 Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese
+
+## Voice Catalog
+
+The Edge-TTS voice catalog is defined in `LANGUAGES` near the top of
+`video_translator_gui.py`. That dictionary is the source of truth for target
+language names, GUI voice radio buttons, and the CLI fallback voice when
+`--voice` is omitted.
+
+Claude/project-maintenance notes mirror this location in `CLAUDE.md` under
+**Voice Catalog Source Of Truth**, so future code agents know where to update
+voices and where the README points users.
 
 ## Translation engines
 
@@ -145,8 +156,15 @@ pip install --break-system-packages --index-url https://download.pytorch.org/whl
 # install missing packages on first run
 pip install --break-system-packages -r requirements.txt
 
-# Launch
+# Optional: install the project as an editable Python package
+pip install --break-system-packages --no-deps -e .
+
+# Launch from source
 python video_translator_gui.py
+
+# Or, after editable/package install
+videotranslatorai
+videotranslatorai --preflight
 ```
 
 > On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows).
@@ -158,6 +176,7 @@ python video_translator_gui.py
 | `requirements.txt` | Full, backward-compatible runtime install. |
 | `requirements-core.txt` | Default pipeline packages used by GUI/CLI. |
 | `requirements-optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, keyring. |
+| `requirements-wav2lip.txt` | Wav2Lip runtime and face-detection stack (`new-basicsr`, `facexlib`, `dlib`). |
 | `requirements-gpu-cu124.txt` | PyTorch stack tested with NVIDIA CUDA 12.4 wheels. |
 | `requirements-dev.txt` | Lightweight dependencies used by CI/unit tests. |
 
@@ -199,11 +218,14 @@ rm -f  ~/.videotranslatorai_config.json
 
 ```bash
 python video_translator_gui.py --preflight
+python video_translator_gui.py --preflight --preflight-lipsync
+python -m videotranslator --preflight
 ```
 
 Runs local environment diagnostics without starting translation or installing
-anything. The GUI exposes the same check from the log panel's **Diagnostics**
-button.
+anything. `--preflight-lipsync` treats Wav2Lip face packages as required,
+which is useful before enabling **Lip Sync**. The GUI exposes the same base
+check from the log panel's **Diagnostics** button.
 
 ### GUI
 
@@ -234,6 +256,8 @@ python video_translator_gui.py
 
 ```bash
 python video_translator_gui.py video.mp4 --lang-target en
+python -m videotranslator video.mp4 --lang-target en
+videotranslatorai video.mp4 --lang-target en
 ```
 
 **All options:**
@@ -255,6 +279,19 @@ python video_translator_gui.py video.mp4 --lang-target en
 | `--no-demucs` | Skip voice/music separation | — |
 | `--output` / `-o` | Output file path | auto |
 | `--batch` | Process multiple files | — |
+
+### Heavy Smoke Tests
+
+The default test suite avoids real model downloads and long GPU work. To run
+opt-in empirical checks for the installed local stack:
+
+```bash
+VTAI_RUN_HEAVY_SMOKE=1 python -m unittest discover -s tests -p "test_heavy_smoke.py" -v
+```
+
+These checks validate real Wav2Lip imports, Torch CUDA availability, Ollama
+daemon availability, and faster-Whisper on synthetic speech. They intentionally
+fail or skip when the local driver/daemon/model state is not ready.
 
 **Examples:**
 
