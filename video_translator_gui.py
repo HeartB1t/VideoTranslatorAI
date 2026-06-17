@@ -5484,6 +5484,30 @@ class App(tk.Tk):
             highlightthickness=1, highlightbackground=border_color,
         )
 
+    def _glow_btn(self, parent, glow=None, **kwargs):
+        """Raised button with a 1-px neon glow ring around it.
+
+        Returns (wrap_frame, button) so callers can pack/grid the frame.
+        glow defaults to ACC (neon green).
+        """
+        if glow is None:
+            glow = ACC
+        btn_bg  = kwargs.pop("bg", "#1a1a3a")
+        act_bg  = kwargs.pop("activebackground", glow)
+        act_fg  = kwargs.pop("activeforeground", BG)
+        wrap = tk.Frame(parent, bg=glow, padx=1, pady=1)
+        btn = tk.Button(
+            wrap,
+            bg=btn_bg,
+            relief="raised",
+            bd=2,
+            activebackground=act_bg,
+            activeforeground=act_fg,
+            **kwargs,
+        )
+        btn.pack(fill="both", expand=True)
+        return wrap, btn
+
     def _section_title(self, parent, text):
         """Section title with neon green accent marker."""
         f = tk.Frame(parent, bg=BG)
@@ -5708,24 +5732,21 @@ class App(tk.Tk):
         _sb.pack(side="left", fill="y")
         btn_col = tk.Frame(batch_outer, bg=CARD)
         btn_col.pack(side="left", padx=(6, 0), anchor="n")
-        self._btn_add = tk.Button(
-            btn_col, text=self._s("btn_add"), command=self._add_files,
-            bg=BORDER, fg=ACC, relief="flat", width=10, cursor="hand2",
-            font=_MONO_SM,
-            activebackground=ACC, activeforeground=BG)
-        self._btn_add.pack(pady=2)
-        self._btn_remove = tk.Button(
-            btn_col, text=self._s("btn_remove"), command=self._remove_file,
-            bg=BORDER, fg=FG, relief="flat", width=10, cursor="hand2",
-            font=_MONO_SM,
-            activebackground=RED, activeforeground=BG)
-        self._btn_remove.pack(pady=2)
-        self._btn_clear = tk.Button(
-            btn_col, text=self._s("btn_clear"), command=self._clear_files,
-            bg=BORDER, fg=FG, relief="flat", width=10, cursor="hand2",
-            font=_MONO_SM,
-            activebackground=RED, activeforeground=BG)
-        self._btn_clear.pack(pady=2)
+        w, self._btn_add = self._glow_btn(
+            btn_col, glow=ACC,
+            text=self._s("btn_add"), command=self._add_files,
+            fg=ACC, width=10, cursor="hand2", font=_MONO_SM)
+        w.pack(pady=2)
+        w, self._btn_remove = self._glow_btn(
+            btn_col, glow=RED,
+            text=self._s("btn_remove"), command=self._remove_file,
+            fg=FG, width=10, cursor="hand2", font=_MONO_SM)
+        w.pack(pady=2)
+        w, self._btn_clear = self._glow_btn(
+            btn_col, glow=BORDER,
+            text=self._s("btn_clear"), command=self._clear_files,
+            fg=FG, width=10, cursor="hand2", font=_MONO_SM)
+        w.pack(pady=2)
 
         # ── Output path ────────────────────────────────────────────────────
         tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(4, 6))
@@ -5738,11 +5759,11 @@ class App(tk.Tk):
                  bg=SEL, fg=FG, insertbackground=FG,
                  relief="flat", font=("Helvetica", 9)).pack(
             side="left", fill="x", expand=True, padx=(0, 6))
-        self._btn_browse = tk.Button(
-            out_row, text=self._s("btn_browse"), command=self._browse_output,
-            bg=SEL, fg=FG2, relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_browse.pack(side="left")
+        _w, self._btn_browse = self._glow_btn(
+            out_row, glow=BORDER,
+            text=self._s("btn_browse"), command=self._browse_output,
+            fg=FG, padx=8, pady=2, cursor="hand2", font=_MONO_SM)
+        _w.pack(side="left")
 
         # ── URL download ───────────────────────────────────────────────────
         tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
@@ -5759,13 +5780,13 @@ class App(tk.Tk):
         self._url_text.bind("<FocusIn>",  self._url_focus_in)
         self._url_text.bind("<FocusOut>", self._url_focus_out)
         self._url_text.pack(side="left", fill="both", expand=True)
-        self._btn_download = tk.Button(
-            url_row, text=self._s("btn_download"),
-            command=self._start_download,
-            bg=GRN, fg=BG, font=("Helvetica", 9, "bold"),
-            relief="flat", padx=10, pady=4, cursor="hand2",
-            activebackground="#b6f2c9", activeforeground=BG)
-        self._btn_download.pack(side="left", padx=(6, 0))
+        _wd, self._btn_download = self._glow_btn(
+            url_row, glow=ACC,
+            text=self._s("btn_download"), command=self._start_download,
+            bg=ACC, fg=BG, font=_MONO_B,
+            padx=10, pady=4, cursor="hand2",
+            activebackground=FG, activeforeground=BG)
+        _wd.pack(side="left", padx=(6, 0))
 
     def _build_advanced_panel(self, parent):
         """Left-pane: collapsible accordion sections for all advanced options."""
@@ -6142,13 +6163,14 @@ class App(tk.Tk):
             wraplength=280, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
-        # Start button — full-width, prominent
-        self._btn = tk.Button(
-            inner, text=self._s("btn_start"), command=self._start,
+        # Start button — full-width, prominent, glow ring
+        _ws, self._btn = self._glow_btn(
+            inner, glow=ACC,
+            text=self._s("btn_start"), command=self._start,
             bg=ACC, fg=BG, font=("Courier", 12, "bold"),
-            relief="flat", padx=24, pady=14, cursor="hand2",
-            activebackground=GRN, activeforeground=BG)
-        self._btn.pack(fill="x")
+            padx=24, pady=14, cursor="hand2",
+            activebackground=FG, activeforeground=BG)
+        _ws.pack(fill="x")
 
         # Status row below button
         status_row = tk.Frame(inner, bg=CARD)
@@ -6241,41 +6263,31 @@ class App(tk.Tk):
             bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
         self._lbl_log_panel.pack(side="left")
         # Default collapsed — log starts hidden (btn_log_show text)
-        self._btn_log_toggle = tk.Button(
-            log_header, text=self._s("btn_log_show"),
-            command=self._toggle_log,
-            bg=SEL, fg=FG, font=("Helvetica", 8),
-            relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_log_toggle.pack(side="left", padx=(8, 0))
-        self._btn_log_clear = tk.Button(
-            log_header, text=self._s("btn_log_clear"),
-            command=self._log_clear,
-            bg=SEL, fg=FG, font=("Helvetica", 8),
-            relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_log_clear.pack(side="right")
-        self._btn_log_save = tk.Button(
-            log_header, text=self._s("btn_log_save"),
-            command=self._log_save,
-            bg=SEL, fg=FG, font=("Helvetica", 8),
-            relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_log_save.pack(side="right", padx=(0, 4))
-        self._btn_log_copy = tk.Button(
-            log_header, text=self._s("btn_log_copy"),
-            command=self._log_copy,
-            bg=SEL, fg=FG, font=("Helvetica", 8),
-            relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_log_copy.pack(side="right", padx=(0, 4))
-        self._btn_preflight = tk.Button(
-            log_header, text=self._s("btn_preflight"),
-            command=self._run_gui_preflight,
-            bg=SEL, fg=FG, font=("Helvetica", 8),
-            relief="flat", padx=8, pady=2, cursor="hand2",
-            activebackground=ACC, activeforeground=BG)
-        self._btn_preflight.pack(side="right", padx=(0, 4))
+        _wt, self._btn_log_toggle = self._glow_btn(
+            log_header, glow=BORDER,
+            text=self._s("btn_log_show"), command=self._toggle_log,
+            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+        _wt.pack(side="left", padx=(8, 0))
+        _wc, self._btn_log_clear = self._glow_btn(
+            log_header, glow=RED,
+            text=self._s("btn_log_clear"), command=self._log_clear,
+            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+        _wc.pack(side="right")
+        _ws2, self._btn_log_save = self._glow_btn(
+            log_header, glow=BORDER,
+            text=self._s("btn_log_save"), command=self._log_save,
+            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+        _ws2.pack(side="right", padx=(0, 4))
+        _wcp, self._btn_log_copy = self._glow_btn(
+            log_header, glow=BORDER,
+            text=self._s("btn_log_copy"), command=self._log_copy,
+            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+        _wcp.pack(side="right", padx=(0, 4))
+        _wpf, self._btn_preflight = self._glow_btn(
+            log_header, glow=ACC2,
+            text=self._s("btn_preflight"), command=self._run_gui_preflight,
+            fg=FG, font=_MONO_SM, padx=8, pady=2, cursor="hand2")
+        _wpf.pack(side="right", padx=(0, 4))
 
         self._log_container = tk.Frame(log_frame, bg=BG)
         self._log_container.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
