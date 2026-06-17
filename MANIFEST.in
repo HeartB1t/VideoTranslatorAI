@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements*.txt
+include setup_windows.bat
+recursive-include assets *.ico *.png
+recursive-include docs *.md

@@ -1,0 +1,11 @@
+# Optional Wav2Lip runtime stack.
+#
+# The base packages support the external Wav2Lip inference script; the face
+# stack is required for the detector/helper imports used by Wav2Lip.
+
+opencv-python
+librosa
+tqdm
+new-basicsr
+facexlib
+dlib
