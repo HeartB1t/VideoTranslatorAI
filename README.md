@@ -19,7 +19,7 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 
 ## Features
 
-- 🖥️ Dark-themed GUI (Tkinter) - no command line needed
+- 🖥️ Themed GUI (Tkinter) - no command line needed; Graphite, Slate, Light and Neon themes, accent colours, text size, and cards you can reorder by dragging
 - 🌍 **26 target languages** with multiple voices per language
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
@@ -209,7 +209,8 @@ rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
-rm -f  ~/.videotranslatorai_config.json
+rm -rf ~/.config/videotranslatorai          # config (themes, panel order, settings)
+rm -f  ~/.videotranslatorai_config.json     # legacy config of versions <= 1.9, if present
 ```
 
 ## Usage
@@ -233,12 +234,21 @@ check from the log panel's **Diagnostics** button.
 python video_translator_gui.py
 ```
 
+**Layout:** every control lives in the column on the right, as a stack of
+cards: **Input**, **Translation**, **Workflow profile**, **Start**, and the
+collapsible advanced sections (model, translation engine, audio, voice
+cloning, lip sync, diarization, options, hotwords). The large area on the
+left is reserved for the built-in video player that is coming next. Drag a
+card by its title or by the **≡** handle to move it up or down the column;
+the order is saved (`ui_panel_order`) and restored at the next start. The
+log panel at the bottom can be hidden with **Hide log**.
+
 **From local files:**
 1. Click **Add** to select one or more video files
 2. Choose source and target language
-3. Select a Whisper model (`small` is a good balance of speed/accuracy)
+3. Open the **Model** section and select a Whisper model (`small` is a good balance of speed/accuracy)
 4. Pick a voice and adjust TTS speed if needed
-5. *(Optional)* Select translation engine: **Google** (default), **MarianMT** (local/offline), or **DeepL Free**
+5. *(Optional)* In **Translation engine** select **Google** (default), **MarianMT** (local/offline), **DeepL Free**, or **Ollama LLM** (local, recommended for dubbing)
 6. *(Optional)* Enable **Voice Cloning** (XTTS v2) and/or **Speaker Diarization**
 7. *(Optional)* Enable **Lip Sync** (Wav2Lip)
 8. Click **Start Translation**
@@ -262,7 +272,9 @@ Click the gear icon in the header to open **Settings**:
 - **Interface language**: 26 languages.
 
 Changes apply immediately, without restarting, and are saved in the config file
-(`ui_theme`, `ui_accent`, `ui_scale`, `ui_lang`).
+(`ui_theme`, `ui_accent`, `ui_scale`, `ui_lang`). **Restore defaults** brings
+back the Graphite theme, the default accent, the normal text size and the
+default order of the cards.
 
 ### Command line
 
