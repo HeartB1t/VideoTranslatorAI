@@ -5637,7 +5637,7 @@ class App(tk.Tk):
             disabledforeground=FG2,
             relief="flat", bd=0, highlightthickness=0,
             cursor="hand2",
-            font="VT.Bold" if primary else "VT.Base",
+            font=kwargs.pop("font", "VT.Bold" if primary else "VT.Base"),
             padx=kwargs.pop("padx", 10), pady=kwargs.pop("pady", 4),
             **kwargs,
         )
@@ -5912,11 +5912,12 @@ class App(tk.Tk):
         self._url_text.configure(fg=FG2)
         self._url_text.bind("<FocusIn>",  self._url_focus_in)
         self._url_text.bind("<FocusOut>", self._url_focus_out)
-        self._url_text.pack(side="left", fill="both", expand=True)
         _wd, self._btn_download = self._flat_btn(
             url_row, primary=True, text=self._s("btn_download"),
             command=self._start_download, padx=10, pady=4)
-        _wd.pack(side="left", padx=(6, 0))
+        # Packed before the text field so the fixed-size button keeps its width
+        _wd.pack(side="right", padx=(6, 0))
+        self._url_text.pack(side="left", fill="both", expand=True)
 
     def _build_advanced_panel(self, parent):
         """Left-pane: collapsible accordion sections for all advanced options."""
@@ -6296,7 +6297,7 @@ class App(tk.Tk):
         # Start button - full-width, accent-filled primary
         _ws, self._btn = self._flat_btn(
             inner, primary=True, text=self._s("btn_start"),
-            command=self._start, padx=24, pady=14)
+            command=self._start, font="VT.Large", padx=24, pady=8)
         _ws.pack(fill="x")
 
         # Status row below button
