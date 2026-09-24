@@ -36,6 +36,11 @@ class RequirementsStaticTests(unittest.TestCase):
         self.assertIn("opencv-python-headless", lines)
         self.assertIn("numpy>=2.0,<2.4", lines)
         self.assertIn("soundfile", lines)
+        # The CI "validate package metadata" step runs pip with
+        # --no-build-isolation, so the [build-system] backend must be
+        # installed explicitly: Python 3.12+ venvs no longer ship setuptools.
+        self.assertIn("setuptools>=69", lines)
+        self.assertIn("wheel", lines)
 
     def test_core_and_optional_profiles_keep_expected_runtime_families(self):
         core = set(_requirement_lines(ROOT / "requirements-core.txt"))

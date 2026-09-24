@@ -4,7 +4,14 @@
 # need the full runtime stack.
 # The e2e-lite media smoke test also needs system ffmpeg/ffprobe and skips
 # itself when those binaries are unavailable.
+#
+# Build backend for the "validate package metadata" CI step, which runs
+# `pip install --dry-run --no-build-isolation -e .`: without build isolation
+# pip does not fetch [build-system] requires, and Python 3.12+ virtual
+# environments no longer ship setuptools, so it must be installed here.
 
+setuptools>=69
+wheel
 opencv-python-headless
 numpy>=2.0,<2.4
 soundfile
