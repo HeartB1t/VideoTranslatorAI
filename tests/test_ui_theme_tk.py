@@ -236,5 +236,36 @@ class SettingsDialogSmokeTests(unittest.TestCase):
                     sys.stdout, sys.stderr = saved_stdout, saved_stderr
 
 
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class LogToggleStartupTests(unittest.TestCase):
+    def test_visible_log_at_startup_shows_hide_label(self):
+        import json
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        import video_translator_gui as gui
+
+        saved_stdout, saved_stderr = sys.stdout, sys.stderr
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "config.json"
+            cfg_path.write_text(json.dumps({"ui_lang": "it", "ui_log_visible": True}),
+                                encoding="utf-8")
+            with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
+                    mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
+                    mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
+                    mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
+                app = gui.App()
+                try:
+                    app.withdraw()
+                    self.assertTrue(app._log_visible)
+                    self.assertEqual(app._btn_log_toggle.cget("text"),
+                                     gui.UI_STRINGS["it"]["btn_log_hide"])
+                finally:
+                    app._destroying = True
+                    app.destroy()
+                    sys.stdout, sys.stderr = saved_stdout, saved_stderr
+
+
 if __name__ == "__main__":
     unittest.main()

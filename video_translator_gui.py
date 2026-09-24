@@ -5583,6 +5583,8 @@ class App(tk.Tk):
         if not self._log_visible:
             self._log_container.grid_remove()
             self._btn_log_toggle.configure(text=self._s("btn_log_show"))
+        else:
+            self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Minimum window size + reasonable default geometry so the window
         # remains usable on small displays (1366×768, 1280×720) and at
