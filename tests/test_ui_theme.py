@@ -1,6 +1,8 @@
 import itertools
+import re
 import subprocess
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from videotranslator import ui_theme
@@ -311,6 +313,28 @@ class DetectSystemDarkTests(unittest.TestCase):
         timeout_error = subprocess.TimeoutExpired(cmd=["slow"], timeout=2)
         with mock.patch("videotranslator.ui_theme.subprocess.run", side_effect=timeout_error):
             self.assertIsNone(ui_theme._run_quiet(["slow"]))
+
+
+GUI_SOURCE = Path(__file__).resolve().parents[1] / "video_translator_gui.py"
+
+
+class GuiSourceStaticTests(unittest.TestCase):
+    """Guard rails: colours and fonts in the GUI come from the theme system."""
+
+    def setUp(self):
+        self.src = GUI_SOURCE.read_text(encoding="utf-8")
+
+    def test_no_font_tuples_left(self):
+        hits = re.findall(r'font=\(\s*"(Helvetica|Courier|Monospace|Arial|Segoe UI)"', self.src)
+        self.assertEqual(hits, [], f"fixed font tuples still present: {hits}")
+
+    def test_no_legacy_mono_constants(self):
+        for name in ("_MONO_B", "_MONO_SM", "_MONO_LG"):
+            self.assertNotRegex(self.src, rf"\b{name}\b")
+
+    def test_gui_imports_theme_system(self):
+        self.assertIn("from videotranslator.ui_theme_tk import", self.src)
+        self.assertIn("ThemeManager(", self.src)
 
 
 if __name__ == "__main__":

@@ -301,24 +301,31 @@ _OPTIONAL_ALIASES: dict[str, list[str]] = {
     "TTS": ["TTS", "coqui_tts"],
 }
 
-# ── GUI colours - Neon Dark theme ────────────────────────────
-BG     = "#060612"   # near-black background
-FG     = "#e0e0ff"   # off-white text
-FG2    = "#6060a0"   # dim secondary text
-ACC    = "#00ff88"   # neon green accent
-ACC2   = "#ff00aa"   # neon magenta (GPU badge, warnings)
-SEL    = "#0d0d2a"   # selection background
-RED    = "#ff4466"   # neon red for errors
-GRN    = "#00ff88"   # same as ACC
-CARD   = "#0d0d1f"   # card background
-BORDER = "#1a1a3a"   # subtle border
-PILL   = "#1a1a3a"   # pill/chip background
+# ── GUI colours and fonts ────────────────────────────────────
+# The concrete values are owned by the theme system: ThemeManager.apply()
+# rewrites these module globals on every theme change, so code below keeps
+# reading BG / FG / ACC / CARD ... and stays theme-agnostic. The values set
+# here are only the import-time defaults (Graphite).
+from videotranslator.ui_theme import resolve_palette as _resolve_palette  # noqa: E402
+from videotranslator.ui_theme import normalize_ui_settings as _normalize_ui_settings  # noqa: E402
+from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
+from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 
-# ── Monospace font constants ──────────────────────────────────
-_MONO    = ("Courier", 9)
-_MONO_B  = ("Courier", 9, "bold")
-_MONO_SM = ("Courier", 8)
-_MONO_LG = ("Courier", 11, "bold")
+_DEFAULT_PALETTE = _resolve_palette("graphite")
+for _name, _field in _GLOBAL_ALIASES.items():
+    globals()[_name] = getattr(_DEFAULT_PALETTE, _field)
+del _name, _field
+# Explicit names for linters / readers (values above win at runtime).
+BG = globals()["BG"]; FG = globals()["FG"]; FG2 = globals()["FG2"]; ACC = globals()["ACC"]
+ACC2 = globals()["ACC2"]; SEL = globals()["SEL"]; RED = globals()["RED"]; GRN = globals()["GRN"]
+CARD = globals()["CARD"]; BORDER = globals()["BORDER"]; PILL = globals()["PILL"]
+SURFACE = globals()["SURFACE"]; FIELD = globals()["FIELD"]; BTN = globals()["BTN"]
+ACC_HOVER = globals()["ACC_HOVER"]; ACC_SOFT = globals()["ACC_SOFT"]; ACC_FG = globals()["ACC_FG"]
+OK = globals()["OK"]; WARN = globals()["WARN"]; ERR = globals()["ERR"]
+
+# Named fonts (created by ThemeManager; Tk updates every widget on change).
+# Roles: Small 8, SmallBold 8b, Base 9, Bold 9b, Italic 8i, Large 11b,
+# Title 15b, Mono 9 (always monospace: log, paths, tokens).
 
 # ── UI translation strings ───────────────────────────────────
 UI_STRINGS = {
@@ -3088,6 +3095,7 @@ UI_LANG_OPTIONS = [
     ("uk", "🇺🇦 Українська"),
     ("vi", "🇻🇳 Tiếng Việt"),
 ]
+UI_LANG_CODES = {code for code, _ in UI_LANG_OPTIONS}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -4825,7 +4833,7 @@ class SubtitleEditor(tk.Toplevel):
         self._tooltip_iid: str | None = None
 
         tk.Label(self, text=self._s("editor_hint"),
-                 bg=BG, fg=FG2, font=("Helvetica", 9)).pack(pady=(10, 4))
+                 bg=BG, fg=FG2, font="VT.Base").pack(pady=(10, 4))
 
         # ── Filter / summary bar ──────────────────────────────────────
         # Counts how many segments carry each flag, plus a checkbox to
@@ -4843,7 +4851,7 @@ class SubtitleEditor(tk.Toplevel):
             fallback=flag_count[_FLAG_TRANSLATION_FALLBACK],
         )
         tk.Label(bar, text=summary, bg=BG, fg=FG2,
-                 font=("Helvetica", 9)).pack(side="left")
+                 font="VT.Base").pack(side="left")
         # The Tk Checkbutton on a dark theme needs `selectcolor=BG` so the
         # tick box doesn't render as a bright white square. `activebackground`
         # keeps the hover state in-theme.
@@ -4854,7 +4862,7 @@ class SubtitleEditor(tk.Toplevel):
             command=self._populate,
             bg=BG, fg=FG, activebackground=BG, activeforeground=FG,
             selectcolor=BG, relief="flat", borderwidth=0,
-            highlightthickness=0, font=("Helvetica", 9),
+            highlightthickness=0, font="VT.Base",
         )
         # Disable the checkbox when there are zero flagged segments - toggling
         # it would blank the table, which is confusing.
@@ -4904,7 +4912,7 @@ class SubtitleEditor(tk.Toplevel):
         btn_frame.pack(pady=8)
         tk.Button(btn_frame, text=self._s("editor_btn_confirm"),
                   command=self._confirm,
-                  bg=ACC, fg=BG, font=("Helvetica", 11, "bold"),
+                  bg=ACC, fg=BG, font="VT.Large",
                   relief="flat", padx=16, pady=6).pack(side="left", padx=8)
         tk.Button(btn_frame, text=self._s("editor_btn_cancel"),
                   command=self.destroy,
@@ -4967,7 +4975,7 @@ class SubtitleEditor(tk.Toplevel):
         tk.Label(win, text=f"{self._s('editor_seg_label').format(idx+1)} {col_name}:",
                  bg=BG, fg=FG).pack(pady=6)
         entry = tk.Entry(win, width=60, bg=SEL, fg=FG, insertbackground=FG,
-                         font=("Helvetica", 10), relief="flat")
+                         font="VT.Base", relief="flat")
         entry.insert(0, current)
         entry.pack(padx=10)
         entry.focus()
@@ -5038,7 +5046,7 @@ class SubtitleEditor(tk.Toplevel):
             tip.configure(bg=SEL, padx=2, pady=2)
             lbl = tk.Label(
                 tip, text=text, bg=SEL, fg=FG,
-                font=("Helvetica", 9), justify="left",
+                font="VT.Base", justify="left",
                 wraplength=320,
             )
             lbl.pack()
@@ -5098,12 +5106,16 @@ def _parse_hotwords_gui(raw: str) -> list[str]:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        _ocfg = load_config()
+        self._ui_settings = _normalize_ui_settings(_ocfg, lang_codes=UI_LANG_CODES)
+        self._theme = _ThemeManager(self, module_globals=globals())
+        self._theme.apply(self._ui_settings, recolor=False)
         self.title("Video Translator AI")
         self.resizable(True, True)
         self.configure(bg=BG)
         self._set_window_icon()
 
-        self._ui_lang   = tk.StringVar(value="it")
+        self._ui_lang   = tk.StringVar(value=self._ui_settings["ui_lang"])
         self._model     = tk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self._lang_src  = tk.StringVar(value="auto")
         self._lang_tgt  = tk.StringVar(value="it")
@@ -5119,7 +5131,6 @@ class App(tk.Tk):
         self._translation_engine = tk.StringVar(value="google")
         self._deepl_key_var      = tk.StringVar()
         # Ollama LLM config (v2.0) - preset da config JSON se presente
-        _ocfg = load_config()
         self._ollama_model_var   = tk.StringVar(
             value=_ocfg.get("ollama_model", "qwen3:8b")
         )
@@ -5159,27 +5170,6 @@ class App(tk.Tk):
         self._url_placeholder_active = True
         self._pending_pkgs_after_ffmpeg: list[str] = []
         self._preflight_running = False
-
-        # ── ttk Style - Neon Dark ─────────────────────────────────────────
-        style = ttk.Style(self)
-        style.theme_use("clam")
-        style.configure("TCombobox",
-            fieldbackground=CARD, background=CARD,
-            foreground=FG, selectbackground=SEL,
-            selectforeground=ACC,
-            arrowcolor=ACC,
-            bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
-            insertcolor=FG,
-            font=("Courier", 9),
-        )
-        style.map("TCombobox",
-            fieldbackground=[("readonly", CARD)],
-            foreground=[("readonly", FG)],
-        )
-        style.configure("Vertical.TScrollbar",
-            background=BORDER, troughcolor=CARD,
-            arrowcolor=ACC, bordercolor=BG,
-        )
 
         self._build_ui()
         # Restore log panel visibility from config (default collapsed in the
@@ -5623,7 +5613,7 @@ class App(tk.Tk):
         """Pill badge: white text, colored neon border for visibility."""
         return tk.Label(
             parent, text=text, bg=PILL, fg=FG,
-            font=_MONO_SM,
+            font="VT.Small",
             relief="flat", padx=6, pady=2,
             highlightthickness=1, highlightbackground=border_color,
         )
@@ -5656,7 +5646,7 @@ class App(tk.Tk):
         """Section title with neon green accent marker."""
         f = tk.Frame(parent, bg=BG)
         tk.Label(f, text=f"▸ {text.upper()}", bg=BG, fg=ACC,
-                 font=_MONO_B).pack(side="left")
+                 font="VT.Bold").pack(side="left")
         return f
 
     def _make_accordion_section(self, parent, title_text):
@@ -5672,9 +5662,9 @@ class App(tk.Tk):
         hdr = tk.Frame(outer, bg=BG, cursor="hand2")
         hdr.pack(fill="x")
 
-        arrow_lbl = tk.Label(hdr, text="▸", bg=BG, fg=ACC, font=_MONO_B, width=2)
+        arrow_lbl = tk.Label(hdr, text="▸", bg=BG, fg=ACC, font="VT.Bold", width=2)
         arrow_lbl.pack(side="left")
-        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG, font=_MONO_B).pack(side="left", padx=(4, 0))
+        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG, font="VT.Bold").pack(side="left", padx=(4, 0))
 
         # Collapsible body
         body = tk.Frame(outer, bg=CARD, padx=10, pady=6)
@@ -5797,9 +5787,9 @@ class App(tk.Tk):
         title_col = tk.Frame(logo_inner, bg=BG)
         title_col.pack(side="left")
         tk.Label(title_col, text="◈  VIDEO TRANSLATOR AI",
-                 font=("Courier", 18, "bold"), bg=BG, fg=ACC).pack(anchor="w")
+                 font="VT.Title", bg=BG, fg=ACC).pack(anchor="w")
         tk.Label(title_col, text="local ai  ·  open source dubbing studio",
-                 font=_MONO_SM, bg=BG, fg=FG2).pack(anchor="w")
+                 font="VT.Small", bg=BG, fg=FG2).pack(anchor="w")
 
         # ── Status badges + lang selector (right) ─────────────────────────
         right = tk.Frame(header, bg=BG)
@@ -5823,13 +5813,14 @@ class App(tk.Tk):
         lang_sel.pack(side="left")
         self._lbl_ui_lang = tk.Label(
             lang_sel, text=self._s("label_ui_lang"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_ui_lang.pack(side="left", padx=(0, 4))
         self._ui_lang_combo = ttk.Combobox(
             lang_sel,
             values=[lbl for _, lbl in UI_LANG_OPTIONS],
-            state="readonly", width=20, font=("Helvetica", 8))
-        self._ui_lang_combo.current(0)
+            state="readonly", width=20)
+        _codes = [code for code, _ in UI_LANG_OPTIONS]
+        self._ui_lang_combo.current(_codes.index(self._ui_lang.get()) if self._ui_lang.get() in _codes else 0)
         self._ui_lang_combo.pack(side="left")
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
@@ -5850,7 +5841,7 @@ class App(tk.Tk):
         title_row = tk.Frame(inner, bg=CARD)
         title_row.pack(fill="x", pady=(0, 8))
         tk.Label(title_row, text="▸ INPUT", bg=CARD, fg=ACC,
-                 font=_MONO_B).pack(side="left")
+                 font="VT.Bold").pack(side="left")
 
         # Hidden label refs required by _apply_lang (configure(text=...))
         self._lbl_video  = tk.Label(inner, text="", bg=CARD)
@@ -5866,7 +5857,7 @@ class App(tk.Tk):
             batch_frame, height=4,
             bg=SEL, fg=FG, selectbackground=ACC,
             selectforeground=BG,
-            font=("Monospace", 8), relief="flat",
+            font="VT.Mono", relief="flat",
             highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=ACC,
             activestyle="none")
@@ -5879,17 +5870,17 @@ class App(tk.Tk):
         w, self._btn_add = self._glow_btn(
             btn_col, glow=ACC,
             text=self._s("btn_add"), command=self._add_files,
-            fg=ACC, width=10, cursor="hand2", font=_MONO_B)
+            fg=ACC, width=10, cursor="hand2", font="VT.Bold")
         w.pack(pady=2)
         w, self._btn_remove = self._glow_btn(
             btn_col, glow=RED,
             text=self._s("btn_remove"), command=self._remove_file,
-            fg=FG, width=10, cursor="hand2", font=_MONO_B)
+            fg=FG, width=10, cursor="hand2", font="VT.Bold")
         w.pack(pady=2)
         w, self._btn_clear = self._glow_btn(
             btn_col, glow=BORDER,
             text=self._s("btn_clear"), command=self._clear_files,
-            fg=FG, width=10, cursor="hand2", font=_MONO_B)
+            fg=FG, width=10, cursor="hand2", font="VT.Bold")
         w.pack(pady=2)
 
         # ── Output path ────────────────────────────────────────────────────
@@ -5897,28 +5888,28 @@ class App(tk.Tk):
         out_row = tk.Frame(inner, bg=CARD)
         out_row.pack(fill="x", pady=(0, 6))
         tk.Label(out_row, text=self._s("label_output"),
-                 bg=CARD, fg=FG2, font=("Helvetica", 8)).pack(side="left", padx=(0, 6))
+                 bg=CARD, fg=FG2, font="VT.Small").pack(side="left", padx=(0, 6))
         self._output_var = tk.StringVar()
         tk.Entry(out_row, textvariable=self._output_var,
                  bg=SEL, fg=FG, insertbackground=FG,
-                 relief="flat", font=("Helvetica", 9)).pack(
+                 relief="flat", font="VT.Base").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
         _w, self._btn_browse = self._glow_btn(
             out_row, glow=BORDER,
             text=self._s("btn_browse"), command=self._browse_output,
-            fg=FG, padx=8, pady=2, cursor="hand2", font=_MONO_B)
+            fg=FG, padx=8, pady=2, cursor="hand2", font="VT.Bold")
         _w.pack(side="left")
 
         # ── URL download ───────────────────────────────────────────────────
         tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
         tk.Label(inner, text=self._s("label_url"),
-                 bg=CARD, fg=FG2, font=("Helvetica", 8)).pack(anchor="w", pady=(0, 2))
+                 bg=CARD, fg=FG2, font="VT.Small").pack(anchor="w", pady=(0, 2))
         url_row = tk.Frame(inner, bg=CARD)
         url_row.pack(fill="x", pady=(0, 2))
         self._url_text = tk.Text(
             url_row, height=2,
             bg=SEL, fg=FG, insertbackground=FG,
-            font=("Monospace", 8), relief="flat", wrap="none")
+            font="VT.Mono", relief="flat", wrap="none")
         self._url_text.insert("1.0", self._s("url_placeholder"))
         self._url_text.configure(fg=FG2)
         self._url_text.bind("<FocusIn>",  self._url_focus_in)
@@ -5927,7 +5918,7 @@ class App(tk.Tk):
         _wd, self._btn_download = self._glow_btn(
             url_row, glow=ACC,
             text=self._s("btn_download"), command=self._start_download,
-            bg=ACC, fg=BG, font=_MONO_B,
+            bg=ACC, fg=BG, font="VT.Bold",
             padx=10, pady=4, cursor="hand2",
             activebackground=FG, activeforeground=BG)
         _wd.pack(side="left", padx=(6, 0))
@@ -5939,7 +5930,7 @@ class App(tk.Tk):
             w = tk.Checkbutton(
                 par, text=self._s(text_key), variable=var, command=cmd,
                 bg=BG, fg=FG, selectcolor=SEL,
-                activebackground=BG, font=("Helvetica", 9))
+                activebackground=BG, font="VT.Base")
             w._text_key = text_key
             return w
 
@@ -5954,12 +5945,12 @@ class App(tk.Tk):
                 mf, text=m, variable=self._model, value=m,
                 bg=BG, fg=RED if "large" in m else FG,
                 selectcolor=SEL, activebackground=BG,
-                font=("Helvetica", 9)).pack(side="left", padx=3)
+                font="VT.Base").pack(side="left", padx=3)
         # Hidden label refs required by _apply_lang
         self._lbl_model      = tk.Label(body, text="", bg=BG)
         self._lbl_model_hint = tk.Label(
             body, text=self._s("label_model_hint"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_model_hint.pack(anchor="w", padx=4, pady=(0, 4))
 
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
@@ -5974,28 +5965,28 @@ class App(tk.Tk):
         engine_row.grid(row=0, column=0, sticky="w", pady=(4, 0))
         self._lbl_engine = tk.Label(
             engine_row, text=self._s("label_engine"),
-            bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+            bg=BG, fg=FG, font="VT.Bold")
         self._lbl_engine.pack(side="left")
         self._rb_eng_google = tk.Radiobutton(
             engine_row, text=self._s("engine_google"),
             variable=self._translation_engine, value="google",
             command=self._on_engine_change,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 9))
+            font="VT.Base")
         self._rb_eng_google.pack(side="left", padx=(6, 0))
         self._rb_eng_deepl = tk.Radiobutton(
             engine_row, text=self._s("engine_deepl"),
             variable=self._translation_engine, value="deepl",
             command=self._on_engine_change,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 9))
+            font="VT.Base")
         self._rb_eng_deepl.pack(side="left", padx=(6, 0))
         self._rb_eng_marian = tk.Radiobutton(
             engine_row, text=self._s("engine_marian"),
             variable=self._translation_engine, value="marian",
             command=self._on_engine_change,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 9))
+            font="VT.Base")
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
 
         engine_row2 = tk.Frame(body2, bg=BG)
@@ -6005,7 +5996,7 @@ class App(tk.Tk):
             variable=self._translation_engine, value="llm_ollama",
             command=self._on_engine_change,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 9))
+            font="VT.Base")
         self._rb_eng_ollama.pack(side="left")
 
         # Ollama config row (toggled by _on_engine_change)
@@ -6013,7 +6004,7 @@ class App(tk.Tk):
         self._ollama_row.grid(row=2, column=0, sticky="w", pady=(2, 0))
         self._lbl_ollama_model = tk.Label(
             self._ollama_row, text=self._s("label_ollama_model"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_ollama_model.pack(side="left")
         self._ollama_model_combo = ttk.Combobox(
             self._ollama_row, textvariable=self._ollama_model_var, width=28,
@@ -6023,23 +6014,23 @@ class App(tk.Tk):
                 "qwen2.5:7b-instruct",
                 "qwen3:4b",
             ],
-            font=("Monospace", 8),
+            font="VT.Mono",
         )
         self._ollama_model_combo.pack(side="left", padx=(4, 8))
         self._lbl_ollama_url = tk.Label(
             self._ollama_row, text=self._s("label_ollama_url"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_ollama_url.pack(side="left")
         self._ollama_url_entry = tk.Entry(
             self._ollama_row, textvariable=self._ollama_url_var, width=24,
             bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8))
+            font="VT.Mono")
         self._ollama_url_entry.pack(side="left", padx=(4, 8))
         self._chk_ollama_slot = tk.Checkbutton(
             self._ollama_row, text="slot-aware",
             variable=self._ollama_slot_aware,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 8))
+            font="VT.Small")
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
         self._ollama_row.grid_remove()
 
@@ -6050,12 +6041,12 @@ class App(tk.Tk):
             self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 8))
+            font="VT.Small")
         self._chk_ollama_thinking.pack(side="left")
         self._lbl_ollama_thinking_hint = tk.Label(
             self._ollama_row2,
             text="  " + self._s("hint_ollama_thinking"),
-            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+            bg=BG, fg=FG2, font="VT.Italic")
         self._lbl_ollama_thinking_hint.pack(side="left")
         self._ollama_row2.grid_remove()
 
@@ -6064,12 +6055,12 @@ class App(tk.Tk):
         self._deepl_row.grid(row=4, column=0, sticky="w", pady=(2, 4))
         self._lbl_deepl_key = tk.Label(
             self._deepl_row, text=self._s("label_deepl_key"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_deepl_key.pack(side="left")
         self._deepl_key_entry = tk.Entry(
             self._deepl_row, textvariable=self._deepl_key_var, width=32,
             bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8), show="*")
+            font="VT.Mono", show="*")
         self._deepl_key_entry.pack(side="left", padx=(4, 0))
         self._deepl_row.grid_remove()
 
@@ -6104,23 +6095,23 @@ class App(tk.Tk):
             variable=self._use_diarization,
             command=self._on_diarization_toggle,
             bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
-            font=("Helvetica", 9))
+            font="VT.Base")
         self._chk_diar.pack(side="left")
 
         self._hf_row = tk.Frame(body6, bg=BG)
         self._hf_row.grid(row=1, column=0, sticky="w", pady=(2, 4))
         self._lbl_hf_token = tk.Label(
             self._hf_row, text=self._s("label_hf_token"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_hf_token.pack(side="left")
         self._hf_token_entry = tk.Entry(
             self._hf_row, textvariable=self._hf_token_var, width=40,
             bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8), show="*")
+            font="VT.Mono", show="*")
         self._hf_token_entry.pack(side="left", padx=(4, 0))
         self._lbl_hf_hint = tk.Label(
             self._hf_row, text="  " + self._s("hint_hf_token"),
-            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+            bg=BG, fg=FG2, font="VT.Italic")
         self._lbl_hf_hint.pack(side="left")
         self._hf_row.grid_remove()
 
@@ -6148,17 +6139,17 @@ class App(tk.Tk):
         self._hotwords_row.pack(anchor="w", pady=4)
         self._lbl_hotwords = tk.Label(
             self._hotwords_row, text=self._s("label_hotwords"),
-            bg=BG, fg=FG2, font=("Helvetica", 8))
+            bg=BG, fg=FG2, font="VT.Small")
         self._lbl_hotwords.pack(side="left")
         self._hotwords_entry = tk.Entry(
             self._hotwords_row, textvariable=self._hotwords_var, width=40,
             bg=SEL, fg=FG, insertbackground=FG, relief="flat",
-            font=("Monospace", 8))
+            font="VT.Mono")
         self._hotwords_entry.pack(side="left", padx=(4, 0))
         self._lbl_hotwords_hint = tk.Label(
             self._hotwords_row,
             text="  " + self._s("hint_hotwords"),
-            bg=BG, fg=FG2, font=("Helvetica", 8, "italic"))
+            bg=BG, fg=FG2, font="VT.Italic")
         self._lbl_hotwords_hint.pack(side="left")
 
     def _build_lang_voice_section(self, parent):
@@ -6173,18 +6164,18 @@ class App(tk.Tk):
         # Card title
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ TRADUZIONE", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
+        tk.Label(title, text="▸ TRADUZIONE", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
 
         # Source language
         from_row = tk.Frame(inner, bg=CARD)
         from_row.pack(fill="x", pady=2)
         self._lbl_from = tk.Label(
             from_row, text=self._s("label_from"),
-            bg=CARD, fg=FG2, font=_MONO_SM, width=6, anchor="e")
+            bg=CARD, fg=FG2, font="VT.Small", width=6, anchor="e")
         self._lbl_from.pack(side="left")
         self._src_combo = ttk.Combobox(
             from_row, values=list(SOURCE_LANGS.values()),
-            state="readonly", width=22, font=("Courier", 9))
+            state="readonly", width=22)
         self._src_combo.current(0)
         self._src_combo.pack(side="left", padx=(4, 0))
         src_keys = list(SOURCE_LANGS.keys())
@@ -6198,11 +6189,11 @@ class App(tk.Tk):
         to_row.pack(fill="x", pady=2)
         self._lbl_to = tk.Label(
             to_row, text=self._s("label_to"),
-            bg=CARD, fg=FG2, font=_MONO_SM, width=6, anchor="e")
+            bg=CARD, fg=FG2, font="VT.Small", width=6, anchor="e")
         self._lbl_to.pack(side="left")
         self._tgt_combo = ttk.Combobox(
             to_row, values=[v["name"] for v in LANGUAGES.values()],
-            state="readonly", width=22, font=("Courier", 9))
+            state="readonly", width=22)
         self._tgt_combo.current(list(LANGUAGES.keys()).index("it"))
         self._tgt_combo.pack(side="left", padx=(4, 0))
         self._tgt_combo.bind("<<ComboboxSelected>>", self._on_lang_tgt_change)
@@ -6212,7 +6203,7 @@ class App(tk.Tk):
         voice_lbl_row.pack(fill="x", pady=(8, 2))
         self._lbl_voice = tk.Label(
             voice_lbl_row, text=self._s("label_voice"),
-            bg=CARD, fg=FG2, font=_MONO_SM)
+            bg=CARD, fg=FG2, font="VT.Small")
         self._lbl_voice.pack(side="left")
 
         self._voice_frame = tk.Frame(inner, bg=CARD)
@@ -6224,20 +6215,20 @@ class App(tk.Tk):
         rate_title_row.pack(fill="x", pady=(4, 2))
         self._lbl_tts_rate = tk.Label(
             rate_title_row, text=self._s("label_tts_rate"),
-            bg=CARD, fg=FG2, font=_MONO_SM)
+            bg=CARD, fg=FG2, font="VT.Small")
         self._lbl_tts_rate.pack(side="left")
 
         rate_frame = tk.Frame(inner, bg=CARD)
         rate_frame.pack(fill="x", pady=(0, 4))
         tk.Label(rate_frame, text="-50%", bg=CARD, fg=FG2,
-                 font=_MONO_SM).pack(side="left")
+                 font="VT.Small").pack(side="left")
         ttk.Scale(rate_frame, from_=-50, to=50, variable=self._tts_rate,
                   orient="horizontal", length=180).pack(side="left", padx=6)
         tk.Label(rate_frame, text="+50%", bg=CARD, fg=FG2,
-                 font=_MONO_SM).pack(side="left")
+                 font="VT.Small").pack(side="left")
         self._rate_lbl = tk.Label(
             rate_frame, text="+0%", bg=CARD, fg=ACC,
-            font=_MONO_B, width=6)
+            font="VT.Bold", width=6)
         self._rate_lbl.pack(side="left", padx=4)
         self._tts_rate.trace_add("write", self._update_rate_label)
 
@@ -6252,7 +6243,7 @@ class App(tk.Tk):
 
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ WORKFLOW PROFILE", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
+        tk.Label(title, text="▸ WORKFLOW PROFILE", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
 
         btn_row = tk.Frame(inner, bg=CARD)
         btn_row.pack(fill="x")
@@ -6268,7 +6259,7 @@ class App(tk.Tk):
             btn = tk.Button(
                 btn_row, text=f"{icon} {label}",
                 bg=CARD, fg=FG2,
-                font=_MONO_SM,
+                font="VT.Small",
                 relief="flat", padx=6, pady=6,
                 cursor="hand2",
                 highlightthickness=1, highlightbackground=BORDER,
@@ -6281,7 +6272,7 @@ class App(tk.Tk):
         # Hint text (updates when profile changes)
         self._lbl_profile_hint = tk.Label(
             inner, text="", bg=CARD, fg=FG2,
-            font=_MONO_SM, wraplength=280,
+            font="VT.Small", wraplength=280,
             anchor="w", justify="left")
         self._lbl_profile_hint.pack(fill="x", pady=(6, 0))
 
@@ -6298,12 +6289,12 @@ class App(tk.Tk):
 
         title = tk.Frame(inner, bg=CARD)
         title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ START", bg=CARD, fg=ACC, font=_MONO_B).pack(side="left")
+        tk.Label(title, text="▸ START", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = tk.Label(
             inner, textvariable=self._summary_var,
-            bg=CARD, fg=FG2, font=_MONO_SM,
+            bg=CARD, fg=FG2, font="VT.Small",
             wraplength=280, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
@@ -6311,7 +6302,7 @@ class App(tk.Tk):
         _ws, self._btn = self._glow_btn(
             inner, glow=ACC,
             text=self._s("btn_start"), command=self._start,
-            bg=ACC, fg=BG, font=("Courier", 12, "bold"),
+            bg=ACC, fg=BG, font="VT.Large",
             padx=24, pady=14, cursor="hand2",
             activebackground=FG, activeforeground=BG)
         _ws.pack(fill="x")
@@ -6320,10 +6311,10 @@ class App(tk.Tk):
         status_row = tk.Frame(inner, bg=CARD)
         status_row.pack(fill="x", pady=(8, 0))
         tk.Label(status_row, text="⚡", bg=CARD, fg=ACC,
-                 font=_MONO_SM).pack(side="left")
+                 font="VT.Small").pack(side="left")
         self._lbl_status = tk.Label(
             status_row, text="Ready",
-            bg=CARD, fg=ACC, font=_MONO_SM)
+            bg=CARD, fg=ACC, font="VT.Small")
         self._lbl_status.pack(side="left", padx=(2, 0))
 
     # ── Main _build_ui entry point ─────────────────────────────────────────
@@ -6404,33 +6395,33 @@ class App(tk.Tk):
         log_header.grid(row=0, column=0, sticky="ew")
         self._lbl_log_panel = tk.Label(
             log_header, text=self._s("label_log_panel"),
-            bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
+            bg=BG, fg=FG, font="VT.Bold")
         self._lbl_log_panel.pack(side="left")
         # Default collapsed - log starts hidden (btn_log_show text)
         _wt, self._btn_log_toggle = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_show"), command=self._toggle_log,
-            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
+            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
         _wt.pack(side="left", padx=(8, 0))
         _wc, self._btn_log_clear = self._glow_btn(
             log_header, glow=RED,
             text=self._s("btn_log_clear"), command=self._log_clear,
-            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
+            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
         _wc.pack(side="right")
         _ws2, self._btn_log_save = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_save"), command=self._log_save,
-            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
+            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
         _ws2.pack(side="right", padx=(0, 4))
         _wcp, self._btn_log_copy = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_copy"), command=self._log_copy,
-            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
+            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
         _wcp.pack(side="right", padx=(0, 4))
         _wpf, self._btn_preflight = self._glow_btn(
             log_header, glow=ACC2,
             text=self._s("btn_preflight"), command=self._run_gui_preflight,
-            fg=FG, font=_MONO_B, padx=8, pady=2, cursor="hand2")
+            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
         _wpf.pack(side="right", padx=(0, 4))
 
         self._log_container = tk.Frame(log_frame, bg=BG)
@@ -6439,7 +6430,7 @@ class App(tk.Tk):
         self._log_container.columnconfigure(0, weight=1)
         self._log = tk.Text(
             self._log_container, height=12, width=76,
-            bg="#11111b", fg=GRN, font=("Monospace", 8),
+            bg="#11111b", fg=GRN, font="VT.Mono",
             relief="flat", state="disabled", wrap="word")
         vsb = tk.Scrollbar(self._log_container, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
@@ -6464,7 +6455,7 @@ class App(tk.Tk):
         # root would break the scrolling layout, so we route them through
         # the inner frame just like every other form widget.
         lbl = tk.Label(self._main_frame, text=text, bg=BG, fg="#bac2de",
-                       font=("Helvetica", 9, "bold"), anchor="e")
+                       font="VT.Bold", anchor="e")
         lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=7)
         return lbl
 
@@ -6514,6 +6505,7 @@ class App(tk.Tk):
         if idx < 0:
             return
         self._ui_lang.set(UI_LANG_OPTIONS[idx][0])
+        save_config({"ui_lang": self._ui_lang.get()})
         self._apply_lang()
 
     def _apply_lang(self):
@@ -6623,7 +6615,7 @@ class App(tk.Tk):
                 bg=PILL, fg=FG2,
                 selectcolor=ACC,
                 activebackground=ACC, activeforeground=BG,
-                font=("Helvetica", 9),
+                font="VT.Base",
                 relief="flat", padx=8, pady=4,
                 cursor="hand2",
                 command=_refresh_pills,
