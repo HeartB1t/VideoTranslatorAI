@@ -221,9 +221,12 @@ class CanvasContentFitsTests(unittest.TestCase):
 def built_app(config):
     """Build the whole ``App`` on a temporary config and always tear it down.
 
-    stdout/stderr are saved before ``App()`` and restored in ``finally``, so
-    a constructor that raises after installing its redirect cannot leave
-    later tests writing into a dead Tk widget.
+    stdout/stderr are saved before ``App()`` and restored in the outermost
+    ``finally``, so neither a constructor that raises after installing its
+    redirect nor a failing ``destroy()`` can leave later tests writing into
+    a dead Tk widget. The app is destroyed while ``CONFIG_PATH`` is still
+    patched, so a save triggered at teardown can never reach the real user
+    config.
     """
     import json
     import sys
@@ -233,7 +236,6 @@ def built_app(config):
     import video_translator_gui as gui
 
     saved_stdout, saved_stderr = sys.stdout, sys.stderr
-    app = None
     try:
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = Path(tmp) / "config.json"
@@ -242,13 +244,16 @@ def built_app(config):
                     mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
                     mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
                     mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
-                app = gui.App()
-                app.withdraw()
-                yield gui, app, cfg_path
+                app = None
+                try:
+                    app = gui.App()
+                    app.withdraw()
+                    yield gui, app, cfg_path
+                finally:
+                    if app is not None:
+                        app._destroying = True
+                        app.destroy()
     finally:
-        if app is not None:
-            app._destroying = True
-            app.destroy()
         sys.stdout, sys.stderr = saved_stdout, saved_stderr
 
 
