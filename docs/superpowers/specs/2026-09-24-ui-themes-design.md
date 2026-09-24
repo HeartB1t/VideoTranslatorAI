@@ -98,21 +98,28 @@ ThemeManager a ogni cambio tema. Nuovi nomi aggiunti: `SURFACE`, `FIELD`,
 `BTN`, `ACC_HOVER`, `ACC_SOFT`, `ACC_FG`, `OK`, `WARN`, `ERR`.
 `CARD` resta alias di `SURFACE`.
 
-### 3. `ThemeManager` (in `video_translator_gui.py`, vicino ad `App`)
+### 3. `ThemeManager` (in `videotranslator/ui_theme_tk.py`)
+
+`ThemeManager(root, module_globals)` vive in un modulo dedicato, separato
+dalla logica pura di `ui_theme.py`; la GUI lo crea prima di qualsiasi widget
+passando i propri `globals()`, così `apply()` riscrive le variabili colore del
+modulo GUI (`GLOBAL_ALIASES`).
 
 Responsabilità:
 
 1. **Font con nome** - crea una volta `tkfont.Font(name=...)` per
-   `VT.Small`, `VT.Base`, `VT.Bold`, `VT.Italic`, `VT.Title`, `VT.Mono`,
-   `VT.MonoBold`. Tutte le 38 tuple fisse e le costanti `_MONO*` vengono
+   esattamente i ruoli di `FONT_ROLES`: `VT.Small`, `VT.SmallBold`,
+   `VT.Base`, `VT.Bold`, `VT.Italic`, `VT.Large`, `VT.Title`, `VT.Mono`
+   (non esiste `VT.MonoBold`). Tutte le 38 tuple fisse e le costanti `_MONO*` vengono
    sostituite con questi nomi. `apply()` fa `font.configure(family=, size=)`
    → Tk aggiorna automaticamente ogni widget.
    - Famiglia sans: prima disponibile tra `Segoe UI`, `Inter`, `Noto Sans`,
      `Cantarell`, `DejaVu Sans`, `TkDefaultFont`.
    - Famiglia mono: `Cascadia Mono`, `JetBrains Mono`, `DejaVu Sans Mono`,
      `TkFixedFont`.
-   - Taglie base (scala 1.0): Small 8, Base 9, Bold 9, Title 15, Mono 9;
-     moltiplicate per la scala e arrotondate.
+   - Taglie base (scala 1.0): Small 8, SmallBold 8, Base 9, Bold 9,
+     Italic 8, Large 11, Title 15, Mono 9; moltiplicate per la scala e
+     arrotondate (minimo 6 pt).
 2. **Stili ttk** - tutto il blocco `ttk.Style` oggi in `App.__init__`
    (Combobox, Scrollbar) si sposta in `ThemeManager._apply_ttk()`, esteso a
    Treeview (editor sottotitoli), Progressbar, Scale e Checkbutton se usati.
