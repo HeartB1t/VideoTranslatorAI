@@ -1,7 +1,7 @@
 # Temi UI personalizzabili - Design
 
 **Data:** 2026-09-24
-**Stato:** approvato (approccio 1), in attesa di revisione spec
+**Stato:** implementato (vedi docs/superpowers/plans/2026-09-24-ui-themes.md)
 **Demo di riferimento:** `_dev/demo_pro_themes.py` (graphite / slate / light)
 
 ## Obiettivo

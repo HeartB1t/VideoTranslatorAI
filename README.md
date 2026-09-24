@@ -252,6 +252,18 @@ python video_translator_gui.py
 
 > ⚠️ **Fair use notice:** Downloading videos via yt-dlp is considered automated access by platforms like YouTube and may violate their Terms of Service. Heavy or repeated use from the same IP address can result in temporary blocks (HTTP 429 / sign-in required errors). Use a VPN or rotate your IP if you encounter download failures. This tool is intended for personal, non-commercial use only. Redistribution of translated content may infringe copyright - always respect the original creator's rights.
 
+### Themes and appearance
+
+Click the gear icon in the header to open **Settings**:
+
+- **Theme**: Automatic (follows the OS dark/light mode), Graphite (default), Slate, Light, Neon.
+- **Accent colour**: default per theme, or blue, teal, violet, green, amber, rose.
+- **Text size**: small, normal, large, extra large.
+- **Interface language**: 26 languages.
+
+Changes apply immediately, without restarting, and are saved in the config file
+(`ui_theme`, `ui_accent`, `ui_scale`, `ui_lang`).
+
 ### Command line
 
 ```bash
