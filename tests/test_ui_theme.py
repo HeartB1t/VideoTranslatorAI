@@ -156,7 +156,8 @@ class TkDefaultColourTests(unittest.TestCase):
 
     def test_constant_lists_the_tk_defaults(self):
         self.assertEqual(set(ui_theme.TK_DEFAULT_COLORS), {
-            "#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3"})
+            "#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3",
+            "#f0f0f0", "#e1e1e1", "#0078d7", "#6d6d6d"})
 
     def test_no_role_equals_a_tk_default(self):
         for theme, accent in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES):

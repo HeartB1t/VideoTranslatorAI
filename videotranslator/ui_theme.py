@@ -40,8 +40,13 @@ DEFAULT_LANG = "it"
 # one of these: the live recolour maps old hex -> new hex per role, so a
 # widget left at a default would otherwise be recoloured as if it carried
 # that role.
-TK_DEFAULT_COLORS: frozenset[str] = frozenset(
-    {"#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3"})
+TK_DEFAULT_COLORS: frozenset[str] = frozenset({
+    # X11 defaults
+    "#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3",
+    # Windows system colours as Tk resolves them (SystemButtonFace, button
+    # face, SystemHighlight, SystemGrayText)
+    "#f0f0f0", "#e1e1e1", "#0078d7", "#6d6d6d",
+})
 
 
 # -- Palette ------------------------------------------------------------
