@@ -188,6 +188,12 @@ class ThemeManager:
                 self._fonts[name] = tkfont.Font(
                     root=self.root, name=name, family=family, size=px,
                     weight=weight, slant=slant)
+        # ttk Entry/Combobox text and dropdown lists use Tk's standard fonts,
+        # so they follow the text size only if these are scaled too.
+        std_px = max(6, int(round(FONT_ROLES["VT.Base"][1] * scale)))
+        for name in ("TkDefaultFont", "TkTextFont"):
+            tkfont.nametofont(name, root=self.root).configure(
+                family=ui_family, size=std_px, weight="normal")
 
     def _apply_ttk(self, p: Palette, scale: float) -> None:
         s = ttk.Style(self.root)

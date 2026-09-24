@@ -43,6 +43,18 @@ class ThemeManagerTkTests(unittest.TestCase):
         self.tm.apply({"ui_scale": "xlarge"}, recolor=False)
         self.assertGreater(tkfont.nametofont("VT.Base").actual("size"), base)
 
+    def test_scale_changes_tk_standard_fonts(self):
+        self.tm.apply({"ui_scale": "normal"}, recolor=False)
+        base = tkfont.nametofont("TkTextFont", root=self.root).actual("size")
+        fixed = tkfont.nametofont("TkFixedFont", root=self.root).actual()
+        self.tm.apply({"ui_scale": "xlarge"}, recolor=False)
+        for name in ("TkDefaultFont", "TkTextFont"):
+            font = tkfont.nametofont(name, root=self.root)
+            self.assertGreater(font.actual("size"), base)
+            self.assertEqual(font.actual("family"),
+                             tkfont.nametofont("VT.Base", root=self.root).actual("family"))
+        self.assertEqual(tkfont.nametofont("TkFixedFont", root=self.root).actual(), fixed)
+
     def test_mono_theme_switches_ui_family_but_mono_font_stays_mono(self):
         self.tm.apply({"ui_theme": "graphite"}, recolor=False)
         sans_family = tkfont.nametofont("VT.Base").actual("family")
