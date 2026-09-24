@@ -1,5 +1,7 @@
 import itertools
+import subprocess
 import unittest
+from unittest import mock
 
 from videotranslator import ui_theme
 from videotranslator.ui_theme import (
@@ -93,10 +95,49 @@ class ResolvePaletteTests(unittest.TestCase):
         self.assertEqual(p.name, DEFAULT_THEME)
         self.assertEqual(p.ACC, resolve_palette(DEFAULT_THEME).ACC)
 
+    def test_non_string_theme_or_accent_fall_back(self):
+        # A non-string accent (e.g. a stray list from bad config) must not
+        # raise: "accent in ACCENTS" only runs after an isinstance guard.
+        self.assertEqual(resolve_palette("graphite", ["blue"]).ACC, resolve_palette("graphite").ACC)
+        self.assertEqual(resolve_palette(None).name, DEFAULT_THEME)
+
     def test_font_family_role(self):
         self.assertEqual(resolve_palette("neon").font_family, "mono")
         self.assertEqual(resolve_palette("graphite").font_family, "sans")
         self.assertTrue(resolve_palette("light").dark is False)
+
+
+class AccentForegroundTests(unittest.TestCase):
+    """Regression coverage for the >=4.0 white-text preference (fix round 1, item 6)."""
+
+    def test_graphite_accent_prefers_white_text(self):
+        # #3574f0: white contrast is 4.28 (clears the 4.0 floor), black is
+        # 4.91. White wins despite scoring a hair lower, matching the
+        # approved UI mockup where the primary button shows white text.
+        self.assertEqual(resolve_palette("graphite").ACC_FG, "#ffffff")
+
+    def test_slate_accent_keeps_black_text_below_threshold(self):
+        # #2aa198 (teal): white contrast is only ~3.16, below the 4.0 floor,
+        # so the highest-contrast rule applies and black (~6.65) wins.
+        self.assertEqual(resolve_palette("slate").ACC_FG, "#000000")
+
+    def test_amber_accent_keeps_black_text(self):
+        # #d9932a: white contrast is ~2.57, well below the 4.0 floor; black
+        # (~8.16) wins under both the old and the new rule.
+        self.assertEqual(resolve_palette("graphite", "amber").ACC_FG, "#000000")
+
+
+class EnsureDistinctTests(unittest.TestCase):
+    def test_terminates_and_returns_distinct_values(self):
+        # "#000000" and "#000001" are both already taken, so the third
+        # duplicate must walk past both before finding a free value. This
+        # must terminate (fix round 1, item 1: no more infinite +-1 loop).
+        result = ui_theme._ensure_distinct({"a": "#000000", "b": "#000001", "c": "#000000"})
+        self.assertEqual(len(result), 3)
+        self.assertEqual(len(set(result.values())), 3)
+        self.assertEqual(result["a"], "#000000")
+        self.assertEqual(result["b"], "#000001")
+        self.assertEqual(result["c"], "#000002")
 
 
 class NormalizeSettingsTests(unittest.TestCase):
@@ -139,39 +180,95 @@ class DetectSystemDarkTests(unittest.TestCase):
         return run
 
     def test_linux_prefer_dark(self):
+        # env={} pins the non-XFCE order (gsettings first) regardless of the
+        # host this suite runs on (this dev box's own XDG_CURRENT_DESKTOP is
+        # XFCE, see fix round 1 item 4).
         run = self._runner({
             ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'prefer-dark'\n"),
         })
-        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), True)
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), True)
 
     def test_linux_prefer_light(self):
         run = self._runner({
             ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'prefer-light'\n"),
         })
-        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), False)
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), False)
 
     def test_linux_falls_back_to_gtk_theme_name(self):
         run = self._runner({
             ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'default'\n"),
             ("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"): (0, "'Kali-Dark'\n"),
         })
-        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), True)
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), True)
 
     def test_linux_falls_back_to_xfconf(self):
         run = self._runner({
             ("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"): (0, "Adwaita\n"),
         })
-        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), False)
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), False)
 
     def test_linux_nothing_available_is_unknown(self):
         run = self._runner({})
-        self.assertIsNone(ui_theme.detect_system_dark("linux", runner=run))
+        self.assertIsNone(ui_theme.detect_system_dark("linux", runner=run, env={}))
+
+    def test_linux_color_scheme_nonzero_falls_back(self):
+        # (a) gsettings color-scheme exits non-zero (no schema / no daemon):
+        # must fall through to the next check instead of stopping.
+        run = self._runner({
+            ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (1, ""),
+            ("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"): (0, "'Kali-Dark'\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), True)
+
+    def test_linux_gtk_theme_empty_falls_back_to_xfconf(self):
+        # (b) gtk-theme returns rc=0 but an empty string: must fall through
+        # to xfconf rather than treating empty as a theme name.
+        run = self._runner({
+            ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'default'\n"),
+            ("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"): (0, ""),
+            ("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"): (0, "Kali-Dark\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run, env={}), True)
+
+    def test_linux_fallback_order_when_not_xfce(self):
+        # (e) order check: color-scheme, then gtk-theme, then xfconf, when
+        # XDG_CURRENT_DESKTOP does not mention XFCE.
+        run = self._runner({})
+        ui_theme.detect_system_dark("linux", runner=run, env={"XDG_CURRENT_DESKTOP": "GNOME"})
+        self.assertEqual(run.calls, [
+            ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+            ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
+            ["xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"],
+        ])
+
+    def test_linux_xfce_checks_xfconf_first(self):
+        # Fix round 1, item 4: on an XFCE session, xfconf is authoritative
+        # and gsettings is often absent or stale, so it goes first.
+        run = self._runner({
+            ("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"): (0, "Kali-Dark\n"),
+            ("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"): (0, "'Adwaita'\n"),
+        })
+        result = ui_theme.detect_system_dark("linux", runner=run, env={"XDG_CURRENT_DESKTOP": "XFCE"})
+        self.assertIs(result, True)
+        self.assertEqual(run.calls[0], ["xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"])
+
+    def test_linux_xfce_detection_is_case_insensitive(self):
+        run = self._runner({
+            ("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"): (0, "Adwaita\n"),
+        })
+        ui_theme.detect_system_dark("linux", runner=run, env={"XDG_CURRENT_DESKTOP": "xfce"})
+        self.assertEqual(run.calls[0], ["xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"])
 
     def test_macos_dark_and_light(self):
         dark = self._runner({("defaults", "read", "-g", "AppleInterfaceStyle"): (0, "Dark\n")})
         light = self._runner({("defaults", "read", "-g", "AppleInterfaceStyle"): (1, "")})
         self.assertIs(ui_theme.detect_system_dark("darwin", runner=dark), True)
         self.assertIs(ui_theme.detect_system_dark("darwin", runner=light), False)
+
+    def test_macos_runner_returns_none_is_unknown(self):
+        # (c) the command is simply not in the fake runner's table.
+        run = self._runner({})
+        self.assertIsNone(ui_theme.detect_system_dark("darwin", runner=run))
 
     def test_windows_registry(self):
         class FakeKey:
@@ -207,6 +304,13 @@ class DetectSystemDarkTests(unittest.TestCase):
 
     def test_run_quiet_handles_missing_binary(self):
         self.assertIsNone(ui_theme._run_quiet(["definitely-not-a-real-binary-xyz"]))
+
+    def test_run_quiet_handles_timeout(self):
+        # (d) subprocess.TimeoutExpired is a SubprocessError subclass, so
+        # the existing except clause already covers it; this pins that.
+        timeout_error = subprocess.TimeoutExpired(cmd=["slow"], timeout=2)
+        with mock.patch("videotranslator.ui_theme.subprocess.run", side_effect=timeout_error):
+            self.assertIsNone(ui_theme._run_quiet(["slow"]))
 
 
 if __name__ == "__main__":

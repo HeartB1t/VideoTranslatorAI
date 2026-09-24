@@ -8,9 +8,10 @@ display. The Tk side (named fonts, ttk styles, live recolour) lives in
 from __future__ import annotations
 
 import importlib
+import os
 import subprocess
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 
 # -- Choices and defaults ---------------------------------------------
@@ -152,29 +153,68 @@ def derive_accent(base_hex: str, surface_hex: str, dark: bool) -> tuple[str, str
 
     hover: accent lightened (dark themes) or darkened (light themes) by 12%.
     soft:  22% accent blended over the surface (selection / chip background).
-    fg:    black or white, whichever has the higher contrast on the accent.
+    fg:    white when it already clears a 4.0 contrast ratio on the accent
+           (matches the approved UI mockup, where mid-tone accents such as
+           Graphite's blue show white text even though black scores a hair
+           higher); otherwise whichever of black/white has the higher
+           contrast, so low-contrast accents (teal, amber, ...) still fall
+           back to black.
     """
     acc = base_hex.lower()
     hover = lighten(acc, 0.12) if dark else darken(acc, 0.12)
     soft = mix(acc, surface_hex, 0.22)
-    fg = "#ffffff" if contrast_ratio("#ffffff", acc) >= contrast_ratio("#000000", acc) else "#000000"
+    white_contrast = contrast_ratio("#ffffff", acc)
+    if white_contrast >= 4.0:
+        fg = "#ffffff"
+    else:
+        fg = "#ffffff" if white_contrast >= contrast_ratio("#000000", acc) else "#000000"
     return acc, hover, soft, fg
 
 
+def _find_free_value(start: str, seen: set[str]) -> str:
+    """Find a colour close to ``start`` that is not in ``seen``.
+
+    Walks outward with increasing distance (1, -1, 2, -2, ...) on the blue
+    channel first, then green, then red, skipping out-of-range candidates.
+    Bounded to at most 255 steps per channel, so it always terminates.
+    Raises ``ValueError`` if no free value exists on any of the three
+    channels (never happens with real palettes, but never loops either).
+    """
+    r0, g0, b0 = _hex_to_rgb(start)
+    for channel in range(3):  # 0 = blue, 1 = green, 2 = red
+        for step in range(1, 256):
+            for delta in (step, -step):
+                r, g, b = r0, g0, b0
+                if channel == 0:
+                    b = b0 + delta
+                    in_range = 0 <= b <= 255
+                elif channel == 1:
+                    g = g0 + delta
+                    in_range = 0 <= g <= 255
+                else:
+                    r = r0 + delta
+                    in_range = 0 <= r <= 255
+                if not in_range:
+                    continue
+                candidate = _rgb_to_hex(r, g, b)
+                if candidate not in seen:
+                    return candidate
+    raise ValueError(f"cannot find a colour distinct from {start!r} near {seen!r}")
+
+
 def _ensure_distinct(colors: dict[str, str]) -> dict[str, str]:
-    """Nudge duplicated values by one unit on the blue channel until unique.
+    """Nudge duplicated values until every one is unique.
 
     The live recolour maps old hex -> new hex per role, so two roles sharing
-    a hex would be indistinguishable. A one-unit nudge is invisible.
+    a hex would be indistinguishable. Duplicates are nudged to a nearby free
+    value via ``_find_free_value``, which is bounded and never loops.
     """
     seen: set[str] = set()
     out: dict[str, str] = {}
     for key, value in colors.items():
         v = value.lower()
-        while v in seen:
-            r, g, b = _hex_to_rgb(v)
-            b = b - 1 if b > 0 else b + 1
-            v = _rgb_to_hex(r, g, b)
+        if v in seen:
+            v = _find_free_value(v, seen)
         seen.add(v)
         out[key] = v
     return out
@@ -185,14 +225,15 @@ def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
     """Build the fully resolved palette for ``theme`` and ``accent``.
 
     ``auto`` maps to ``light`` when ``system_dark`` is False, else ``graphite``
-    (unknown counts as dark). Unknown names fall back to the defaults.
+    (unknown counts as dark). Unknown or wrongly-typed names fall back to the
+    defaults instead of raising.
     """
-    if theme not in THEME_CHOICES:
+    if not isinstance(theme, str) or theme not in THEME_CHOICES:
         theme = DEFAULT_THEME
     if theme == "auto":
         theme = "light" if system_dark is False else DEFAULT_THEME
     base = THEMES[theme]
-    acc_base = ACCENTS[accent] if accent in ACCENTS else str(base["ACC"])
+    acc_base = ACCENTS[accent] if isinstance(accent, str) and accent in ACCENTS else str(base["ACC"])
     acc, hover, soft, fg = derive_accent(acc_base, str(base["SURFACE"]), bool(base["dark"]))
     raw = {f: str(base[f]) for f in _BASE_FIELDS}
     raw.update({"ACC": acc, "ACC_HOVER": hover, "ACC_SOFT": soft, "ACC_FG": fg})
@@ -237,15 +278,18 @@ def _run_quiet(cmd: list[str]) -> tuple[int, str] | None:
 
 
 def detect_system_dark(sys_platform: str | None = None, runner=None,
-                       winreg_module=None) -> bool | None:
+                       winreg_module=None, env: dict | None = None) -> bool | None:
     """Best-effort OS dark-mode detection. ``None`` means unknown.
 
     Windows: registry ``AppsUseLightTheme``. macOS: ``defaults read -g
     AppleInterfaceStyle`` (non-zero exit means light). Linux: gsettings
-    colour-scheme, then gtk-theme name, then xfconf theme name.
+    colour-scheme, then gtk-theme name, then xfconf theme name - except
+    when ``XDG_CURRENT_DESKTOP`` names XFCE, where xfconf is checked first
+    (gsettings is usually absent or stale on a plain XFCE session).
     """
     plat = sys_platform or sys.platform
     run = runner or _run_quiet
+    environ = env if env is not None else os.environ
 
     if plat.startswith("win"):
         try:
@@ -264,17 +308,33 @@ def detect_system_dark(sys_platform: str | None = None, runner=None,
         rc, out = res
         return False if rc != 0 else "dark" in out.lower()
 
-    res = run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
-    if res is not None and res[0] == 0:
-        out = res[1].lower()
-        if "prefer-dark" in out:
-            return True
-        if "prefer-light" in out:
-            return False
-    res = run(["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"])
-    if res is not None and res[0] == 0 and res[1].strip():
-        return "dark" in res[1].lower()
-    res = run(["xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"])
-    if res is not None and res[0] == 0 and res[1].strip():
-        return "dark" in res[1].lower()
+    def check_color_scheme() -> bool | None:
+        res = run(["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"])
+        if res is not None and res[0] == 0:
+            out = res[1].lower()
+            if "prefer-dark" in out:
+                return True
+            if "prefer-light" in out:
+                return False
+        return None
+
+    def check_gtk_theme() -> bool | None:
+        res = run(["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"])
+        if res is not None and res[0] == 0 and res[1].strip():
+            return "dark" in res[1].lower()
+        return None
+
+    def check_xfconf() -> bool | None:
+        res = run(["xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"])
+        if res is not None and res[0] == 0 and res[1].strip():
+            return "dark" in res[1].lower()
+        return None
+
+    is_xfce = "xfce" in str(environ.get("XDG_CURRENT_DESKTOP", "")).lower()
+    checks = (check_xfconf, check_color_scheme, check_gtk_theme) if is_xfce \
+        else (check_color_scheme, check_gtk_theme, check_xfconf)
+    for check in checks:
+        result = check()
+        if result is not None:
+            return result
     return None
