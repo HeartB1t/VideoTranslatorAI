@@ -427,29 +427,63 @@ class LayoutTests(unittest.TestCase):
                         if w in by_outer]
 
             self.assertEqual(ids(), ["start", "input", "translation", "profile", "settings"])
-            # Drag "settings" to the top. The spans are injected so the test
-            # needs no real geometry (the app is withdrawn).
+            # Drag "settings" to the top. Spans and the column test are
+            # injected so the test needs no real geometry (the app is withdrawn).
             app._panel_spans = lambda exclude: [(0, 100), (100, 200), (200, 300), (300, 400)]
-            app._panel_drag_start("settings", types.SimpleNamespace(y_root=350))
-            app._panel_drag_motion(types.SimpleNamespace(y_root=10))
+            app._pointer_over_column = lambda x_root, slack=40: True
+            ev = lambda y: types.SimpleNamespace(x_root=500, y_root=y)  # noqa: E731
+            app._panel_drag_start("settings", ev(350))
+            app._panel_drag_motion(ev(10))
             self.assertTrue(app._drag_indicator.winfo_manager())
             self.assertEqual(app._drag_indicator.cget("bg"), app._theme.palette.ACC)
-            app._panel_drag_end(types.SimpleNamespace(y_root=10))
+            app._panel_drag_end(ev(10))
             expected = ["settings", "start", "input", "translation", "profile"]
             self.assertEqual(ids(), expected)
             self.assertFalse(app._drag_indicator.winfo_manager())
             saved = json.loads(cfg_path.read_text(encoding="utf-8"))
             self.assertEqual(saved["ui_panel_order"], expected)
             # A click without movement changes nothing.
-            app._panel_drag_start("input", types.SimpleNamespace(y_root=150))
-            app._panel_drag_end(types.SimpleNamespace(y_root=151))
+            app._panel_drag_start("input", ev(150))
+            app._panel_drag_end(ev(151))
             self.assertEqual(ids(), expected)
+            # Dropping below the last panel packs the line after it, then
+            # moves the card to the end.
+            app._panel_drag_start("settings", ev(50))
+            app._panel_drag_motion(ev(999))
+            self.assertIs(app._right_pane.pack_slaves()[-1], app._drag_indicator)
+            app._panel_drag_end(ev(999))
+            self.assertEqual(ids(), ["start", "input", "translation", "profile", "settings"])
+            # Leaving the column sideways cancels the drop.
+            app._pointer_over_column = lambda x_root, slack=40: False
+            app._panel_drag_start("start", ev(50))
+            app._panel_drag_motion(ev(999))
+            self.assertFalse(app._drag_indicator.winfo_manager())
+            app._panel_drag_end(ev(999))
+            self.assertEqual(ids(), ["start", "input", "translation", "profile", "settings"])
             # "Restore defaults" in the Settings window also restores the order.
             app._open_settings()
             app._reset_ui_settings()
             self.assertEqual(ids(), list(gui._PANEL_IDS))
             saved = json.loads(cfg_path.read_text(encoding="utf-8"))
             self.assertEqual(saved["ui_panel_order"], list(gui._PANEL_IDS))
+
+    def test_every_header_widget_starts_a_drag(self):
+        # The title text is nested one level below the header row: the
+        # bindings must reach every descendant, not only the direct children.
+        with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            for pid, (outer, _) in app._panels.items():
+                inner = outer.winfo_children()[0]
+                hdr = inner.winfo_children()[0]
+                stack = [hdr]
+                seen = 0
+                while stack:
+                    w = stack.pop()
+                    stack.extend(w.winfo_children())
+                    seen += 1
+                    with self.subTest(panel=pid, widget=str(w)):
+                        for seq in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>"):
+                            self.assertTrue(w.bind(seq), seq)
+                self.assertGreaterEqual(seen, 2)
 
 
 def _card_of(widget, pane):

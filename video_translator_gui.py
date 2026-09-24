@@ -6128,12 +6128,23 @@ class App(tk.Tk):
         grip = tk.Label(hdr, text="≡", bg=SURFACE, fg=FG2,
                         font="VT.Base", cursor="fleur")
         grip.pack(side="right")
-        for w in (hdr, grip) + tuple(hdr.winfo_children()):
-            w.bind("<ButtonPress-1>",
-                   lambda e, pid=panel_id: self._panel_drag_start(pid, e))
-            w.bind("<B1-Motion>", self._panel_drag_motion)
-            w.bind("<ButtonRelease-1>", self._panel_drag_end)
+        self._bind_panel_drag(hdr, panel_id)
         return inner
+
+    def _bind_panel_drag(self, widget, panel_id):
+        """Bind the drag handlers on ``widget`` and every descendant, so the
+        whole header row (title text included) starts a drag."""
+        widget.bind("<ButtonPress-1>",
+                    lambda e, pid=panel_id: self._panel_drag_start(pid, e))
+        widget.bind("<B1-Motion>", self._panel_drag_motion)
+        widget.bind("<ButtonRelease-1>", self._panel_drag_end)
+        for child in widget.winfo_children():
+            self._bind_panel_drag(child, panel_id)
+
+    def _pointer_over_column(self, x_root, slack=40):
+        """True when ``x_root`` is over the settings column (plus ``slack`` px)."""
+        left = self._right_pane.winfo_rootx()
+        return left - slack <= x_root <= left + self._right_pane.winfo_width() + slack
 
     def _panel_spans(self, exclude):
         """(top, bottom) root-y extents of every panel except ``exclude``."""
@@ -6160,11 +6171,16 @@ class App(tk.Tk):
         others = [p for p in self._panel_order if p != d["pid"]]
         if not others:
             return
-        idx = _drop_index(event.y_root, self._panel_spans(d["pid"]))
-        d["index"] = idx
         ind = self._drag_indicator
         if ind is None or not ind.winfo_exists():
             ind = self._drag_indicator = tk.Frame(self._right_pane, height=3)
+        if not self._pointer_over_column(event.x_root):
+            # Leaving the column sideways cancels the drop (release does nothing).
+            d["index"] = None
+            ind.pack_forget()
+            return
+        idx = _drop_index(event.y_root, self._panel_spans(d["pid"]))
+        d["index"] = idx
         ind.configure(bg=ACC)
         ind.pack_forget()
         if idx < len(others):
@@ -6195,9 +6211,14 @@ class App(tk.Tk):
             outer.pack(fill="x", **opts)
 
     def _make_accordion_section(self, parent, title_text):
-        """Return (outer_frame, body_frame, arrow_label). Starts collapsed."""
-        first = not parent.winfo_children()
+        """Return (outer_frame, body_frame, arrow_label). Starts collapsed.
+
+        A separator is drawn above every section but the first one; the
+        card's drag header does not count as a section."""
+        first = not any(getattr(c, "_is_accordion_section", False)
+                        for c in parent.winfo_children())
         outer = tk.Frame(parent, bg=SURFACE)
+        outer._is_accordion_section = True
         outer.pack(fill="x", pady=1)
         if not first:
             tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
@@ -6348,7 +6369,7 @@ class App(tk.Tk):
             row=1, column=0, columnspan=2, sticky="ew")
 
     def _build_input_section(self, parent):
-        """Left-pane INPUT card: batch list, output path, URL download."""
+        """Right-column INPUT card: batch list, output path, URL download."""
         inner = self._panel(parent, "input", "Input", pady=(0, 10))
 
         # Hidden label refs required by _apply_lang (configure(text=...))
@@ -6414,7 +6435,7 @@ class App(tk.Tk):
         # width=30: a small request, so the Text stretches with fill="x"
         # instead of forcing the column to its 80-column default.
         self._url_text = tk.Text(
-            url_row, height=2, width=30,
+            url_row, height=2, width=20,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", wrap="none")
@@ -6501,17 +6522,21 @@ class App(tk.Tk):
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_deepl.pack(side="left", padx=(6, 0))
+        # Two engines per row keep the column at its 460 px minimum in
+        # every UI language and text size.
+        engine_row_b = tk.Frame(body2, bg=SURFACE)
+        engine_row_b.grid(row=2, column=0, sticky="w")
         self._rb_eng_marian = tk.Radiobutton(
-            engine_row, text=self._s("engine_marian"),
+            engine_row_b, text=self._s("engine_marian"),
             variable=self._translation_engine, value="marian",
             command=self._on_engine_change,
             bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
-        self._rb_eng_marian.pack(side="left", padx=(6, 0))
+        self._rb_eng_marian.pack(side="left")
         # The Ollama label is long: own row, wrapped.
         engine_row2 = tk.Frame(body2, bg=SURFACE)
-        engine_row2.grid(row=2, column=0, sticky="w")
+        engine_row2.grid(row=3, column=0, sticky="w")
         self._rb_eng_ollama = tk.Radiobutton(
             engine_row2, text=self._s("engine_ollama"),
             variable=self._translation_engine, value="llm_ollama",
@@ -6525,7 +6550,7 @@ class App(tk.Tk):
         # Ollama config row (toggled by _on_engine_change). Two lines inside
         # one container so grid()/grid_remove() keep working on the container.
         self._ollama_row = tk.Frame(body2, bg=SURFACE)
-        self._ollama_row.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        self._ollama_row.grid(row=4, column=0, sticky="w", pady=(2, 0))
         _ol_line1 = tk.Frame(self._ollama_row, bg=SURFACE)
         _ol_line1.pack(anchor="w")
         _ol_line2 = tk.Frame(self._ollama_row, bg=SURFACE)
@@ -6566,7 +6591,7 @@ class App(tk.Tk):
 
         # Ollama thinking row (toggled by _on_engine_change)
         self._ollama_row2 = tk.Frame(body2, bg=SURFACE)
-        self._ollama_row2.grid(row=4, column=0, sticky="w", pady=(2, 0))
+        self._ollama_row2.grid(row=5, column=0, sticky="w", pady=(2, 0))
         self._chk_ollama_thinking = tk.Checkbutton(
             self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
@@ -6584,7 +6609,7 @@ class App(tk.Tk):
 
         # DeepL key row (toggled by _on_engine_change)
         self._deepl_row = tk.Frame(body2, bg=SURFACE)
-        self._deepl_row.grid(row=5, column=0, sticky="w", pady=(2, 4))
+        self._deepl_row.grid(row=6, column=0, sticky="w", pady=(2, 4))
         self._lbl_deepl_key = tk.Label(
             self._deepl_row, text=self._s("label_deepl_key"),
             bg=SURFACE, fg=FG2, font="VT.Small")
@@ -6794,7 +6819,7 @@ class App(tk.Tk):
         # Hint text (updates when profile changes)
         self._lbl_profile_hint = tk.Label(
             inner, text="", bg=CARD, fg=FG2,
-            font="VT.Small", wraplength=280,
+            font="VT.Small", wraplength=_HINT_WRAP,
             anchor="w", justify="left")
         self._lbl_profile_hint.pack(fill="x", pady=(6, 0))
 
@@ -6808,7 +6833,7 @@ class App(tk.Tk):
         self._lbl_summary = tk.Label(
             inner, textvariable=self._summary_var,
             bg=CARD, fg=FG2, font="VT.Small",
-            wraplength=280, justify="left")
+            wraplength=_HINT_WRAP, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
         # Start button - full-width, accent-filled primary
@@ -6860,7 +6885,7 @@ class App(tk.Tk):
         # ── Two-column content layout ─────────────────────────────────────
         # row 0: header (spans both cols)
         # row 1: separator
-        # row 2: content frame (left = input+advanced, right = lang+profile+start)
+        # row 2: content frame (left = player area, right = every card)
         self._main_frame.columnconfigure(0, weight=1)
         self._main_frame.columnconfigure(1, weight=0)
 
