@@ -6353,7 +6353,8 @@ class App(tk.Tk):
             tk.Radiobutton(
                 mf, text=m, variable=self._model, value=m,
                 bg=SURFACE, fg=RED if "large" in m else FG,
-                selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
+                selectcolor=SEL, activebackground=SURFACE,
+                activeforeground=RED if "large" in m else FG,
                 highlightbackground=SURFACE, highlightcolor=ACC,
                 font="VT.Base").pack(side="left", padx=3)
         # Hidden label refs required by _apply_lang

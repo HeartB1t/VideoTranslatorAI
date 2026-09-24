@@ -366,7 +366,10 @@ class GuiThemedDefaultsTests(unittest.TestCase):
                     self.assertEqual(w.cget("insertbackground"), p.FG)
             for w in toggles:
                 with self.subTest(toggle=str(w)):
-                    self.assertEqual(w.cget("activeforeground"), p.FG)
+                    # Hover keeps the widget's own text colour: FG, or the
+                    # ERR hint used on the large Whisper models.
+                    self.assertIn(w.cget("fg"), (p.FG, p.ERR))
+                    self.assertEqual(w.cget("activeforeground"), w.cget("fg"))
                     self.assertEqual(w.cget("activebackground"),
                                      p.ACC_SOFT if w.cget("indicatoron") in (0, "0")
                                      else w.cget("bg"))
