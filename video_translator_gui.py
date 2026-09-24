@@ -308,6 +308,10 @@ _OPTIONAL_ALIASES: dict[str, list[str]] = {
 # here are only the import-time defaults (Graphite).
 from videotranslator.ui_theme import resolve_palette as _resolve_palette  # noqa: E402
 from videotranslator.ui_theme import normalize_ui_settings as _normalize_ui_settings  # noqa: E402
+from videotranslator.ui_layout import PANEL_IDS as _PANEL_IDS  # noqa: E402
+from videotranslator.ui_layout import normalize_panel_order as _normalize_panel_order  # noqa: E402
+from videotranslator.ui_layout import move_panel as _move_panel  # noqa: E402
+from videotranslator.ui_layout import drop_index as _drop_index  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator.ui_theme import (  # noqa: E402
@@ -5527,6 +5531,12 @@ class App(tk.Tk):
         super().__init__()
         _ocfg = load_config()
         self._ui_settings = _normalize_ui_settings(_ocfg, lang_codes=UI_LANG_CODES)
+        # Movable panels of the settings column: id -> (outer frame, pack
+        # options), current order, and the state of a drag in progress.
+        self._panels = {}
+        self._panel_order = _normalize_panel_order(_ocfg.get("ui_panel_order"))
+        self._drag = None
+        self._drag_indicator = None
         self._theme = _ThemeManager(self, module_globals=globals())
         self._theme.apply(self._ui_settings, recolor=False)
         self.title("Video Translator AI")
@@ -6099,6 +6109,91 @@ class App(tk.Tk):
                  font="VT.SmallBold").pack(side="left")
         return f
 
+    # -- Movable panels of the settings column ---------------------------
+
+    def _panel(self, parent, panel_id, title, **pack):
+        """A card the user can drag to another position in the column.
+
+        Builds a `_card`, registers its outer frame under ``panel_id`` and
+        adds a header row: the section title (when given) on the left and
+        a drag handle on the right. Dragging the header moves the card;
+        the order is saved as ``ui_panel_order``. Returns the inner frame.
+        """
+        inner = self._card(parent, **pack)
+        self._panels[panel_id] = (inner.master, dict(pack))
+        hdr = tk.Frame(inner, bg=SURFACE, cursor="fleur")
+        hdr.pack(fill="x", pady=(0, 8) if title else (0, 2))
+        if title:
+            self._section_title(hdr, title).pack(side="left")
+        grip = tk.Label(hdr, text="≡", bg=SURFACE, fg=FG2,
+                        font="VT.Base", cursor="fleur")
+        grip.pack(side="right")
+        for w in (hdr, grip) + tuple(hdr.winfo_children()):
+            w.bind("<ButtonPress-1>",
+                   lambda e, pid=panel_id: self._panel_drag_start(pid, e))
+            w.bind("<B1-Motion>", self._panel_drag_motion)
+            w.bind("<ButtonRelease-1>", self._panel_drag_end)
+        return inner
+
+    def _panel_spans(self, exclude):
+        """(top, bottom) root-y extents of every panel except ``exclude``."""
+        spans = []
+        for pid in self._panel_order:
+            if pid == exclude or pid not in self._panels:
+                continue
+            outer = self._panels[pid][0]
+            top = outer.winfo_rooty()
+            spans.append((top, top + outer.winfo_height()))
+        return spans
+
+    def _panel_drag_start(self, panel_id, event):
+        self._drag = {"pid": panel_id, "y0": event.y_root,
+                      "moved": False, "index": None}
+
+    def _panel_drag_motion(self, event):
+        d = self._drag
+        if d is None:
+            return
+        if not d["moved"] and abs(event.y_root - d["y0"]) < 4:
+            return  # a click with a tiny wobble is not a drag
+        d["moved"] = True
+        others = [p for p in self._panel_order if p != d["pid"]]
+        if not others:
+            return
+        idx = _drop_index(event.y_root, self._panel_spans(d["pid"]))
+        d["index"] = idx
+        ind = self._drag_indicator
+        if ind is None or not ind.winfo_exists():
+            ind = self._drag_indicator = tk.Frame(self._right_pane, height=3)
+        ind.configure(bg=ACC)
+        ind.pack_forget()
+        if idx < len(others):
+            ind.pack(fill="x", before=self._panels[others[idx]][0])
+        else:
+            ind.pack(fill="x", after=self._panels[others[-1]][0])
+
+    def _panel_drag_end(self, event):
+        d, self._drag = self._drag, None
+        ind = self._drag_indicator
+        if ind is not None and ind.winfo_exists():
+            ind.pack_forget()
+        if d is None or not d["moved"] or d["index"] is None:
+            return
+        new_order = _move_panel(self._panel_order, d["pid"], d["index"])
+        if new_order != self._panel_order:
+            self._panel_order = new_order
+            self._repack_panels()
+            save_config({"ui_panel_order": new_order})
+
+    def _repack_panels(self):
+        """Re-pack the registered panels following ``self._panel_order``."""
+        ordered = [pid for pid in self._panel_order if pid in self._panels]
+        for pid in ordered:
+            self._panels[pid][0].pack_forget()
+        for pid in ordered:
+            outer, opts = self._panels[pid]
+            outer.pack(fill="x", **opts)
+
     def _make_accordion_section(self, parent, title_text):
         """Return (outer_frame, body_frame, arrow_label). Starts collapsed."""
         first = not parent.winfo_children()
@@ -6254,8 +6349,7 @@ class App(tk.Tk):
 
     def _build_input_section(self, parent):
         """Left-pane INPUT card: batch list, output path, URL download."""
-        inner = self._card(parent, pady=(0, 10))
-        self._section_title(inner, "Input").pack(anchor="w", pady=(0, 8))
+        inner = self._panel(parent, "input", "Input", pady=(0, 10))
 
         # Hidden label refs required by _apply_lang (configure(text=...))
         self._lbl_video  = tk.Label(inner, text="", bg=CARD)
@@ -6340,7 +6434,7 @@ class App(tk.Tk):
     def _build_advanced_panel(self, parent):
         """Right-pane card, below Start: collapsible accordion sections for
         all advanced options."""
-        adv = self._card(parent, pady=(4, 0))
+        adv = self._panel(parent, "settings", None, pady=(4, 0))
         self._advanced_card = adv
 
         def cb(par, text_key, var, cmd=None):
@@ -6601,8 +6695,7 @@ class App(tk.Tk):
 
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
-        inner = self._card(parent, padx=4, pady=(0, 10))
-        self._section_title(inner, "Traduzione").pack(anchor="w", pady=(0, 8))
+        inner = self._panel(parent, "translation", "Traduzione", padx=4, pady=(0, 10))
 
         # Source language
         from_row = tk.Frame(inner, bg=CARD)
@@ -6672,8 +6765,7 @@ class App(tk.Tk):
 
     def _build_profile_section(self, parent):
         """Right-pane card: Fast / Balanced / Studio / Cinematic presets."""
-        inner = self._card(parent, padx=4, pady=(0, 10))
-        self._section_title(inner, "Workflow profile").pack(anchor="w", pady=(0, 8))
+        inner = self._panel(parent, "profile", "Workflow profile", padx=4, pady=(0, 10))
 
         btn_row = tk.Frame(inner, bg=CARD)
         btn_row.pack(fill="x")
@@ -6710,8 +6802,7 @@ class App(tk.Tk):
 
     def _build_start_section(self, parent):
         """Right-pane card: summary line + big Start button + status row."""
-        inner = self._card(parent, padx=4, pady=(0, 10))
-        self._section_title(inner, "Start").pack(anchor="w", pady=(0, 8))
+        inner = self._panel(parent, "start", "Start", padx=4, pady=(0, 10))
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = tk.Label(
@@ -6806,6 +6897,8 @@ class App(tk.Tk):
         self._build_profile_section(right)
         self._build_start_section(right)
         self._build_advanced_panel(right)
+        # Built in the default order; apply the order the user saved.
+        self._repack_panels()
 
         # ── Log panel (root row 1, outside canvas) ────────────────────────
         log_frame = tk.Frame(self, bg=BG)
@@ -7131,6 +7224,10 @@ class App(tk.Tk):
         self._update_profile_buttons()
 
     def _reset_ui_settings(self):
+        if self._panel_order != list(_PANEL_IDS):
+            self._panel_order = list(_PANEL_IDS)
+            self._repack_panels()
+            save_config({"ui_panel_order": self._panel_order})
         self._ui_theme_var.set(_DEFAULT_THEME)
         self._ui_accent_var.set(_DEFAULT_ACCENT)
         self._ui_scale_var.set(_DEFAULT_SCALE)

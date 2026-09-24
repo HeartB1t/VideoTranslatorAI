@@ -413,6 +413,44 @@ class LayoutTests(unittest.TestCase):
             self.assertEqual(set(app._right_pane.grid_info()["sticky"]), set("new"))
             self.assertEqual(set(app._left_pane.grid_info()["sticky"]), set("nsew"))
 
+    def test_panels_follow_the_saved_order_and_drag_reorders_and_persists(self):
+        import json
+        import types
+
+        cfg = {"ui_theme": "graphite", "ui_lang": "it",
+               "ui_panel_order": ["start", "input"]}
+        with built_app(cfg) as (gui, app, cfg_path):
+            by_outer = {outer: pid for pid, (outer, _) in app._panels.items()}
+
+            def ids():
+                return [by_outer[w] for w in app._right_pane.pack_slaves()
+                        if w in by_outer]
+
+            self.assertEqual(ids(), ["start", "input", "translation", "profile", "settings"])
+            # Drag "settings" to the top. The spans are injected so the test
+            # needs no real geometry (the app is withdrawn).
+            app._panel_spans = lambda exclude: [(0, 100), (100, 200), (200, 300), (300, 400)]
+            app._panel_drag_start("settings", types.SimpleNamespace(y_root=350))
+            app._panel_drag_motion(types.SimpleNamespace(y_root=10))
+            self.assertTrue(app._drag_indicator.winfo_manager())
+            self.assertEqual(app._drag_indicator.cget("bg"), app._theme.palette.ACC)
+            app._panel_drag_end(types.SimpleNamespace(y_root=10))
+            expected = ["settings", "start", "input", "translation", "profile"]
+            self.assertEqual(ids(), expected)
+            self.assertFalse(app._drag_indicator.winfo_manager())
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["ui_panel_order"], expected)
+            # A click without movement changes nothing.
+            app._panel_drag_start("input", types.SimpleNamespace(y_root=150))
+            app._panel_drag_end(types.SimpleNamespace(y_root=151))
+            self.assertEqual(ids(), expected)
+            # "Restore defaults" in the Settings window also restores the order.
+            app._open_settings()
+            app._reset_ui_settings()
+            self.assertEqual(ids(), list(gui._PANEL_IDS))
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["ui_panel_order"], list(gui._PANEL_IDS))
+
 
 def _card_of(widget, pane):
     """Walk up from ``widget`` to the child of ``pane`` that contains it."""
