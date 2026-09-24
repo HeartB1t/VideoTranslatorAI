@@ -127,5 +127,87 @@ class NormalizeSettingsTests(unittest.TestCase):
             self.assertTrue(0.5 < v < 2.0)
 
 
+class DetectSystemDarkTests(unittest.TestCase):
+    def _runner(self, table):
+        """Build a fake runner: command tuple -> (rc, stdout) or None."""
+        calls = []
+
+        def run(cmd):
+            calls.append(list(cmd))
+            return table.get(tuple(cmd))
+        run.calls = calls
+        return run
+
+    def test_linux_prefer_dark(self):
+        run = self._runner({
+            ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'prefer-dark'\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), True)
+
+    def test_linux_prefer_light(self):
+        run = self._runner({
+            ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'prefer-light'\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), False)
+
+    def test_linux_falls_back_to_gtk_theme_name(self):
+        run = self._runner({
+            ("gsettings", "get", "org.gnome.desktop.interface", "color-scheme"): (0, "'default'\n"),
+            ("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"): (0, "'Kali-Dark'\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), True)
+
+    def test_linux_falls_back_to_xfconf(self):
+        run = self._runner({
+            ("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName"): (0, "Adwaita\n"),
+        })
+        self.assertIs(ui_theme.detect_system_dark("linux", runner=run), False)
+
+    def test_linux_nothing_available_is_unknown(self):
+        run = self._runner({})
+        self.assertIsNone(ui_theme.detect_system_dark("linux", runner=run))
+
+    def test_macos_dark_and_light(self):
+        dark = self._runner({("defaults", "read", "-g", "AppleInterfaceStyle"): (0, "Dark\n")})
+        light = self._runner({("defaults", "read", "-g", "AppleInterfaceStyle"): (1, "")})
+        self.assertIs(ui_theme.detect_system_dark("darwin", runner=dark), True)
+        self.assertIs(ui_theme.detect_system_dark("darwin", runner=light), False)
+
+    def test_windows_registry(self):
+        class FakeKey:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        class FakeWinreg:
+            HKEY_CURRENT_USER = object()
+
+            def __init__(self, value):
+                self._value = value
+
+            def OpenKey(self, root, path):
+                return FakeKey()
+
+            def QueryValueEx(self, key, name):
+                return (self._value, 4)
+
+        self.assertIs(ui_theme.detect_system_dark("win32", winreg_module=FakeWinreg(0)), True)
+        self.assertIs(ui_theme.detect_system_dark("win32", winreg_module=FakeWinreg(1)), False)
+
+    def test_windows_registry_error_is_unknown(self):
+        class Broken:
+            HKEY_CURRENT_USER = object()
+
+            def OpenKey(self, root, path):
+                raise OSError("no key")
+
+        self.assertIsNone(ui_theme.detect_system_dark("win32", winreg_module=Broken()))
+
+    def test_run_quiet_handles_missing_binary(self):
+        self.assertIsNone(ui_theme._run_quiet(["definitely-not-a-real-binary-xyz"]))
+
+
 if __name__ == "__main__":
     unittest.main()
