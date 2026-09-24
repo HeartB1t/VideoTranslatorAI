@@ -363,7 +363,7 @@ class GuiSourceStaticTests(unittest.TestCase):
         self.src = GUI_SOURCE.read_text(encoding="utf-8")
 
     def test_no_font_tuples_left(self):
-        hits = re.findall(r'font=\(\s*"(Helvetica|Courier|Monospace|Arial|Segoe UI)"', self.src)
+        hits = re.findall(r'font\s*=\s*\(', self.src)
         self.assertEqual(hits, [], f"fixed font tuples still present: {hits}")
 
     def test_no_legacy_mono_constants(self):
@@ -375,8 +375,31 @@ class GuiSourceStaticTests(unittest.TestCase):
         self.assertIn("ThemeManager(", self.src)
 
     def test_no_hardcoded_hex_colours(self):
-        hits = re.findall(r'"#[0-9a-fA-F]{6}"', self.src)
+        hits = re.findall(r"""["']#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})["']""", self.src)
         self.assertEqual(hits, [], f"hard-coded colours in GUI: {hits}")
+
+    COLOR_OPTION_RE = re.compile(
+        r"""\b(bg|fg|background|foreground|activebackground|activeforeground|"""
+        r"""selectbackground|selectforeground|highlightbackground|highlightcolor|"""
+        r"""insertbackground|troughcolor)\s*=\s*["']"""
+        r"""(white|black|gr[ae]y\d*|red|green|blue|yellow|orange|purple|cyan|magenta)["']""",
+        re.IGNORECASE)
+
+    def test_no_named_colours_as_colour_options(self):
+        hits = self.COLOR_OPTION_RE.findall(self.src)
+        self.assertEqual(hits, [], f"named colours in GUI colour options: {hits}")
+
+    def test_static_colour_patterns_catch_the_forms_they_claim(self):
+        # Guards the guard: each form the tests above claim to catch is caught.
+        samples = ["bg='#fff'", 'fg="#ABC"', "bg='#a1b2c3'"]
+        for sample in samples:
+            self.assertTrue(
+                re.search(r"""["']#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})["']""", sample), sample)
+        for sample in ['fg="white"', "bg='grey30'", 'highlightcolor = "Black"',
+                       "troughcolor='gray'"]:
+            self.assertTrue(self.COLOR_OPTION_RE.search(sample), sample)
+        self.assertIsNone(self.COLOR_OPTION_RE.search('text="white"'))
+        self.assertTrue(re.search(r'font\s*=\s*\(', 'font = ("Inter", 9)'))
 
     def test_no_classic_tk_scrollbars(self):
         # Lookbehind: "ttk.Scrollbar(" contains "tk.Scrollbar(" as a substring

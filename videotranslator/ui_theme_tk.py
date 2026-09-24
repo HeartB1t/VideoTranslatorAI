@@ -64,6 +64,11 @@ def pick_family(root: tk.Misc, candidates, fallback_font: str) -> str:
     return tkfont.nametofont(fallback_font, root=root).actual("family")
 
 
+def _scaled(size: int, scale: float) -> int:
+    """Point size for ``size`` at ``scale``, never below 6 pt."""
+    return max(6, int(round(size * scale)))
+
+
 def build_color_mapping(old: Palette, new: Palette) -> dict[str, str]:
     """old hex (lower) -> new hex, one entry per colour role."""
     return {getattr(old, f).lower(): getattr(new, f) for f in Palette.COLOR_FIELDS}
@@ -84,10 +89,14 @@ def normalize_color(widget: tk.Misc, value) -> str | None:
 
 
 def recolor_widget_tree(root: tk.Misc, mapping: dict[str, str]) -> int:
-    """Replace mapped colours on every classic Tk widget below ``root``.
+    """Replace mapped colours on every widget below ``root``, ``root`` included.
 
-    Returns the number of options changed. Unknown colours are left alone,
-    ttk widgets are skipped (they follow the ttk styles instead).
+    For each widget, every option of ``COLOR_OPTIONS`` that the widget
+    exposes is recoloured when its current value is a key of ``mapping``;
+    for ``tk.Text`` the background and foreground of every tag are handled
+    the same way. ttk widgets are walked too, but they expose none of these
+    options, so in practice they follow the ttk styles instead. Unknown
+    colours are left alone. Returns the number of options changed.
     """
     changed = 0
     stack: list[tk.Misc] = [root]
@@ -120,8 +129,11 @@ def recolor_widget_tree(root: tk.Misc, mapping: dict[str, str]) -> int:
                         continue
                     new = mapping.get(cur) if cur else None
                     if new and new != cur:
-                        w.tag_configure(tag, {opt: new})
-                        changed += 1
+                        try:
+                            w.tag_configure(tag, {opt: new})
+                            changed += 1
+                        except tk.TclError:
+                            pass
         try:
             stack.extend(w.winfo_children())
         except tk.TclError:
@@ -150,7 +162,7 @@ class ThemeManager:
         merged.update(settings if isinstance(settings, dict) else {})
         self.settings = normalize_ui_settings(merged)
         theme = self.settings["ui_theme"]
-        if theme == "auto" and (self._last_theme is None or self._last_theme != "auto"):
+        if theme == "auto" and self._last_theme != "auto":
             self._system_dark = detect_system_dark()
         system_dark = self._system_dark if theme == "auto" else None
         new = resolve_palette(theme, self.settings["ui_accent"], system_dark)
@@ -177,7 +189,7 @@ class ThemeManager:
         existing = set(tkfont.names(self.root))
         for name, (role, size, weight, slant) in FONT_ROLES.items():
             family = self._mono if role == "mono" else ui_family
-            px = max(6, int(round(size * scale)))
+            px = _scaled(size, scale)
             if name in existing:
                 tkfont.Font(root=self.root, name=name, exists=True).configure(
                     family=family, size=px, weight=weight, slant=slant)
@@ -190,7 +202,7 @@ class ThemeManager:
                     weight=weight, slant=slant)
         # ttk Entry/Combobox text and dropdown lists use Tk's standard fonts,
         # so they follow the text size only if these are scaled too.
-        std_px = max(6, int(round(FONT_ROLES["VT.Base"][1] * scale)))
+        std_px = _scaled(FONT_ROLES["VT.Base"][1], scale)
         for name in ("TkDefaultFont", "TkTextFont"):
             tkfont.nametofont(name, root=self.root).configure(
                 family=ui_family, size=std_px, weight="normal")
@@ -238,17 +250,23 @@ class ThemeManager:
         self.root.option_add("*TCombobox*Listbox.font", "VT.Base")
 
     def _recolor_combobox_popdowns(self, p: Palette) -> None:
-        """Best effort: restyle drop-down lists that Tk already created."""
+        """Restyle the drop-down lists that Tk already created.
+
+        Only existing popdowns are touched: ``ttk::combobox::PopdownWindow``
+        would create one for every combobox never opened. Popdowns created
+        later read the option database entries set by ``_apply_ttk``.
+        """
         stack: list[tk.Misc] = [self.root]
         while stack:
             w = stack.pop()
             if isinstance(w, ttk.Combobox):
+                pd = f"{w}.popdown"
                 try:
-                    pd = w.tk.call("ttk::combobox::PopdownWindow", w)
-                    w.tk.call(f"{pd}.f.l", "configure",
-                              "-background", p.FIELD, "-foreground", p.FG,
-                              "-selectbackground", p.SEL, "-selectforeground", p.FG,
-                              "-font", "VT.Base")
+                    if int(w.tk.call("winfo", "exists", pd)):
+                        w.tk.call(f"{pd}.f.l", "configure",
+                                  "-background", p.FIELD, "-foreground", p.FG,
+                                  "-selectbackground", p.SEL, "-selectforeground", p.FG,
+                                  "-font", "VT.Base")
                 except tk.TclError:
                     pass
             try:

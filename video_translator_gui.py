@@ -6639,7 +6639,7 @@ class App(tk.Tk):
         tk.Label(rate_frame, text="+50%", bg=CARD, fg=FG2,
                  font="VT.Small").pack(side="left")
         self._rate_lbl = tk.Label(
-            rate_frame, text="+0%", bg=CARD, fg=ACC,
+            rate_frame, text="+0%", bg=CARD, fg=FG,
             font="VT.Bold", width=6)
         self._rate_lbl.pack(side="left", padx=4)
         self._tts_rate.trace_add("write", self._update_rate_label)
@@ -6707,7 +6707,7 @@ class App(tk.Tk):
                  font="VT.Small").pack(side="left")
         self._lbl_status = tk.Label(
             status_row, text="Ready",
-            bg=CARD, fg=ACC, font="VT.Small")
+            bg=CARD, fg=FG2, font="VT.Small")
         self._lbl_status.pack(side="left", padx=(2, 0))
 
     # ── Main _build_ui entry point ─────────────────────────────────────────

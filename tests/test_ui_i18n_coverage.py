@@ -147,5 +147,50 @@ class UIStringsPlaceholderConsistencyTests(unittest.TestCase):
             self.fail(f"{len(mismatches)} incoerenze di placeholder tra lingue:\n{details}")
 
 
+class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
+    """Keys built at run time are invisible to _S_CALL_RE: assert each family."""
+
+    _FSTRING_RE = re.compile(r'(?:self\._s|ui_s|_s)\(\s*f"([^"]+)"')
+    _CB_RE = re.compile(r'\bcb\(\s*[\w.]+\s*,\s*"([^"]+)"')
+
+    @staticmethod
+    def _families() -> dict[str, list[str]]:
+        return {
+            "size_{k}": [f"size_{k}" for k in legacy._SCALES],
+            "editor_tooltip_{f}": [
+                f"editor_tooltip_{f}" for f in (
+                    legacy._FLAG_TRANSLATION_FALLBACK,
+                    legacy._FLAG_LENGTH_UNFIT,
+                    legacy._FLAG_WHISPER_SUSPICIOUS,
+                )
+            ],
+        }
+
+    def test_every_fstring_family_in_source_is_known(self):
+        source = SOURCE_PATH.read_text(encoding="utf-8")
+        found = set(self._FSTRING_RE.findall(source))
+        self.assertTrue(found, "no f-string _s(...) call found: the scan regex is probably broken")
+        unknown = sorted(found - set(self._families()))
+        self.assertEqual(unknown, [], f"f-string key families without a test: {unknown}")
+
+    def test_every_family_key_exists_in_every_language(self):
+        missing = [
+            (lang, key)
+            for keys in self._families().values()
+            for key in keys
+            for lang in sorted(UI_STRINGS)
+            if key not in UI_STRINGS[lang]
+        ]
+        self.assertEqual(missing, [], f"dynamic keys missing: {missing}")
+
+    def test_checkbox_helper_keys_exist_in_every_language(self):
+        source = SOURCE_PATH.read_text(encoding="utf-8")
+        keys = sorted(set(self._CB_RE.findall(source)))
+        self.assertGreaterEqual(len(keys), 5, "cb(...) scan found too few keys")
+        missing = [(lang, key) for key in keys for lang in sorted(UI_STRINGS)
+                   if key not in UI_STRINGS[lang]]
+        self.assertEqual(missing, [], f"cb() keys missing: {missing}")
+
+
 if __name__ == "__main__":
     unittest.main()

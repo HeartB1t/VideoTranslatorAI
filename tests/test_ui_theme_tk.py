@@ -1,3 +1,4 @@
+import contextlib
 import tkinter as tk
 import unittest
 from tkinter import font as tkfont, ttk
@@ -123,6 +124,26 @@ class ThemeManagerTkTests(unittest.TestCase):
                  if (str(w), opt) in before}
         self.assertEqual(after, before)
 
+    def test_apply_does_not_create_popdowns_but_later_ones_get_the_palette(self):
+        # M2: restyling must not create the drop-down of a combobox never opened.
+        self.tm.apply({"ui_theme": "graphite"}, recolor=False)
+        cb = ttk.Combobox(self.root, values=("a", "b"))
+        cb.pack()
+        opened = ttk.Combobox(self.root, values=("c", "d"))
+        opened.pack()
+        pd_opened = self.root.tk.call("ttk::combobox::PopdownWindow", opened)
+        p = self.tm.apply({"ui_theme": "light", "ui_accent": "amber"}, recolor=True)
+        self.assertFalse(int(self.root.tk.call("winfo", "exists", f"{cb}.popdown")))
+        self.assertEqual(self.root.tk.call(f"{pd_opened}.f.l", "cget", "-background"), p.FIELD)
+        self.assertEqual(self.root.tk.call(f"{pd_opened}.f.l", "cget", "-selectbackground"), p.SEL)
+        pd_late = self.root.tk.call("ttk::combobox::PopdownWindow", cb)
+        listbox = f"{pd_late}.f.l"
+        self.assertEqual(str(self.root.tk.call(listbox, "cget", "-background")), p.FIELD)
+        self.assertEqual(str(self.root.tk.call(listbox, "cget", "-foreground")), p.FG)
+        self.assertEqual(str(self.root.tk.call(listbox, "cget", "-selectbackground")), p.SEL)
+        self.assertEqual(str(self.root.tk.call(listbox, "cget", "-selectforeground")), p.FG)
+        self.assertEqual(str(self.root.tk.call(listbox, "cget", "-font")), "VT.Base")
+
     def test_recolor_before_any_palette_is_noop(self):
         # First apply has nothing to map from: must not raise.
         self.tm.apply({"ui_theme": "slate"}, recolor=True)
@@ -146,6 +167,15 @@ class ThemeManagerTkTests(unittest.TestCase):
             self.tm.apply({"ui_theme": "graphite"}, recolor=False)
             self.tm.apply({"ui_theme": "auto"}, recolor=False)
             self.assertEqual(stub.call_count, 2)
+
+
+class ScaledSizeTests(unittest.TestCase):
+    def test_scaled_rounds_and_has_a_floor(self):
+        from videotranslator.ui_theme_tk import _scaled
+        self.assertEqual(_scaled(9, 1.0), 9)
+        self.assertEqual(_scaled(9, 1.3), 12)
+        self.assertEqual(_scaled(8, 0.9), 7)
+        self.assertEqual(_scaled(4, 0.9), 6)
 
 
 class ColorMappingTests(unittest.TestCase):
@@ -187,107 +217,125 @@ class CanvasContentFitsTests(unittest.TestCase):
         self.assertTrue(gui.App._canvas_content_fits(canvas))
 
 
-@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
-class SettingsDialogSmokeTests(unittest.TestCase):
-    def test_open_apply_reset_close(self):
-        import json
-        import sys
-        import tempfile
-        from pathlib import Path
+@contextlib.contextmanager
+def built_app(config):
+    """Build the whole ``App`` on a temporary config and always tear it down.
 
-        import video_translator_gui as gui
+    stdout/stderr are saved before ``App()`` and restored in ``finally``, so
+    a constructor that raises after installing its redirect cannot leave
+    later tests writing into a dead Tk widget.
+    """
+    import json
+    import sys
+    import tempfile
+    from pathlib import Path
 
-        saved_stdout, saved_stderr = sys.stdout, sys.stderr
+    import video_translator_gui as gui
+
+    saved_stdout, saved_stderr = sys.stdout, sys.stderr
+    app = None
+    try:
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = Path(tmp) / "config.json"
-            cfg_path.write_text(json.dumps({"ui_theme": "slate", "ui_accent": "rose",
-                                            "ui_scale": "large", "ui_lang": "en"}), encoding="utf-8")
+            cfg_path.write_text(json.dumps(config), encoding="utf-8")
             with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
                     mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
                     mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
                     mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
                 app = gui.App()
-                try:
-                    app.withdraw()
-                    self.assertEqual(app._theme.palette.name, "slate")
-                    self.assertEqual(app._ui_lang.get(), "en")
-                    app._open_settings()
-                    self.assertTrue(app._settings_win.winfo_exists())
-                    app._open_settings()
-                    toplevels = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
-                    self.assertEqual(len(toplevels), 1)
-                    app._ui_theme_var.set("light")
-                    app._apply_ui_settings()
-                    self.assertEqual(app._theme.palette.name, "light")
-                    self.assertEqual(app.cget("bg"), app._theme.palette.BG)
-                    self.assertEqual(app._settings_win.cget("bg"), app._theme.palette.BG)
-                    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
-                    self.assertEqual(saved["ui_theme"], "light")
-                    # an explicit accent dot keeps its own colour across accent changes
-                    rose_dot = app._accent_dots["rose"]
-                    app._ui_accent_var.set("teal")
-                    app._apply_ui_settings()
-                    self.assertEqual(rose_dot.cget("fg"), gui._ACCENTS["rose"])
-                    # the default dot shows the theme's own accent, not the selected one
-                    app._ui_accent_var.set("rose")
-                    app._apply_ui_settings()
-                    own_accent = resolve_palette(app._theme.palette.name, "default").ACC
-                    self.assertEqual(app._accent_dots["default"].cget("fg"), own_accent)
-                    self.assertNotEqual(own_accent, gui._ACCENTS["rose"])
-                    # a language switch relabels the open dialog and rebuilds the rows in place
-                    theme_before = app._ui_theme_var.get()
-                    fr_index = [code for code, _ in gui.UI_LANG_OPTIONS].index("fr")
-                    app._ui_lang_combo.current(fr_index)
-                    app._on_ui_lang_change()
-                    self.assertEqual(app._settings_win.title(), gui.UI_STRINGS["fr"]["settings_title"])
-                    self.assertTrue(app._seg_theme.winfo_exists())
-                    self.assertEqual(app._ui_theme_var.get(), theme_before)
-                    slaves = app._lbl_settings_theme.master.pack_slaves()
-                    self.assertIs(slaves[slaves.index(app._lbl_settings_theme) + 1], app._seg_theme)
-                    en_index = [code for code, _ in gui.UI_LANG_OPTIONS].index("en")
-                    app._ui_lang_combo.current(en_index)
-                    app._on_ui_lang_change()
-                    app._reset_ui_settings()
-                    self.assertEqual(app._theme.palette.name, "graphite")
-                    self.assertEqual(app._ui_scale_var.get(), "normal")
-                    self.assertEqual(app._ui_lang.get(), "en")  # reset keeps the language
-                    app._close_settings()
-                    self.assertFalse(getattr(app, "_settings_win", None) and app._settings_win.winfo_exists())
-                finally:
-                    app._destroying = True
-                    app.destroy()
-                    sys.stdout, sys.stderr = saved_stdout, saved_stderr
+                app.withdraw()
+                yield gui, app, cfg_path
+    finally:
+        if app is not None:
+            app._destroying = True
+            app.destroy()
+        sys.stdout, sys.stderr = saved_stdout, saved_stderr
+
+
+class BuiltAppStreamsTests(unittest.TestCase):
+    def test_streams_restored_when_app_constructor_raises(self):
+        # M5: App() may install its stdout/stderr redirect and then raise.
+        import io
+        import sys
+
+        import video_translator_gui as gui
+
+        class ExplodingApp:
+            _check_deps_on_start = _upgrade_ytdlp_in_background = _fit_to_screen = \
+                lambda self: None
+
+            def __init__(self):
+                sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+                raise RuntimeError("boom")
+
+        before = (sys.stdout, sys.stderr)
+        with mock.patch.object(gui, "App", ExplodingApp):
+            with self.assertRaises(RuntimeError):
+                with built_app({}):
+                    pass
+        self.assertEqual((sys.stdout, sys.stderr), before)
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class SettingsDialogSmokeTests(unittest.TestCase):
+    def test_open_apply_reset_close(self):
+        import json
+
+        config = {"ui_theme": "slate", "ui_accent": "rose", "ui_scale": "large", "ui_lang": "en"}
+        with built_app(config) as (gui, app, cfg_path):
+            self.assertEqual(app._theme.palette.name, "slate")
+            self.assertEqual(app._ui_lang.get(), "en")
+            app._open_settings()
+            self.assertTrue(app._settings_win.winfo_exists())
+            app._open_settings()
+            toplevels = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+            self.assertEqual(len(toplevels), 1)
+            app._ui_theme_var.set("light")
+            app._apply_ui_settings()
+            self.assertEqual(app._theme.palette.name, "light")
+            self.assertEqual(app.cget("bg"), app._theme.palette.BG)
+            self.assertEqual(app._settings_win.cget("bg"), app._theme.palette.BG)
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["ui_theme"], "light")
+            # an explicit accent dot keeps its own colour across accent changes
+            rose_dot = app._accent_dots["rose"]
+            app._ui_accent_var.set("teal")
+            app._apply_ui_settings()
+            self.assertEqual(rose_dot.cget("fg"), gui._ACCENTS["rose"])
+            # the default dot shows the theme's own accent, not the selected one
+            app._ui_accent_var.set("rose")
+            app._apply_ui_settings()
+            own_accent = resolve_palette(app._theme.palette.name, "default").ACC
+            self.assertEqual(app._accent_dots["default"].cget("fg"), own_accent)
+            self.assertNotEqual(own_accent, gui._ACCENTS["rose"])
+            # a language switch relabels the open dialog and rebuilds the rows in place
+            theme_before = app._ui_theme_var.get()
+            fr_index = [code for code, _ in gui.UI_LANG_OPTIONS].index("fr")
+            app._ui_lang_combo.current(fr_index)
+            app._on_ui_lang_change()
+            self.assertEqual(app._settings_win.title(), gui.UI_STRINGS["fr"]["settings_title"])
+            self.assertTrue(app._seg_theme.winfo_exists())
+            self.assertEqual(app._ui_theme_var.get(), theme_before)
+            slaves = app._lbl_settings_theme.master.pack_slaves()
+            self.assertIs(slaves[slaves.index(app._lbl_settings_theme) + 1], app._seg_theme)
+            en_index = [code for code, _ in gui.UI_LANG_OPTIONS].index("en")
+            app._ui_lang_combo.current(en_index)
+            app._on_ui_lang_change()
+            app._reset_ui_settings()
+            self.assertEqual(app._theme.palette.name, "graphite")
+            self.assertEqual(app._ui_scale_var.get(), "normal")
+            self.assertEqual(app._ui_lang.get(), "en")  # reset keeps the language
+            app._close_settings()
+            self.assertFalse(getattr(app, "_settings_win", None) and app._settings_win.winfo_exists())
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class LogToggleStartupTests(unittest.TestCase):
     def test_visible_log_at_startup_shows_hide_label(self):
-        import json
-        import sys
-        import tempfile
-        from pathlib import Path
-
-        import video_translator_gui as gui
-
-        saved_stdout, saved_stderr = sys.stdout, sys.stderr
-        with tempfile.TemporaryDirectory() as tmp:
-            cfg_path = Path(tmp) / "config.json"
-            cfg_path.write_text(json.dumps({"ui_lang": "it", "ui_log_visible": True}),
-                                encoding="utf-8")
-            with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
-                    mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
-                    mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
-                    mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
-                app = gui.App()
-                try:
-                    app.withdraw()
-                    self.assertTrue(app._log_visible)
-                    self.assertEqual(app._btn_log_toggle.cget("text"),
-                                     gui.UI_STRINGS["it"]["btn_log_hide"])
-                finally:
-                    app._destroying = True
-                    app.destroy()
-                    sys.stdout, sys.stderr = saved_stdout, saved_stderr
+        with built_app({"ui_lang": "it", "ui_log_visible": True}) as (gui, app, _):
+            self.assertTrue(app._log_visible)
+            self.assertEqual(app._btn_log_toggle.cget("text"),
+                             gui.UI_STRINGS["it"]["btn_log_hide"])
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
@@ -295,63 +343,46 @@ class GuiThemedDefaultsTests(unittest.TestCase):
     """I2b: the GUI sets the colour options it used to leave at Tk defaults."""
 
     def test_fields_toggles_and_focus_rings_follow_the_palette(self):
-        import json
-        import sys
-        import tempfile
-        from pathlib import Path
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            app._open_settings()
+            app._ui_theme_var.set("slate")
+            app._apply_ui_settings()
+            p = app._theme.palette
+            fields, toggles = [], []
+            stack = [app]
+            while stack:
+                w = stack.pop()
+                stack.extend(w.winfo_children())
+                if isinstance(w, (tk.Entry, tk.Text)) and not isinstance(w, ttk.Entry):
+                    fields.append(w)
+                elif isinstance(w, (tk.Checkbutton, tk.Radiobutton)):
+                    toggles.append(w)
+            self.assertGreaterEqual(len(fields), 7)
+            self.assertGreaterEqual(len(toggles), 8)
+            for w in fields:
+                with self.subTest(field=str(w)):
+                    self.assertEqual(w.cget("selectbackground"), p.SEL)
+                    self.assertEqual(w.cget("selectforeground"), p.FG)
+                    self.assertEqual(w.cget("insertbackground"), p.FG)
+            for w in toggles:
+                with self.subTest(toggle=str(w)):
+                    self.assertEqual(w.cget("activeforeground"), p.FG)
+                    self.assertEqual(w.cget("activebackground"),
+                                     p.ACC_SOFT if w.cget("indicatoron") in (0, "0")
+                                     else w.cget("bg"))
+            ringed = list(app._profile_btns.values()) \
+                + list(app._seg_theme.winfo_children()) \
+                + list(app._seg_scale.winfo_children())
+            for b in ringed:
+                with self.subTest(button=str(b)):
+                    self.assertEqual(b.cget("highlightcolor"), p.ACC)
 
-        import video_translator_gui as gui
-
-        saved_stdout, saved_stderr = sys.stdout, sys.stderr
-        app = None
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                cfg_path = Path(tmp) / "config.json"
-                cfg_path.write_text(json.dumps({"ui_theme": "graphite", "ui_lang": "en"}),
-                                    encoding="utf-8")
-                with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
-                        mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
-                        mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
-                        mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
-                    app = gui.App()
-                    app.withdraw()
-                    app._open_settings()
-                    app._ui_theme_var.set("slate")
-                    app._apply_ui_settings()
-                    p = app._theme.palette
-                    fields, toggles = [], []
-                    stack = [app]
-                    while stack:
-                        w = stack.pop()
-                        stack.extend(w.winfo_children())
-                        if isinstance(w, (tk.Entry, tk.Text)) and not isinstance(w, ttk.Entry):
-                            fields.append(w)
-                        elif isinstance(w, (tk.Checkbutton, tk.Radiobutton)):
-                            toggles.append(w)
-                    self.assertGreaterEqual(len(fields), 7)
-                    self.assertGreaterEqual(len(toggles), 8)
-                    for w in fields:
-                        with self.subTest(field=str(w)):
-                            self.assertEqual(w.cget("selectbackground"), p.SEL)
-                            self.assertEqual(w.cget("selectforeground"), p.FG)
-                            self.assertEqual(w.cget("insertbackground"), p.FG)
-                    for w in toggles:
-                        with self.subTest(toggle=str(w)):
-                            self.assertEqual(w.cget("activeforeground"), p.FG)
-                            self.assertEqual(w.cget("activebackground"),
-                                             p.ACC_SOFT if w.cget("indicatoron") in (0, "0")
-                                             else w.cget("bg"))
-                    ringed = list(app._profile_btns.values()) \
-                        + list(app._seg_theme.winfo_children()) \
-                        + list(app._seg_scale.winfo_children())
-                    for b in ringed:
-                        with self.subTest(button=str(b)):
-                            self.assertEqual(b.cget("highlightcolor"), p.ACC)
-        finally:
-            if app is not None:
-                app._destroying = True
-                app.destroy()
-            sys.stdout, sys.stderr = saved_stdout, saved_stderr
+    def test_small_status_texts_do_not_use_the_accent(self):
+        # M1: accent text on SURFACE at 8-9 pt is 2.57:1 on light+amber.
+        with built_app({"ui_theme": "light", "ui_accent": "amber", "ui_lang": "en"}) as (gui, app, _):
+            p = app._theme.palette
+            self.assertEqual(app._rate_lbl.cget("fg"), p.FG)
+            self.assertEqual(app._lbl_status.cget("fg"), p.FG2)
 
 
 if __name__ == "__main__":
