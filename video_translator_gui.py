@@ -333,6 +333,11 @@ ACC_HOVER = globals()["ACC_HOVER"]; ACC_SOFT = globals()["ACC_SOFT"]; ACC_FG = g
 OK = globals()["OK"]; WARN = globals()["WARN"]; ERR = globals()["ERR"]
 
 
+# Pixel width at which hints and long checkbox texts wrap inside the settings
+# column (460 px minus card and accordion padding).
+_HINT_WRAP = 370
+
+
 def _field_colors() -> dict:
     """Selection and cursor colours for tk.Entry / tk.Text, read at call time.
 
@@ -6312,8 +6317,10 @@ class App(tk.Tk):
                  bg=CARD, fg=FG2, font="VT.Small").pack(anchor="w", pady=(0, 2))
         url_row = tk.Frame(inner, bg=CARD)
         url_row.pack(fill="x", pady=(0, 2))
+        # width=30: a small request, so the Text stretches with fill="x"
+        # instead of forcing the column to its 80-column default.
         self._url_text = tk.Text(
-            url_row, height=2,
+            url_row, height=2, width=30,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", wrap="none")
@@ -6331,12 +6338,15 @@ class App(tk.Tk):
         self._url_text.lift(_wd)
 
     def _build_advanced_panel(self, parent):
-        """Left-pane: collapsible accordion sections for all advanced options."""
+        """Right-pane card, below Start: collapsible accordion sections for
+        all advanced options."""
         adv = self._card(parent, pady=(4, 0))
+        self._advanced_card = adv
 
         def cb(par, text_key, var, cmd=None):
             w = tk.Checkbutton(
                 par, text=self._s(text_key), variable=var, command=cmd,
+                wraplength=_HINT_WRAP, justify="left",
                 bg=SURFACE, fg=FG, selectcolor=SEL,
                 activebackground=SURFACE, activeforeground=FG,
                 highlightbackground=SURFACE, highlightcolor=ACC, font="VT.Base")
@@ -6349,19 +6359,21 @@ class App(tk.Tk):
         sect.pack(fill="x")
         mf = tk.Frame(body, bg=SURFACE)
         mf.pack(anchor="w", pady=4)
-        for m in WHISPER_MODELS:
+        # Four radios per row: the settings column is 460 px wide.
+        for i, m in enumerate(WHISPER_MODELS):
             tk.Radiobutton(
                 mf, text=m, variable=self._model, value=m,
                 bg=SURFACE, fg=RED if "large" in m else FG,
                 selectcolor=SEL, activebackground=SURFACE,
                 activeforeground=RED if "large" in m else FG,
                 highlightbackground=SURFACE, highlightcolor=ACC,
-                font="VT.Base").pack(side="left", padx=3)
+                font="VT.Base").grid(row=i // 4, column=i % 4, sticky="w", padx=3)
         # Hidden label refs required by _apply_lang
         self._lbl_model      = tk.Label(body, text="", bg=SURFACE)
         self._lbl_model_hint = tk.Label(
             body, text=self._s("label_model_hint"),
-            bg=SURFACE, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small",
+            wraplength=_HINT_WRAP, justify="left")
         self._lbl_model_hint.pack(anchor="w", padx=4, pady=(0, 4))
 
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
@@ -6372,12 +6384,13 @@ class App(tk.Tk):
         sect2.pack(fill="x")
         body2.columnconfigure(0, weight=1)
 
-        engine_row = tk.Frame(body2, bg=SURFACE)
-        engine_row.grid(row=0, column=0, sticky="w", pady=(4, 0))
+        # Engines on two rows (two per row) so the section fits the column.
         self._lbl_engine = tk.Label(
-            engine_row, text=self._s("label_engine"),
+            body2, text=self._s("label_engine"),
             bg=SURFACE, fg=FG, font="VT.Bold")
-        self._lbl_engine.pack(side="left")
+        self._lbl_engine.grid(row=0, column=0, sticky="w", pady=(4, 0))
+        engine_row = tk.Frame(body2, bg=SURFACE)
+        engine_row.grid(row=1, column=0, sticky="w")
         self._rb_eng_google = tk.Radiobutton(
             engine_row, text=self._s("engine_google"),
             variable=self._translation_engine, value="google",
@@ -6385,7 +6398,7 @@ class App(tk.Tk):
             bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
-        self._rb_eng_google.pack(side="left", padx=(6, 0))
+        self._rb_eng_google.pack(side="left")
         self._rb_eng_deepl = tk.Radiobutton(
             engine_row, text=self._s("engine_deepl"),
             variable=self._translation_engine, value="deepl",
@@ -6402,27 +6415,33 @@ class App(tk.Tk):
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
-
+        # The Ollama label is long: own row, wrapped.
         engine_row2 = tk.Frame(body2, bg=SURFACE)
-        engine_row2.grid(row=1, column=0, sticky="w", pady=(2, 0))
+        engine_row2.grid(row=2, column=0, sticky="w")
         self._rb_eng_ollama = tk.Radiobutton(
             engine_row2, text=self._s("engine_ollama"),
             variable=self._translation_engine, value="llm_ollama",
             command=self._on_engine_change,
+            wraplength=_HINT_WRAP, justify="left",
             bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
-        self._rb_eng_ollama.pack(side="left")
+        self._rb_eng_ollama.pack(anchor="w")
 
-        # Ollama config row (toggled by _on_engine_change)
+        # Ollama config row (toggled by _on_engine_change). Two lines inside
+        # one container so grid()/grid_remove() keep working on the container.
         self._ollama_row = tk.Frame(body2, bg=SURFACE)
-        self._ollama_row.grid(row=2, column=0, sticky="w", pady=(2, 0))
+        self._ollama_row.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        _ol_line1 = tk.Frame(self._ollama_row, bg=SURFACE)
+        _ol_line1.pack(anchor="w")
+        _ol_line2 = tk.Frame(self._ollama_row, bg=SURFACE)
+        _ol_line2.pack(anchor="w", pady=(2, 0))
         self._lbl_ollama_model = tk.Label(
-            self._ollama_row, text=self._s("label_ollama_model"),
+            _ol_line1, text=self._s("label_ollama_model"),
             bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_ollama_model.pack(side="left")
         self._ollama_model_combo = ttk.Combobox(
-            self._ollama_row, textvariable=self._ollama_model_var, width=28,
+            _ol_line1, textvariable=self._ollama_model_var, width=22,
             values=[
                 "qwen3:8b",
                 "qwen3:14b",
@@ -6431,19 +6450,19 @@ class App(tk.Tk):
             ],
             font="VT.Mono",
         )
-        self._ollama_model_combo.pack(side="left", padx=(4, 8))
+        self._ollama_model_combo.pack(side="left", padx=(4, 0))
         self._lbl_ollama_url = tk.Label(
-            self._ollama_row, text=self._s("label_ollama_url"),
+            _ol_line2, text=self._s("label_ollama_url"),
             bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_ollama_url.pack(side="left")
         self._ollama_url_entry = tk.Entry(
-            self._ollama_row, textvariable=self._ollama_url_var, width=24,
+            _ol_line2, textvariable=self._ollama_url_var, width=22,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
         self._ollama_url_entry.pack(side="left", padx=(4, 8))
         self._chk_ollama_slot = tk.Checkbutton(
-            self._ollama_row, text="slot-aware",
+            _ol_line2, text="slot-aware",
             variable=self._ollama_slot_aware,
             bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
@@ -6453,30 +6472,31 @@ class App(tk.Tk):
 
         # Ollama thinking row (toggled by _on_engine_change)
         self._ollama_row2 = tk.Frame(body2, bg=SURFACE)
-        self._ollama_row2.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        self._ollama_row2.grid(row=4, column=0, sticky="w", pady=(2, 0))
         self._chk_ollama_thinking = tk.Checkbutton(
             self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
             bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
-        self._chk_ollama_thinking.pack(side="left")
+        self._chk_ollama_thinking.pack(anchor="w")
         self._lbl_ollama_thinking_hint = tk.Label(
             self._ollama_row2,
-            text="  " + self._s("hint_ollama_thinking"),
-            bg=SURFACE, fg=FG2, font="VT.Italic")
-        self._lbl_ollama_thinking_hint.pack(side="left")
+            text=self._s("hint_ollama_thinking"),
+            bg=SURFACE, fg=FG2, font="VT.Italic",
+            wraplength=_HINT_WRAP, justify="left")
+        self._lbl_ollama_thinking_hint.pack(anchor="w", padx=(24, 0))
         self._ollama_row2.grid_remove()
 
         # DeepL key row (toggled by _on_engine_change)
         self._deepl_row = tk.Frame(body2, bg=SURFACE)
-        self._deepl_row.grid(row=4, column=0, sticky="w", pady=(2, 4))
+        self._deepl_row.grid(row=5, column=0, sticky="w", pady=(2, 4))
         self._lbl_deepl_key = tk.Label(
             self._deepl_row, text=self._s("label_deepl_key"),
             bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_deepl_key.pack(side="left")
         self._deepl_key_entry = tk.Entry(
-            self._deepl_row, textvariable=self._deepl_key_var, width=32,
+            self._deepl_row, textvariable=self._deepl_key_var, width=28,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
@@ -6518,22 +6538,27 @@ class App(tk.Tk):
             font="VT.Base")
         self._chk_diar.pack(side="left")
 
+        # Token line plus a wrapped hint line, inside one container so
+        # grid()/grid_remove() keep working on the container.
         self._hf_row = tk.Frame(body6, bg=SURFACE)
         self._hf_row.grid(row=1, column=0, sticky="w", pady=(2, 4))
+        _hf_line = tk.Frame(self._hf_row, bg=SURFACE)
+        _hf_line.pack(anchor="w")
         self._lbl_hf_token = tk.Label(
-            self._hf_row, text=self._s("label_hf_token"),
+            _hf_line, text=self._s("label_hf_token"),
             bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_hf_token.pack(side="left")
         self._hf_token_entry = tk.Entry(
-            self._hf_row, textvariable=self._hf_token_var, width=40,
+            _hf_line, textvariable=self._hf_token_var, width=28,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
         self._hf_token_entry.pack(side="left", padx=(4, 0))
         self._lbl_hf_hint = tk.Label(
-            self._hf_row, text="  " + self._s("hint_hf_token"),
-            bg=SURFACE, fg=FG2, font="VT.Italic")
-        self._lbl_hf_hint.pack(side="left")
+            self._hf_row, text=self._s("hint_hf_token"),
+            bg=SURFACE, fg=FG2, font="VT.Italic",
+            wraplength=_HINT_WRAP, justify="left")
+        self._lbl_hf_hint.pack(anchor="w", pady=(2, 0))
         self._hf_row.grid_remove()
 
         # ── 7. SUBTITLES ──────────────────────────────────────────────────
@@ -6557,22 +6582,22 @@ class App(tk.Tk):
             adv, self._s("label_hotwords"))
         sect8.pack(fill="x")
         self._hotwords_row = tk.Frame(body8, bg=SURFACE)
-        self._hotwords_row.pack(anchor="w", pady=4)
+        self._hotwords_row.pack(anchor="w", fill="x", pady=4)
         self._lbl_hotwords = tk.Label(
             self._hotwords_row, text=self._s("label_hotwords"),
             bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_hotwords.pack(side="left")
         self._hotwords_entry = tk.Entry(
-            self._hotwords_row, textvariable=self._hotwords_var, width=40,
+            self._hotwords_row, textvariable=self._hotwords_var, width=28,
             bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
-        self._hotwords_entry.pack(side="left", padx=(4, 0))
+        self._hotwords_entry.pack(side="left", padx=(4, 0), fill="x", expand=True)
         self._lbl_hotwords_hint = tk.Label(
-            self._hotwords_row,
-            text="  " + self._s("hint_hotwords"),
-            bg=SURFACE, fg=FG2, font="VT.Italic")
-        self._lbl_hotwords_hint.pack(side="left")
+            body8, text=self._s("hint_hotwords"),
+            bg=SURFACE, fg=FG2, font="VT.Italic",
+            wraplength=_HINT_WRAP, justify="left")
+        self._lbl_hotwords_hint.pack(anchor="w", pady=(0, 4))
 
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
@@ -6757,20 +6782,30 @@ class App(tk.Tk):
         content.grid(row=1, column=0, columnspan=2, sticky="nsew",
                      padx=16, pady=(8, 8))
         content.columnconfigure(0, weight=1)
-        content.columnconfigure(1, minsize=320, weight=0)
+        # The right column holds every setting card, so it needs room for
+        # the expanded accordion sections (model radios, key entries).
+        content.columnconfigure(1, minsize=460, weight=0)
 
-        # Left pane
+        # Left pane: reserved for the video player (backlog). Until it
+        # exists, a dark surface in the FIELD colour marks the area.
         left = tk.Frame(content, bg=BG)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
-        self._build_input_section(left)
-        self._build_advanced_panel(left)
+        self._left_pane = left
+        self._player_area = tk.Frame(left, bg=FIELD, highlightthickness=1,
+                                     highlightbackground=BORDER,
+                                     highlightcolor=BORDER)
+        self._player_area.pack(fill="both", expand=True)
 
-        # Right pane
+        # Right pane: input, translation, profile, start, then the settings
+        # accordion. Every control lives in this column.
         right = tk.Frame(content, bg=BG)
-        right.grid(row=0, column=1, sticky="n")
+        right.grid(row=0, column=1, sticky="new")
+        self._right_pane = right
+        self._build_input_section(right)
         self._build_lang_voice_section(right)
         self._build_profile_section(right)
         self._build_start_section(right)
+        self._build_advanced_panel(right)
 
         # ── Log panel (root row 1, outside canvas) ────────────────────────
         log_frame = tk.Frame(self, bg=BG)
@@ -7169,14 +7204,13 @@ class App(tk.Tk):
         self._lbl_ollama_model.configure(text=self._s("label_ollama_model"))
         self._lbl_ollama_url.configure(text=self._s("label_ollama_url"))
         self._chk_ollama_thinking.configure(text=self._s("opt_ollama_thinking"))
-        self._lbl_ollama_thinking_hint.configure(text="  " + self._s("hint_ollama_thinking"))
+        self._lbl_ollama_thinking_hint.configure(text=self._s("hint_ollama_thinking"))
         self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
-        self._lbl_hf_hint.configure(text="  " + self._s("hint_hf_token"))
+        self._lbl_hf_hint.configure(text=self._s("hint_hf_token"))
         self._lbl_hotwords.configure(text=self._s("label_hotwords"))
-        self._lbl_hotwords_hint.configure(
-            text="  " + self._s("hint_hotwords"))
+        self._lbl_hotwords_hint.configure(text=self._s("hint_hotwords"))
         # Log panel labels
         self._lbl_log_panel.configure(text=self._s("label_log_panel"))
         self._btn_log_toggle.configure(

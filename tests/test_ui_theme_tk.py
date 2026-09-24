@@ -393,5 +393,33 @@ class GuiThemedDefaultsTests(unittest.TestCase):
             self.assertEqual(app._lbl_status.cget("fg"), p.FG2)
 
 
+class LayoutTests(unittest.TestCase):
+    def test_every_card_sits_in_the_right_pane_and_the_left_is_the_player_area(self):
+        # The operator asked for every card on the right (input first, the
+        # settings accordion last, under Start), leaving the whole left pane
+        # to the future video player.
+        with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            cards = app._right_pane.pack_slaves()
+            self.assertGreaterEqual(len(cards), 5)
+            self.assertIs(cards[0], _card_of(app._batch_listbox, app._right_pane))
+            self.assertIs(cards[-1], app._advanced_card.master)
+            self.assertEqual(app._left_pane.pack_slaves(), [app._player_area])
+            p = app._theme.palette
+            self.assertEqual(app._player_area.cget("bg"), p.FIELD)
+            content = app._right_pane.master
+            self.assertGreaterEqual(int(content.grid_columnconfigure(1)["minsize"]), 460)
+            # Tk reports sticky in its own letter order: compare as sets.
+            self.assertEqual(set(app._right_pane.grid_info()["sticky"]), set("new"))
+            self.assertEqual(set(app._left_pane.grid_info()["sticky"]), set("nsew"))
+
+
+def _card_of(widget, pane):
+    """Walk up from ``widget`` to the child of ``pane`` that contains it."""
+    w = widget
+    while w.master is not pane:
+        w = w.master
+    return w
+
+
 if __name__ == "__main__":
     unittest.main()
