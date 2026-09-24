@@ -5609,37 +5609,49 @@ class App(tk.Tk):
 
     # ── GUI style helpers ──────────────────────────────────────────────────
 
-    def _pill_badge(self, parent, text, border_color):
-        """Pill badge: white text, colored neon border for visibility."""
-        return tk.Label(
-            parent, text=text, bg=PILL, fg=FG,
-            font="VT.Small",
-            relief="flat", padx=6, pady=2,
-            highlightthickness=1, highlightbackground=border_color,
-        )
+    def _status_badge(self, parent, text, color):
+        """Discreet status indicator: coloured dot + label (header)."""
+        f = tk.Frame(parent, bg=BG)
+        tk.Label(f, text="●", bg=BG, fg=color, font="VT.Small").pack(side="left")
+        tk.Label(f, text=text, bg=BG, fg=FG2, font="VT.Small").pack(side="left", padx=(3, 0))
+        return f
 
-    def _glow_btn(self, parent, glow=None, **kwargs):
-        """Raised button with a 1-px neon glow ring around it.
+    def _flat_btn(self, parent, primary=False, **kwargs):
+        """Flat button with a 1 px border. Returns (wrap_frame, button).
 
-        Returns (wrap_frame, button) so callers can pack/grid the frame.
-        glow defaults to ACC (neon green).
+        ``primary`` renders the accent-filled call-to-action variant. Hover
+        colours are read from the module globals at event time, so they
+        follow live theme changes.
         """
-        if glow is None:
-            glow = ACC
-        btn_bg  = kwargs.pop("bg", "#1a1a3a")
-        act_bg  = kwargs.pop("activebackground", glow)
-        act_fg  = kwargs.pop("activeforeground", BG)
-        wrap = tk.Frame(parent, bg=glow, padx=1, pady=1)
+        kwargs.pop("bg", None)
+        kwargs.pop("activebackground", None)
+        kwargs.pop("activeforeground", None)
+        kwargs.pop("glow", None)
+        wrap = tk.Frame(parent, bg=ACC if primary else BORDER, padx=1, pady=1)
         btn = tk.Button(
             wrap,
-            bg=btn_bg,
-            relief="raised",
-            bd=2,
-            activebackground=act_bg,
-            activeforeground=act_fg,
+            bg=ACC if primary else BTN,
+            fg=ACC_FG if primary else FG,
+            activebackground=ACC_HOVER if primary else BORDER,
+            activeforeground=ACC_FG if primary else FG,
+            disabledforeground=FG2,
+            relief="flat", bd=0, highlightthickness=0,
+            cursor="hand2",
+            font="VT.Bold" if primary else "VT.Base",
+            padx=kwargs.pop("padx", 10), pady=kwargs.pop("pady", 4),
             **kwargs,
         )
         btn.pack(fill="both", expand=True)
+
+        def _enter(_e, b=btn, p=primary):
+            if str(b.cget("state")) != "disabled":
+                b.configure(bg=ACC_HOVER if p else BORDER)
+
+        def _leave(_e, b=btn, p=primary):
+            b.configure(bg=ACC if p else BTN)
+
+        btn.bind("<Enter>", _enter)
+        btn.bind("<Leave>", _leave)
         return wrap, btn
 
     def _section_title(self, parent, text):
@@ -5779,34 +5791,24 @@ class App(tk.Tk):
         # ── Logo block (left) ─────────────────────────────────────────────
         logo_block = tk.Frame(header, bg=BG)
         logo_block.grid(row=0, column=0, sticky="w")
+        tk.Label(logo_block, text="Video Translator AI",
+                 font="VT.Title", bg=BG, fg=FG).pack(side="left")
+        tk.Label(logo_block, text="Open source dubbing studio",
+                 font="VT.Small", bg=BG, fg=FG2).pack(side="left", padx=(10, 0), pady=(6, 0))
 
-        # Accent mark before logo
-        logo_inner = tk.Frame(logo_block, bg=BG)
-        logo_inner.pack(anchor="w")
-        tk.Frame(logo_inner, bg=ACC, width=4).pack(side="left", fill="y", padx=(0, 8))
-        title_col = tk.Frame(logo_inner, bg=BG)
-        title_col.pack(side="left")
-        tk.Label(title_col, text="◈  VIDEO TRANSLATOR AI",
-                 font="VT.Title", bg=BG, fg=ACC).pack(anchor="w")
-        tk.Label(title_col, text="local ai  ·  open source dubbing studio",
-                 font="VT.Small", bg=BG, fg=FG2).pack(anchor="w")
-
-        # ── Status badges + lang selector (right) ─────────────────────────
+        # ── Status + lang selector (right) ────────────────────────────────
         right = tk.Frame(header, bg=BG)
         right.grid(row=0, column=1, sticky="e")
 
         badges = tk.Frame(right, bg=BG)
-        badges.pack(side="left", padx=(0, 12))
-
+        badges.pack(side="left", padx=(0, 16))
         gpu_ok = bool(shutil.which("nvidia-smi"))
-        self._pill_badge(badges,
-                         "  GPU ✓ " if gpu_ok else "  CPU ",
-                         ACC2 if gpu_ok else FG2).pack(side="left", padx=(0, 4))
-        self._pill_badge(badges, "  Ollama ? ", FG2).pack(side="left", padx=(0, 4))
+        self._status_badge(badges, "GPU" if gpu_ok else "CPU",
+                           OK if gpu_ok else FG2).pack(side="left", padx=(0, 12))
+        self._status_badge(badges, "Ollama", FG2).pack(side="left", padx=(0, 12))
         has_wav2lip = importlib.util.find_spec("dlib") is not None
-        self._pill_badge(badges,
-                         "  Wav2Lip ✓ " if has_wav2lip else "  Wav2Lip ○ ",
-                         ACC if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
+        self._status_badge(badges, "Wav2Lip",
+                           OK if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
 
         # UI language selector
         lang_sel = tk.Frame(right, bg=BG)
@@ -5824,8 +5826,8 @@ class App(tk.Tk):
         self._ui_lang_combo.pack(side="left")
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
-        # Thin accent line under header
-        tk.Frame(header_wrap, bg=ACC, height=2).grid(
+        # Thin border line under header
+        tk.Frame(header_wrap, bg=BORDER, height=1).grid(
             row=1, column=0, columnspan=2, sticky="ew")
 
     def _build_input_section(self, parent):
@@ -5867,20 +5869,17 @@ class App(tk.Tk):
         _sb.pack(side="left", fill="y")
         btn_col = tk.Frame(batch_outer, bg=CARD)
         btn_col.pack(side="left", padx=(6, 0), anchor="n")
-        w, self._btn_add = self._glow_btn(
-            btn_col, glow=ACC,
-            text=self._s("btn_add"), command=self._add_files,
-            fg=ACC, width=10, cursor="hand2", font="VT.Bold")
+        w, self._btn_add = self._flat_btn(
+            btn_col, text=self._s("btn_add"), command=self._add_files,
+            width=10)
         w.pack(pady=2)
-        w, self._btn_remove = self._glow_btn(
-            btn_col, glow=RED,
-            text=self._s("btn_remove"), command=self._remove_file,
-            fg=FG, width=10, cursor="hand2", font="VT.Bold")
+        w, self._btn_remove = self._flat_btn(
+            btn_col, text=self._s("btn_remove"), command=self._remove_file,
+            width=10)
         w.pack(pady=2)
-        w, self._btn_clear = self._glow_btn(
-            btn_col, glow=BORDER,
-            text=self._s("btn_clear"), command=self._clear_files,
-            fg=FG, width=10, cursor="hand2", font="VT.Bold")
+        w, self._btn_clear = self._flat_btn(
+            btn_col, text=self._s("btn_clear"), command=self._clear_files,
+            width=10)
         w.pack(pady=2)
 
         # ── Output path ────────────────────────────────────────────────────
@@ -5894,10 +5893,9 @@ class App(tk.Tk):
                  bg=SEL, fg=FG, insertbackground=FG,
                  relief="flat", font="VT.Base").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
-        _w, self._btn_browse = self._glow_btn(
-            out_row, glow=BORDER,
-            text=self._s("btn_browse"), command=self._browse_output,
-            fg=FG, padx=8, pady=2, cursor="hand2", font="VT.Bold")
+        _w, self._btn_browse = self._flat_btn(
+            out_row, text=self._s("btn_browse"), command=self._browse_output,
+            padx=8, pady=2)
         _w.pack(side="left")
 
         # ── URL download ───────────────────────────────────────────────────
@@ -5915,12 +5913,9 @@ class App(tk.Tk):
         self._url_text.bind("<FocusIn>",  self._url_focus_in)
         self._url_text.bind("<FocusOut>", self._url_focus_out)
         self._url_text.pack(side="left", fill="both", expand=True)
-        _wd, self._btn_download = self._glow_btn(
-            url_row, glow=ACC,
-            text=self._s("btn_download"), command=self._start_download,
-            bg=ACC, fg=BG, font="VT.Bold",
-            padx=10, pady=4, cursor="hand2",
-            activebackground=FG, activeforeground=BG)
+        _wd, self._btn_download = self._flat_btn(
+            url_row, primary=True, text=self._s("btn_download"),
+            command=self._start_download, padx=10, pady=4)
         _wd.pack(side="left", padx=(6, 0))
 
     def _build_advanced_panel(self, parent):
@@ -6298,13 +6293,10 @@ class App(tk.Tk):
             wraplength=280, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
-        # Start button - full-width, prominent, glow ring
-        _ws, self._btn = self._glow_btn(
-            inner, glow=ACC,
-            text=self._s("btn_start"), command=self._start,
-            bg=ACC, fg=BG, font="VT.Large",
-            padx=24, pady=14, cursor="hand2",
-            activebackground=FG, activeforeground=BG)
+        # Start button - full-width, accent-filled primary
+        _ws, self._btn = self._flat_btn(
+            inner, primary=True, text=self._s("btn_start"),
+            command=self._start, padx=24, pady=14)
         _ws.pack(fill="x")
 
         # Status row below button
@@ -6398,30 +6390,25 @@ class App(tk.Tk):
             bg=BG, fg=FG, font="VT.Bold")
         self._lbl_log_panel.pack(side="left")
         # Default collapsed - log starts hidden (btn_log_show text)
-        _wt, self._btn_log_toggle = self._glow_btn(
-            log_header, glow=BORDER,
-            text=self._s("btn_log_show"), command=self._toggle_log,
-            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
+        _wt, self._btn_log_toggle = self._flat_btn(
+            log_header, text=self._s("btn_log_show"), command=self._toggle_log,
+            padx=8, pady=2)
         _wt.pack(side="left", padx=(8, 0))
-        _wc, self._btn_log_clear = self._glow_btn(
-            log_header, glow=RED,
-            text=self._s("btn_log_clear"), command=self._log_clear,
-            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
+        _wc, self._btn_log_clear = self._flat_btn(
+            log_header, text=self._s("btn_log_clear"), command=self._log_clear,
+            padx=8, pady=2)
         _wc.pack(side="right")
-        _ws2, self._btn_log_save = self._glow_btn(
-            log_header, glow=BORDER,
-            text=self._s("btn_log_save"), command=self._log_save,
-            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
+        _ws2, self._btn_log_save = self._flat_btn(
+            log_header, text=self._s("btn_log_save"), command=self._log_save,
+            padx=8, pady=2)
         _ws2.pack(side="right", padx=(0, 4))
-        _wcp, self._btn_log_copy = self._glow_btn(
-            log_header, glow=BORDER,
-            text=self._s("btn_log_copy"), command=self._log_copy,
-            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
+        _wcp, self._btn_log_copy = self._flat_btn(
+            log_header, text=self._s("btn_log_copy"), command=self._log_copy,
+            padx=8, pady=2)
         _wcp.pack(side="right", padx=(0, 4))
-        _wpf, self._btn_preflight = self._glow_btn(
-            log_header, glow=ACC2,
-            text=self._s("btn_preflight"), command=self._run_gui_preflight,
-            fg=FG, font="VT.Bold", padx=8, pady=2, cursor="hand2")
+        _wpf, self._btn_preflight = self._flat_btn(
+            log_header, text=self._s("btn_preflight"), command=self._run_gui_preflight,
+            padx=8, pady=2)
         _wpf.pack(side="right", padx=(0, 4))
 
         self._log_container = tk.Frame(log_frame, bg=BG)
