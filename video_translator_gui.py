@@ -6720,16 +6720,10 @@ class App(tk.Tk):
             (0, 0), window=self._main_frame, anchor="nw")
 
         # Keep scrollregion in sync with the inner frame's natural size.
-        self._main_frame.bind(
-            "<Configure>",
-            lambda e: self._main_canvas.configure(
-                scrollregion=self._main_canvas.bbox("all")))
+        self._main_frame.bind("<Configure>", self._on_main_frame_configure)
         # Stretch the inner frame to the canvas width so the existing
         # column-weighted grid still expands horizontally as expected.
-        self._main_canvas.bind(
-            "<Configure>",
-            lambda e: self._main_canvas.itemconfig(
-                self._main_canvas_window, width=e.width))
+        self._main_canvas.bind("<Configure>", self._on_main_canvas_configure)
 
         # ── Two-column content layout ─────────────────────────────────────
         # row 0: header (spans both cols)
@@ -6835,6 +6829,31 @@ class App(tk.Tk):
 
     # ── Mouse wheel scrolling for the form canvas ──────────────────────────
 
+    @staticmethod
+    def _canvas_content_fits(canvas) -> bool:
+        """True when the canvas content is not taller than the canvas itself.
+
+        Scrolling in that case only shifts the form down and leaves an empty
+        band above the header, so callers skip the scroll and pin the view.
+        """
+        bbox = canvas.bbox("all")
+        if not bbox:
+            return True
+        height = canvas.winfo_height()
+        if height <= 1:  # not mapped yet
+            height = canvas.winfo_reqheight()
+        return bbox[3] - bbox[1] <= height
+
+    def _on_main_frame_configure(self, event):
+        self._main_canvas.configure(scrollregion=self._main_canvas.bbox("all"))
+        if self._canvas_content_fits(self._main_canvas):
+            self._main_canvas.yview_moveto(0)
+
+    def _on_main_canvas_configure(self, event):
+        self._main_canvas.itemconfig(self._main_canvas_window, width=event.width)
+        if self._canvas_content_fits(self._main_canvas):
+            self._main_canvas.yview_moveto(0)
+
     def _on_mousewheel(self, event):
         """Scroll the form canvas in response to a wheel event.
 
@@ -6845,6 +6864,11 @@ class App(tk.Tk):
         """
         # Defensive: the canvas may have been destroyed mid-shutdown.
         if not hasattr(self, "_main_canvas"):
+            return
+        try:
+            if self._canvas_content_fits(self._main_canvas):
+                return
+        except tk.TclError:
             return
         if sys.platform.startswith("linux"):
             delta = -1 if getattr(event, "num", 0) == 5 else 1

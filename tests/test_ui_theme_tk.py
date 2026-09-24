@@ -124,6 +124,35 @@ class ColorMappingTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class CanvasContentFitsTests(unittest.TestCase):
+    def setUp(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+
+    def tearDown(self):
+        self.root.destroy()
+
+    def test_fits_only_when_content_is_not_taller_than_canvas(self):
+        import video_translator_gui as gui
+
+        canvas = tk.Canvas(self.root, height=300, width=200, highlightthickness=0)
+        canvas.pack()
+        inner = tk.Frame(canvas, height=50, width=100)
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        self.root.update_idletasks()
+        self.assertTrue(gui.App._canvas_content_fits(canvas))
+        inner.configure(height=1000)
+        self.root.update_idletasks()
+        self.assertFalse(gui.App._canvas_content_fits(canvas))
+
+    def test_empty_canvas_fits(self):
+        import video_translator_gui as gui
+
+        canvas = tk.Canvas(self.root, height=300, width=200)
+        self.assertTrue(gui.App._canvas_content_fits(canvas))
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class SettingsDialogSmokeTests(unittest.TestCase):
     def test_open_apply_reset_close(self):
         import json
