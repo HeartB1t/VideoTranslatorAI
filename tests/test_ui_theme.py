@@ -336,6 +336,14 @@ class GuiSourceStaticTests(unittest.TestCase):
         self.assertIn("from videotranslator.ui_theme_tk import", self.src)
         self.assertIn("ThemeManager(", self.src)
 
+    def test_no_hardcoded_hex_colours(self):
+        hits = re.findall(r'"#[0-9a-fA-F]{6}"', self.src)
+        self.assertEqual(hits, [], f"hard-coded colours in GUI: {hits}")
+
+    def test_no_classic_tk_scrollbars(self):
+        # Lookbehind: "ttk.Scrollbar(" contains "tk.Scrollbar(" as a substring
+        self.assertNotRegex(self.src, r"(?<![\w.])tk\.Scrollbar\(")
+
 
 if __name__ == "__main__":
     unittest.main()

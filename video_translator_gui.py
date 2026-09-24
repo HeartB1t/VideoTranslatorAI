@@ -5657,33 +5657,34 @@ class App(tk.Tk):
         btn.bind("<Leave>", _leave)
         return wrap, btn
 
+    def _card(self, parent, **pack):
+        """Surface card with a 1 px border; returns the inner padded frame."""
+        outer = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
+                         highlightbackground=BORDER)
+        outer.pack(fill="x", **pack)
+        inner = tk.Frame(outer, bg=SURFACE)
+        inner.pack(fill="both", expand=True, padx=12, pady=10)
+        return inner
+
     def _section_title(self, parent, text):
-        """Section title with neon green accent marker."""
-        f = tk.Frame(parent, bg=BG)
-        tk.Label(f, text=f"▸ {text.upper()}", bg=BG, fg=ACC,
-                 font="VT.Bold").pack(side="left")
+        """Small upper-case section label in muted colour."""
+        f = tk.Frame(parent, bg=parent.cget("bg"))
+        tk.Label(f, text=text.upper(), bg=parent.cget("bg"), fg=FG2,
+                 font="VT.SmallBold").pack(side="left")
         return f
 
     def _make_accordion_section(self, parent, title_text):
-        """Return (outer_frame, body_frame, toggle_btn).
-
-        Clicking the header row shows/hides body_frame.
-        The section starts collapsed (body hidden).
-        """
-        outer = tk.Frame(parent, bg=BG)
-        outer.pack(fill="x", pady=2)
-
-        # Header row
-        hdr = tk.Frame(outer, bg=BG, cursor="hand2")
+        """Return (outer_frame, body_frame, arrow_label). Starts collapsed."""
+        outer = tk.Frame(parent, bg=SURFACE)
+        outer.pack(fill="x", pady=1)
+        hdr = tk.Frame(outer, bg=SURFACE, cursor="hand2")
         hdr.pack(fill="x")
-
-        arrow_lbl = tk.Label(hdr, text="▸", bg=BG, fg=ACC, font="VT.Bold", width=2)
+        arrow_lbl = tk.Label(hdr, text="▸", bg=SURFACE, fg=FG2, font="VT.Base", width=2)
         arrow_lbl.pack(side="left")
-        tk.Label(hdr, text=title_text.upper(), bg=BG, fg=FG, font="VT.Bold").pack(side="left", padx=(4, 0))
-
-        # Collapsible body
-        body = tk.Frame(outer, bg=CARD, padx=10, pady=6)
-        # Start collapsed
+        tk.Label(hdr, text=title_text, bg=SURFACE, fg=FG, font="VT.Base").pack(
+            side="left", padx=(2, 0), pady=6)
+        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
+        body = tk.Frame(outer, bg=SURFACE, padx=24, pady=6)
 
         def toggle(e=None):
             if body.winfo_manager():
@@ -5691,12 +5692,11 @@ class App(tk.Tk):
                 arrow_lbl.configure(text="▸")
             else:
                 body.pack(fill="x")
-                arrow_lbl.configure(text="▼")
+                arrow_lbl.configure(text="▾")
 
         hdr.bind("<Button-1>", toggle)
         for w in hdr.winfo_children():
             w.bind("<Button-1>", toggle)
-
         return outer, body, arrow_lbl
 
     def _apply_profile(self, name):
@@ -5743,10 +5743,10 @@ class App(tk.Tk):
         active = self._active_profile.get()
         for name, btn in self._profile_btns.items():
             if name == active:
-                btn.configure(bg=BORDER, fg=ACC,
+                btn.configure(bg=ACC_SOFT, fg=ACC,
                               highlightthickness=1, highlightbackground=ACC)
             else:
-                btn.configure(bg=CARD, fg=FG,
+                btn.configure(bg=BTN, fg=FG,
                               highlightthickness=1, highlightbackground=BORDER)
         if hasattr(self, "_lbl_profile_hint"):
             self._lbl_profile_hint.configure(
@@ -5835,18 +5835,8 @@ class App(tk.Tk):
 
     def _build_input_section(self, parent):
         """Left-pane INPUT card: batch list, output path, URL download."""
-        # Card wrapper with top accent border
-        tk.Frame(parent, bg=ACC, height=2).pack(fill="x")
-        card = tk.Frame(parent, bg=CARD, relief="flat")
-        card.pack(fill="x", pady=(0, 8))
-        inner = tk.Frame(card, bg=CARD, padx=14, pady=10)
-        inner.pack(fill="both")
-
-        # Section title inside card
-        title_row = tk.Frame(inner, bg=CARD)
-        title_row.pack(fill="x", pady=(0, 8))
-        tk.Label(title_row, text="▸ INPUT", bg=CARD, fg=ACC,
-                 font="VT.Bold").pack(side="left")
+        inner = self._card(parent, pady=(0, 10))
+        self._section_title(inner, "Input").pack(anchor="w", pady=(0, 8))
 
         # Hidden label refs required by _apply_lang (configure(text=...))
         self._lbl_video  = tk.Label(inner, text="", bg=CARD)
@@ -5860,14 +5850,14 @@ class App(tk.Tk):
         batch_frame.pack(side="left", fill="both", expand=True)
         self._batch_listbox = tk.Listbox(
             batch_frame, height=4,
-            bg=SEL, fg=FG, selectbackground=ACC,
+            bg=FIELD, fg=FG, selectbackground=ACC,
             selectforeground=BG,
             font="VT.Mono", relief="flat",
             highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=ACC,
             activestyle="none")
         self._batch_listbox.pack(side="left", fill="both", expand=True)
-        _sb = tk.Scrollbar(batch_frame, command=self._batch_listbox.yview)
+        _sb = ttk.Scrollbar(batch_frame, command=self._batch_listbox.yview)
         self._batch_listbox.configure(yscrollcommand=_sb.set)
         _sb.pack(side="left", fill="y")
         btn_col = tk.Frame(batch_outer, bg=CARD)
@@ -5893,8 +5883,9 @@ class App(tk.Tk):
                  bg=CARD, fg=FG2, font="VT.Small").pack(side="left", padx=(0, 6))
         self._output_var = tk.StringVar()
         tk.Entry(out_row, textvariable=self._output_var,
-                 bg=SEL, fg=FG, insertbackground=FG,
-                 relief="flat", font="VT.Base").pack(
+                 bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+                 highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+                 font="VT.Base").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
         _w, self._btn_browse = self._flat_btn(
             out_row, text=self._s("btn_browse"), command=self._browse_output,
@@ -5909,8 +5900,9 @@ class App(tk.Tk):
         url_row.pack(fill="x", pady=(0, 2))
         self._url_text = tk.Text(
             url_row, height=2,
-            bg=SEL, fg=FG, insertbackground=FG,
-            font="VT.Mono", relief="flat", wrap="none")
+            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+            font="VT.Mono", wrap="none")
         self._url_text.insert("1.0", self._s("url_placeholder"))
         self._url_text.configure(fg=FG2)
         self._url_text.bind("<FocusIn>",  self._url_focus_in)
@@ -5926,86 +5918,93 @@ class App(tk.Tk):
 
     def _build_advanced_panel(self, parent):
         """Left-pane: collapsible accordion sections for all advanced options."""
+        adv = self._card(parent, pady=(4, 0))
 
         def cb(par, text_key, var, cmd=None):
             w = tk.Checkbutton(
                 par, text=self._s(text_key), variable=var, command=cmd,
-                bg=BG, fg=FG, selectcolor=SEL,
-                activebackground=BG, font="VT.Base")
+                bg=SURFACE, fg=FG, selectcolor=SEL,
+                activebackground=SURFACE,
+                highlightbackground=SURFACE, highlightcolor=ACC, font="VT.Base")
             w._text_key = text_key
             return w
 
         # ── 1. WHISPER MODEL ──────────────────────────────────────────────
         sect, body, _ = self._make_accordion_section(
-            parent, self._s("label_model"))
+            adv, self._s("label_model"))
         sect.pack(fill="x")
-        mf = tk.Frame(body, bg=BG)
+        mf = tk.Frame(body, bg=SURFACE)
         mf.pack(anchor="w", pady=4)
         for m in WHISPER_MODELS:
             tk.Radiobutton(
                 mf, text=m, variable=self._model, value=m,
-                bg=BG, fg=RED if "large" in m else FG,
-                selectcolor=SEL, activebackground=BG,
+                bg=SURFACE, fg=RED if "large" in m else FG,
+                selectcolor=SEL, activebackground=SURFACE,
+                highlightbackground=SURFACE, highlightcolor=ACC,
                 font="VT.Base").pack(side="left", padx=3)
         # Hidden label refs required by _apply_lang
-        self._lbl_model      = tk.Label(body, text="", bg=BG)
+        self._lbl_model      = tk.Label(body, text="", bg=SURFACE)
         self._lbl_model_hint = tk.Label(
             body, text=self._s("label_model_hint"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_model_hint.pack(anchor="w", padx=4, pady=(0, 4))
 
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
         # body2 uses grid layout so _ollama_row/_deepl_row work with
         # grid_remove()/grid() as called by _on_engine_change().
         sect2, body2, _ = self._make_accordion_section(
-            parent, self._s("label_engine"))
+            adv, self._s("label_engine"))
         sect2.pack(fill="x")
         body2.columnconfigure(0, weight=1)
 
-        engine_row = tk.Frame(body2, bg=BG)
+        engine_row = tk.Frame(body2, bg=SURFACE)
         engine_row.grid(row=0, column=0, sticky="w", pady=(4, 0))
         self._lbl_engine = tk.Label(
             engine_row, text=self._s("label_engine"),
-            bg=BG, fg=FG, font="VT.Bold")
+            bg=SURFACE, fg=FG, font="VT.Bold")
         self._lbl_engine.pack(side="left")
         self._rb_eng_google = tk.Radiobutton(
             engine_row, text=self._s("engine_google"),
             variable=self._translation_engine, value="google",
             command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_google.pack(side="left", padx=(6, 0))
         self._rb_eng_deepl = tk.Radiobutton(
             engine_row, text=self._s("engine_deepl"),
             variable=self._translation_engine, value="deepl",
             command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_deepl.pack(side="left", padx=(6, 0))
         self._rb_eng_marian = tk.Radiobutton(
             engine_row, text=self._s("engine_marian"),
             variable=self._translation_engine, value="marian",
             command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
 
-        engine_row2 = tk.Frame(body2, bg=BG)
+        engine_row2 = tk.Frame(body2, bg=SURFACE)
         engine_row2.grid(row=1, column=0, sticky="w", pady=(2, 0))
         self._rb_eng_ollama = tk.Radiobutton(
             engine_row2, text=self._s("engine_ollama"),
             variable=self._translation_engine, value="llm_ollama",
             command=self._on_engine_change,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_ollama.pack(side="left")
 
         # Ollama config row (toggled by _on_engine_change)
-        self._ollama_row = tk.Frame(body2, bg=BG)
+        self._ollama_row = tk.Frame(body2, bg=SURFACE)
         self._ollama_row.grid(row=2, column=0, sticky="w", pady=(2, 0))
         self._lbl_ollama_model = tk.Label(
             self._ollama_row, text=self._s("label_ollama_model"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_ollama_model.pack(side="left")
         self._ollama_model_combo = ttk.Combobox(
             self._ollama_row, textvariable=self._ollama_model_var, width=28,
@@ -6020,108 +6019,114 @@ class App(tk.Tk):
         self._ollama_model_combo.pack(side="left", padx=(4, 8))
         self._lbl_ollama_url = tk.Label(
             self._ollama_row, text=self._s("label_ollama_url"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_ollama_url.pack(side="left")
         self._ollama_url_entry = tk.Entry(
             self._ollama_row, textvariable=self._ollama_url_var, width=24,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
         self._ollama_url_entry.pack(side="left", padx=(4, 8))
         self._chk_ollama_slot = tk.Checkbutton(
             self._ollama_row, text="slot-aware",
             variable=self._ollama_slot_aware,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
         self._ollama_row.grid_remove()
 
         # Ollama thinking row (toggled by _on_engine_change)
-        self._ollama_row2 = tk.Frame(body2, bg=BG)
+        self._ollama_row2 = tk.Frame(body2, bg=SURFACE)
         self._ollama_row2.grid(row=3, column=0, sticky="w", pady=(2, 0))
         self._chk_ollama_thinking = tk.Checkbutton(
             self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
         self._chk_ollama_thinking.pack(side="left")
         self._lbl_ollama_thinking_hint = tk.Label(
             self._ollama_row2,
             text="  " + self._s("hint_ollama_thinking"),
-            bg=BG, fg=FG2, font="VT.Italic")
+            bg=SURFACE, fg=FG2, font="VT.Italic")
         self._lbl_ollama_thinking_hint.pack(side="left")
         self._ollama_row2.grid_remove()
 
         # DeepL key row (toggled by _on_engine_change)
-        self._deepl_row = tk.Frame(body2, bg=BG)
+        self._deepl_row = tk.Frame(body2, bg=SURFACE)
         self._deepl_row.grid(row=4, column=0, sticky="w", pady=(2, 4))
         self._lbl_deepl_key = tk.Label(
             self._deepl_row, text=self._s("label_deepl_key"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_deepl_key.pack(side="left")
         self._deepl_key_entry = tk.Entry(
             self._deepl_row, textvariable=self._deepl_key_var, width=32,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
         self._deepl_key_entry.pack(side="left", padx=(4, 0))
         self._deepl_row.grid_remove()
 
         # ── 3. AUDIO ──────────────────────────────────────────────────────
-        sect3, body3, _ = self._make_accordion_section(parent, "Audio")
+        sect3, body3, _ = self._make_accordion_section(adv, "Audio")
         sect3.pack(fill="x")
         self._chk_no_demucs = cb(body3, "opt_no_demucs", self._no_demucs)
         self._chk_no_demucs.pack(anchor="w", pady=4)
 
         # ── 4. VOICE CLONING ──────────────────────────────────────────────
-        sect4, body4, _ = self._make_accordion_section(parent, "Voice Cloning")
+        sect4, body4, _ = self._make_accordion_section(adv, "Voice Cloning")
         sect4.pack(fill="x")
         self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts)
         self._chk_xtts.pack(anchor="w", pady=4)
 
         # ── 5. LIP SYNC ───────────────────────────────────────────────────
-        sect5, body5, _ = self._make_accordion_section(parent, "Lip Sync")
+        sect5, body5, _ = self._make_accordion_section(adv, "Lip Sync")
         sect5.pack(fill="x")
         self._chk_lipsync = cb(body5, "opt_lipsync", self._use_lipsync)
         self._chk_lipsync.pack(anchor="w", pady=4)
 
         # ── 6. DIARIZATION ────────────────────────────────────────────────
         # body6 uses grid layout so _hf_row works with grid_remove()/grid().
-        sect6, body6, _ = self._make_accordion_section(parent, "Diarization")
+        sect6, body6, _ = self._make_accordion_section(adv, "Diarization")
         sect6.pack(fill="x")
         body6.columnconfigure(0, weight=1)
 
-        diar_f = tk.Frame(body6, bg=BG)
+        diar_f = tk.Frame(body6, bg=SURFACE)
         diar_f.grid(row=0, column=0, sticky="w", pady=(4, 0))
         self._chk_diar = tk.Checkbutton(
             diar_f, text=self._s("opt_diarization"),
             variable=self._use_diarization,
             command=self._on_diarization_toggle,
-            bg=BG, fg=FG, selectcolor=SEL, activebackground=BG,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._chk_diar.pack(side="left")
 
-        self._hf_row = tk.Frame(body6, bg=BG)
+        self._hf_row = tk.Frame(body6, bg=SURFACE)
         self._hf_row.grid(row=1, column=0, sticky="w", pady=(2, 4))
         self._lbl_hf_token = tk.Label(
             self._hf_row, text=self._s("label_hf_token"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_hf_token.pack(side="left")
         self._hf_token_entry = tk.Entry(
             self._hf_row, textvariable=self._hf_token_var, width=40,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
         self._hf_token_entry.pack(side="left", padx=(4, 0))
         self._lbl_hf_hint = tk.Label(
             self._hf_row, text="  " + self._s("hint_hf_token"),
-            bg=BG, fg=FG2, font="VT.Italic")
+            bg=SURFACE, fg=FG2, font="VT.Italic")
         self._lbl_hf_hint.pack(side="left")
         self._hf_row.grid_remove()
 
         # ── 7. SUBTITLES ──────────────────────────────────────────────────
         sect7, body7, _ = self._make_accordion_section(
-            parent, self._s("label_options"))
+            adv, self._s("label_options"))
         sect7.pack(fill="x")
         # Hidden ref for _apply_lang
-        self._lbl_options = tk.Label(body7, text="", bg=BG)
+        self._lbl_options = tk.Label(body7, text="", bg=SURFACE)
         _opy = {"pady": (4, 0)}
         self._chk_subs_only = cb(body7, "opt_subs_only",
                                  self._subs_only, self._on_subs_only)
@@ -6134,38 +6139,30 @@ class App(tk.Tk):
 
         # ── 8. HOTWORDS ───────────────────────────────────────────────────
         sect8, body8, _ = self._make_accordion_section(
-            parent, self._s("label_hotwords"))
+            adv, self._s("label_hotwords"))
         sect8.pack(fill="x")
-        self._hotwords_row = tk.Frame(body8, bg=BG)
+        self._hotwords_row = tk.Frame(body8, bg=SURFACE)
         self._hotwords_row.pack(anchor="w", pady=4)
         self._lbl_hotwords = tk.Label(
             self._hotwords_row, text=self._s("label_hotwords"),
-            bg=BG, fg=FG2, font="VT.Small")
+            bg=SURFACE, fg=FG2, font="VT.Small")
         self._lbl_hotwords.pack(side="left")
         self._hotwords_entry = tk.Entry(
             self._hotwords_row, textvariable=self._hotwords_var, width=40,
-            bg=SEL, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
         self._hotwords_entry.pack(side="left", padx=(4, 0))
         self._lbl_hotwords_hint = tk.Label(
             self._hotwords_row,
             text="  " + self._s("hint_hotwords"),
-            bg=BG, fg=FG2, font="VT.Italic")
+            bg=SURFACE, fg=FG2, font="VT.Italic")
         self._lbl_hotwords_hint.pack(side="left")
 
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
-        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
-        card = tk.Frame(parent, bg=CARD, relief="flat")
-        card.pack(fill="x", padx=4, pady=(0, 8))
-
-        inner = tk.Frame(card, bg=CARD)
-        inner.pack(fill="x", padx=12, pady=8)
-
-        # Card title
-        title = tk.Frame(inner, bg=CARD)
-        title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ TRADUZIONE", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
+        inner = self._card(parent, padx=4, pady=(0, 10))
+        self._section_title(inner, "Traduzione").pack(anchor="w", pady=(0, 8))
 
         # Source language
         from_row = tk.Frame(inner, bg=CARD)
@@ -6235,36 +6232,28 @@ class App(tk.Tk):
 
     def _build_profile_section(self, parent):
         """Right-pane card: Fast / Balanced / Studio / Cinematic presets."""
-        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
-        card = tk.Frame(parent, bg=CARD, relief="flat")
-        card.pack(fill="x", padx=4, pady=(0, 8))
-
-        inner = tk.Frame(card, bg=CARD)
-        inner.pack(fill="x", padx=12, pady=8)
-
-        title = tk.Frame(inner, bg=CARD)
-        title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ WORKFLOW PROFILE", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
+        inner = self._card(parent, padx=4, pady=(0, 10))
+        self._section_title(inner, "Workflow profile").pack(anchor="w", pady=(0, 8))
 
         btn_row = tk.Frame(inner, bg=CARD)
         btn_row.pack(fill="x")
 
         _PROFILE_LABELS = {
-            "fast":      ("Fast",     "⚡"),
-            "balanced":  ("Balanced", "⚖"),
-            "studio":    ("Studio",   "🎙"),
-            "cinematic": ("Cinema",   "🎬"),
+            "fast":      ("Fast",     ""),
+            "balanced":  ("Balanced", ""),
+            "studio":    ("Studio",   ""),
+            "cinematic": ("Cinema",   ""),
         }
         self._profile_btns = {}
-        for name, (label, icon) in _PROFILE_LABELS.items():
+        for name, (label, _icon) in _PROFILE_LABELS.items():
             btn = tk.Button(
-                btn_row, text=f"{icon} {label}",
-                bg=CARD, fg=FG2,
-                font="VT.Small",
+                btn_row, text=label,
+                bg=BTN, fg=FG,
+                font="VT.Base",
                 relief="flat", padx=6, pady=6,
                 cursor="hand2",
                 highlightthickness=1, highlightbackground=BORDER,
-                activebackground=ACC, activeforeground=BG,
+                activebackground=ACC_SOFT, activeforeground=ACC,
                 command=lambda n=name: self._apply_profile(n),
             )
             btn.pack(side="left", padx=(0, 4), fill="x", expand=True)
@@ -6281,16 +6270,8 @@ class App(tk.Tk):
 
     def _build_start_section(self, parent):
         """Right-pane card: summary line + big Start button + status row."""
-        tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", padx=4)
-        card = tk.Frame(parent, bg=CARD, relief="flat")
-        card.pack(fill="x", padx=4, pady=(0, 8))
-
-        inner = tk.Frame(card, bg=CARD)
-        inner.pack(fill="x", padx=12, pady=10)
-
-        title = tk.Frame(inner, bg=CARD)
-        title.pack(fill="x", pady=(0, 8))
-        tk.Label(title, text="▸ START", bg=CARD, fg=ACC, font="VT.Bold").pack(side="left")
+        inner = self._card(parent, padx=4, pady=(0, 10))
+        self._section_title(inner, "Start").pack(anchor="w", pady=(0, 8))
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = tk.Label(
@@ -6330,8 +6311,8 @@ class App(tk.Tk):
         # ── Scrollable canvas ─────────────────────────────────────────────
         self._main_canvas = tk.Canvas(self, bg=BG, highlightthickness=0)
         self._main_canvas.grid(row=0, column=0, sticky="nsew")
-        main_vsb = tk.Scrollbar(self, orient="vertical",
-                                command=self._main_canvas.yview)
+        main_vsb = ttk.Scrollbar(self, orient="vertical",
+                                 command=self._main_canvas.yview)
         main_vsb.grid(row=0, column=1, sticky="ns")
         self._main_canvas.configure(yscrollcommand=main_vsb.set)
 
@@ -6423,9 +6404,10 @@ class App(tk.Tk):
         self._log_container.columnconfigure(0, weight=1)
         self._log = tk.Text(
             self._log_container, height=12, width=76,
-            bg="#11111b", fg=GRN, font="VT.Mono",
-            relief="flat", state="disabled", wrap="word")
-        vsb = tk.Scrollbar(self._log_container, command=self._log.yview)
+            bg=FIELD, fg=FG, font="VT.Mono", insertbackground=FG, relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+            state="disabled", wrap="word")
+        vsb = ttk.Scrollbar(self._log_container, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
         self._log.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
@@ -6447,7 +6429,7 @@ class App(tk.Tk):
         # scrollable canvas built in `_build_ui`). Anchoring labels to the
         # root would break the scrolling layout, so we route them through
         # the inner frame just like every other form widget.
-        lbl = tk.Label(self._main_frame, text=text, bg=BG, fg="#bac2de",
+        lbl = tk.Label(self._main_frame, text=text, bg=BG, fg=FG2,
                        font="VT.Bold", anchor="e")
         lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=7)
         return lbl
@@ -6594,9 +6576,9 @@ class App(tk.Tk):
             cur = self._voice.get()
             for btn_v, btn_w in _pill_map.items():
                 if btn_v == cur:
-                    btn_w.configure(bg=ACC, fg=BG)
+                    btn_w.configure(bg=ACC_SOFT, fg=ACC)
                 else:
-                    btn_w.configure(bg=PILL, fg=FG2)
+                    btn_w.configure(bg=BTN, fg=FG)
 
         _pill_map = {}
         for v in voices:
@@ -6605,11 +6587,12 @@ class App(tk.Tk):
                 self._voice_frame, text=label,
                 variable=self._voice, value=v,
                 indicatoron=False,
-                bg=PILL, fg=FG2,
-                selectcolor=ACC,
-                activebackground=ACC, activeforeground=BG,
+                bg=BTN, fg=FG,
+                selectcolor=ACC_SOFT,
+                activebackground=ACC_SOFT, activeforeground=ACC,
                 font="VT.Base",
-                relief="flat", padx=8, pady=4,
+                relief="flat", padx=10, pady=4,
+                highlightthickness=1, highlightbackground=BORDER,
                 cursor="hand2",
                 command=_refresh_pills,
             )
