@@ -332,6 +332,15 @@ SURFACE = globals()["SURFACE"]; FIELD = globals()["FIELD"]; BTN = globals()["BTN
 ACC_HOVER = globals()["ACC_HOVER"]; ACC_SOFT = globals()["ACC_SOFT"]; ACC_FG = globals()["ACC_FG"]
 OK = globals()["OK"]; WARN = globals()["WARN"]; ERR = globals()["ERR"]
 
+
+def _field_colors() -> dict:
+    """Selection and cursor colours for tk.Entry / tk.Text, read at call time.
+
+    Left unset, these options keep Tk's defaults (grey selection on a dark
+    field) instead of following the theme.
+    """
+    return {"selectbackground": SEL, "selectforeground": FG, "insertbackground": FG}
+
 # Named fonts (created by ThemeManager; Tk updates every widget on change).
 # Roles: Small 8, SmallBold 8b, Base 9, Bold 9b, Italic 8i, Large 11b,
 # Title 15b, Mono 9 (always monospace: log, paths, tokens).
@@ -5313,7 +5322,9 @@ class SubtitleEditor(tk.Toplevel):
         btn_frame.pack(pady=8)
         tk.Button(btn_frame, text=self._s("editor_btn_confirm"),
                   command=self._confirm,
-                  bg=ACC, fg=BG, font="VT.Large",
+                  bg=ACC, fg=ACC_FG, activebackground=ACC_HOVER,
+                  activeforeground=ACC_FG, disabledforeground=ACC_FG,
+                  font="VT.Large",
                   relief="flat", padx=16, pady=6).pack(side="left", padx=8)
         tk.Button(btn_frame, text=self._s("editor_btn_cancel"),
                   command=self.destroy,
@@ -5375,7 +5386,7 @@ class SubtitleEditor(tk.Toplevel):
         win.geometry("500x120")
         tk.Label(win, text=f"{self._s('editor_seg_label').format(idx+1)} {col_name}:",
                  bg=BG, fg=FG).pack(pady=6)
-        entry = tk.Entry(win, width=60, bg=SEL, fg=FG, insertbackground=FG,
+        entry = tk.Entry(win, width=60, bg=FIELD, fg=FG, **_field_colors(),
                          font="VT.Base", relief="flat")
         entry.insert(0, current)
         entry.pack(padx=10)
@@ -5388,7 +5399,9 @@ class SubtitleEditor(tk.Toplevel):
 
         entry.bind("<Return>", save)
         tk.Button(win, text=self._s("editor_btn_save"), command=save,
-                  bg=ACC, fg=BG, relief="flat", padx=10).pack(pady=6)
+                  bg=ACC, fg=ACC_FG, activebackground=ACC_HOVER,
+                  activeforeground=ACC_FG, disabledforeground=ACC_FG,
+                  relief="flat", padx=10).pack(pady=6)
 
     def _flag_tooltip_text(self, flags: list[str]) -> str:
         """Compose the hover text for a row with one or more flags.
@@ -6284,7 +6297,7 @@ class App(tk.Tk):
                  bg=CARD, fg=FG2, font="VT.Small").pack(side="left", padx=(0, 6))
         self._output_var = tk.StringVar()
         tk.Entry(out_row, textvariable=self._output_var,
-                 bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+                 bg=FIELD, fg=FG, **_field_colors(), relief="flat",
                  highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
                  font="VT.Base").pack(
             side="left", fill="x", expand=True, padx=(0, 6))
@@ -6301,7 +6314,7 @@ class App(tk.Tk):
         url_row.pack(fill="x", pady=(0, 2))
         self._url_text = tk.Text(
             url_row, height=2,
-            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", wrap="none")
         self._url_text.insert("1.0", self._s("url_placeholder"))
@@ -6325,7 +6338,7 @@ class App(tk.Tk):
             w = tk.Checkbutton(
                 par, text=self._s(text_key), variable=var, command=cmd,
                 bg=SURFACE, fg=FG, selectcolor=SEL,
-                activebackground=SURFACE,
+                activebackground=SURFACE, activeforeground=FG,
                 highlightbackground=SURFACE, highlightcolor=ACC, font="VT.Base")
             w._text_key = text_key
             return w
@@ -6340,7 +6353,7 @@ class App(tk.Tk):
             tk.Radiobutton(
                 mf, text=m, variable=self._model, value=m,
                 bg=SURFACE, fg=RED if "large" in m else FG,
-                selectcolor=SEL, activebackground=SURFACE,
+                selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
                 highlightbackground=SURFACE, highlightcolor=ACC,
                 font="VT.Base").pack(side="left", padx=3)
         # Hidden label refs required by _apply_lang
@@ -6368,7 +6381,7 @@ class App(tk.Tk):
             engine_row, text=self._s("engine_google"),
             variable=self._translation_engine, value="google",
             command=self._on_engine_change,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_google.pack(side="left", padx=(6, 0))
@@ -6376,7 +6389,7 @@ class App(tk.Tk):
             engine_row, text=self._s("engine_deepl"),
             variable=self._translation_engine, value="deepl",
             command=self._on_engine_change,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_deepl.pack(side="left", padx=(6, 0))
@@ -6384,7 +6397,7 @@ class App(tk.Tk):
             engine_row, text=self._s("engine_marian"),
             variable=self._translation_engine, value="marian",
             command=self._on_engine_change,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_marian.pack(side="left", padx=(6, 0))
@@ -6395,7 +6408,7 @@ class App(tk.Tk):
             engine_row2, text=self._s("engine_ollama"),
             variable=self._translation_engine, value="llm_ollama",
             command=self._on_engine_change,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._rb_eng_ollama.pack(side="left")
@@ -6424,14 +6437,14 @@ class App(tk.Tk):
         self._lbl_ollama_url.pack(side="left")
         self._ollama_url_entry = tk.Entry(
             self._ollama_row, textvariable=self._ollama_url_var, width=24,
-            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
         self._ollama_url_entry.pack(side="left", padx=(4, 8))
         self._chk_ollama_slot = tk.Checkbutton(
             self._ollama_row, text="slot-aware",
             variable=self._ollama_slot_aware,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
@@ -6443,7 +6456,7 @@ class App(tk.Tk):
         self._chk_ollama_thinking = tk.Checkbutton(
             self._ollama_row2, text=self._s("opt_ollama_thinking"),
             variable=self._ollama_thinking,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
         self._chk_ollama_thinking.pack(side="left")
@@ -6463,7 +6476,7 @@ class App(tk.Tk):
         self._lbl_deepl_key.pack(side="left")
         self._deepl_key_entry = tk.Entry(
             self._deepl_row, textvariable=self._deepl_key_var, width=32,
-            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
         self._deepl_key_entry.pack(side="left", padx=(4, 0))
@@ -6499,7 +6512,7 @@ class App(tk.Tk):
             diar_f, text=self._s("opt_diarization"),
             variable=self._use_diarization,
             command=self._on_diarization_toggle,
-            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE,
+            bg=SURFACE, fg=FG, selectcolor=SEL, activebackground=SURFACE, activeforeground=FG,
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Base")
         self._chk_diar.pack(side="left")
@@ -6512,7 +6525,7 @@ class App(tk.Tk):
         self._lbl_hf_token.pack(side="left")
         self._hf_token_entry = tk.Entry(
             self._hf_row, textvariable=self._hf_token_var, width=40,
-            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono", show="*")
         self._hf_token_entry.pack(side="left", padx=(4, 0))
@@ -6550,7 +6563,7 @@ class App(tk.Tk):
         self._lbl_hotwords.pack(side="left")
         self._hotwords_entry = tk.Entry(
             self._hotwords_row, textvariable=self._hotwords_var, width=40,
-            bg=FIELD, fg=FG, insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             font="VT.Mono")
         self._hotwords_entry.pack(side="left", padx=(4, 0))
@@ -6653,7 +6666,7 @@ class App(tk.Tk):
                 font="VT.Base",
                 relief="flat", padx=6, pady=6,
                 cursor="hand2",
-                highlightthickness=1, highlightbackground=BORDER,
+                highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
                 activebackground=ACC_SOFT, activeforeground=FG,
                 command=lambda n=name: self._apply_profile(n),
             )
@@ -6799,7 +6812,7 @@ class App(tk.Tk):
         self._log_container.columnconfigure(0, weight=1)
         self._log = tk.Text(
             self._log_container, height=12, width=76,
-            bg=FIELD, fg=FG, font="VT.Mono", insertbackground=FG, relief="flat",
+            bg=FIELD, fg=FG, font="VT.Mono", **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             state="disabled", wrap="word")
         vsb = ttk.Scrollbar(self._log_container, command=self._log.yview)
@@ -6937,6 +6950,7 @@ class App(tk.Tk):
                           relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
                           activebackground=ACC_SOFT, activeforeground=FG,
                           highlightthickness=1, highlightbackground=BORDER,
+                          highlightcolor=ACC,
                           command=lambda v=value: choose(v))
             b.pack(side="left", padx=(0, 4))
             buttons[value] = b

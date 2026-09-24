@@ -110,23 +110,61 @@ class ResolvePaletteTests(unittest.TestCase):
 
 
 class AccentForegroundTests(unittest.TestCase):
-    """Regression coverage for the >=4.0 white-text preference (fix round 1, item 6)."""
+    """Regression coverage for the >=4.0 white-text preference (fix round 1, item 6).
+
+    resolve_palette nudges ACC_FG one unit away from pure white/black (Tk
+    default colours, see TkDefaultColourTests), so these assert the property
+    the literal stood for: near-white or near-black, with the same contrast.
+    """
+
+    def assert_near(self, value, literal, acc):
+        lum = ui_theme.relative_luminance(value)
+        if literal == "#ffffff":
+            self.assertGreater(lum, 0.99)
+        else:
+            self.assertLess(lum, 0.01)
+        self.assertAlmostEqual(
+            contrast_ratio(value, acc), contrast_ratio(literal, acc), delta=0.05)
 
     def test_graphite_accent_prefers_white_text(self):
         # #3574f0: white contrast is 4.28 (clears the 4.0 floor), black is
         # 4.91. White wins despite scoring a hair lower, matching the
         # approved UI mockup where the primary button shows white text.
-        self.assertEqual(resolve_palette("graphite").ACC_FG, "#ffffff")
+        p = resolve_palette("graphite")
+        self.assert_near(p.ACC_FG, "#ffffff", p.ACC)
 
     def test_slate_accent_keeps_black_text_below_threshold(self):
         # #2aa198 (teal): white contrast is only ~3.16, below the 4.0 floor,
         # so the highest-contrast rule applies and black (~6.65) wins.
-        self.assertEqual(resolve_palette("slate").ACC_FG, "#000000")
+        p = resolve_palette("slate")
+        self.assert_near(p.ACC_FG, "#000000", p.ACC)
 
     def test_amber_accent_keeps_black_text(self):
         # #d9932a: white contrast is ~2.57, well below the 4.0 floor; black
         # (~8.16) wins under both the old and the new rule.
-        self.assertEqual(resolve_palette("graphite", "amber").ACC_FG, "#000000")
+        p = resolve_palette("graphite", "amber")
+        self.assert_near(p.ACC_FG, "#000000", p.ACC)
+
+    def test_light_surface_stays_near_white(self):
+        self.assertGreater(ui_theme.relative_luminance(resolve_palette("light").SURFACE), 0.99)
+
+
+class TkDefaultColourTests(unittest.TestCase):
+    """I2a: the live recolour maps old hex -> new hex per role, so a role
+    equal to a Tk default colour would drag every widget that left that
+    option at its default along with it."""
+
+    def test_constant_lists_the_tk_defaults(self):
+        self.assertEqual(set(ui_theme.TK_DEFAULT_COLORS), {
+            "#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3"})
+
+    def test_no_role_equals_a_tk_default(self):
+        for theme, accent in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES):
+            with self.subTest(theme=theme, accent=accent):
+                colours = resolve_palette(theme, accent).colors()
+                for field in Palette.COLOR_FIELDS:
+                    self.assertNotIn(colours[field], ui_theme.TK_DEFAULT_COLORS, field)
+                self.assertEqual(len(set(colours.values())), len(Palette.COLOR_FIELDS))
 
 
 class EnsureDistinctTests(unittest.TestCase):

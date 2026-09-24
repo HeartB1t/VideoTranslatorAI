@@ -100,6 +100,29 @@ class ThemeManagerTkTests(unittest.TestCase):
         self.assertEqual(foreign.cget("bg"), "#123456")
         self.assertEqual(foreign.cget("fg"), new.FG)
 
+    def test_widgets_left_at_tk_defaults_survive_a_round_trip(self):
+        # I2: a widget that never set a colour option keeps Tk's default and
+        # must not be recoloured as if it carried a palette role.
+        self.tm.apply({"ui_theme": "graphite", "ui_accent": "default", "ui_scale": "normal"},
+                      recolor=False)
+        widgets = [tk.Entry(self.root), tk.Label(self.root, text="x"),
+                   tk.Checkbutton(self.root, text="x")]
+        options = ("fg", "bg", "selectforeground", "selectbackground", "highlightcolor",
+                   "activeforeground", "activebackground", "insertbackground")
+        before = {}
+        for w in widgets:
+            keys = set(w.keys())
+            for opt in options:
+                full = {"fg": "foreground", "bg": "background"}.get(opt, opt)
+                if full in keys:
+                    before[(str(w), opt)] = w.cget(opt)
+        self.assertGreater(len(before), 10)
+        for theme in ("slate", "graphite"):
+            self.tm.apply({"ui_theme": theme}, recolor=True)
+        after = {(str(w), opt): w.cget(opt) for w in widgets for opt in options
+                 if (str(w), opt) in before}
+        self.assertEqual(after, before)
+
     def test_recolor_before_any_palette_is_noop(self):
         # First apply has nothing to map from: must not raise.
         self.tm.apply({"ui_theme": "slate"}, recolor=True)
@@ -265,6 +288,70 @@ class LogToggleStartupTests(unittest.TestCase):
                     app._destroying = True
                     app.destroy()
                     sys.stdout, sys.stderr = saved_stdout, saved_stderr
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class GuiThemedDefaultsTests(unittest.TestCase):
+    """I2b: the GUI sets the colour options it used to leave at Tk defaults."""
+
+    def test_fields_toggles_and_focus_rings_follow_the_palette(self):
+        import json
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        import video_translator_gui as gui
+
+        saved_stdout, saved_stderr = sys.stdout, sys.stderr
+        app = None
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                cfg_path = Path(tmp) / "config.json"
+                cfg_path.write_text(json.dumps({"ui_theme": "graphite", "ui_lang": "en"}),
+                                    encoding="utf-8")
+                with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
+                        mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
+                        mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
+                        mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
+                    app = gui.App()
+                    app.withdraw()
+                    app._open_settings()
+                    app._ui_theme_var.set("slate")
+                    app._apply_ui_settings()
+                    p = app._theme.palette
+                    fields, toggles = [], []
+                    stack = [app]
+                    while stack:
+                        w = stack.pop()
+                        stack.extend(w.winfo_children())
+                        if isinstance(w, (tk.Entry, tk.Text)) and not isinstance(w, ttk.Entry):
+                            fields.append(w)
+                        elif isinstance(w, (tk.Checkbutton, tk.Radiobutton)):
+                            toggles.append(w)
+                    self.assertGreaterEqual(len(fields), 7)
+                    self.assertGreaterEqual(len(toggles), 8)
+                    for w in fields:
+                        with self.subTest(field=str(w)):
+                            self.assertEqual(w.cget("selectbackground"), p.SEL)
+                            self.assertEqual(w.cget("selectforeground"), p.FG)
+                            self.assertEqual(w.cget("insertbackground"), p.FG)
+                    for w in toggles:
+                        with self.subTest(toggle=str(w)):
+                            self.assertEqual(w.cget("activeforeground"), p.FG)
+                            self.assertEqual(w.cget("activebackground"),
+                                             p.ACC_SOFT if w.cget("indicatoron") in (0, "0")
+                                             else w.cget("bg"))
+                    ringed = list(app._profile_btns.values()) \
+                        + list(app._seg_theme.winfo_children()) \
+                        + list(app._seg_scale.winfo_children())
+                    for b in ringed:
+                        with self.subTest(button=str(b)):
+                            self.assertEqual(b.cget("highlightcolor"), p.ACC)
+        finally:
+            if app is not None:
+                app._destroying = True
+                app.destroy()
+            sys.stdout, sys.stderr = saved_stdout, saved_stderr
 
 
 if __name__ == "__main__":

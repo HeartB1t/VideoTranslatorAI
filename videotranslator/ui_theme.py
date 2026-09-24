@@ -35,6 +35,14 @@ DEFAULT_SCALE = "normal"
 
 DEFAULT_LANG = "it"
 
+# Colours Tk gives to options a widget never set (X11 defaults, also the
+# common Windows system colours once resolved). No palette role may equal
+# one of these: the live recolour maps old hex -> new hex per role, so a
+# widget left at a default would otherwise be recoloured as if it carried
+# that role.
+TK_DEFAULT_COLORS: frozenset[str] = frozenset(
+    {"#000000", "#ffffff", "#d9d9d9", "#ececec", "#a3a3a3", "#c3c3c3"})
+
 
 # -- Palette ------------------------------------------------------------
 
@@ -202,14 +210,16 @@ def _find_free_value(start: str, seen: set[str]) -> str:
     raise ValueError(f"cannot find a colour distinct from {start!r} near {seen!r}")
 
 
-def _ensure_distinct(colors: dict[str, str]) -> dict[str, str]:
+def _ensure_distinct(colors: dict[str, str],
+                     reserved: frozenset[str] | set[str] = frozenset()) -> dict[str, str]:
     """Nudge duplicated values until every one is unique.
 
     The live recolour maps old hex -> new hex per role, so two roles sharing
-    a hex would be indistinguishable. Duplicates are nudged to a nearby free
-    value via ``_find_free_value``, which is bounded and never loops.
+    a hex would be indistinguishable. Duplicates, and values found in
+    ``reserved``, are nudged to a nearby free value via ``_find_free_value``,
+    which is bounded and never loops.
     """
-    seen: set[str] = set()
+    seen: set[str] = set(reserved)
     out: dict[str, str] = {}
     for key, value in colors.items():
         v = value.lower()
@@ -238,7 +248,7 @@ def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
     raw = {f: str(base[f]) for f in _BASE_FIELDS}
     raw.update({"ACC": acc, "ACC_HOVER": hover, "ACC_SOFT": soft, "ACC_FG": fg})
     ordered = {f: raw[f] for f in Palette.COLOR_FIELDS}
-    colors = _ensure_distinct(ordered)
+    colors = _ensure_distinct(ordered, TK_DEFAULT_COLORS)
     return Palette(name=theme, dark=bool(base["dark"]), font_family=str(base["font"]), **colors)
 
 
