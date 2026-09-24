@@ -6926,6 +6926,12 @@ class App(tk.Tk):
     def _scale_options(self):
         return [(k, self._s(f"size_{k}")) for k in _SCALES]
 
+    def _accent_dot_colour(self, value):
+        """Swatch colour: the theme's own accent for "default", the fixed accent otherwise."""
+        if value == "default":
+            return _resolve_palette(self._theme.palette.name, "default").ACC
+        return _ACCENTS[value]
+
     def _refresh_accent_dots(self):
         """Re-paint the accent dots: own colour, theme accent for "default", ring on the selection."""
         if not getattr(self, "_accent_dots", None):
@@ -6934,7 +6940,7 @@ class App(tk.Tk):
         for value, d in self._accent_dots.items():
             if not d.winfo_exists():
                 continue
-            d.configure(fg=ACC if value == "default" else _ACCENTS[value],
+            d.configure(fg=self._accent_dot_colour(value),
                         bg=SURFACE,
                         highlightbackground=FG if value == cur else SURFACE)
 
@@ -6977,14 +6983,17 @@ class App(tk.Tk):
             self._apply_ui_settings()
 
         for value in _ACCENT_CHOICES:
-            d = tk.Label(dots, text="●", bg=SURFACE, font="VT.Title", cursor="hand2",
+            d = tk.Label(dots, text="●", bg=SURFACE, fg=self._accent_dot_colour(value),
+                         font="VT.Title", cursor="hand2",
                          padx=4, highlightthickness=2, highlightbackground=SURFACE)
             d.pack(side="left", padx=(0, 2))
             d.bind("<Button-1>", lambda e, v=value: choose_accent(v))
             self._accent_dots[value] = d
-        self._lbl_accent_default = tk.Label(dots, text=self._s("accent_default"),
-                                            bg=SURFACE, fg=FG2, font="VT.Small")
-        self._lbl_accent_default.pack(side="left", padx=(8, 0))
+            if value == "default":
+                # Caption sits next to its own dot, before the fixed accents
+                self._lbl_accent_default = tk.Label(dots, text=self._s("accent_default"),
+                                                    bg=SURFACE, fg=FG2, font="VT.Small")
+                self._lbl_accent_default.pack(side="left", padx=(2, 14))
         self._refresh_accent_dots()
 
         self._lbl_settings_size = tk.Label(card, text=self._s("settings_text_size"),
