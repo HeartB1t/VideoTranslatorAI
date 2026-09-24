@@ -77,7 +77,7 @@ class FindSuspiciousTokensTests(unittest.TestCase):
         # contractions specially? For now we just document the
         # actual behaviour: ``don`` (3-char) is not in the whitelist.
         # So ``don't`` produces flags. This documents the limitation
-        # for the editor pass — manual review recommended.
+        # for the editor pass - manual review recommended.
         flagged = find_suspicious_tokens("I don't know")
         # "don" 3 chars NOT in whitelist → flagged.
         # "t" 1 char NOT in whitelist → flagged.
@@ -144,7 +144,7 @@ class SanityScoreSegmentsTests(unittest.TestCase):
     def test_repeat_only(self) -> None:
         # Use only whitelisted short words ("be") to verify the
         # ``repeats`` channel in isolation. (``cat`` would be flagged
-        # by the 3-char heuristic — that's a documented false positive.)
+        # by the 3-char heuristic - that's a documented false positive.)
         segs = [{"start": 0, "end": 1, "text": "let it be be"}]
         result = sanity_score_segments(segs)
         self.assertEqual(result, {0: {"suspicious": [], "repeats": ["be"]}})

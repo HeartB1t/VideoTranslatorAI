@@ -117,7 +117,7 @@ HARD_THRESHOLD = 1.80
 # Empirical mean of XTTS adaptive speed per target language. The cap is
 # 1.35 but most segments land lower; using the cap as divisor would make
 # the estimator over-optimistic. These values come from observed CSV
-# distributions and are deliberately conservative — a value too low is
+# distributions and are deliberately conservative - a value too low is
 # better than a value too high (false-positive HARD warnings are softer
 # than false-negative EASY classifications that mislead the user).
 #
@@ -248,8 +248,8 @@ def _cli() -> int:
     after a fast Whisper-only run, before sinking compute into TTS.
 
     Exit codes:
-        0 — analysis printed
-        2 — file missing, unsupported format, or no segments parsed
+        0 - analysis printed
+        2 - file missing, unsupported format, or no segments parsed
 
     Examples:
         python3 -m videotranslator.difficulty_detector /home/u/Video/x_it.srt

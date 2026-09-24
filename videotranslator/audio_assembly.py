@@ -54,7 +54,7 @@ def build_dubbed_track(
     total_frames = int(total_duration * SR)
     out = os.path.join(tmp_dir, "track_dubbed.wav")
 
-    # DIAGNOSTIC: tracks per-segment metrics — feeds both the aggregate
+    # DIAGNOSTIC: tracks per-segment metrics - feeds both the aggregate
     # diagnostic (bucket distribution + top 10 worst) and the optional CSV
     # dump for cross-video P90/P95 analysis. List of dicts instead of
     # anonymous tuples so it can evolve without breaking existing consumers.
@@ -81,7 +81,7 @@ def build_dubbed_track(
     )
     if _rubberband_available:
         print(
-            f"     [info] Rubber Band CLI available — using for ratio "
+            f"     [info] Rubber Band CLI available - using for ratio "
             f"{_rb_min:.2f}-{_rb_max:.2f} band",
             flush=True,
         )
@@ -93,7 +93,7 @@ def build_dubbed_track(
     # MAX_OVERLAP_FRAMES into the next segment's slot. The memmap mix
     # below sums int32 samples, so the tail naturally crossfades with
     # whatever gets written there next. Counters drive the diagnostic.
-    MAX_OVERLAP_FRAMES = int(0.40 * SR)  # 400 ms — perception-safe ceiling
+    MAX_OVERLAP_FRAMES = int(0.40 * SR)  # 400 ms - perception-safe ceiling
     overlap_clean_count = 0      # full pcm preserved, mild overshoot
     overlap_truncate_count = 0   # capped at slot+max_overlap, fade-out
     last_seg_index = len(segments) - 1
@@ -233,7 +233,7 @@ def build_dubbed_track(
             truncated = True
             overlap_used = True
             overlap_truncate_count += 1
-        # else: "fit" — no slicing, no fade.
+        # else: "fit" - no slicing, no fade.
 
         if strategy != "fit":
             # Apply the trailing fade-out on whatever is left of pcm.
@@ -302,7 +302,7 @@ def build_dubbed_track(
         print(f"     --- end diagnostic ---", flush=True)
         # TASK 2C-2: print the breakdown of stretch engines used.
         # Useful in production to verify that the tier strategy behaves
-        # as expected (rubberband concentrated in the 1.15–1.50 band).
+        # as expected (rubberband concentrated in the 1.15-1.50 band).
         if rubberband_used + atempo_used > 0:
             print(
                 f"     -> Stretch engines: {rubberband_used} rubberband, "

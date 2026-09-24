@@ -1,6 +1,6 @@
 """Unit tests for videotranslator.document_context.
 
-TASK 2K — these cover the document-level context contract:
+TASK 2K - these cover the document-level context contract:
 * a transcript that is long enough triggers the summary call,
 * the summary prompt carries the concatenated transcript and the
   glossary-style instructions,
@@ -55,7 +55,7 @@ class IsSummaryUsefulTests(unittest.TestCase):
 
 class SummaryPromptStructureTests(unittest.TestCase):
     def test_empty_segments_returns_empty_string(self):
-        # Defensive default — caller can call unconditionally.
+        # Defensive default - caller can call unconditionally.
         prompt = build_summary_prompt([], "Italian", "English")
         self.assertEqual(prompt, "")
 

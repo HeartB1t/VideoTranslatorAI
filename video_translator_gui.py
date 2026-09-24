@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Video Translator AI — single-file edition
+Video Translator AI - single-file edition
 Pipeline: faster-Whisper (GPU) + Demucs + Google Translate + Edge-TTS
 Run with arguments for CLI mode, without for GUI mode.
 """
@@ -130,7 +130,7 @@ def _suggest_xtts_speed(
     - auto: True if the value was computed, False if it is a user override.
 
     If `user_override` is provided (via CLI --xtts-speed or an explicit JSON
-    config key), it is honoured without modification — we trust the user knows
+    config key), it is honoured without modification - we trust the user knows
     what they are doing. With `user_override=None` the heuristic picks a higher
     speed when the target is significantly longer than the source (EN→IT, EN→FR…)
     to give XTTS more headroom and reduce audible atempo post-processing.
@@ -164,7 +164,7 @@ def _suggest_xtts_speed(
         speed = 1.30   # target moderately longer
     elif ratio <= 0.75:
         # Target noticeably shorter (e.g. EN→ZH 0.70). Threshold 0.75 (not 0.90
-        # as in the first draft) so that IT→EN (ratio 0.80) is NOT touched — the
+        # as in the first draft) so that IT→EN (ratio 0.80) is NOT touched - the
         # v1.4 empirical tuning already locked it at 1.25. With 0.90 we would
         # have regressed IT→EN to 1.15, violating the "don't break what works"
         # constraint.
@@ -279,7 +279,7 @@ if sys.version_info >= (3, 13):
 # key = Python module name, value = (list of pip requirements, UI description)
 # Maintained fork (Idiap): universal pure-Python wheel for Py ≥3.10, avoids
 # the broken setup.py of the original `TTS` package on Windows. Pin
-# transformers<5.1 (5.x removes isin_mps_friendly; 5.1 breaks coqui-tts — issue #558).
+# transformers<5.1 (5.x removes isin_mps_friendly; 5.1 breaks coqui-tts - issue #558).
 _TTS_PKGS = ["coqui-tts", "transformers<5.1"]
 OPTIONAL_PACKAGES: dict[str, tuple[list[str], str]] = {
     "sacremoses":    (["sacremoses"],    "MarianMT tokenizer (traduzione offline)"),
@@ -301,7 +301,7 @@ _OPTIONAL_ALIASES: dict[str, list[str]] = {
     "TTS": ["TTS", "coqui_tts"],
 }
 
-# ── GUI colours — Neon Dark theme ────────────────────────────
+# ── GUI colours - Neon Dark theme ────────────────────────────
 BG     = "#060612"   # near-black background
 FG     = "#e0e0ff"   # off-white text
 FG2    = "#6060a0"   # dim secondary text
@@ -346,18 +346,18 @@ UI_STRINGS = {
         "opt_no_subs":        "Non voglio sottotitoli",
         "opt_no_demucs":      "Salta separazione voce/musica (Demucs)",
         "opt_edit_subs":      "Mostra editor sottotitoli prima del doppiaggio",
-        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — prima esecuzione: download ~1.8GB)",
-        "opt_lipsync":        "💋 Lip Sync (Wav2Lip — prima esecuzione: download ~416MB)",
+        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 - prima esecuzione: download ~1.8GB)",
+        "opt_lipsync":        "💋 Lip Sync (Wav2Lip - prima esecuzione: download ~416MB)",
         "label_engine":       "Motore traduzione:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
         "engine_marian":      "MarianMT (locale)",
-        "engine_ollama":      "LLM Ollama (locale, consigliato — traduzioni concise per doppiaggio)",
+        "engine_ollama":      "LLM Ollama (locale, consigliato - traduzioni concise per doppiaggio)",
         "label_deepl_key":    "API key DeepL:",
         "label_ollama_model": "Modello:",
         "label_ollama_url":   "URL Ollama:",
         "hint_ollama":        (
-            "Default: qwen3:8b (raccomandato) — qwen3:4b leggero (~3 GB), "
+            "Default: qwen3:8b (raccomandato) - qwen3:4b leggero (~3 GB), "
             "qwen3:14b qualità superiore (~9 GB), qwen2.5:7b-instruct retrocompat. "
             "Richiede Ollama installato"
         ),
@@ -402,11 +402,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓  Conferma e avvia doppiaggio",
         "editor_btn_cancel":  "✗  Annulla",
         "editor_edit_title":  "Modifica",
-        "editor_seg_label":   "Segmento {} —",
+        "editor_seg_label":   "Segmento {} -",
         "editor_btn_save":    "Salva",
         "editor_filter_show_flagged_only": "Mostra solo segmenti da rivedere",
         "editor_flag_summary": "Segmenti: {total}  ·  Da rivedere: {flagged} (lunghezza: {length}, trascrizione: {whisper}, fallback: {fallback})",
-        "editor_tooltip_length_unfit":         "Traduzione lunga: l'audio sarà accelerato — accorcia",
+        "editor_tooltip_length_unfit":         "Traduzione lunga: l'audio sarà accelerato - accorcia",
         "editor_tooltip_whisper_suspicious":   "Trascrizione sospetta: token isolati o ripetizioni",
         "editor_tooltip_translation_fallback": "Traduzione fallback: l'engine principale ha fallito",
         "warn_editor":        "Editor",
@@ -453,18 +453,18 @@ UI_STRINGS = {
         "opt_no_subs":        "I don't want subtitles",
         "opt_no_demucs":      "Skip voice/music separation (Demucs)",
         "opt_edit_subs":      "Show subtitle editor before dubbing",
-        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 — first run: downloads ~1.8GB)",
-        "opt_lipsync":        "💋 Lip Sync (Wav2Lip — first run: downloads ~416MB)",
+        "opt_xtts":           "🎙 Voice Cloning (Coqui XTTS v2 - first run: downloads ~1.8GB)",
+        "opt_lipsync":        "💋 Lip Sync (Wav2Lip - first run: downloads ~416MB)",
         "label_engine":       "Translation engine:",
         "engine_google":      "Google (default)",
         "engine_deepl":       "DeepL Free",
         "engine_marian":      "MarianMT (local)",
-        "engine_ollama":      "LLM Ollama (local, recommended — concise translations for dubbing)",
+        "engine_ollama":      "LLM Ollama (local, recommended - concise translations for dubbing)",
         "label_deepl_key":    "DeepL API key:",
         "label_ollama_model": "Model:",
         "label_ollama_url":   "Ollama URL:",
         "hint_ollama":        (
-            "Default: qwen3:8b (recommended) — qwen3:4b lightweight (~3 GB), "
+            "Default: qwen3:8b (recommended) - qwen3:4b lightweight (~3 GB), "
             "qwen3:14b higher quality (~9 GB), qwen2.5:7b-instruct legacy. "
             "Requires Ollama installed"
         ),
@@ -509,11 +509,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓  Confirm and start dubbing",
         "editor_btn_cancel":  "✗  Cancel",
         "editor_edit_title":  "Edit",
-        "editor_seg_label":   "Segment {} —",
+        "editor_seg_label":   "Segment {} -",
         "editor_btn_save":    "Save",
         "editor_filter_show_flagged_only": "Show only segments to review",
         "editor_flag_summary": "Segments: {total}  ·  To review: {flagged} (length: {length}, transcript: {whisper}, fallback: {fallback})",
-        "editor_tooltip_length_unfit":         "Translation too long: audio will be sped up — shorten",
+        "editor_tooltip_length_unfit":         "Translation too long: audio will be sped up - shorten",
         "editor_tooltip_whisper_suspicious":   "Suspicious transcript: isolated tokens or repetitions",
         "editor_tooltip_translation_fallback": "Fallback translation: the primary engine failed",
         "warn_editor":        "Editor",
@@ -560,8 +560,8 @@ UI_STRINGS = {
         "opt_no_subs": "لا ترجمات",
         "opt_no_demucs": "تخطي فصل الصوت/الموسيقى (Demucs)",
         "opt_edit_subs": "إظهار محرر الترجمة قبل الدبلجة",
-        "opt_xtts": "استنساخ الصوت (Coqui XTTS v2 — التشغيل الأول: التنزيلات ~1.8 جيجابايت)",
-        "opt_lipsync": "مزامنة الشفاه (Wav2Lip — التشغيل الأول: التنزيل ~416MB)",
+        "opt_xtts": "استنساخ الصوت (Coqui XTTS v2 - التشغيل الأول: التنزيلات ~1.8 جيجابايت)",
+        "opt_lipsync": "مزامنة الشفاه (Wav2Lip - التشغيل الأول: التنزيل ~416MB)",
         "label_engine": "محرك الترجمة:",
         "engine_google": "Google (افتراضي)",
         "engine_deepl": "DeepL Free",
@@ -596,11 +596,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ التأكيد وبدء الدبلجة",
         "editor_btn_cancel": "✗ إلغاء",
         "editor_edit_title": "يحرر",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "يحفظ",
         "editor_filter_show_flagged_only": "إظهار الأجزاء التي تحتاج للمراجعة فقط",
         "editor_flag_summary": "الأجزاء: {total}  ·  للمراجعة: {flagged} (الطول: {length}، النص: {whisper}، الاحتياطي: {fallback})",
-        "editor_tooltip_length_unfit": "الترجمة طويلة: الصوت سيُسرَّع — اختصر",
+        "editor_tooltip_length_unfit": "الترجمة طويلة: الصوت سيُسرَّع - اختصر",
         "editor_tooltip_whisper_suspicious": "نص مشبوه: رموز منفصلة أو تكرارات",
         "editor_tooltip_translation_fallback": "ترجمة احتياطية: فشل المحرك الرئيسي",
         "warn_editor": "محرر",
@@ -612,10 +612,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (محلي، موصى به — ترجمات موجزة للدبلجة)",
+        "engine_ollama": "LLM Ollama (محلي، موصى به - ترجمات موجزة للدبلجة)",
         "label_ollama_model": "النموذج:",
         "label_ollama_url": "عنوان Ollama:",
-        "hint_ollama": "افتراضي: qwen3:8b (موصى به) — qwen3:4b خفيف (~3 جيجابايت)، qwen3:14b جودة أعلى (~9 جيجابايت)، qwen2.5:7b-instruct قديم. يتطلب تثبيت Ollama",
+        "hint_ollama": "افتراضي: qwen3:8b (موصى به) - qwen3:4b خفيف (~3 جيجابايت)، qwen3:14b جودة أعلى (~9 جيجابايت)، qwen2.5:7b-instruct قديم. يتطلب تثبيت Ollama",
         "opt_ollama_thinking":  "🧠 وضع التفكير (أبطأ، ترجمات أفضل)",
         "hint_ollama_thinking": "يتداول خطوة بخطوة، ~10x أبطأ ولكن يقلل من أخطاء التعابير والقواعد",
         "msg_ollama_unavailable": (
@@ -659,8 +659,8 @@ UI_STRINGS = {
         "opt_no_subs": "无字幕",
         "opt_no_demucs": "跳过语音/音乐分离 (Demucs)",
         "opt_edit_subs": "配音前显示字幕编辑器",
-        "opt_xtts": "语音克隆（Coqui XTTS v2 — 首次运行：下载量约 1.8GB）",
-        "opt_lipsync": "唇形同步 (Wav2Lip — 首次运行：下载约 416MB)",
+        "opt_xtts": "语音克隆（Coqui XTTS v2 - 首次运行：下载量约 1.8GB）",
+        "opt_lipsync": "唇形同步 (Wav2Lip - 首次运行：下载约 416MB)",
         "label_engine": "翻译引擎：",
         "engine_google": "Google（默认）",
         "engine_deepl": "DeepL Free",
@@ -695,11 +695,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ 确认并开始配音",
         "editor_btn_cancel": "✗ 取消",
         "editor_edit_title": "编辑",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "节省",
         "editor_filter_show_flagged_only": "仅显示需复查的片段",
         "editor_flag_summary": "片段: {total}  ·  待复查: {flagged} (长度: {length}, 转录: {whisper}, 回退: {fallback})",
-        "editor_tooltip_length_unfit": "译文过长: 音频将被加速 — 请缩短",
+        "editor_tooltip_length_unfit": "译文过长: 音频将被加速 - 请缩短",
         "editor_tooltip_whisper_suspicious": "可疑转录: 孤立标记或重复",
         "editor_tooltip_translation_fallback": "回退翻译: 主翻译引擎失败",
         "warn_editor": "编辑",
@@ -711,10 +711,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "Ollama LLM(本地,推荐 — 简洁的配音翻译)",
+        "engine_ollama": "Ollama LLM(本地,推荐 - 简洁的配音翻译)",
         "label_ollama_model": "模型:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "默认: qwen3:8b(推荐) — qwen3:4b 轻量级(~3 GB), qwen3:14b 更高质量(~9 GB), qwen2.5:7b-instruct 旧版本。需要安装 Ollama",
+        "hint_ollama": "默认: qwen3:8b(推荐) - qwen3:4b 轻量级(~3 GB), qwen3:14b 更高质量(~9 GB), qwen2.5:7b-instruct 旧版本。需要安装 Ollama",
         "opt_ollama_thinking":  "🧠 思考模式 (更慢，翻译更好)",
         "hint_ollama_thinking": "逐步推敲，慢约10倍，但能减少习语和语法错误",
         "msg_ollama_unavailable": (
@@ -758,8 +758,8 @@ UI_STRINGS = {
         "opt_no_subs": "Žádné titulky",
         "opt_no_demucs": "Přeskočit oddělení hlasu a hudby (Demucs)",
         "opt_edit_subs": "Před dabováním zobrazit editor titulků",
-        "opt_xtts": "Hlasové klonování (Coqui XTTS v2 – první spuštění: stažení ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — první spuštění: stažení ~416MB)",
+        "opt_xtts": "Hlasové klonování (Coqui XTTS v2 - první spuštění: stažení ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - první spuštění: stažení ~416MB)",
         "label_engine": "Překladač:",
         "engine_google": "Google (výchozí)",
         "engine_deepl": "DeepL Free",
@@ -794,11 +794,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Potvrďte a spusťte kopírování",
         "editor_btn_cancel": "✗ Zrušit",
         "editor_edit_title": "Upravit",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Uložit",
         "editor_filter_show_flagged_only": "Zobrazit pouze segmenty ke kontrole",
         "editor_flag_summary": "Segmenty: {total}  ·  Ke kontrole: {flagged} (délka: {length}, přepis: {whisper}, záloha: {fallback})",
-        "editor_tooltip_length_unfit": "Překlad příliš dlouhý: zvuk bude zrychlen — zkraťte",
+        "editor_tooltip_length_unfit": "Překlad příliš dlouhý: zvuk bude zrychlen - zkraťte",
         "editor_tooltip_whisper_suspicious": "Podezřelý přepis: izolované tokeny nebo opakování",
         "editor_tooltip_translation_fallback": "Záložní překlad: hlavní engine selhal",
         "warn_editor": "Editor",
@@ -810,10 +810,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokální, doporučeno — stručné překlady pro dabing)",
+        "engine_ollama": "LLM Ollama (lokální, doporučeno - stručné překlady pro dabing)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Výchozí: qwen3:8b (doporučeno) — qwen3:4b odlehčený (~3 GB), qwen3:14b vyšší kvalita (~9 GB), qwen2.5:7b-instruct starší. Vyžaduje nainstalovaný Ollama",
+        "hint_ollama": "Výchozí: qwen3:8b (doporučeno) - qwen3:4b odlehčený (~3 GB), qwen3:14b vyšší kvalita (~9 GB), qwen2.5:7b-instruct starší. Vyžaduje nainstalovaný Ollama",
         "opt_ollama_thinking":  "🧠 Režim přemýšlení (pomalejší, lepší překlady)",
         "hint_ollama_thinking": "Zvažuje krok za krokem, ~10x pomalejší, ale snižuje chyby v idiomech a gramatice",
         "msg_ollama_unavailable": (
@@ -857,8 +857,8 @@ UI_STRINGS = {
         "opt_no_subs": "Ingen undertekster",
         "opt_no_demucs": "Spring stemme-/musikadskillelse over (demucs)",
         "opt_edit_subs": "Vis underteksteditor før dubbing",
-        "opt_xtts": "Stemmekloning (Coqui XTTS v2 — første kørsel: downloads ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — første kørsel: download ~416MB)",
+        "opt_xtts": "Stemmekloning (Coqui XTTS v2 - første kørsel: downloads ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - første kørsel: download ~416MB)",
         "label_engine": "Oversættelsesmotor:",
         "engine_google": "Google (standard)",
         "engine_deepl": "DeepL Free",
@@ -893,11 +893,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Bekræft og start dubbing",
         "editor_btn_cancel": "✗ Annuller",
         "editor_edit_title": "Redigere",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Spare",
         "editor_filter_show_flagged_only": "Vis kun segmenter til gennemgang",
         "editor_flag_summary": "Segmenter: {total}  ·  Til gennemgang: {flagged} (længde: {length}, transskription: {whisper}, reserve: {fallback})",
-        "editor_tooltip_length_unfit": "Oversættelsen er for lang: lyden vil blive fremskyndet — forkort",
+        "editor_tooltip_length_unfit": "Oversættelsen er for lang: lyden vil blive fremskyndet - forkort",
         "editor_tooltip_whisper_suspicious": "Mistænkelig transskription: isolerede tegn eller gentagelser",
         "editor_tooltip_translation_fallback": "Reserveoversættelse: hovedmotoren fejlede",
         "warn_editor": "Redaktør",
@@ -909,10 +909,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokal, anbefalet — koncise oversættelser til dubbing)",
+        "engine_ollama": "LLM Ollama (lokal, anbefalet - koncise oversættelser til dubbing)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "Standard: qwen3:8b (anbefalet) — qwen3:4b let (~3 GB), qwen3:14b højere kvalitet (~9 GB), qwen2.5:7b-instruct ældre. Kræver Ollama installeret",
+        "hint_ollama": "Standard: qwen3:8b (anbefalet) - qwen3:4b let (~3 GB), qwen3:14b højere kvalitet (~9 GB), qwen2.5:7b-instruct ældre. Kræver Ollama installeret",
         "opt_ollama_thinking":  "🧠 Tænketilstand (langsommere, bedre oversættelser)",
         "hint_ollama_thinking": "Overvejer trin for trin, ~10x langsommere, men reducerer idiom-/grammatikfejl",
         "msg_ollama_unavailable": (
@@ -956,8 +956,8 @@ UI_STRINGS = {
         "opt_no_subs": "Geen ondertitels",
         "opt_no_demucs": "Stem-/muziekscheiding overslaan (Demucs)",
         "opt_edit_subs": "Toon de ondertiteleditor vóór het kopiëren",
-        "opt_xtts": "Spraakklonen (Coqui XTTS v2 – eerste keer: downloads ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — eerste keer: download ~416MB)",
+        "opt_xtts": "Spraakklonen (Coqui XTTS v2 - eerste keer: downloads ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - eerste keer: download ~416MB)",
         "label_engine": "Vertaalengine:",
         "engine_google": "Google (standaard)",
         "engine_deepl": "DeepL Free",
@@ -992,11 +992,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Bevestig en begin met kopiëren",
         "editor_btn_cancel": "✗ Annuleren",
         "editor_edit_title": "Bewerking",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Redden",
         "editor_filter_show_flagged_only": "Alleen segmenten ter controle tonen",
         "editor_flag_summary": "Segmenten: {total}  ·  Te controleren: {flagged} (lengte: {length}, transcriptie: {whisper}, fallback: {fallback})",
-        "editor_tooltip_length_unfit": "Vertaling te lang: audio wordt versneld — inkorten",
+        "editor_tooltip_length_unfit": "Vertaling te lang: audio wordt versneld - inkorten",
         "editor_tooltip_whisper_suspicious": "Verdachte transcriptie: losse tokens of herhalingen",
         "editor_tooltip_translation_fallback": "Fallback-vertaling: de hoofdengine faalde",
         "warn_editor": "Editor",
@@ -1008,10 +1008,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokaal, aanbevolen — beknopte vertalingen voor nasynchronisatie)",
+        "engine_ollama": "LLM Ollama (lokaal, aanbevolen - beknopte vertalingen voor nasynchronisatie)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama-URL:",
-        "hint_ollama": "Standaard: qwen3:8b (aanbevolen) — qwen3:4b licht (~3 GB), qwen3:14b hogere kwaliteit (~9 GB), qwen2.5:7b-instruct legacy. Vereist Ollama geïnstalleerd",
+        "hint_ollama": "Standaard: qwen3:8b (aanbevolen) - qwen3:4b licht (~3 GB), qwen3:14b hogere kwaliteit (~9 GB), qwen2.5:7b-instruct legacy. Vereist Ollama geïnstalleerd",
         "opt_ollama_thinking":  "🧠 Denkmodus (langzamer, betere vertalingen)",
         "hint_ollama_thinking": "Overweegt stap voor stap, ~10x langzamer maar minder idioom- en grammaticafouten",
         "msg_ollama_unavailable": (
@@ -1055,8 +1055,8 @@ UI_STRINGS = {
         "opt_no_subs": "Ei tekstityksiä",
         "opt_no_demucs": "Ohita äänen ja musiikin erottelu (Demucs)",
         "opt_edit_subs": "Näytä tekstityseditori ennen kopiointia",
-        "opt_xtts": "Äänen kloonaus (Coqui XTTS v2 – ensimmäinen käyttökerta: lataukset ~1,8 Gt)",
-        "opt_lipsync": "Huulisynkka (Wav2Lip — ensimmäinen ajo: lataa ~416MB)",
+        "opt_xtts": "Äänen kloonaus (Coqui XTTS v2 - ensimmäinen käyttökerta: lataukset ~1,8 Gt)",
+        "opt_lipsync": "Huulisynkka (Wav2Lip - ensimmäinen ajo: lataa ~416MB)",
         "label_engine": "Käännöskone:",
         "engine_google": "Google (oletus)",
         "engine_deepl": "DeepL Free",
@@ -1091,11 +1091,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Vahvista ja aloita kopiointi",
         "editor_btn_cancel": "✗ Peruuta",
         "editor_edit_title": "Muokata",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Tallentaa",
         "editor_filter_show_flagged_only": "Näytä vain tarkistettavat segmentit",
         "editor_flag_summary": "Segmentit: {total}  ·  Tarkistettavia: {flagged} (pituus: {length}, transkriptio: {whisper}, varakone: {fallback})",
-        "editor_tooltip_length_unfit": "Käännös liian pitkä: ääntä nopeutetaan — lyhennä",
+        "editor_tooltip_length_unfit": "Käännös liian pitkä: ääntä nopeutetaan - lyhennä",
         "editor_tooltip_whisper_suspicious": "Epäilyttävä transkriptio: irrallisia tokeneita tai toistoja",
         "editor_tooltip_translation_fallback": "Varakäännös: pääkone epäonnistui",
         "warn_editor": "Toimittaja",
@@ -1107,10 +1107,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (paikallinen, suositeltu — tiiviit käännökset dubbaukseen)",
+        "engine_ollama": "LLM Ollama (paikallinen, suositeltu - tiiviit käännökset dubbaukseen)",
         "label_ollama_model": "Malli:",
         "label_ollama_url": "Ollaman URL:",
-        "hint_ollama": "Oletus: qwen3:8b (suositeltu) — qwen3:4b kevyt (~3 GB), qwen3:14b parempi laatu (~9 GB), qwen2.5:7b-instruct vanha. Vaatii Ollaman asennuksen",
+        "hint_ollama": "Oletus: qwen3:8b (suositeltu) - qwen3:4b kevyt (~3 GB), qwen3:14b parempi laatu (~9 GB), qwen2.5:7b-instruct vanha. Vaatii Ollaman asennuksen",
         "opt_ollama_thinking":  "🧠 Ajattelutila (hitaampi, parempia käännöksiä)",
         "hint_ollama_thinking": "Harkitsee vaiheittain, ~10x hitaampi mutta vähentää idiomi- ja kielioppivirheitä",
         "msg_ollama_unavailable": (
@@ -1154,8 +1154,8 @@ UI_STRINGS = {
         "opt_no_subs": "Pas de sous-titres",
         "opt_no_demucs": "Passer la séparation voix/musique (Demucs)",
         "opt_edit_subs": "Afficher l'éditeur de sous-titres avant la copie",
-        "opt_xtts": "Clonage vocal (Coqui XTTS v2 — première exécution : téléchargements ~ 1,8 Go)",
-        "opt_lipsync": "Synchronisation labiale (Wav2Lip — première exécution : téléchargement ~416 Mo)",
+        "opt_xtts": "Clonage vocal (Coqui XTTS v2 - première exécution : téléchargements ~ 1,8 Go)",
+        "opt_lipsync": "Synchronisation labiale (Wav2Lip - première exécution : téléchargement ~416 Mo)",
         "label_engine": "Moteur de traduction :",
         "engine_google": "Google (par défaut)",
         "engine_deepl": "DeepL Free",
@@ -1190,11 +1190,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Confirmez et démarrez la copie",
         "editor_btn_cancel": "✗ Annuler",
         "editor_edit_title": "Modifier",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Sauvegarder",
         "editor_filter_show_flagged_only": "Afficher uniquement les segments à revoir",
         "editor_flag_summary": "Segments : {total}  ·  À revoir : {flagged} (longueur : {length}, transcription : {whisper}, secours : {fallback})",
-        "editor_tooltip_length_unfit": "Traduction trop longue : l'audio sera accéléré — raccourcissez",
+        "editor_tooltip_length_unfit": "Traduction trop longue : l'audio sera accéléré - raccourcissez",
         "editor_tooltip_whisper_suspicious": "Transcription suspecte : jetons isolés ou répétitions",
         "editor_tooltip_translation_fallback": "Traduction de secours : le moteur principal a échoué",
         "warn_editor": "Éditeur",
@@ -1206,10 +1206,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (local, recommandé — traductions concises pour le doublage)",
+        "engine_ollama": "LLM Ollama (local, recommandé - traductions concises pour le doublage)",
         "label_ollama_model": "Modèle :",
         "label_ollama_url": "URL Ollama :",
-        "hint_ollama": "Par défaut : qwen3:8b (recommandé) — qwen3:4b léger (~3 Go), qwen3:14b qualité supérieure (~9 Go), qwen2.5:7b-instruct hérité. Nécessite Ollama installé",
+        "hint_ollama": "Par défaut : qwen3:8b (recommandé) - qwen3:4b léger (~3 Go), qwen3:14b qualité supérieure (~9 Go), qwen2.5:7b-instruct hérité. Nécessite Ollama installé",
         "opt_ollama_thinking":  "🧠 Mode réflexif (plus lent, meilleures traductions)",
         "hint_ollama_thinking": "Délibère étape par étape, ~10x plus lent mais réduit les erreurs d'idiomes et de grammaire",
         "msg_ollama_unavailable": (
@@ -1253,8 +1253,8 @@ UI_STRINGS = {
         "opt_no_subs": "Keine Untertitel",
         "opt_no_demucs": "Sprach-/Musiktrennung überspringen (Demucs)",
         "opt_edit_subs": "Untertitel-Editor vor dem Überspielen anzeigen",
-        "opt_xtts": "Voice Cloning (Coqui XTTS v2 – erster Durchlauf: Downloads ~1,8 GB)",
-        "opt_lipsync": "Lippensynchronisation (Wav2Lip — Erststart: Download ~416MB)",
+        "opt_xtts": "Voice Cloning (Coqui XTTS v2 - erster Durchlauf: Downloads ~1,8 GB)",
+        "opt_lipsync": "Lippensynchronisation (Wav2Lip - Erststart: Download ~416MB)",
         "label_engine": "Übersetzungs-Engine:",
         "engine_google": "Google (Standard)",
         "engine_deepl": "DeepL Free",
@@ -1289,11 +1289,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Bestätigen und mit dem Überspielen beginnen",
         "editor_btn_cancel": "✗ Abbrechen",
         "editor_edit_title": "Bearbeiten",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Speichern",
         "editor_filter_show_flagged_only": "Nur zu prüfende Segmente anzeigen",
         "editor_flag_summary": "Segmente: {total}  ·  Zu prüfen: {flagged} (Länge: {length}, Transkription: {whisper}, Fallback: {fallback})",
-        "editor_tooltip_length_unfit": "Übersetzung zu lang: Audio wird beschleunigt — kürzen",
+        "editor_tooltip_length_unfit": "Übersetzung zu lang: Audio wird beschleunigt - kürzen",
         "editor_tooltip_whisper_suspicious": "Verdächtige Transkription: isolierte Tokens oder Wiederholungen",
         "editor_tooltip_translation_fallback": "Fallback-Übersetzung: die primäre Engine ist gescheitert",
         "warn_editor": "Editor",
@@ -1305,10 +1305,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokal, empfohlen — präzise Übersetzungen für Synchronisation)",
+        "engine_ollama": "LLM Ollama (lokal, empfohlen - präzise Übersetzungen für Synchronisation)",
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama-URL:",
-        "hint_ollama": "Standard: qwen3:8b (empfohlen) — qwen3:4b leichtgewichtig (~3 GB), qwen3:14b höhere Qualität (~9 GB), qwen2.5:7b-instruct älter. Erfordert installiertes Ollama",
+        "hint_ollama": "Standard: qwen3:8b (empfohlen) - qwen3:4b leichtgewichtig (~3 GB), qwen3:14b höhere Qualität (~9 GB), qwen2.5:7b-instruct älter. Erfordert installiertes Ollama",
         "opt_ollama_thinking":  "🧠 Denkmodus (langsamer, bessere Übersetzungen)",
         "hint_ollama_thinking": "Überlegt Schritt für Schritt, ~10x langsamer, reduziert aber Idiom- und Grammatikfehler",
         "msg_ollama_unavailable": (
@@ -1352,8 +1352,8 @@ UI_STRINGS = {
         "opt_no_subs": "Χωρίς υπότιτλους",
         "opt_no_demucs": "Παράλειψη διαχωρισμού φωνής/μουσικής (Demucs)",
         "opt_edit_subs": "Εμφάνιση του επεξεργαστή υποτίτλων πριν από τη μεταγλώττιση",
-        "opt_xtts": "Κλωνοποίηση φωνής (Coqui XTTS v2 — πρώτη εκτέλεση: λήψεις ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — πρώτη εκτέλεση: λήψη ~416MB)",
+        "opt_xtts": "Κλωνοποίηση φωνής (Coqui XTTS v2 - πρώτη εκτέλεση: λήψεις ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - πρώτη εκτέλεση: λήψη ~416MB)",
         "label_engine": "Μηχανή μετάφρασης:",
         "engine_google": "Google (προεπιλογή)",
         "engine_deepl": "DeepL Free",
@@ -1388,11 +1388,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Επιβεβαιώστε και ξεκινήστε τη μεταγλώττιση",
         "editor_btn_cancel": "✗ Ακύρωση",
         "editor_edit_title": "Εκδίδω",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Εκτός",
         "editor_filter_show_flagged_only": "Εμφάνιση μόνο τμημάτων προς έλεγχο",
         "editor_flag_summary": "Τμήματα: {total}  ·  Προς έλεγχο: {flagged} (μήκος: {length}, μεταγραφή: {whisper}, εφεδρικό: {fallback})",
-        "editor_tooltip_length_unfit": "Μετάφραση πολύ μεγάλη: ο ήχος θα επιταχυνθεί — συντομεύστε",
+        "editor_tooltip_length_unfit": "Μετάφραση πολύ μεγάλη: ο ήχος θα επιταχυνθεί - συντομεύστε",
         "editor_tooltip_whisper_suspicious": "Ύποπτη μεταγραφή: μεμονωμένα tokens ή επαναλήψεις",
         "editor_tooltip_translation_fallback": "Εφεδρική μετάφραση: η κύρια μηχανή απέτυχε",
         "warn_editor": "Συντάκτης",
@@ -1404,10 +1404,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (τοπικό, συνιστώμενο — συνοπτικές μεταφράσεις για μεταγλώττιση)",
+        "engine_ollama": "LLM Ollama (τοπικό, συνιστώμενο - συνοπτικές μεταφράσεις για μεταγλώττιση)",
         "label_ollama_model": "Μοντέλο:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Προεπιλογή: qwen3:8b (συνιστάται) — qwen3:4b ελαφρύ (~3 GB), qwen3:14b υψηλότερη ποιότητα (~9 GB), qwen2.5:7b-instruct παλιό. Απαιτείται εγκατεστημένο Ollama",
+        "hint_ollama": "Προεπιλογή: qwen3:8b (συνιστάται) - qwen3:4b ελαφρύ (~3 GB), qwen3:14b υψηλότερη ποιότητα (~9 GB), qwen2.5:7b-instruct παλιό. Απαιτείται εγκατεστημένο Ollama",
         "opt_ollama_thinking":  "🧠 Λειτουργία σκέψης (πιο αργή, καλύτερες μεταφράσεις)",
         "hint_ollama_thinking": "Συλλογίζεται βήμα-βήμα, ~10x πιο αργή αλλά μειώνει λάθη ιδιωμάτων/γραμματικής",
         "msg_ollama_unavailable": (
@@ -1452,7 +1452,7 @@ UI_STRINGS = {
         "opt_no_demucs": "आवाज/संगीत पृथक्करण छोड़ें (डेमुक्स)",
         "opt_edit_subs": "डबिंग से पहले उपशीर्षक संपादक दिखाएँ",
         "opt_xtts": "वॉयस क्लोनिंग (कोक्वी XTTS v2 - पहला रन: डाउनलोड ~1.8GB)",
-        "opt_lipsync": "लिप सिंक (Wav2Lip — पहली बार: ~416MB डाउनलोड)",
+        "opt_lipsync": "लिप सिंक (Wav2Lip - पहली बार: ~416MB डाउनलोड)",
         "label_engine": "अनुवाद इंजन:",
         "engine_google": "Google (डिफ़ॉल्ट)",
         "engine_deepl": "DeepL Free",
@@ -1487,11 +1487,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ पुष्टि करें और डबिंग शुरू करें",
         "editor_btn_cancel": "✗ रद्द करें",
         "editor_edit_title": "संपादन करना",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "बचाना",
         "editor_filter_show_flagged_only": "केवल समीक्षा वाले खंड दिखाएँ",
         "editor_flag_summary": "खंड: {total}  ·  समीक्षा हेतु: {flagged} (लंबाई: {length}, प्रतिलेख: {whisper}, फॉलबैक: {fallback})",
-        "editor_tooltip_length_unfit": "अनुवाद बहुत लंबा: ऑडियो तेज होगा — छोटा करें",
+        "editor_tooltip_length_unfit": "अनुवाद बहुत लंबा: ऑडियो तेज होगा - छोटा करें",
         "editor_tooltip_whisper_suspicious": "संदिग्ध प्रतिलेख: एकल टोकन या दोहराव",
         "editor_tooltip_translation_fallback": "फॉलबैक अनुवाद: मुख्य इंजन विफल",
         "warn_editor": "संपादक",
@@ -1503,10 +1503,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (स्थानीय, अनुशंसित — डबिंग के लिए संक्षिप्त अनुवाद)",
+        "engine_ollama": "LLM Ollama (स्थानीय, अनुशंसित - डबिंग के लिए संक्षिप्त अनुवाद)",
         "label_ollama_model": "मॉडल:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "डिफ़ॉल्ट: qwen3:8b (अनुशंसित) — qwen3:4b हल्का (~3 GB), qwen3:14b उच्च गुणवत्ता (~9 GB), qwen2.5:7b-instruct पुराना। Ollama स्थापित होना आवश्यक",
+        "hint_ollama": "डिफ़ॉल्ट: qwen3:8b (अनुशंसित) - qwen3:4b हल्का (~3 GB), qwen3:14b उच्च गुणवत्ता (~9 GB), qwen2.5:7b-instruct पुराना। Ollama स्थापित होना आवश्यक",
         "opt_ollama_thinking":  "🧠 थिंकिंग मोड (धीमा, बेहतर अनुवाद)",
         "hint_ollama_thinking": "चरण-दर-चरण विचार करता है, ~10x धीमा लेकिन मुहावरे/व्याकरण की गलतियाँ कम करता है",
         "msg_ollama_unavailable": (
@@ -1550,8 +1550,8 @@ UI_STRINGS = {
         "opt_no_subs": "Nincs felirat",
         "opt_no_demucs": "Hang/zene szétválasztásának kihagyása (Demucs)",
         "opt_edit_subs": "Feliratszerkesztő megjelenítése szinkronizálás előtt",
-        "opt_xtts": "Hangklónozás (Coqui XTTS v2 – első futtatás: letöltések ~1,8 GB)",
-        "opt_lipsync": "Ajakszinkron (Wav2Lip — első futás: letöltés ~416MB)",
+        "opt_xtts": "Hangklónozás (Coqui XTTS v2 - első futtatás: letöltések ~1,8 GB)",
+        "opt_lipsync": "Ajakszinkron (Wav2Lip - első futás: letöltés ~416MB)",
         "label_engine": "Fordítómotor:",
         "engine_google": "Google (alapértelmezett)",
         "engine_deepl": "DeepL Free",
@@ -1586,11 +1586,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Erősítse meg és indítsa el a szinkronizálást",
         "editor_btn_cancel": "✗ Mégse",
         "editor_edit_title": "Szerkesztés",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Megtakarítás",
         "editor_filter_show_flagged_only": "Csak az átvizsgálandó szegmensek mutatása",
         "editor_flag_summary": "Szegmensek: {total}  ·  Ellenőrzendő: {flagged} (hossz: {length}, átirat: {whisper}, tartalék: {fallback})",
-        "editor_tooltip_length_unfit": "A fordítás túl hosszú: a hang fel lesz gyorsítva — rövidítse",
+        "editor_tooltip_length_unfit": "A fordítás túl hosszú: a hang fel lesz gyorsítva - rövidítse",
         "editor_tooltip_whisper_suspicious": "Gyanús átirat: izolált tokenek vagy ismétlések",
         "editor_tooltip_translation_fallback": "Tartalékfordítás: a fő motor meghiúsult",
         "warn_editor": "Szerkesztő",
@@ -1602,10 +1602,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "Ollama LLM (helyi, ajánlott — tömör fordítások szinkronizáláshoz)",
+        "engine_ollama": "Ollama LLM (helyi, ajánlott - tömör fordítások szinkronizáláshoz)",
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "Alapértelmezett: qwen3:8b (ajánlott) — qwen3:4b könnyű (~3 GB), qwen3:14b jobb minőség (~9 GB), qwen2.5:7b-instruct régi. Telepített Ollama szükséges",
+        "hint_ollama": "Alapértelmezett: qwen3:8b (ajánlott) - qwen3:4b könnyű (~3 GB), qwen3:14b jobb minőség (~9 GB), qwen2.5:7b-instruct régi. Telepített Ollama szükséges",
         "opt_ollama_thinking":  "🧠 Gondolkodó mód (lassabb, jobb fordítások)",
         "hint_ollama_thinking": "Lépésről lépésre mérlegel, ~10x lassabb, de csökkenti az idióma- és nyelvtani hibákat",
         "msg_ollama_unavailable": (
@@ -1649,8 +1649,8 @@ UI_STRINGS = {
         "opt_no_subs": "Tidak ada subtitle",
         "opt_no_demucs": "Lewati pemisahan suara/musik (Demucs)",
         "opt_edit_subs": "Tampilkan editor subtitle sebelum melakukan dubbing",
-        "opt_xtts": "Kloning Suara (Coqui XTTS v2 — dijalankan pertama kali: unduh ~1,8GB)",
-        "opt_lipsync": "Sinkronisasi Bibir (Wav2Lip — menjalankan pertama: unduh ~416MB)",
+        "opt_xtts": "Kloning Suara (Coqui XTTS v2 - dijalankan pertama kali: unduh ~1,8GB)",
+        "opt_lipsync": "Sinkronisasi Bibir (Wav2Lip - menjalankan pertama: unduh ~416MB)",
         "label_engine": "Mesin terjemahan:",
         "engine_google": "Google (default)",
         "engine_deepl": "DeepL Free",
@@ -1685,11 +1685,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Konfirmasikan dan mulai dubbing",
         "editor_btn_cancel": "✗ Batal",
         "editor_edit_title": "Sunting",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Menyimpan",
         "editor_filter_show_flagged_only": "Tampilkan hanya segmen yang perlu ditinjau",
         "editor_flag_summary": "Segmen: {total}  ·  Perlu ditinjau: {flagged} (panjang: {length}, transkrip: {whisper}, cadangan: {fallback})",
-        "editor_tooltip_length_unfit": "Terjemahan terlalu panjang: audio akan dipercepat — perpendek",
+        "editor_tooltip_length_unfit": "Terjemahan terlalu panjang: audio akan dipercepat - perpendek",
         "editor_tooltip_whisper_suspicious": "Transkrip mencurigakan: token terisolasi atau pengulangan",
         "editor_tooltip_translation_fallback": "Terjemahan cadangan: mesin utama gagal",
         "warn_editor": "Editor",
@@ -1701,10 +1701,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokal, direkomendasikan — terjemahan ringkas untuk dubbing)",
+        "engine_ollama": "LLM Ollama (lokal, direkomendasikan - terjemahan ringkas untuk dubbing)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Default: qwen3:8b (direkomendasikan) — qwen3:4b ringan (~3 GB), qwen3:14b kualitas lebih tinggi (~9 GB), qwen2.5:7b-instruct lawas. Memerlukan Ollama terinstal",
+        "hint_ollama": "Default: qwen3:8b (direkomendasikan) - qwen3:4b ringan (~3 GB), qwen3:14b kualitas lebih tinggi (~9 GB), qwen2.5:7b-instruct lawas. Memerlukan Ollama terinstal",
         "opt_ollama_thinking":  "🧠 Mode berpikir (lebih lambat, terjemahan lebih baik)",
         "hint_ollama_thinking": "Mempertimbangkan langkah demi langkah, ~10x lebih lambat tetapi mengurangi kesalahan idiom/tata bahasa",
         "msg_ollama_unavailable": (
@@ -1748,8 +1748,8 @@ UI_STRINGS = {
         "opt_no_subs": "字幕なし",
         "opt_no_demucs": "音声と音楽の分離をスキップする (Demucs)",
         "opt_edit_subs": "吹き替え前に字幕エディタを表示",
-        "opt_xtts": "音声クローン作成 (Coqui XTTS v2 — 初回実行: ダウンロード ~1.8GB)",
-        "opt_lipsync": "リップシンク (Wav2Lip — 初回実行: 約416MBダウンロード)",
+        "opt_xtts": "音声クローン作成 (Coqui XTTS v2 - 初回実行: ダウンロード ~1.8GB)",
+        "opt_lipsync": "リップシンク (Wav2Lip - 初回実行: 約416MBダウンロード)",
         "label_engine": "翻訳エンジン:",
         "engine_google": "Google (デフォルト)",
         "engine_deepl": "DeepL Free",
@@ -1784,11 +1784,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ 確認してダビングを開始する",
         "editor_btn_cancel": "✗ キャンセル",
         "editor_edit_title": "編集",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "保存",
         "editor_filter_show_flagged_only": "確認が必要なセグメントのみ表示",
         "editor_flag_summary": "セグメント: {total}  ·  要確認: {flagged} (長さ: {length}, 文字起こし: {whisper}, フォールバック: {fallback})",
-        "editor_tooltip_length_unfit": "翻訳が長すぎ: 音声が速くなります — 短くしてください",
+        "editor_tooltip_length_unfit": "翻訳が長すぎ: 音声が速くなります - 短くしてください",
         "editor_tooltip_whisper_suspicious": "疑わしい文字起こし: 単独のトークンや繰り返し",
         "editor_tooltip_translation_fallback": "フォールバック翻訳: メインエンジンが失敗",
         "warn_editor": "エディタ",
@@ -1800,10 +1800,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "Ollama LLM(ローカル、推奨 — 吹き替え用の簡潔な翻訳)",
+        "engine_ollama": "Ollama LLM(ローカル、推奨 - 吹き替え用の簡潔な翻訳)",
         "label_ollama_model": "モデル:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "デフォルト: qwen3:8b(推奨) — qwen3:4b 軽量(~3 GB)、qwen3:14b 高品質(~9 GB)、qwen2.5:7b-instruct レガシー。Ollama のインストールが必要",
+        "hint_ollama": "デフォルト: qwen3:8b(推奨) - qwen3:4b 軽量(~3 GB)、qwen3:14b 高品質(~9 GB)、qwen2.5:7b-instruct レガシー。Ollama のインストールが必要",
         "opt_ollama_thinking":  "🧠 思考モード（低速、より高品質な翻訳）",
         "hint_ollama_thinking": "段階的に検討、約10倍遅いがイディオム・文法エラーを削減",
         "msg_ollama_unavailable": (
@@ -1847,8 +1847,8 @@ UI_STRINGS = {
         "opt_no_subs": "자막 없음",
         "opt_no_demucs": "음성/음악 분리 건너뛰기(Demucs)",
         "opt_edit_subs": "더빙하기 전에 자막 편집기 표시",
-        "opt_xtts": "음성 복제(Coqui XTTS v2 — 첫 실행: 다운로드 ~1.8GB)",
-        "opt_lipsync": "립싱크 (Wav2Lip — 첫 실행: 약 416MB 다운로드)",
+        "opt_xtts": "음성 복제(Coqui XTTS v2 - 첫 실행: 다운로드 ~1.8GB)",
+        "opt_lipsync": "립싱크 (Wav2Lip - 첫 실행: 약 416MB 다운로드)",
         "label_engine": "번역 엔진:",
         "engine_google": "Google (기본)",
         "engine_deepl": "DeepL Free",
@@ -1883,11 +1883,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ 확인하고 더빙을 시작하세요",
         "editor_btn_cancel": "✗ 취소",
         "editor_edit_title": "편집하다",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "구하다",
         "editor_filter_show_flagged_only": "검토가 필요한 세그먼트만 표시",
         "editor_flag_summary": "세그먼트: {total}  ·  검토 대상: {flagged} (길이: {length}, 전사: {whisper}, 폴백: {fallback})",
-        "editor_tooltip_length_unfit": "번역이 너무 김: 오디오가 빨라짐 — 줄이세요",
+        "editor_tooltip_length_unfit": "번역이 너무 김: 오디오가 빨라짐 - 줄이세요",
         "editor_tooltip_whisper_suspicious": "의심스러운 전사: 고립된 토큰 또는 반복",
         "editor_tooltip_translation_fallback": "폴백 번역: 기본 엔진 실패",
         "warn_editor": "편집자",
@@ -1899,10 +1899,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "Ollama LLM (로컬, 권장 — 더빙용 간결한 번역)",
+        "engine_ollama": "Ollama LLM (로컬, 권장 - 더빙용 간결한 번역)",
         "label_ollama_model": "모델:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "기본값: qwen3:8b (권장) — qwen3:4b 경량 (~3 GB), qwen3:14b 고품질 (~9 GB), qwen2.5:7b-instruct 레거시. Ollama 설치 필요",
+        "hint_ollama": "기본값: qwen3:8b (권장) - qwen3:4b 경량 (~3 GB), qwen3:14b 고품질 (~9 GB), qwen2.5:7b-instruct 레거시. Ollama 설치 필요",
         "opt_ollama_thinking":  "🧠 사고 모드 (느림, 더 나은 번역)",
         "hint_ollama_thinking": "단계별로 숙고, 약 10배 느리지만 관용구/문법 오류 감소",
         "msg_ollama_unavailable": (
@@ -1946,8 +1946,8 @@ UI_STRINGS = {
         "opt_no_subs": "Ingen undertekster",
         "opt_no_demucs": "Hopp over stemme-/musikkseparasjon (demucs)",
         "opt_edit_subs": "Vis undertekstredigering før dubbing",
-        "opt_xtts": "Stemmekloning (Coqui XTTS v2 — første kjøring: nedlastinger ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — første kjøring: last ned ~416MB)",
+        "opt_xtts": "Stemmekloning (Coqui XTTS v2 - første kjøring: nedlastinger ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - første kjøring: last ned ~416MB)",
         "label_engine": "Oversettelsesmotor:",
         "engine_google": "Google (standard)",
         "engine_deepl": "DeepL Free",
@@ -1982,11 +1982,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Bekreft og start dubbingen",
         "editor_btn_cancel": "✗ Avbryt",
         "editor_edit_title": "Redigere",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Spare",
         "editor_filter_show_flagged_only": "Vis bare segmenter til gjennomgang",
         "editor_flag_summary": "Segmenter: {total}  ·  Til gjennomgang: {flagged} (lengde: {length}, transkripsjon: {whisper}, reserve: {fallback})",
-        "editor_tooltip_length_unfit": "Oversettelsen er for lang: lyden blir raskere — forkort",
+        "editor_tooltip_length_unfit": "Oversettelsen er for lang: lyden blir raskere - forkort",
         "editor_tooltip_whisper_suspicious": "Mistenkelig transkripsjon: isolerte tokens eller gjentakelser",
         "editor_tooltip_translation_fallback": "Reserveoversettelse: hovedmotoren feilet",
         "warn_editor": "Redaktør",
@@ -1998,10 +1998,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokal, anbefalt — konsise oversettelser for dubbing)",
+        "engine_ollama": "LLM Ollama (lokal, anbefalt - konsise oversettelser for dubbing)",
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "Standard: qwen3:8b (anbefalt) — qwen3:4b lett (~3 GB), qwen3:14b høyere kvalitet (~9 GB), qwen2.5:7b-instruct eldre. Krever Ollama installert",
+        "hint_ollama": "Standard: qwen3:8b (anbefalt) - qwen3:4b lett (~3 GB), qwen3:14b høyere kvalitet (~9 GB), qwen2.5:7b-instruct eldre. Krever Ollama installert",
         "opt_ollama_thinking":  "🧠 Tenkemodus (tregere, bedre oversettelser)",
         "hint_ollama_thinking": "Vurderer trinn for trinn, ~10x tregere men reduserer idiom-/grammatikkfeil",
         "msg_ollama_unavailable": (
@@ -2045,8 +2045,8 @@ UI_STRINGS = {
         "opt_no_subs": "Brak napisów",
         "opt_no_demucs": "Pomiń separację głosu/muzyki (Demucs)",
         "opt_edit_subs": "Pokaż edytor napisów przed kopiowaniem",
-        "opt_xtts": "Klonowanie głosu (Coqui XTTS v2 — pierwsze uruchomienie: pliki do pobrania ~1,8 GB)",
-        "opt_lipsync": "Synchronizacja ust (Wav2Lip — pierwsze uruchomienie: pobranie ~416MB)",
+        "opt_xtts": "Klonowanie głosu (Coqui XTTS v2 - pierwsze uruchomienie: pliki do pobrania ~1,8 GB)",
+        "opt_lipsync": "Synchronizacja ust (Wav2Lip - pierwsze uruchomienie: pobranie ~416MB)",
         "label_engine": "Silnik tłumaczenia:",
         "engine_google": "Google (domyślny)",
         "engine_deepl": "DeepL Free",
@@ -2081,11 +2081,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Potwierdź i rozpocznij kopiowanie",
         "editor_btn_cancel": "✗ Anuluj",
         "editor_edit_title": "Redagować",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Ratować",
         "editor_filter_show_flagged_only": "Pokaż tylko segmenty do przejrzenia",
         "editor_flag_summary": "Segmenty: {total}  ·  Do przejrzenia: {flagged} (długość: {length}, transkrypcja: {whisper}, zapas: {fallback})",
-        "editor_tooltip_length_unfit": "Tłumaczenie zbyt długie: dźwięk zostanie przyspieszony — skróć",
+        "editor_tooltip_length_unfit": "Tłumaczenie zbyt długie: dźwięk zostanie przyspieszony - skróć",
         "editor_tooltip_whisper_suspicious": "Podejrzana transkrypcja: pojedyncze tokeny lub powtórzenia",
         "editor_tooltip_translation_fallback": "Tłumaczenie zapasowe: główny silnik zawiódł",
         "warn_editor": "Redaktor",
@@ -2097,10 +2097,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokalny, zalecany — zwięzłe tłumaczenia do dubbingu)",
+        "engine_ollama": "LLM Ollama (lokalny, zalecany - zwięzłe tłumaczenia do dubbingu)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Domyślnie: qwen3:8b (zalecane) — qwen3:4b lekki (~3 GB), qwen3:14b wyższa jakość (~9 GB), qwen2.5:7b-instruct starszy. Wymaga zainstalowanego Ollama",
+        "hint_ollama": "Domyślnie: qwen3:8b (zalecane) - qwen3:4b lekki (~3 GB), qwen3:14b wyższa jakość (~9 GB), qwen2.5:7b-instruct starszy. Wymaga zainstalowanego Ollama",
         "opt_ollama_thinking":  "🧠 Tryb myślenia (wolniejszy, lepsze tłumaczenia)",
         "hint_ollama_thinking": "Rozważa krok po kroku, ~10x wolniej, ale zmniejsza błędy w idiomach i gramatyce",
         "msg_ollama_unavailable": (
@@ -2144,8 +2144,8 @@ UI_STRINGS = {
         "opt_no_subs": "Sem legendas",
         "opt_no_demucs": "Pular separação voz/música (Demucs)",
         "opt_edit_subs": "Mostrar editor de legendas antes da dublagem",
-        "opt_xtts": "Clonagem de voz (Coqui XTTS v2 – primeira execução: downloads de aproximadamente 1,8 GB)",
-        "opt_lipsync": "Sincronização labial (Wav2Lip — primeira execução: download ~416MB)",
+        "opt_xtts": "Clonagem de voz (Coqui XTTS v2 - primeira execução: downloads de aproximadamente 1,8 GB)",
+        "opt_lipsync": "Sincronização labial (Wav2Lip - primeira execução: download ~416MB)",
         "label_engine": "Motor de tradução:",
         "engine_google": "Google (padrão)",
         "engine_deepl": "DeepL Free",
@@ -2180,11 +2180,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Confirme e comece a dublagem",
         "editor_btn_cancel": "✗ Cancelar",
         "editor_edit_title": "Editar",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Salvar",
         "editor_filter_show_flagged_only": "Mostrar somente segmentos para revisão",
         "editor_flag_summary": "Segmentos: {total}  ·  Para revisar: {flagged} (comprimento: {length}, transcrição: {whisper}, reserva: {fallback})",
-        "editor_tooltip_length_unfit": "Tradução longa: o áudio será acelerado — encurte",
+        "editor_tooltip_length_unfit": "Tradução longa: o áudio será acelerado - encurte",
         "editor_tooltip_whisper_suspicious": "Transcrição suspeita: tokens isolados ou repetições",
         "editor_tooltip_translation_fallback": "Tradução de reserva: o motor principal falhou",
         "warn_editor": "Editor",
@@ -2196,10 +2196,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (local, recomendado — traduções concisas para dublagem)",
+        "engine_ollama": "LLM Ollama (local, recomendado - traduções concisas para dublagem)",
         "label_ollama_model": "Modelo:",
         "label_ollama_url": "URL do Ollama:",
-        "hint_ollama": "Padrão: qwen3:8b (recomendado) — qwen3:4b leve (~3 GB), qwen3:14b qualidade superior (~9 GB), qwen2.5:7b-instruct legado. Requer Ollama instalado",
+        "hint_ollama": "Padrão: qwen3:8b (recomendado) - qwen3:4b leve (~3 GB), qwen3:14b qualidade superior (~9 GB), qwen2.5:7b-instruct legado. Requer Ollama instalado",
         "opt_ollama_thinking":  "🧠 Modo pensante (mais lento, traduções melhores)",
         "hint_ollama_thinking": "Delibera passo a passo, ~10x mais lento mas reduz erros de idiomas/gramática",
         "msg_ollama_unavailable": (
@@ -2243,8 +2243,8 @@ UI_STRINGS = {
         "opt_no_subs": "Fără subtitrări",
         "opt_no_demucs": "Omiteți separarea voce/muzică (Demucs)",
         "opt_edit_subs": "Afișați editorul de subtitrări înainte de dublare",
-        "opt_xtts": "Clonarea vocii (Coqui XTTS v2 — prima rulare: descărcări ~1,8 GB)",
-        "opt_lipsync": "Lip Sync (Wav2Lip — prima rulare: descărcare ~416MB)",
+        "opt_xtts": "Clonarea vocii (Coqui XTTS v2 - prima rulare: descărcări ~1,8 GB)",
+        "opt_lipsync": "Lip Sync (Wav2Lip - prima rulare: descărcare ~416MB)",
         "label_engine": "Motor de traducere:",
         "engine_google": "Google (implicit)",
         "engine_deepl": "DeepL Free",
@@ -2279,11 +2279,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Confirmați și începeți dublarea",
         "editor_btn_cancel": "✗ Anulează",
         "editor_edit_title": "Edita",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Salva",
         "editor_filter_show_flagged_only": "Afișează doar segmentele de revizuit",
         "editor_flag_summary": "Segmente: {total}  ·  De revizuit: {flagged} (lungime: {length}, transcriere: {whisper}, rezervă: {fallback})",
-        "editor_tooltip_length_unfit": "Traducere prea lungă: audio va fi accelerat — scurtează",
+        "editor_tooltip_length_unfit": "Traducere prea lungă: audio va fi accelerat - scurtează",
         "editor_tooltip_whisper_suspicious": "Transcriere suspectă: tokenuri izolate sau repetiții",
         "editor_tooltip_translation_fallback": "Traducere de rezervă: motorul principal a eșuat",
         "warn_editor": "Editor",
@@ -2295,10 +2295,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (local, recomandat — traduceri concise pentru dublaj)",
+        "engine_ollama": "LLM Ollama (local, recomandat - traduceri concise pentru dublaj)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Implicit: qwen3:8b (recomandat) — qwen3:4b ușor (~3 GB), qwen3:14b calitate superioară (~9 GB), qwen2.5:7b-instruct vechi. Necesită Ollama instalat",
+        "hint_ollama": "Implicit: qwen3:8b (recomandat) - qwen3:4b ușor (~3 GB), qwen3:14b calitate superioară (~9 GB), qwen2.5:7b-instruct vechi. Necesită Ollama instalat",
         "opt_ollama_thinking":  "🧠 Mod gândire (mai lent, traduceri mai bune)",
         "hint_ollama_thinking": "Deliberează pas cu pas, ~10x mai lent, dar reduce erorile de idiomuri/gramatică",
         "msg_ollama_unavailable": (
@@ -2342,8 +2342,8 @@ UI_STRINGS = {
         "opt_no_subs": "Нет субтитров",
         "opt_no_demucs": "Пропустить разделение голоса и музыки (Demucs)",
         "opt_edit_subs": "Показывать редактор субтитров перед перезаписью",
-        "opt_xtts": "Голосовое клонирование (Coqui XTTS v2 — первый запуск: загрузка ~ 1,8 ГБ)",
-        "opt_lipsync": "Синхронизация губ (Wav2Lip — первый запуск: загрузка ~416МБ)",
+        "opt_xtts": "Голосовое клонирование (Coqui XTTS v2 - первый запуск: загрузка ~ 1,8 ГБ)",
+        "opt_lipsync": "Синхронизация губ (Wav2Lip - первый запуск: загрузка ~416МБ)",
         "label_engine": "Движок перевода:",
         "engine_google": "Google (по умолчанию)",
         "engine_deepl": "DeepL Free",
@@ -2378,11 +2378,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Подтвердите и начните перезапись.",
         "editor_btn_cancel": "✗ Отмена",
         "editor_edit_title": "Редактировать",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Сохранять",
         "editor_filter_show_flagged_only": "Показывать только сегменты для проверки",
         "editor_flag_summary": "Сегменты: {total}  ·  К проверке: {flagged} (длина: {length}, транскрипция: {whisper}, резерв: {fallback})",
-        "editor_tooltip_length_unfit": "Перевод слишком длинный: аудио ускорится — сократите",
+        "editor_tooltip_length_unfit": "Перевод слишком длинный: аудио ускорится - сократите",
         "editor_tooltip_whisper_suspicious": "Подозрительная транскрипция: отдельные токены или повторы",
         "editor_tooltip_translation_fallback": "Резервный перевод: основной движок не сработал",
         "warn_editor": "Редактор",
@@ -2394,10 +2394,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (локально, рекомендуется — лаконичные переводы для дубляжа)",
+        "engine_ollama": "LLM Ollama (локально, рекомендуется - лаконичные переводы для дубляжа)",
         "label_ollama_model": "Модель:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "По умолчанию: qwen3:8b (рекомендуется) — qwen3:4b лёгкий (~3 ГБ), qwen3:14b более высокое качество (~9 ГБ), qwen2.5:7b-instruct устаревший. Требуется установленный Ollama",
+        "hint_ollama": "По умолчанию: qwen3:8b (рекомендуется) - qwen3:4b лёгкий (~3 ГБ), qwen3:14b более высокое качество (~9 ГБ), qwen2.5:7b-instruct устаревший. Требуется установленный Ollama",
         "opt_ollama_thinking":  "🧠 Режим рассуждения (медленнее, переводы лучше)",
         "hint_ollama_thinking": "Обдумывает шаг за шагом, ~10x медленнее, но уменьшает ошибки идиом/грамматики",
         "msg_ollama_unavailable": (
@@ -2441,8 +2441,8 @@ UI_STRINGS = {
         "opt_no_subs": "Sin subtítulos",
         "opt_no_demucs": "Saltar separación de voz/música (Demucs)",
         "opt_edit_subs": "Mostrar editor de subtítulos antes del doblaje",
-        "opt_xtts": "Clonación de voz (Coqui XTTS v2 – primera ejecución: descargas ~1,8 GB)",
-        "opt_lipsync": "Sincronización labial (Wav2Lip — primera ejecución: descarga ~416MB)",
+        "opt_xtts": "Clonación de voz (Coqui XTTS v2 - primera ejecución: descargas ~1,8 GB)",
+        "opt_lipsync": "Sincronización labial (Wav2Lip - primera ejecución: descarga ~416MB)",
         "label_engine": "Motor de traducción:",
         "engine_google": "Google (predeterminado)",
         "engine_deepl": "DeepL Free",
@@ -2477,11 +2477,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Confirmar y comenzar a doblar",
         "editor_btn_cancel": "✗ Cancelar",
         "editor_edit_title": "Editar",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Ahorrar",
         "editor_filter_show_flagged_only": "Mostrar solo segmentos a revisar",
         "editor_flag_summary": "Segmentos: {total}  ·  A revisar: {flagged} (longitud: {length}, transcripción: {whisper}, respaldo: {fallback})",
-        "editor_tooltip_length_unfit": "Traducción demasiado larga: el audio se acelerará — acorta",
+        "editor_tooltip_length_unfit": "Traducción demasiado larga: el audio se acelerará - acorta",
         "editor_tooltip_whisper_suspicious": "Transcripción sospechosa: tokens aislados o repeticiones",
         "editor_tooltip_translation_fallback": "Traducción de respaldo: el motor principal falló",
         "warn_editor": "Editor",
@@ -2493,10 +2493,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (local, recomendado — traducciones concisas para doblaje)",
+        "engine_ollama": "LLM Ollama (local, recomendado - traducciones concisas para doblaje)",
         "label_ollama_model": "Modelo:",
         "label_ollama_url": "URL de Ollama:",
-        "hint_ollama": "Por defecto: qwen3:8b (recomendado) — qwen3:4b ligero (~3 GB), qwen3:14b mayor calidad (~9 GB), qwen2.5:7b-instruct heredado. Requiere Ollama instalado",
+        "hint_ollama": "Por defecto: qwen3:8b (recomendado) - qwen3:4b ligero (~3 GB), qwen3:14b mayor calidad (~9 GB), qwen2.5:7b-instruct heredado. Requiere Ollama instalado",
         "opt_ollama_thinking":  "🧠 Modo de pensamiento (más lento, mejores traducciones)",
         "hint_ollama_thinking": "Delibera paso a paso, ~10x más lento pero reduce errores de modismos/gramática",
         "msg_ollama_unavailable": (
@@ -2540,8 +2540,8 @@ UI_STRINGS = {
         "opt_no_subs": "Inga undertexter",
         "opt_no_demucs": "Hoppa över röst-/musikseparation (Demucs)",
         "opt_edit_subs": "Visa undertextredigerare före dubbning",
-        "opt_xtts": "Röstkloning (Coqui XTTS v2 — första körningen: nedladdningar ~1,8 GB)",
-        "opt_lipsync": "Läppsynk (Wav2Lip — första körningen: laddar ner ~416MB)",
+        "opt_xtts": "Röstkloning (Coqui XTTS v2 - första körningen: nedladdningar ~1,8 GB)",
+        "opt_lipsync": "Läppsynk (Wav2Lip - första körningen: laddar ner ~416MB)",
         "label_engine": "Översättningsmotor:",
         "engine_google": "Google (standard)",
         "engine_deepl": "DeepL Free",
@@ -2576,11 +2576,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Bekräfta och börja dubba",
         "editor_btn_cancel": "✗ Avbryt",
         "editor_edit_title": "Redigera",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Spara",
         "editor_filter_show_flagged_only": "Visa endast segment att granska",
         "editor_flag_summary": "Segment: {total}  ·  Att granska: {flagged} (längd: {length}, transkription: {whisper}, reserv: {fallback})",
-        "editor_tooltip_length_unfit": "Översättningen är för lång: ljudet kommer att snabbas upp — förkorta",
+        "editor_tooltip_length_unfit": "Översättningen är för lång: ljudet kommer att snabbas upp - förkorta",
         "editor_tooltip_whisper_suspicious": "Misstänkt transkription: isolerade token eller upprepningar",
         "editor_tooltip_translation_fallback": "Reservöversättning: huvudmotorn misslyckades",
         "warn_editor": "Redaktör",
@@ -2592,10 +2592,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (lokal, rekommenderas — koncisa översättningar för dubbning)",
+        "engine_ollama": "LLM Ollama (lokal, rekommenderas - koncisa översättningar för dubbning)",
         "label_ollama_model": "Modell:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "Standard: qwen3:8b (rekommenderas) — qwen3:4b lätt (~3 GB), qwen3:14b högre kvalitet (~9 GB), qwen2.5:7b-instruct äldre. Kräver installerat Ollama",
+        "hint_ollama": "Standard: qwen3:8b (rekommenderas) - qwen3:4b lätt (~3 GB), qwen3:14b högre kvalitet (~9 GB), qwen2.5:7b-instruct äldre. Kräver installerat Ollama",
         "opt_ollama_thinking":  "🧠 Tänkeläge (långsammare, bättre översättningar)",
         "hint_ollama_thinking": "Överväger steg för steg, ~10x långsammare men minskar idiom-/grammatikfel",
         "msg_ollama_unavailable": (
@@ -2639,8 +2639,8 @@ UI_STRINGS = {
         "opt_no_subs": "Altyazı yok",
         "opt_no_demucs": "Ses/müzik ayrımını atla (Demucs)",
         "opt_edit_subs": "Dublajdan önce altyazı düzenleyiciyi göster",
-        "opt_xtts": "Ses Klonlama (Coqui XTTS v2 — ilk çalıştırma: indirmeler ~1,8 GB)",
-        "opt_lipsync": "Dudak Senkronu (Wav2Lip — ilk çalıştırma: ~416MB indirme)",
+        "opt_xtts": "Ses Klonlama (Coqui XTTS v2 - ilk çalıştırma: indirmeler ~1,8 GB)",
+        "opt_lipsync": "Dudak Senkronu (Wav2Lip - ilk çalıştırma: ~416MB indirme)",
         "label_engine": "Çeviri motoru:",
         "engine_google": "Google (varsayılan)",
         "engine_deepl": "DeepL Free",
@@ -2675,11 +2675,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Onaylayın ve dublajı başlatın",
         "editor_btn_cancel": "✗ İptal",
         "editor_edit_title": "Düzenlemek",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Kaydetmek",
         "editor_filter_show_flagged_only": "Yalnızca incelenecek segmentleri göster",
         "editor_flag_summary": "Segmentler: {total}  ·  İncelenecek: {flagged} (uzunluk: {length}, transkripsiyon: {whisper}, yedek: {fallback})",
-        "editor_tooltip_length_unfit": "Çeviri çok uzun: ses hızlandırılacak — kısaltın",
+        "editor_tooltip_length_unfit": "Çeviri çok uzun: ses hızlandırılacak - kısaltın",
         "editor_tooltip_whisper_suspicious": "Şüpheli transkripsiyon: yalıtık jetonlar veya tekrarlar",
         "editor_tooltip_translation_fallback": "Yedek çeviri: ana motor başarısız oldu",
         "warn_editor": "Editör",
@@ -2691,10 +2691,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (yerel, önerilen — dublaj için özlü çeviriler)",
+        "engine_ollama": "LLM Ollama (yerel, önerilen - dublaj için özlü çeviriler)",
         "label_ollama_model": "Model:",
         "label_ollama_url": "Ollama URL:",
-        "hint_ollama": "Varsayılan: qwen3:8b (önerilen) — qwen3:4b hafif (~3 GB), qwen3:14b daha yüksek kalite (~9 GB), qwen2.5:7b-instruct eski. Ollama kurulu olmasını gerektirir",
+        "hint_ollama": "Varsayılan: qwen3:8b (önerilen) - qwen3:4b hafif (~3 GB), qwen3:14b daha yüksek kalite (~9 GB), qwen2.5:7b-instruct eski. Ollama kurulu olmasını gerektirir",
         "opt_ollama_thinking":  "🧠 Düşünme modu (daha yavaş, daha iyi çeviriler)",
         "hint_ollama_thinking": "Adım adım değerlendirir, ~10x daha yavaş ancak deyim/dilbilgisi hatalarını azaltır",
         "msg_ollama_unavailable": (
@@ -2738,8 +2738,8 @@ UI_STRINGS = {
         "opt_no_subs": "Без субтитрів",
         "opt_no_demucs": "Пропустити розділення голосу та музики (Demucs)",
         "opt_edit_subs": "Показати редактор субтитрів перед дубляжем",
-        "opt_xtts": "Клонування голосу (Coqui XTTS v2 — перший запуск: завантаження ~1,8 ГБ)",
-        "opt_lipsync": "Синхронізація губ (Wav2Lip — перший запуск: завантаження ~416МБ)",
+        "opt_xtts": "Клонування голосу (Coqui XTTS v2 - перший запуск: завантаження ~1,8 ГБ)",
+        "opt_lipsync": "Синхронізація губ (Wav2Lip - перший запуск: завантаження ~416МБ)",
         "label_engine": "Рушій перекладу:",
         "engine_google": "Google (типовий)",
         "engine_deepl": "DeepL Free",
@@ -2774,11 +2774,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Підтвердьте та почніть дубляж",
         "editor_btn_cancel": "✗ Скасувати",
         "editor_edit_title": "Редагувати",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "зберегти",
         "editor_filter_show_flagged_only": "Показувати лише сегменти для перевірки",
         "editor_flag_summary": "Сегменти: {total}  ·  До перевірки: {flagged} (довжина: {length}, транскрипція: {whisper}, резерв: {fallback})",
-        "editor_tooltip_length_unfit": "Переклад задовгий: аудіо буде прискорено — скоротіть",
+        "editor_tooltip_length_unfit": "Переклад задовгий: аудіо буде прискорено - скоротіть",
         "editor_tooltip_whisper_suspicious": "Підозріла транскрипція: ізольовані токени або повтори",
         "editor_tooltip_translation_fallback": "Резервний переклад: основний рушій зазнав збою",
         "warn_editor": "редактор",
@@ -2790,10 +2790,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (локально, рекомендовано — лаконічні переклади для дубляжу)",
+        "engine_ollama": "LLM Ollama (локально, рекомендовано - лаконічні переклади для дубляжу)",
         "label_ollama_model": "Модель:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "За замовчуванням: qwen3:8b (рекомендовано) — qwen3:4b легка (~3 ГБ), qwen3:14b вища якість (~9 ГБ), qwen2.5:7b-instruct застаріла. Потрібен встановлений Ollama",
+        "hint_ollama": "За замовчуванням: qwen3:8b (рекомендовано) - qwen3:4b легка (~3 ГБ), qwen3:14b вища якість (~9 ГБ), qwen2.5:7b-instruct застаріла. Потрібен встановлений Ollama",
         "opt_ollama_thinking":  "🧠 Режим міркування (повільніше, кращі переклади)",
         "hint_ollama_thinking": "Обмірковує крок за кроком, ~10x повільніше, але зменшує помилки ідіом/граматики",
         "msg_ollama_unavailable": (
@@ -2837,8 +2837,8 @@ UI_STRINGS = {
         "opt_no_subs": "Không có phụ đề",
         "opt_no_demucs": "Bỏ qua việc tách giọng/nhạc (Demucs)",
         "opt_edit_subs": "Hiển thị trình chỉnh sửa phụ đề trước khi lồng tiếng",
-        "opt_xtts": "Nhân bản giọng nói (Coqui XTTS v2 — lần chạy đầu tiên: tải xuống ~1,8GB)",
-        "opt_lipsync": "Đồng bộ môi (Wav2Lip — chạy lần đầu: tải ~416MB)",
+        "opt_xtts": "Nhân bản giọng nói (Coqui XTTS v2 - lần chạy đầu tiên: tải xuống ~1,8GB)",
+        "opt_lipsync": "Đồng bộ môi (Wav2Lip - chạy lần đầu: tải ~416MB)",
         "label_engine": "Công cụ dịch:",
         "engine_google": "Google (mặc định)",
         "engine_deepl": "DeepL Free",
@@ -2873,11 +2873,11 @@ UI_STRINGS = {
         "editor_btn_confirm": "✓ Xác nhận và bắt đầu lồng tiếng",
         "editor_btn_cancel": "✗ Hủy",
         "editor_edit_title": "Biên tập",
-        "editor_seg_label": "Segment {} —",
+        "editor_seg_label": "Segment {} -",
         "editor_btn_save": "Cứu",
         "editor_filter_show_flagged_only": "Chỉ hiển thị các đoạn cần xem lại",
         "editor_flag_summary": "Đoạn: {total}  ·  Cần xem lại: {flagged} (độ dài: {length}, phiên âm: {whisper}, dự phòng: {fallback})",
-        "editor_tooltip_length_unfit": "Bản dịch quá dài: âm thanh sẽ bị tăng tốc — rút gọn",
+        "editor_tooltip_length_unfit": "Bản dịch quá dài: âm thanh sẽ bị tăng tốc - rút gọn",
         "editor_tooltip_whisper_suspicious": "Phiên âm đáng ngờ: token riêng lẻ hoặc lặp lại",
         "editor_tooltip_translation_fallback": "Bản dịch dự phòng: engine chính thất bại",
         "warn_editor": "Biên tập viên",
@@ -2889,10 +2889,10 @@ UI_STRINGS = {
         "log_downloading": "Downloading: {}",
         "log_dl_done": "Download complete → {}",
         "log_dl_error": "Download error: {}",
-        "engine_ollama": "LLM Ollama (cục bộ, khuyến nghị — bản dịch ngắn gọn cho lồng tiếng)",
+        "engine_ollama": "LLM Ollama (cục bộ, khuyến nghị - bản dịch ngắn gọn cho lồng tiếng)",
         "label_ollama_model": "Mô hình:",
         "label_ollama_url": "URL Ollama:",
-        "hint_ollama": "Mặc định: qwen3:8b (khuyến nghị) — qwen3:4b nhẹ (~3 GB), qwen3:14b chất lượng cao hơn (~9 GB), qwen2.5:7b-instruct cũ. Yêu cầu đã cài Ollama",
+        "hint_ollama": "Mặc định: qwen3:8b (khuyến nghị) - qwen3:4b nhẹ (~3 GB), qwen3:14b chất lượng cao hơn (~9 GB), qwen2.5:7b-instruct cũ. Yêu cầu đã cài Ollama",
         "opt_ollama_thinking":  "🧠 Chế độ tư duy (chậm hơn, dịch tốt hơn)",
         "hint_ollama_thinking": "Cân nhắc từng bước, chậm ~10x nhưng giảm lỗi thành ngữ/ngữ pháp",
         "msg_ollama_unavailable": (
@@ -3007,7 +3007,7 @@ from videotranslator.platforms import (  # noqa: E402
 )
 
 
-# Strong sentence-ending punctuation — ASCII + CJK full-width + Arabic question mark.
+# Strong sentence-ending punctuation - ASCII + CJK full-width + Arabic question mark.
 # Used by _split_on_punctuation to re-align Whisper segments at natural
 # syntactic boundaries, including Chinese/Japanese/Arabic.
 _END_PUNCT_CHARS = r".?!;。？！；؟"
@@ -3160,7 +3160,7 @@ def _merge_short_segments(
     longer segments have more headroom to absorb language expansion. Trade-off:
     higher maximum peaks, offset by a more aggressive auto-tuned XTTS speed.
     Note: with the new default max_gap=2.0, aggressive=True no longer bumps the
-    gap (max(1.5, 2.0)=2.0) — intentional, conservative for existing callers.
+    gap (max(1.5, 2.0)=2.0) - intentional, conservative for existing callers.
 
     `verbose=True` prints each merged orphan (useful for tuning debugging).
     """
@@ -3382,7 +3382,7 @@ def translate_with_ollama(
     # about the orchestrator.
     _profile = difficulty_profile or _DIFFICULTY_PROFILE_MEDIUM
 
-    # Health check upfront — if Ollama is down we raise immediately instead of
+    # Health check upfront - if Ollama is down we raise immediately instead of
     # failing 300 times in the loop.
     # TASK 2J: if the requested model is missing
     # but the daemon has another usable model, the selector returns it via
@@ -3397,7 +3397,7 @@ def translate_with_ollama(
 
     print(f"     → Ollama ready ({model} @ {base}, slot_aware={slot_aware}, batch={batch_size})", flush=True)
 
-    # Detect Qwen3 family — needs thinking mode disabled to avoid <think>
+    # Detect Qwen3 family - needs thinking mode disabled to avoid <think>
     # blocks in output that XTTS would pronounce as audible chain-of-thought.
     # Sampling parameters tuned per Qwen team's official recommendations:
     #   - Qwen3 non-thinking: T=0.7, TopP=0.8, TopK=20 (avoids endless loops)
@@ -3407,7 +3407,7 @@ def translate_with_ollama(
     is_qwen3 = model.lower().startswith("qwen3")
     # `thinking` is only meaningful for Qwen3 (other models ignore the flag).
     # For non-Qwen3 models the log label stays "standard"; for Qwen3 it reflects
-    # the user's choice — thinking=True enables step-by-step deliberation
+    # the user's choice - thinking=True enables step-by-step deliberation
     # (~10x slower, reduces idiom/grammar errors), False keeps fast behaviour
     # with the /no_think prompt.
     if is_qwen3:
@@ -3434,7 +3434,7 @@ def translate_with_ollama(
     # predicts the P90 of pre_stretch_ratio BEFORE TTS+stretch. Lets the
     # user know upfront whether the dub will be fluent (easy), partially
     # accelerated (medium) or audibly accelerated on most segments (hard).
-    # Informational only — pipeline runs to completion regardless.
+    # Informational only - pipeline runs to completion regardless.
     #
     # tts_speed_factor lookup is per-target-language (it=1.15, en/es/fr/de
     # ~=1.10, zh/ja/ko ~=1.05). Empirical means observed on production
@@ -3632,7 +3632,7 @@ def translate_with_ollama(
                                 flush=True,
                             )
                     if not tr:
-                        # Empty response — treat as failure and fall back.
+                        # Empty response - treat as failure and fall back.
                         raise RuntimeError("empty response")
                 # ── Length re-prompt (TASK 2C-1, 2G v2) ─────────────────
                 # If the first translation is significantly over the budget
@@ -3724,7 +3724,7 @@ def translate_with_ollama(
                 # multi-iter) length retry loop exhausted its budget and
                 # the translation is *still* above the comfort threshold,
                 # mark the segment so the editor highlights it for review.
-                # The pipeline still ships the over-budget translation —
+                # The pipeline still ships the over-budget translation -
                 # this is purely a hint for the human reviewer.
                 if (
                     _seg_target_chars > 0
@@ -3848,7 +3848,7 @@ def translate_with_ollama(
                         f"     ! Ollama translation failed for segment #{i}, keeping source: {e}",
                         flush=True,
                     )
-                # TASK 5C: primary engine failed for this segment — flag so
+                # TASK 5C: primary engine failed for this segment - flag so
                 # the editor surfaces it. Both branches (fallback used OR
                 # source kept) are lower-quality than a successful Ollama
                 # translation, so they share the same flag.
@@ -3917,7 +3917,7 @@ def translate_with_ollama(
             # / quantifier) and we ran the second-pass; "corrected" is
             # the subset where the model produced a substantially
             # different translation that we accepted. A 0/N corrected
-            # rate is normal on clean translations — it just means the
+            # rate is normal on clean translations - it just means the
             # first pass already preserved every negation.
             print(
                 f"     → CoVe verification: {cove_metrics.summary()}",
@@ -4068,7 +4068,7 @@ def _resolve_wav2lip_paths():
     writable.
 
     Backwards compatibility: callers that previously used a single
-    ``WAV2LIP_DIR`` keep working — ``WAV2LIP_DIR`` is aliased to ``asset_dir``
+    ``WAV2LIP_DIR`` keep working - ``WAV2LIP_DIR`` is aliased to ``asset_dir``
     below, which is exactly what the legacy code did when assets were
     already populated under the system path or fell back to
     ``~/.local/share/wav2lip``.
@@ -4113,7 +4113,7 @@ WAV2LIP_BASE_PKGS = [req.pip_name for req in WAV2LIP_BASE_REQUIREMENTS]
 # `KeyError: '__version__'` because its setup.py uses the
 # get_version() helper that relies on PEP 667-broken locals() semantics.
 # `new-basicsr` ships a pre-built wheel (no setup.py invocation at install
-# time) AND installs the SAME top-level `basicsr` package — every
+# time) AND installs the SAME top-level `basicsr` package - every
 # `import basicsr...` in Wav2Lip / facexlib keeps working unchanged.
 WAV2LIP_FACE_PKGS = ["new-basicsr", "facexlib"]
 
@@ -4156,7 +4156,7 @@ def _install_wav2lip_base_stack() -> None:
         check=False,
     )
     if result.returncode != 0:
-        print("     ! Some Wav2Lip base deps failed to install — lipsync may not work.", flush=True)
+        print("     ! Some Wav2Lip base deps failed to install - lipsync may not work.", flush=True)
 
 
 def _install_wav2lip_face_stack_linux() -> None:
@@ -4166,7 +4166,7 @@ def _install_wav2lip_face_stack_linux() -> None:
     via cmake + libboost. We pre-check for cmake and emit an actionable error
     instead of letting pip dump a long traceback.
 
-    `new-basicsr` is a maintained fork of the abandoned `basicsr` 1.4.2 — it
+    `new-basicsr` is a maintained fork of the abandoned `basicsr` 1.4.2 - it
     ships a pre-built wheel and installs as the same `basicsr` module, which
     sidesteps the `KeyError: '__version__'` build failure of the original on
     Python 3.13 (PEP 667 broke its setup.py exec/locals pattern).
@@ -4184,7 +4184,7 @@ def _install_wav2lip_face_stack_linux() -> None:
             check=False,
         )
         if res.returncode != 0:
-            print("     ! new-basicsr/facexlib install failed — lipsync face detection may not work.", flush=True)
+            print("     ! new-basicsr/facexlib install failed - lipsync face detection may not work.", flush=True)
 
     # dlib: short-circuit if already importable (system package or prior install).
     try:
@@ -4198,7 +4198,7 @@ def _install_wav2lip_face_stack_linux() -> None:
         print(
             "     ! dlib not installed: cmake is required to build dlib from source.\n"
             "       Install it with:  sudo apt install cmake build-essential libboost-all-dev\n"
-            "       Then rerun this tool — Wav2Lip lipsync will be retried automatically.",
+            "       Then rerun this tool - Wav2Lip lipsync will be retried automatically.",
             flush=True,
         )
         return
@@ -4638,7 +4638,7 @@ class _TkStreamRedirect(io.TextIOBase):
 
     def _flush_buf(self):
         self._flush_pending = False
-        buf, self._buf = self._buf, []  # atomic swap under GIL — safe against concurrent append()
+        buf, self._buf = self._buf, []  # atomic swap under GIL - safe against concurrent append()
         if buf:
             try:
                 self._on_write("".join(buf))
@@ -4672,7 +4672,7 @@ class SubtitleEditor(tk.Toplevel):
         self.segments   = [s.copy() for s in segments]
         self.on_confirm = on_confirm
 
-        # TASK 5C: filter state — when True, only segments with at least one
+        # TASK 5C: filter state - when True, only segments with at least one
         # quality flag are shown. Useful on long videos (200+ segments) where
         # only a handful are flagged for review.
         self._filter_flagged_only = tk.BooleanVar(value=False)
@@ -4712,7 +4712,7 @@ class SubtitleEditor(tk.Toplevel):
             selectcolor=BG, relief="flat", borderwidth=0,
             highlightthickness=0, font=("Helvetica", 9),
         )
-        # Disable the checkbox when there are zero flagged segments — toggling
+        # Disable the checkbox when there are zero flagged segments - toggling
         # it would blank the table, which is confusing.
         if flag_count["any"] == 0:
             chk.configure(state="disabled")
@@ -4732,7 +4732,7 @@ class SubtitleEditor(tk.Toplevel):
         # TASK 5C: configure colour tags for each known quality flag. The
         # palette is defined in videotranslator.quality_flags so the GUI
         # and the pipeline stay in sync (and so the colours are unit-tested
-        # for shape). Catppuccin Mocha companions to BG=#1e1e2e — high
+        # for shape). Catppuccin Mocha companions to BG=#1e1e2e - high
         # saturation backgrounds with dark FG so flagged rows pop without
         # losing legibility. Tag priority is resolved by primary_flag()
         # which returns the most severe flag for the row.
@@ -4922,7 +4922,7 @@ class SubtitleEditor(tk.Toplevel):
 
     def destroy(self):  # type: ignore[override]
         # Make sure the orphan tooltip Toplevel is cleaned up when the
-        # editor closes — otherwise it would linger as a ghost label.
+        # editor closes - otherwise it would linger as a ghost label.
         self._hide_tooltip()
         super().destroy()
 
@@ -4974,7 +4974,7 @@ class App(tk.Tk):
         # Translation engine: "google" | "deepl" | "marian" | "llm_ollama"
         self._translation_engine = tk.StringVar(value="google")
         self._deepl_key_var      = tk.StringVar()
-        # Ollama LLM config (v2.0) — preset da config JSON se presente
+        # Ollama LLM config (v2.0) - preset da config JSON se presente
         _ocfg = load_config()
         self._ollama_model_var   = tk.StringVar(
             value=_ocfg.get("ollama_model", "qwen3:8b")
@@ -4999,7 +4999,7 @@ class App(tk.Tk):
         self._hotwords_var    = tk.StringVar(
             value=str(_ocfg.get("hotwords", ""))
         )
-        # Active quality preset (Fast / Balanced / Studio / Cinematic) — maps
+        # Active quality preset (Fast / Balanced / Studio / Cinematic) - maps
         # onto the existing Tk vars; no new pipeline state is introduced.
         self._active_profile = tk.StringVar(value="balanced")
         # Summary line shown in the START card (lang pair + engine + profile).
@@ -5016,7 +5016,7 @@ class App(tk.Tk):
         self._pending_pkgs_after_ffmpeg: list[str] = []
         self._preflight_running = False
 
-        # ── ttk Style — Neon Dark ─────────────────────────────────────────
+        # ── ttk Style - Neon Dark ─────────────────────────────────────────
         style = ttk.Style(self)
         style.theme_use("clam")
         style.configure("TCombobox",
@@ -5039,7 +5039,7 @@ class App(tk.Tk):
 
         self._build_ui()
         # Restore log panel visibility from config (default collapsed in the
-        # modernized GUI — the log starts hidden unless config opts in).
+        # modernized GUI - the log starts hidden unless config opts in).
         self._log_visible = bool(_ocfg.get("ui_log_visible", False))
         if not self._log_visible:
             self._log_container.grid_remove()
@@ -5059,7 +5059,7 @@ class App(tk.Tk):
         self.after(800, self._upgrade_ytdlp_in_background)
         self._optional_checked = False
 
-        # Install global redirect once — routes print() to per-thread GUI log
+        # Install global redirect once - routes print() to per-thread GUI log
         sys.stdout = _GlobalRedirect(sys.stdout)
         sys.stderr = _GlobalRedirect(sys.stderr)
 
@@ -5067,7 +5067,7 @@ class App(tk.Tk):
         """Set the window icon from the bundled assets folder.
 
         Gracefully falls back to the default Tk icon if assets/ is missing or
-        the image cannot be loaded — common e.g. when the GUI is launched
+        the image cannot be loaded - common e.g. when the GUI is launched
         from a source checkout without the assets committed yet.
         """
         here = Path(__file__).resolve().parent
@@ -5133,7 +5133,7 @@ class App(tk.Tk):
     def _check_deps_on_start(self):
         missing_pkgs, missing_bins = check_dependencies()
         if not missing_pkgs and not missing_bins:
-            # Nothing required to install — safe to check optional now
+            # Nothing required to install - safe to check optional now
             self.after(300, self._check_optional_deps)
             return
         # Serialize: install ffmpeg first, then pip packages in _ffmpeg_done callback
@@ -5147,7 +5147,7 @@ class App(tk.Tk):
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
         self._progress.start(12)
-        self._log_write("[*] ffmpeg not found — installing automatically...\n")
+        self._log_write("[*] ffmpeg not found - installing automatically...\n")
 
         def do():
             ok = False
@@ -5329,7 +5329,7 @@ class App(tk.Tk):
                 with contextlib.suppress(Exception):
                     proc.kill()
                 # On Windows, TerminateProcess does not always unblock a
-                # pending read on the child's stdout pipe immediately —
+                # pending read on the child's stdout pipe immediately -
                 # close our end so the for-loop wakes up even if the OS
                 # is slow to tear down the pipe.
                 with contextlib.suppress(Exception):
@@ -5348,17 +5348,17 @@ class App(tk.Tk):
                     proc.wait(timeout=30)
                 if timed_out["fired"]:
                     self.after(0, self._log_write,
-                               f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
+                               f"    ! pip install timed out after {PIP_TIMEOUT}s - aborting.\n")
                     ok = False
                 else:
                     ok = proc.returncode == 0
             except Exception:
                 # If the timeout watchdog closed stdout the iterator raises
-                # here — still print the timeout message so the user sees the
+                # here - still print the timeout message so the user sees the
                 # cause instead of a generic "Installation failed".
                 if timed_out["fired"]:
                     self.after(0, self._log_write,
-                               f"    ! pip install timed out after {PIP_TIMEOUT}s — aborting.\n")
+                               f"    ! pip install timed out after {PIP_TIMEOUT}s - aborting.\n")
                 with contextlib.suppress(Exception):
                     proc.kill()
                     proc.wait(timeout=30)
@@ -5378,7 +5378,7 @@ class App(tk.Tk):
             self._log_write(f"[✓] Installed: {', '.join(packages)}\n")
         else:
             self._log_write("[✗] Installation failed. Check the log above for details.\n")
-        # Required install chain finished — safe to check optional packages now
+        # Required install chain finished - safe to check optional packages now
         self.after(300, self._check_optional_deps)
 
     def _upgrade_ytdlp_in_background(self):
@@ -5458,7 +5458,7 @@ class App(tk.Tk):
                 seen.add(key)
                 items.append((pip_pkgs, desc))
 
-        names_str = "\n".join(f"  • {pkgs[0]} — {desc}" for pkgs, desc in items)
+        names_str = "\n".join(f"  • {pkgs[0]} - {desc}" for pkgs, desc in items)
         answer = messagebox.askyesno(
             "Pacchetti opzionali mancanti",
             f"I seguenti pacchetti opzionali non sono installati:\n\n{names_str}\n\n"
@@ -5632,7 +5632,7 @@ class App(tk.Tk):
 
     def _build_header(self, parent):
         """Top header bar: logo, subtitle, status badges, UI lang selector."""
-        # Outer header frame — spans both columns
+        # Outer header frame - spans both columns
         header_wrap = tk.Frame(parent, bg=BG)
         header_wrap.grid(row=0, column=0, columnspan=2, sticky="ew")
         header_wrap.columnconfigure(1, weight=1)
@@ -6163,7 +6163,7 @@ class App(tk.Tk):
             wraplength=280, justify="left")
         self._lbl_summary.pack(anchor="w", pady=(0, 10))
 
-        # Start button — full-width, prominent, glow ring
+        # Start button - full-width, prominent, glow ring
         _ws, self._btn = self._glow_btn(
             inner, glow=ACC,
             text=self._s("btn_start"), command=self._start,
@@ -6225,10 +6225,10 @@ class App(tk.Tk):
         self._main_frame.columnconfigure(0, weight=1)
         self._main_frame.columnconfigure(1, weight=0)
 
-        # Header (row 0 — includes its own accent bottom line)
+        # Header (row 0 - includes its own accent bottom line)
         self._build_header(self._main_frame)
 
-        # Content frame (row 1 — header accent line at bottom of row 0 acts as separator)
+        # Content frame (row 1 - header accent line at bottom of row 0 acts as separator)
         self._main_frame.rowconfigure(1, weight=1)
         content = tk.Frame(self._main_frame, bg=BG)
         content.grid(row=1, column=0, columnspan=2, sticky="nsew",
@@ -6262,7 +6262,7 @@ class App(tk.Tk):
             log_header, text=self._s("label_log_panel"),
             bg=BG, fg=FG, font=("Helvetica", 9, "bold"))
         self._lbl_log_panel.pack(side="left")
-        # Default collapsed — log starts hidden (btn_log_show text)
+        # Default collapsed - log starts hidden (btn_log_show text)
         _wt, self._btn_log_toggle = self._glow_btn(
             log_header, glow=BORDER,
             text=self._s("btn_log_show"), command=self._toggle_log,
@@ -6573,7 +6573,7 @@ class App(tk.Tk):
     def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
         """Worker thread: runs steps 1-4. Returns True if Ollama is ready.
 
-        This is the heart of the flow — each step has a precise early-exit
+        This is the heart of the flow - each step has a precise early-exit
         so that no state accumulates, and every popup is forwarded to the main
         thread via `_ask_yes_no_sync` (blocks the worker until the user
         responds, but the GUI stays fluid).
@@ -6611,7 +6611,7 @@ class App(tk.Tk):
             self._log_async(f"[+] Ollama trovato: {binary}\n")
 
         # Step 2: daemon running?
-        # Quick check first (cheap when daemon is already up — common on second runs).
+        # Quick check first (cheap when daemon is already up - common on second runs).
         if _ollama_is_daemon_running(url, timeout=2.0):
             self._log_async(f"[+] Ollama daemon gia' attivo su {url}\n")
         else:
@@ -6632,7 +6632,7 @@ class App(tk.Tk):
                 if not ok:
                     # Port-conflict fallback: if `ollama serve` failed because
                     # something else (Ollama Desktop, prior daemon) bound 11434,
-                    # the existing daemon is fine — verify and use it.
+                    # the existing daemon is fine - verify and use it.
                     msg_lower = (msg or "").lower()
                     port_conflict = any(s in msg_lower for s in (
                         "address already in use",
@@ -6644,7 +6644,7 @@ class App(tk.Tk):
                     ))
                     if port_conflict and _ollama_is_daemon_running(url, timeout=3.0):
                         self._log_async(
-                            f"[+] Port 11434 occupata da un altro daemon Ollama gia' attivo — "
+                            f"[+] Port 11434 occupata da un altro daemon Ollama gia' attivo - "
                             f"riutilizzo quello.\n"
                         )
                     else:
@@ -6655,7 +6655,7 @@ class App(tk.Tk):
         # TASK 2J: health check now returns (ok, msg, resolved_model). When
         # the requested tag is missing but the daemon has compatible models
         # the selector picks a fallback and returns ok=True with a warning.
-        # We surface the warning to the user but DO NOT prompt for pull —
+        # We surface the warning to the user but DO NOT prompt for pull -
         # the pipeline will run on `resolved_model` automatically.
         health_ok, health_msg, resolved_model = _ollama_health_check(url, model, timeout=5.0)
         if health_ok and health_msg and resolved_model and resolved_model != model:
@@ -6710,7 +6710,7 @@ class App(tk.Tk):
                 done.set()
 
         self.after(0, _prompt)
-        # Wait up to 5 minutes — beyond that the dialog has likely been lost.
+        # Wait up to 5 minutes - beyond that the dialog has likely been lost.
         done.wait(timeout=300)
         return result["v"]
 
@@ -6825,7 +6825,7 @@ class App(tk.Tk):
         if editor_requested and len(urls) > 1:
             self._log_write(
                 "[i] Editor sottotitoli supportato solo su singolo URL "
-                "— skipping editor for batch URLs.\n"
+                "- skipping editor for batch URLs.\n"
             )
 
         def run():
@@ -6850,11 +6850,11 @@ class App(tk.Tk):
                         # Editor branch: schedule phase 1 (transcribe+translate)
                         # on the main thread and let _start_with_editor /
                         # _run_with_segments / _open_editor (cancel) take care
-                        # of cleaning up `stable`. Skip _on_done here — it will
+                        # of cleaning up `stable`. Skip _on_done here - it will
                         # be called by the editor flow when done/aborted.
                         if use_editor_for_single_url:
                             self.after(0, self._log_write,
-                                       "[i] Opening subtitle editor — "
+                                       "[i] Opening subtitle editor - "
                                        "pipeline paused, waiting for user...\n")
                             self.after(0, self._start_with_editor,
                                        stable, stable)
@@ -6924,7 +6924,7 @@ class App(tk.Tk):
         # If engine = llm_ollama, run the setup before starting the real
         # pipeline. On failure (user refuses install, download aborted,
         # daemon won't start) translate_segments automatically falls back
-        # to Google — so we proceed regardless.
+        # to Google - so we proceed regardless.
         if self._translation_engine.get() == "llm_ollama":
             self._ollama_setup_in_flight = True
             self._btn.configure(state="disabled", text=self._s("btn_installing"))
@@ -6956,7 +6956,7 @@ class App(tk.Tk):
         self._dispatch_start()
 
     def _dispatch_start(self) -> None:
-        """Route to editor or batch — common entry point for _start and
+        """Route to editor or batch - common entry point for _start and
         _start_after_ollama."""
         if self._edit_subs.get() and len(self._batch_files) == 1:
             self._start_with_editor(self._batch_files[0])
@@ -6992,7 +6992,7 @@ class App(tk.Tk):
         if hf_token and use_diarization:
             save_hf_token(hf_token)
         # Persist Ollama prefs (model/url/slot_aware/thinking) when the user
-        # has selected this engine — so the fields are pre-filled on next launch.
+        # has selected this engine - so the fields are pre-filled on next launch.
         if translation_engine == "llm_ollama":
             try:
                 save_config({
@@ -7037,7 +7037,7 @@ class App(tk.Tk):
         ``cleanup_path``: path of a temporary file (typically the YouTube
         download moved to a stable path) that the editor flow must remove
         at the end of the pipeline (both on confirm and on cancel/error).
-        For local files opened by the user it is ``None`` — the file is
+        For local files opened by the user it is ``None`` - the file is
         left untouched.
         """
         self._log_write("Phase 1: Transcription + translation (no dubbing)...\n")
@@ -7112,7 +7112,7 @@ class App(tk.Tk):
             if evt.widget is not editor:
                 return
             if not confirmed["flag"]:
-                self._log_write("[i] Editor closed without confirmation — "
+                self._log_write("[i] Editor closed without confirmation - "
                                 "discarding download.\n")
                 self._cleanup_editor_tempfile(cleanup_path)
 
@@ -7151,7 +7151,7 @@ class App(tk.Tk):
         threading.Thread(target=do, daemon=True).start()
 
     def _run_batch(self, files: list[str]):
-        """Batch translation — calls translate_video() directly in a worker thread."""
+        """Batch translation - calls translate_video() directly in a worker thread."""
         self._running = True
         self._btn.configure(state="disabled", text=self._s("btn_processing"))
         self._progress.start(12)

@@ -180,7 +180,7 @@ def translate_segments(
                             _time.sleep(wait)
                             continue
                         if r.status_code == 403:
-                            raise RuntimeError(f"DeepL 403 Forbidden — verifica la API key ({r.text[:200]})")
+                            raise RuntimeError(f"DeepL 403 Forbidden - verifica la API key ({r.text[:200]})")
                         r.raise_for_status()
                         data = r.json()
                         for j, item in zip(chunk_idx, data.get("translations", [])):
@@ -205,7 +205,7 @@ def translate_segments(
                     entry["speaker"] = seg["speaker"]
                 # TASK 5C: propagate upstream quality flags (whisper_suspicious)
                 # through the DeepL path. DeepL itself doesn't add new flags
-                # in this version — failed batches just keep the source text.
+                # in this version - failed batches just keep the source text.
                 _flags_in = compute_segment_quality_flags(seg)
                 if _flags_in:
                     entry["_quality_flags"] = _flags_in

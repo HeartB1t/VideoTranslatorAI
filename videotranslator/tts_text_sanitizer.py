@@ -35,8 +35,8 @@ _REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ("...", "."),
     ("..", "."),
     # Em-dash, en-dash, double hyphen -> comma (soft pause, no spelling).
-    ("—", ","),  # —
-    ("–", ","),  # –
+    ("\u2014", ","),  # em dash
+    ("\u2013", ","),  # en dash
     ("--", ","),
     # Semicolon -> period. Colon is handled via regex below to preserve
     # digit-flanked occurrences (clock times, scores, ratios).
@@ -50,7 +50,7 @@ _REPLACEMENTS: tuple[tuple[str, str], ...] = (
 _COLON_SAFE_TO_COMMA = re.compile(r"(?<!\d):|:(?!\d)")
 
 # Collapse repeated commas / periods left by the substitutions
-# (e.g. ", , " or ". . " when source contained "—," or ".:").
+# (e.g. ", , " or ". . " when source contained an em dash + comma, or ".:").
 _COLLAPSE_DOUBLE_COMMA = re.compile(r",(\s*,)+")
 _COLLAPSE_DOUBLE_PERIOD = re.compile(r"\.(\s*\.)+")
 # Collapse ", ." or ". ," sequences to a single period (period wins).

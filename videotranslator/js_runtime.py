@@ -7,9 +7,9 @@ falls back to weak player clients that YouTube bot-blocks, surfacing as
 
 Policy implemented here (two tiers):
 
-* **Tier 1 — no install:** if a runtime is already reachable (on PATH or in the
+* **Tier 1 - no install:** if a runtime is already reachable (on PATH or in the
   app-local bin dir), tell yt-dlp to use it. Zero download.
-* **Tier 2 — auto-install:** if none is present, fetch the standalone ``deno``
+* **Tier 2 - auto-install:** if none is present, fetch the standalone ``deno``
   binary (single self-contained file, no admin) into the app-local bin dir and
   point yt-dlp at it.
 
@@ -123,7 +123,7 @@ def find_runtime(
     """Return (runtime_name, path) of the first available runtime, or None.
 
     Looks on PATH first, then in the app-local bin dir (where Tier-2 installs
-    land — that dir is intentionally NOT added to the user's PATH).
+    land - that dir is intentionally NOT added to the user's PATH).
     """
     system = system if system is not None else sys.platform
     resolved_bin = Path(bin_dir) if bin_dir is not None else app_bin_dir(system=system)
@@ -226,7 +226,7 @@ def ensure_js_runtime(
 
     if log_cb:
         log_cb(
-            "[!] No JS runtime found — yt-dlp needs one for YouTube. "
+            "[!] No JS runtime found - yt-dlp needs one for YouTube. "
             "Installing deno automatically (single binary, no admin)..."
         )
     try:

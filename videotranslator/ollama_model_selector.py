@@ -23,7 +23,7 @@ from typing import Sequence
 
 # Default ranking of model families to consider when the requested family
 # is not available. ``qwen3`` first because it carries our calibration
-# (thinking mode, slot-aware prompt, length re-prompt) — those features
+# (thinking mode, slot-aware prompt, length re-prompt) - those features
 # generalise reasonably to the other qwen* families and most modern
 # instruction-tuned LLMs but we want a deterministic, conservative order.
 DEFAULT_PREFERRED_FAMILIES: tuple[str, ...] = (
@@ -91,7 +91,7 @@ def select_compatible_model(
        match, return the largest model in ``available`` overall, breaking
        ties alphabetically.
 
-    The function never raises on bad inputs — empty/None requested string
+    The function never raises on bad inputs - empty/None requested string
     is treated as "no preference" and goes straight to step 4.
     """
     if not available:

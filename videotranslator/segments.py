@@ -256,33 +256,33 @@ def expand_tight_slots(
 
     Pure function: returns a NEW list of dicts; the input ``segments`` and
     its dict elements are never mutated. Only ``start`` and ``end`` are
-    adjusted on the copies — text and metadata are preserved verbatim, so
+    adjusted on the copies - text and metadata are preserved verbatim, so
     no translation is invalidated.
 
     Strategy (per segment ``i`` whose expected ratio exceeds
     ``tight_ratio_threshold``); steps are tried in order and each subsequent
     step runs only if the segment is still tight after the previous one:
 
-    Step 1 — forward gap stealing (silent gap ``[i].end → [i+1].start``)
+    Step 1 - forward gap stealing (silent gap ``[i].end → [i+1].start``)
         If the gap exceeds ``2 × min_gap_keep_s``, steal up to
         ``min(gap - min_gap_keep_s, max_gap_steal_s)`` seconds by
         extending ``segments[i].end``.
 
-    Step 1b — backward gap stealing (silent gap ``[i-1].end → [i].start``)
+    Step 1b - backward gap stealing (silent gap ``[i-1].end → [i].start``)
         Symmetric to Step 1: if the gap exceeds ``2 × min_gap_keep_s``,
         anticipate ``segments[i].start`` by stealing the silence (the
         previous end is preserved so the conserved gap shrinks but
         never disappears). Skipped for the first segment and when
         ``bidirectional=False``.
 
-    Step 2 — forward neighbor borrowing
+    Step 2 - forward neighbor borrowing
         If still tight AND ``segments[i+1]`` is "easy" (expected ratio
         below ``neighbor_easy_ratio``), steal up to
         ``max_neighbor_steal_s`` from the start of the next slot. Both
         ``segments[i].end`` and ``segments[i+1].start`` shift by the
         same delta so the boundary moves but no overlap is created.
 
-    Step 2b — backward neighbor borrowing
+    Step 2b - backward neighbor borrowing
         Symmetric to Step 2: if still tight AND ``segments[i-1]`` is
         "easy" (using its CURRENT slot, i.e. post any prior cessions),
         steal up to ``max_neighbor_steal_s`` from the tail of the
@@ -290,7 +290,7 @@ def expand_tight_slots(
         shift by the same delta. Skipped for the first segment and when
         ``bidirectional=False``.
 
-    Order of tentatives: 1 → 1b → 2 → 2b — silent gaps are tried before
+    Order of tentatives: 1 → 1b → 2 → 2b - silent gaps are tried before
     invasive neighbor stealing because they don't compete with another
     segment's slot.
 
@@ -444,7 +444,7 @@ def _last_word(text: str) -> str:
 
 def _starts_with_proper_capital(text: str) -> bool:
     """Return True when ``text`` starts with an uppercase letter that is
-    *not* the English standalone "I" / "I'm" / "I'll" — those are legitimate
+    *not* the English standalone "I" / "I'm" / "I'll" - those are legitimate
     lowercase-equivalents at sentence start that should not block joining.
     """
     s = (text or "").lstrip()
@@ -490,7 +490,7 @@ def _should_join(
         return False
 
     # Capitalised continuation (other than "I" / "I'm") usually means a
-    # NEW sentence began — don't merge in that case. Lowercase continuation
+    # NEW sentence began - don't merge in that case. Lowercase continuation
     # is the strongest possible signal of a mid-clause cut.
     if _starts_with_proper_capital(text_next):
         return False

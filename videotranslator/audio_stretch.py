@@ -3,7 +3,7 @@
 This module isolates the policy that decides whether a given segment should
 be stretched with ffmpeg's ``atempo`` filter or with the standalone
 ``rubberband`` CLI. Rubber Band yields markedly higher quality in the
-1.15–1.50 ratio band (no audible "chipmunk" pitch artifacts that ``atempo``
+1.15-1.50 ratio band (no audible "chipmunk" pitch artifacts that ``atempo``
 sometimes introduces on cloned voices), but it is an optional system
 dependency. The helpers here are pure (no I/O, no subprocess) so they can
 be exercised by unit tests on systems where ``rubberband`` is not
@@ -22,7 +22,7 @@ Convention used throughout the module:
 
 from __future__ import annotations
 
-# Engine identifiers — kept as bare strings (no Enum) to stay friendly to
+# Engine identifiers - kept as bare strings (no Enum) to stay friendly to
 # the legacy single-file caller, which already uses string comparisons.
 _ENGINE_RUBBERBAND = "rubberband"
 _ENGINE_ATEMPO = "atempo"
@@ -39,7 +39,7 @@ def select_stretch_engine(
     Returns ``"rubberband"`` when ``rb_min <= ratio <= rb_max`` and the
     binary is available on the host; otherwise ``"atempo"``. Boundaries
     are inclusive so that a ratio sitting exactly on the edge (e.g. 1.15)
-    is still routed to Rubber Band when it is installed — that is the
+    is still routed to Rubber Band when it is installed - that is the
     band where quality matters most.
 
     Parameters
@@ -79,7 +79,7 @@ def build_rubberband_command(
     it through unchanged.
 
     ``--formant`` is enabled to keep the formant envelope stable across
-    the stretch — Rubber Band documents this flag for pitch shifting, but
+    the stretch - Rubber Band documents this flag for pitch shifting, but
     enabling it on time-only changes is harmless and provides a safety
     net for cloned voices coming out of XTTS, which can otherwise drift
     in timbre at the band edges.
@@ -88,7 +88,7 @@ def build_rubberband_command(
     ----------
     input_path, output_path:
         Filesystem paths passed verbatim to the CLI. The caller is
-        responsible for quoting/escaping at the shell level — this
+        responsible for quoting/escaping at the shell level - this
         helper returns an ``argv``-style list, ready for
         ``subprocess.run`` with ``shell=False``.
     ratio:
@@ -141,7 +141,7 @@ def compute_overlap_strategy(
     TASK 2P: hard-truncating segments that overshoot their slot leaves an
     audible "audio mozzato" artefact at end of phrase (15-25% of segments
     on dense voice-only content). Allowing a small overflow into the next
-    segment's slot — capped at ``max_overlap_frames`` — preserves the
+    segment's slot - capped at ``max_overlap_frames`` - preserves the
     tail of the phrase while keeping any leftover within a perceptually
     safe window. The actual mixing is performed by the caller's memmap
     accumulator, which sums int32 samples so the overflow naturally
@@ -170,12 +170,12 @@ def compute_overlap_strategy(
     Returns
     -------
     tuple ``(strategy, target_frames, fade_frames)``:
-        * ``strategy`` — one of ``"fit"``, ``"overlap_clean"``,
+        * ``strategy`` - one of ``"fit"``, ``"overlap_clean"``,
           ``"overlap_truncate"``, ``"truncate"``.
-        * ``target_frames`` — the number of pcm frames the caller should
+        * ``target_frames`` - the number of pcm frames the caller should
           keep (``pcm_frames`` for ``fit``/``overlap_clean``, the capped
           length for the truncating strategies).
-        * ``fade_frames`` — number of samples of trailing fade-out the
+        * ``fade_frames`` - number of samples of trailing fade-out the
           caller should apply on the kept pcm to taper the tail. ``0``
           when no fade is needed (``fit``).
 
@@ -198,7 +198,7 @@ def compute_overlap_strategy(
         # Legacy fade-out matches the existing 200ms cap (TASK 2S).
         # The caller already knows the fade ramp length: we hand back a
         # safe upper bound (1/4 of the kept pcm, capped at 200ms-equivalent
-        # via max_overlap_frames/2 — caller clamps further if needed).
+        # via max_overlap_frames/2 - caller clamps further if needed).
         fade = min(max_overlap_frames // 2, slot_frames // 4)
         return (_STRAT_TRUNCATE, slot_frames, max(1, fade))
 

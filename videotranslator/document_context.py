@@ -20,12 +20,12 @@ The fix implemented here, TASK 2K, is dirt-cheap and high-leverage:
    ``GLOBAL CONTEXT (do not translate, only for understanding)`` block,
    ABOVE the existing local prev/next CONTEXT block.
 
-Cost: +1 Ollama call up front (~30–90s with thinking, ~5–15s without).
+Cost: +1 Ollama call up front (~30-90s with thinking, ~5-15s without).
 Benefit: terminology and tone anchored across the whole video instead of
 drifting freely.
 
 This module exposes only the prompt builder for the summary call and a tiny
-gating heuristic — the actual call to Ollama lives in the legacy GUI module
+gating heuristic - the actual call to Ollama lives in the legacy GUI module
 where the HTTP client and timeouts are already wired.
 """
 
@@ -38,8 +38,8 @@ from __future__ import annotations
 # We cap defensively at 60k chars to leave headroom for the instruction
 # wrapper itself and for very long lecture-style content. Beyond this
 # we DROP THE TAIL and keep the head (the opening of a video usually
-# carries the most terminology / topic framing — "in this video we'll
-# cover X, Y, Z" — so keeping the head is more useful than keeping the
+# carries the most terminology / topic framing - "in this video we'll
+# cover X, Y, Z" - so keeping the head is more useful than keeping the
 # tail). Implementation matches: ``transcript[:max_chars]``.
 SUMMARY_TRANSCRIPT_MAX_CHARS: int = 60_000
 
@@ -66,7 +66,7 @@ def is_summary_useful(
 
     Empty / None inputs always return False so the caller does not have to
     pre-validate. ``min_segments`` is configurable for tests; the default
-    of 5 segments was picked empirically — at 4 or fewer the local
+    of 5 segments was picked empirically - at 4 or fewer the local
     prev/next window already covers the full video.
     """
     if not segments:
@@ -126,7 +126,7 @@ def build_summary_prompt(
       ``max_words`` words, that explicitly lists the technical terms /
       proper nouns / CLI tokens / brand names that must be preserved
       verbatim across the whole translation.
-    * Mark the output as "context only — do not translate the transcript",
+    * Mark the output as "context only - do not translate the transcript",
       so a model that "helpfully" tries to translate the whole thing
       instead of summarising it gets one extra chance to comply.
 
@@ -165,14 +165,14 @@ def build_summary_prompt(
         f"the main entities / proper nouns.\n"
         f"3. Explicitly list the technical terms, brand names, product names, CLI "
         f"commands, API identifiers, file paths and acronyms that MUST be PRESERVED "
-        f"VERBATIM in the translation (do NOT translate them — keep them in the "
+        f"VERBATIM in the translation (do NOT translate them - keep them in the "
         f"original language). Examples to look for: programming languages, software "
         f"names, keyboard shortcuts (Ctrl+C, Cmd+V), URLs, model names.\n"
         f"4. Use natural {target_lang_name}; this summary itself will not be spoken, "
         f"only read by another LLM as a context anchor.\n"
         f"5. Output ONLY the summary. No preamble, no quotes, no markdown headers, "
         f"no chain-of-thought.\n\n"
-        f"{src_lang_name} transcript (for understanding only — DO NOT translate it "
+        f"{src_lang_name} transcript (for understanding only - DO NOT translate it "
         f"verbatim, only summarise):\n"
         f"{transcript}\n\n"
         f"{target_lang_name} summary (max {effective_max_words} words, glossary-style):\n"

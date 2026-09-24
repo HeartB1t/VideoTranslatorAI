@@ -38,7 +38,7 @@ def strip_xtts_terminal_punct(text: str) -> str:
     cleaned = text.rstrip()
     for _ in range(5):
         before = cleaned
-        cleaned = cleaned.rstrip(".!?;:…—–-,)\u00a0\u200b。！？").rstrip()
+        cleaned = cleaned.rstrip(".!?;:…\u2014\u2013-,)\u00a0\u200b。！？").rstrip()
         if cleaned == before:
             break
     return cleaned

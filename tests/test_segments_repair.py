@@ -27,7 +27,7 @@ class RepairSplitSentencesTests(unittest.TestCase):
     # --- legitimate sentence boundaries are preserved --------------------
 
     def test_complete_sentence_then_new_sentence_no_join(self):
-        # Both halves are independent sentences — no continuation token at
+        # Both halves are independent sentences - no continuation token at
         # the end of the first, capitalised start on the second.
         segs = [
             {"start": 0.0, "end": 2.0, "text": "Hello world."},

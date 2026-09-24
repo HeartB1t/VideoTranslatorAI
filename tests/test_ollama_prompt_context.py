@@ -47,7 +47,7 @@ class TargetTextPresenceTests(unittest.TestCase):
 
     def test_long_target_text_not_truncated(self):
         # The target text must survive at full length even when much longer
-        # than CONTEXT_SNIPPET_MAX_CHARS — only neighbours get truncated.
+        # than CONTEXT_SNIPPET_MAX_CHARS - only neighbours get truncated.
         long_text = "a" * (CONTEXT_SNIPPET_MAX_CHARS * 3)
         prompt = _build(text=long_text)
         self.assertIn(long_text, prompt)
@@ -79,7 +79,7 @@ class ContextBlockPresenceTests(unittest.TestCase):
         self.assertIn("[Previous] they're less likely to", prompt)
         # No actual [Next] context line is emitted. The literal token does
         # appear once inside the reinforced "ignoring the [Previous]/[Next]
-        # context" reminder — that's an intentional reminder, not an
+        # context" reminder - that's an intentional reminder, not an
         # emitted context line. Assert by checking line-start position.
         next_lines = [
             line for line in prompt.splitlines() if line.startswith("[Next]")

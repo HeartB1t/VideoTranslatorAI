@@ -12,12 +12,12 @@ when the preceding segment ended with ``...less likely to``.
 
 This module provides :func:`build_translation_prompt`, which optionally
 injects the previous and next segment text as a CONTEXT block. The CONTEXT
-is explicitly marked as "for understanding only — do not translate" so the
+is explicitly marked as "for understanding only - do not translate" so the
 model uses it for disambiguation but emits a translation only for the target
 segment.
 
 The function is intentionally parameter-heavy (every dynamic input is
-explicit) so the caller — :func:`_translate_with_ollama` — can keep its
+explicit) so the caller - :func:`_translate_with_ollama` - can keep its
 configuration logic and the builder stays a deterministic pure function
 suitable for table-driven tests.
 """
@@ -115,20 +115,20 @@ def build_translation_prompt(
     has_global_context = bool(global_snippet)
     has_context = has_local_context or has_global_context
 
-    # CONTEXT blocks — emitted only when there is something to say.
+    # CONTEXT blocks - emitted only when there is something to say.
     # GLOBAL CONTEXT goes FIRST so the model reads the document-level
     # anchor before any local prev/next snippet. Both blocks share the
     # same "do not translate" framing.
     context_parts: list[str] = []
     if has_global_context:
         context_parts.append(
-            "GLOBAL CONTEXT (entire video summary, for understanding only — DO NOT translate, "
+            "GLOBAL CONTEXT (entire video summary, for understanding only - DO NOT translate, "
             "only the target segment below):\n"
             f"{global_snippet}"
         )
     if has_local_context:
         local_lines = [
-            "CONTEXT (for understanding only — DO NOT translate, only the target segment below):",
+            "CONTEXT (for understanding only - DO NOT translate, only the target segment below):",
         ]
         if prev_snippet:
             local_lines.append(f"[Previous] {prev_snippet}")
@@ -171,7 +171,7 @@ def build_translation_prompt(
         f"You are a professional dubbing translator. Translate the following {src_name} text to {tgt_name} for voice dubbing.\n\n"
         f"{context_block}"
         f"CRITICAL REQUIREMENTS:\n"
-        f"1. Keep it CONCISE — {tgt_name} tends to be longer than {src_name}; your job is to compress while preserving meaning.\n"
+        f"1. Keep it CONCISE - {tgt_name} tends to be longer than {src_name}; your job is to compress while preserving meaning.\n"
         f"{slot_clause}"
         f"3. Use SPOKEN register, NOT formal/written language. Natural dubbing dialogue.\n"
         f"4. Drop filler words, redundant adverbs, verbose constructions where possible.\n"

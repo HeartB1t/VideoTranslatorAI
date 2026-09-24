@@ -242,7 +242,7 @@ class ComputeOverlapStrategyTests(unittest.TestCase):
         self.assertEqual(fade, 0)
 
     def test_fade_never_exceeds_pcm_length(self):
-        # Tiny pcm with tiny overshoot — fade must shrink, not be 200 ms.
+        # Tiny pcm with tiny overshoot - fade must shrink, not be 200 ms.
         strat, _target, fade = compute_overlap_strategy(
             pcm_frames=100,         # 100 frames of pcm
             slot_frames=80,         # 20-frame overshoot

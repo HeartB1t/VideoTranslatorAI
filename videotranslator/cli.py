@@ -36,7 +36,7 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
                         choices=["google", "deepl", "marian", "llm_ollama"])
     parser.add_argument("--deepl-key", default="")
     parser.add_argument("--ollama-model", default=None,
-                        help="Ollama model tag (default: qwen3:8b — Qwen3 with thinking mode "
+                        help="Ollama model tag (default: qwen3:8b - Qwen3 with thinking mode "
                              "auto-disabled to avoid <think> blocks. Use qwen2.5:7b-instruct "
                              "for legacy behaviour)")
     parser.add_argument("--ollama-url", default=None,
@@ -62,7 +62,7 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
     parser.add_argument("--lipsync", action="store_true",
                         help="Apply Wav2Lip lip sync after dubbing (first run: downloads ~416MB)")
     parser.add_argument("--xtts-speed", type=float, default=None,
-                        help="XTTS v2 native speed factor (0.5–2.0). "
+                        help="XTTS v2 native speed factor (0.5-2.0). "
                              "If omitted, auto-tuned per language pair "
                              "(e.g. EN→IT=1.35, IT→EN=1.25).")
     parser.add_argument("--no-slot-expansion", action="store_true",

@@ -414,7 +414,7 @@ def resolve_wav2lip_paths(
 
     The function takes ``sys_platform``, ``env`` and ``home`` so unit tests
     can simulate Windows from a Linux developer machine. ``writable_check``
-    and ``assets_check`` are seams for the same reason — both default to the
+    and ``assets_check`` are seams for the same reason - both default to the
     real filesystem probes.
     """
     if sys_platform is None:

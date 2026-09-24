@@ -289,7 +289,7 @@ def translate_video(
                     )
             # TASK 2E: smart slot expansion / time borrowing. Tight segments
             # (expected pre_stretch_ratio > 1.50) steal time from subsequent
-            # silent gaps and — if the neighbouring segment is under-utilised —
+            # silent gaps and - if the neighbouring segment is under-utilised -
             # also from the beginning of its slot. Reduces audible atempo without
             # touching text or translation. Disable with --no-slot-expansion
             # for A/B testing in case of regressions.
@@ -319,7 +319,7 @@ def translate_video(
                     )
             # TASK 2M: post-Whisper sanity check. Flags segments with suspicious
             # tokens (non-standard 1-3 char English words, immediate repetitions).
-            # Does NOT auto-correct — printing them to the console helps the user
+            # Does NOT auto-correct - printing them to the console helps the user
             # know which segments to review in the subtitle editor before dubbing.
             # Disable with --no-whisper-sanity for a silent pipeline.
             if whisper_sanity:
@@ -338,7 +338,7 @@ def translate_video(
                 if _flagged:
                     print(
                         f"     ⚠ Whisper sanity: {len(_flagged)} segment(s) "
-                        f"with suspicious tokens — review in editor:",
+                        f"with suspicious tokens - review in editor:",
                         flush=True,
                     )
                     # TASK 5C: persist the sanity hit on the segment dict so
@@ -375,7 +375,7 @@ def translate_video(
             # atempo cap, Rubber Band band and XTTS speed cap.
             #
             # Manual override (--difficulty-override) bypasses the auto
-            # estimate — useful for A/B testing or for users who already
+            # estimate - useful for A/B testing or for users who already
             # know the source content profile (e.g. fast comedy).
             #
             # --no-difficulty-profile (difficulty_profile_enabled=False)
@@ -437,7 +437,7 @@ def translate_video(
         # Profile's xtts_speed_cap. EASY keeps the voice very natural,
         # MEDIUM allows moderate compression, HARD gives a little more room.
         # Applied only when the user has NOT explicitly pinned xtts_speed
-        # (speed_auto=True) — a CLI/config override is honoured as before
+        # (speed_auto=True) - a CLI/config override is honoured as before
         # to avoid surprising users with manual tuning. Logged explicitly
         # when the cap actually changes, so the XTTS adaptive speed
         # diagnostic matches expectations.
@@ -453,7 +453,7 @@ def translate_video(
                 )
             effective_xtts_speed = _capped
 
-        # TTS generation — Edge-TTS or Coqui XTTS v2.
+        # TTS generation - Edge-TTS or Coqui XTTS v2.
         # Fallback cascade: xtts → edge. If the user chose voice cloning
         # and it fails, we gracefully degrade to Edge-TTS.
         tts_files = None
@@ -492,7 +492,7 @@ def translate_video(
                 print(
                     f"     [face-check] {_face_n}/{_face_total} sampled frames "
                     f"contain a face (ratio {_face_ratio:.2f}); skipping Wav2Lip "
-                    f"— voice-only or no-face video",
+                    f"- voice-only or no-face video",
                     flush=True,
                 )
             else:

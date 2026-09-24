@@ -1,8 +1,8 @@
 """Unit tests for the difficulty-aware profile orchestrator.
 
 The runtime decisions live in ``video_translator_gui.translate_video``
-(profile resolution + parameter wiring) but the *policy* — which knobs
-move when a video is classified easy / medium / hard — is exercised
+(profile resolution + parameter wiring) but the *policy* - which knobs
+move when a video is classified easy / medium / hard - is exercised
 here as a pure function. No I/O, no subprocess.
 """
 

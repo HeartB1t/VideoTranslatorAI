@@ -109,7 +109,7 @@ def get_default_config_path(
 
 
 def get_legacy_config_path(home: Path | None = None) -> Path:
-    """Return the v1.0–v1.9 legacy path: ``~/.videotranslatorai_config.json``."""
+    """Return the v1.0-v1.9 legacy path: ``~/.videotranslatorai_config.json``."""
     hm = home if home is not None else Path.home()
     return Path(hm) / LEGACY_CONFIG_NAME
 

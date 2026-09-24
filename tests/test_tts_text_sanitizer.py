@@ -30,13 +30,13 @@ class SanitizeForTtsTests(unittest.TestCase):
 
     def test_em_dash_becomes_comma(self):
         self.assertEqual(
-            sanitize_for_tts("parola — altra"),
+            sanitize_for_tts("parola \u2014 altra"),
             "parola, altra",
         )
 
     def test_en_dash_becomes_comma(self):
         self.assertEqual(
-            sanitize_for_tts("parola – altra"),
+            sanitize_for_tts("parola \u2013 altra"),
             "parola, altra",
         )
 
@@ -65,7 +65,7 @@ class SanitizeForTtsTests(unittest.TestCase):
         )
 
     def test_idempotent(self):
-        raw = "americano: l'ho scritto — è orribile..."
+        raw = "americano: l'ho scritto \u2014 è orribile..."
         once = sanitize_for_tts(raw)
         twice = sanitize_for_tts(once)
         self.assertEqual(once, twice)

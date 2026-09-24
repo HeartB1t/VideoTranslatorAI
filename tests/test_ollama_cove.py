@@ -2,7 +2,7 @@
 
 Chain-of-Verification is a pure-text contract: detect risky source
 patterns, build a verification prompt for the same model, parse the
-single-line response. No Ollama daemon involved here — all I/O lives
+single-line response. No Ollama daemon involved here - all I/O lives
 in ``_translate_with_ollama`` and is exercised by the integration
 smoke tests.
 """
@@ -29,7 +29,7 @@ class NeedsVerificationTests(unittest.TestCase):
         self.assertEqual(reasons, [])
 
     def test_plain_positive_sentence_no_trigger(self):
-        # "I am happy." has no negation, no quantifier — the Ollama
+        # "I am happy." has no negation, no quantifier - the Ollama
         # call cost is wasted on this segment, so we skip it.
         needs, reasons = needs_verification("I am happy.")
         self.assertFalse(needs)
@@ -83,7 +83,7 @@ class NeedsVerificationTests(unittest.TestCase):
         self.assertFalse(needs)
 
     def test_quantifier_inside_word_does_not_trigger(self):
-        # "wallpaper" contains "all" — must not trigger.
+        # "wallpaper" contains "all" - must not trigger.
         needs, reasons = needs_verification("the wallpaper is nice")
         self.assertFalse(needs)
 
@@ -268,7 +268,7 @@ class ParseVerificationResponseTests(unittest.TestCase):
         self.assertTrue(was_changed)
 
     def test_identical_translation_returns_unchanged(self):
-        # Model echoed the candidate verbatim — counted as YES-YES.
+        # Model echoed the candidate verbatim - counted as YES-YES.
         corrected, was_changed = parse_verification_response(
             "L'ho visto.",
             original_translation="L'ho visto.",

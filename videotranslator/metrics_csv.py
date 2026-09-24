@@ -91,8 +91,8 @@ def _cli() -> int:
     distribution buckets, engine breakdown and top-N outliers with text.
 
     Exit codes:
-        0 — analysis printed
-        2 — file missing or empty / malformed
+        0 - analysis printed
+        2 - file missing or empty / malformed
 
     Example:
         python3 -m videotranslator.metrics_csv ~/Video/yt_xxx_it_metrics.csv

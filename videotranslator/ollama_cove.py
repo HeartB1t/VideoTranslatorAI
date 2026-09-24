@@ -30,12 +30,12 @@ import re
 # drops on EN→IT dubbing translation: "haven't" → "hai" (positive),
 # "won't" → "vuoi" (modal flip). Italian negation auxiliaries ("non",
 # "mai") are handled by the same regex so a reverse direction also
-# triggers verification — most of the production usage is EN→IT today
+# triggers verification - most of the production usage is EN→IT today
 # but the module must not silently degrade for IT→EN.
 #
 # We deliberately keep the list short and high-precision: every false
 # positive here costs an extra Ollama call. Risk patterns we do NOT
-# include (yet): conditionals, double negatives, sarcasm — they are
+# include (yet): conditionals, double negatives, sarcasm - they are
 # either too noisy or already captured by the negation list itself.
 # Note on n't: ``\b`` is a word boundary, but ``'`` is NOT a word
 # character so ``\bn't\b`` would require a transition into a word
@@ -54,10 +54,10 @@ _NEGATION_PATTERN = re.compile(
 )
 
 # Quantifier list: words that change logical truth when dropped or
-# softened. "all/some/none/every" are textbook MT failure modes —
+# softened. "all/some/none/every" are textbook MT failure modes -
 # qwen3 sometimes paraphrases "all of them" as "loro" (just "them"),
 # losing the universal quantifier. The list is intentionally narrow
-# (no "few", "many", "most" by default — they are more often safely
+# (no "few", "many", "most" by default - they are more often safely
 # paraphrased than the strict quantifiers below).
 _QUANTIFIER_PATTERN = re.compile(
     r"\b("
@@ -294,7 +294,7 @@ def parse_verification_response(
 
     # Strip surrounding quotes/brackets that some models add despite
     # the explicit instruction. We mirror a minimal subset of
-    # _ollama_strip_preamble (full strip is upstream) — only the
+    # _ollama_strip_preamble (full strip is upstream) - only the
     # quote characters that are common across qwen3 / llama / mistral.
     for opener, closer in (
         ('"', '"'), ("'", "'"),
@@ -310,7 +310,7 @@ def parse_verification_response(
 
     # Detect meta-string outputs: "same as before", "unchanged",
     # "no changes needed", "yes" (some models emit just the answer
-    # despite the instruction). These mean "no correction" — return
+    # despite the instruction). These mean "no correction" - return
     # the original as-is so the caller can keep the candidate.
     _META_RE = re.compile(
         r"^("

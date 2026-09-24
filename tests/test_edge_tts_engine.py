@@ -107,7 +107,7 @@ class EdgeTtsAllTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_str:
             asyncio.run(
                 tts_all(
-                    [{"text_tgt": "americano: l'ho scritto — davvero..."}],
+                    [{"text_tgt": "americano: l'ho scritto \u2014 davvero..."}],
                     "voice",
                     tmp_str,
                     "+0%",

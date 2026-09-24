@@ -53,7 +53,7 @@ class AddQualityFlagTests(unittest.TestCase):
         # Defensive contract: pipeline stages may pass through wrong types
         # (e.g. a stringified row from a CSV); the helper must not crash.
         add_quality_flag("not a dict", FLAG_LENGTH_UNFIT)  # type: ignore[arg-type]
-        # Reaching here means no exception — pass.
+        # Reaching here means no exception - pass.
 
     def test_corrupted_existing_value_replaced(self) -> None:
         # A previous version of the codebase may have set _quality_flags

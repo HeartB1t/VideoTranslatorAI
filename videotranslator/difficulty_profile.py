@@ -134,7 +134,7 @@ def resolve_profile(classification: str) -> Profile:
 
     Falls back to :data:`MEDIUM` for unknown / empty / ``None`` inputs
     so a typo or future classification value never crashes the pipeline
-    — at worst the runtime keeps the default quality profile.
+    - at worst the runtime keeps the default quality profile.
     """
     if not classification:
         return MEDIUM

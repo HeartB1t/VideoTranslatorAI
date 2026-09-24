@@ -101,7 +101,7 @@ def _ollama_health_check(
       but ``qwen3:14b`` is installed). The pipeline should USE the
       ``resolved_model`` value, not the original request.
 
-    Does not raise — the caller branches on ``ok`` and decides whether to
+    Does not raise - the caller branches on ``ok`` and decides whether to
     surface ``message`` to the user.
     """
     import requests
@@ -127,7 +127,7 @@ def _ollama_health_check(
             "",
         )
 
-    # Tier 1+2: exact / quantization-tail match — keep legacy behaviour
+    # Tier 1+2: exact / quantization-tail match - keep legacy behaviour
     # (silent ok, requested model used as-is).
     if target and target in models:
         return True, "", target
@@ -159,12 +159,12 @@ def _ollama_strip_preamble(text: str) -> str:
     Cleaning pipeline (order is critical):
       0. Qwen3 chain-of-thought: closed or orphaned <think>/<thinking>/
          <reasoning> blocks (orphaned = output truncated by num_predict).
-         Must be removed FIRST — they contain LLM-specific syntax that can
+         Must be removed FIRST - they contain LLM-specific syntax that can
          match patterns in later steps and leave dirty residues.
       1. Markdown code fences ```...``` (some models wrap their output).
       2. Bold/italic markers **x** *x* ***x***.
       3. Multi-language preambles (“Ecco la traduzione:”, “Here's the
-         translation:”, “Sure!”, 好的/这是/翻译, etc.) — case-insensitive,
+         translation:”, “Sure!”, 好的/这是/翻译, etc.) - case-insensitive,
          multiline.
       4. Parenthetical commentary notes with keywords typical of model
          self-commentary (kept natural, fits within, ho mantenuto…).
@@ -212,7 +212,7 @@ def _ollama_strip_preamble(text: str) -> str:
     #    by one. Each pattern ends with `\s*` / `:?\s*` to absorb trailing
     #    whitespace before the next prefix.
     PREAMBLE_PATTERNS = [
-        # EN/IT "Here's the translation:" — including variants "concisa", "tradotta"
+        # EN/IT "Here's the translation:" - including variants "concisa", "tradotta"
         r"^(?:here'?s?|this is|the|la|le|il)\s+(?:the\s+)?(?:concise\s+)?translation(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
         # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:"
         r"^ecco(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
@@ -224,7 +224,7 @@ def _ollama_strip_preamble(text: str) -> str:
         r"^好的\s*[，,:：]?\s*",
         r"^这是\s*[，,:：]?\s*",
         r"^翻译\s*[：:]\s*",
-        # "Per favore" (acknowledgment) — NOTE: "N.B.", "Note:", "Nota bene:",
+        # "Per favore" (acknowledgment) - NOTE: "N.B.", "Note:", "Nota bene:",
         # "Please note:" are handled at step 6 as whole lines (they consume
         # the entire disclaimer sentence, not just the prefix).
         r"^per favore\s*[,:.\-]?\s*",
@@ -294,10 +294,10 @@ def _ollama_strip_preamble(text: str) -> str:
     # Sequence: leading isolated punct → multiple consecutive marks → space
     # before punct → final tidy. Run AFTER the whitespace collapse so it
     # operates on an already single-space-normalised string.
-    LEADING_PUNCT_RE   = _re.compile(r"^[\s.,;:!?\-–—…]+")
+    LEADING_PUNCT_RE   = _re.compile(r"^[\s.,;:!?\-\u2013\u2014…]+")
     REPEATED_PUNCT_RE  = _re.compile(r"([.,;:!?])(?:\s*\1)+")
     SPACE_BEFORE_RE    = _re.compile(r"\s+([.,;:!?])")
-    DANGLING_PUNCT_RE  = _re.compile(r"\s+[.,;:!?\-–—…]+\s*$")  # tail isolato
+    DANGLING_PUNCT_RE  = _re.compile(r"\s+[.,;:!?\-\u2013\u2014…]+\s*$")  # tail isolato
     t = LEADING_PUNCT_RE.sub("", t)
     t = REPEATED_PUNCT_RE.sub(r"\1", t)
     t = SPACE_BEFORE_RE.sub(r"\1", t)
@@ -309,7 +309,7 @@ def _ollama_strip_preamble(text: str) -> str:
 # ── Ollama auto-setup (v2.0.1) ─────────────────────────────────────────────
 # Goal: zero manual setup for the end user. Same strategy already used for
 # ffmpeg (on-demand download) and Git for Windows (auto-installer). The
-# functions below are pure helpers — no Tk, no global state: they accept an
+# functions below are pure helpers - no Tk, no global state: they accept an
 # optional log_cb to stream output to the GUI, and register subprocesses in
 # the global registry so `_on_close` can terminate them.
 
@@ -333,7 +333,7 @@ def _ollama_find_binary() -> str | None:
             Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "Ollama" / "ollama.exe",
             Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")) / "Ollama" / "ollama.exe",
             # winget install Ollama.Ollama → symlink in WinGet/Links (on Win11
-            # this is in PATH by default; on Win10 often not — explicit fallback needed)
+            # this is in PATH by default; on Win10 often not - explicit fallback needed)
             Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "ollama.exe",
         ]
         for c in candidates:
@@ -361,7 +361,7 @@ def _ollama_wait_for_daemon(api_url: str, wait_seconds: float = 12.0,
     """Poll `_ollama_is_daemon_running` for up to `wait_seconds`. Returns True if it responds.
 
     Used after installing Ollama Desktop on Windows: the installer starts its
-    own embedded daemon but with a 5–10 s delay after the install completes.
+    own embedded daemon but with a 5-10 s delay after the install completes.
     Without this wait our fallback `ollama serve` would start and fail with
     port-already-in-use.
     """
@@ -438,7 +438,7 @@ def _ollama_start_daemon(
             return False, f"ollama serve exited (rc={proc.returncode}). Log: {log_path}"
         if _ollama_is_daemon_running(api_url, timeout=1.5):
             log(f"     [+] Ollama daemon attivo su {api_url}\n")
-            # NB: fh is intentionally left open — the daemon keeps writing
+            # NB: fh is intentionally left open - the daemon keeps writing
             # to it for the entire session and it will be closed when proc exits.
             return True, ""
         time.sleep(0.5)
@@ -596,7 +596,7 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
     if proc.returncode != 0:
         # rc=1223 = ERROR_CANCELLED on Windows (user clicked "No" on the
         # UAC prompt for the Ollama installer). The cryptic "rc=1223" message
-        # is meaningless to end users — translate it into plain language.
+        # is meaningless to end users - translate it into plain language.
         # rc=1602 = ERROR_INSTALL_USEREXIT (voluntary cancel without UAC).
         if proc.returncode in (1223, 1602):
             return False, (
@@ -750,7 +750,7 @@ def _ollama_pull_model(
                 key = _stable_key(fragment)
                 now = _time.monotonic()
                 if key == last_key:
-                    # Same logical state — throttle progress ticks to one
+                    # Same logical state - throttle progress ticks to one
                     # log entry every 5% delta OR every 2 seconds OR at 100%.
                     m = _PCT_RE.search(fragment)
                     if m:

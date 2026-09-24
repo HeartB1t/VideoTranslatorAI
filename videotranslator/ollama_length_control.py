@@ -11,12 +11,12 @@ made explicit in the prompt.
 
 This module provides three building blocks used by ``_translate_with_ollama``:
 
-* :func:`compute_target_chars` — given the audio slot duration and the
+* :func:`compute_target_chars` - given the audio slot duration and the
   target language, how many characters does the translation need to stay
   under to fit?
-* :func:`should_reprompt_for_length` — is the first translation long enough
+* :func:`should_reprompt_for_length` - is the first translation long enough
   over the target that a re-prompt is worth the extra Ollama round-trip?
-* :func:`build_rewrite_shorter_prompt` — construct the explicit "rewrite
+* :func:`build_rewrite_shorter_prompt` - construct the explicit "rewrite
   shorter" prompt, including the previous translation and the numeric budget.
 
 The target is computed from the slot duration, NOT from the source character
@@ -33,8 +33,8 @@ from __future__ import annotations
 # code. These are empirical averages calibrated against XTTS v2 output:
 # logographic scripts (zh/ja/ko) pack much more meaning per character so
 # their char/sec is far lower; Romance languages with many open syllables
-# sit around 14–16; Germanic and Slavic compound-heavy languages sit lower
-# around 12–14. The default 14.0 is a safe middle ground for unmapped
+# sit around 14-16; Germanic and Slavic compound-heavy languages sit lower
+# around 12-14. The default 14.0 is a safe middle ground for unmapped
 # languages.
 _CHARS_PER_SECOND_BY_LANG: dict[str, float] = {
     "en": 14.0,

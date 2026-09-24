@@ -3,18 +3,18 @@
 Pipeline stages set string tags on each segment dict (under the
 ``_quality_flags`` key) when they detect candidates for human review:
 
-- :data:`FLAG_LENGTH_UNFIT` — the LLM length retry loop exhausted its
+- :data:`FLAG_LENGTH_UNFIT` - the LLM length retry loop exhausted its
   iterations without bringing the translation under
   ``target_chars * threshold``. Likely the translation is still too long
   for the audio slot and ``atempo`` will accelerate the dub past the
   comfortable listening band.
-- :data:`FLAG_WHISPER_SUSPICIOUS` — Whisper sanity check (TASK 2M)
+- :data:`FLAG_WHISPER_SUSPICIOUS` - Whisper sanity check (TASK 2M)
   flagged short non-words (``ay``, ``em``) or immediate repetitions
   (``the the``) in the source transcript. The translation propagates
-  the noise downstream — manual edit recommended.
-- :data:`FLAG_TRANSLATION_FALLBACK` — the primary translation engine
+  the noise downstream - manual edit recommended.
+- :data:`FLAG_TRANSLATION_FALLBACK` - the primary translation engine
   (Ollama / DeepL / MarianMT) failed for the segment and the pipeline
-  fell through to the secondary engine, or — worst case — kept the
+  fell through to the secondary engine, or - worst case - kept the
   source text as-is. The translation is likely lower quality.
 
 The module is **pure**: no I/O, no side effects, no Tk imports. The
@@ -22,7 +22,7 @@ GUI module reads the flags via :func:`compute_segment_quality_flags`
 to colourise rows in the subtitle editor; the pipeline stages write
 them via :func:`add_quality_flag`.
 
-Design choice — list, not set: the flag count is small (<= 3 today)
+Design choice - list, not set: the flag count is small (<= 3 today)
 and ordering matters for the editor priority resolver
 (:func:`primary_flag`). A list with ``in`` membership checks keeps the
 JSON-serialisability of the segment dicts intact for the metrics CSV
@@ -56,11 +56,11 @@ _FLAG_PRIORITY: tuple[str, ...] = (
 
 # Treeview tag colours for the dark Catppuccin Mocha theme (BG=#1e1e2e,
 # FG=#cdd6f4). Foreground deliberately dark (#1e1e2e) so the row stands
-# out against the surrounding rows AND remains legible — light-on-light
+# out against the surrounding rows AND remains legible - light-on-light
 # would be unreadable on the high-saturation background colours below.
 QUALITY_FLAG_COLOURS: dict[str, dict[str, str]] = {
     FLAG_TRANSLATION_FALLBACK: {
-        "background": "#f38ba8",  # red — Catppuccin Mocha red, matches RED const
+        "background": "#f38ba8",  # red - Catppuccin Mocha red, matches RED const
         "foreground": "#1e1e2e",
     },
     FLAG_LENGTH_UNFIT: {
@@ -77,7 +77,7 @@ QUALITY_FLAG_COLOURS: dict[str, dict[str, str]] = {
 def add_quality_flag(seg: dict, flag: str) -> None:
     """Append ``flag`` to ``seg["_quality_flags"]`` if not already present.
 
-    Initialises the list lazily — segments without flags don't carry
+    Initialises the list lazily - segments without flags don't carry
     the empty list, keeping the dict shape compatible with legacy
     callers that don't expect the key. No-op when ``flag`` is empty/None
     or already in the list.

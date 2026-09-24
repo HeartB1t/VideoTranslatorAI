@@ -28,7 +28,7 @@ Sources, in priority order, are merged by the caller:
 JSON file accepts two shapes:
 
   * Flat list: ``["Strix", "pipx", "Docker"]``.
-  * Per-language dict: ``{"en": [...], "it": [...], "de": [...]}`` —
+  * Per-language dict: ``{"en": [...], "it": [...], "de": [...]}`` -
     the caller passes ``src_lang`` (e.g. ``"it"``) and the matching
     list is returned. If the requested language is missing, the loader
     falls back to ``"en"``; if ``"en"`` is also missing it raises

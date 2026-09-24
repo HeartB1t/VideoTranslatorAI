@@ -86,7 +86,7 @@ class DumpSegmentMetricsTests(unittest.TestCase):
     def test_unicode_preserved(self):
         rows = [{
             "segment_index": 0,
-            "text_tgt": "ciao 你好 こんにちは 안녕하세요 — ñ",
+            "text_tgt": "ciao 你好 こんにちは 안녕하세요 \u2014 ñ",
         }]
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "m.csv")
@@ -94,7 +94,7 @@ class DumpSegmentMetricsTests(unittest.TestCase):
             parsed = self._read_csv(path)
             self.assertEqual(
                 parsed[0]["text_tgt"],
-                "ciao 你好 こんにちは 안녕하세요 — ñ",
+                "ciao 你好 こんにちは 안녕하세요 \u2014 ñ",
             )
 
     def test_extra_keys_ignored_silently(self):

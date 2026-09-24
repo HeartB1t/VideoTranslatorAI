@@ -98,7 +98,7 @@ def compute_face_ratio(face_frames: int, total_frames: int) -> float:
 
     A separate helper so callers and tests can reason about the ratio
     without owning a frame list. Returns ``0.0`` for empty input rather
-    than raising — "no frames sampled" should not be a hard error.
+    than raising - "no frames sampled" should not be a hard error.
     """
     if total_frames <= 0:
         return 0.0
@@ -115,7 +115,7 @@ def decide_has_faces(
 ) -> bool:
     """Decision rule on the sampled face ratio.
 
-    Pure boolean policy — kept separate from the I/O so unit tests can
+    Pure boolean policy - kept separate from the I/O so unit tests can
     exercise the threshold without sampling real frames.
     """
     if min_face_ratio <= 0:
@@ -132,7 +132,7 @@ def sample_frames_via_ffmpeg(
 
     Uses ``ffmpeg`` with the ``select`` filter so the output frames are
     spread uniformly through the video duration. Returns the list of
-    written frame paths (only those that ffmpeg actually produced — some
+    written frame paths (only those that ffmpeg actually produced - some
     videos may yield fewer frames than requested if very short).
     """
     if n_samples <= 0:
@@ -231,7 +231,7 @@ def has_enough_faces(
     Caller can log all four values regardless of the decision.
 
     The ``out_dir`` is used as a working directory for the sampled JPEGs
-    and is left in place — caller is expected to put it under a temp
+    and is left in place - caller is expected to put it under a temp
     directory that gets cleaned up at the end of the pipeline.
     """
     frames = sample_frames_via_ffmpeg(video_path, out_dir, n_samples=n_samples)
@@ -245,9 +245,9 @@ def _cli() -> int:
     """Standalone CLI: report face presence in a video.
 
     Exit codes:
-        0 — faces detected (Wav2Lip would proceed)
-        1 — no faces detected (Wav2Lip would skip)
-        2 — input file missing or other usage error
+        0 - faces detected (Wav2Lip would proceed)
+        1 - no faces detected (Wav2Lip would skip)
+        2 - input file missing or other usage error
 
     Examples:
         python3 -m videotranslator.face_detector video.mp4
