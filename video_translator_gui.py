@@ -5668,22 +5668,25 @@ class App(tk.Tk):
 
     def _section_title(self, parent, text):
         """Small upper-case section label in muted colour."""
-        f = tk.Frame(parent, bg=parent.cget("bg"))
-        tk.Label(f, text=text.upper(), bg=parent.cget("bg"), fg=FG2,
+        bg = parent.cget("bg") if "bg" in parent.keys() else SURFACE
+        f = tk.Frame(parent, bg=bg)
+        tk.Label(f, text=text.upper(), bg=bg, fg=FG2,
                  font="VT.SmallBold").pack(side="left")
         return f
 
     def _make_accordion_section(self, parent, title_text):
         """Return (outer_frame, body_frame, arrow_label). Starts collapsed."""
+        first = not parent.winfo_children()
         outer = tk.Frame(parent, bg=SURFACE)
         outer.pack(fill="x", pady=1)
+        if not first:
+            tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
         hdr = tk.Frame(outer, bg=SURFACE, cursor="hand2")
         hdr.pack(fill="x")
         arrow_lbl = tk.Label(hdr, text="▸", bg=SURFACE, fg=FG2, font="VT.Base", width=2)
         arrow_lbl.pack(side="left")
         tk.Label(hdr, text=title_text, bg=SURFACE, fg=FG, font="VT.Base").pack(
             side="left", padx=(2, 0), pady=6)
-        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
         body = tk.Frame(outer, bg=SURFACE, padx=24, pady=6)
 
         def toggle(e=None):
@@ -5743,7 +5746,7 @@ class App(tk.Tk):
         active = self._active_profile.get()
         for name, btn in self._profile_btns.items():
             if name == active:
-                btn.configure(bg=ACC_SOFT, fg=ACC,
+                btn.configure(bg=ACC_SOFT, fg=FG,
                               highlightthickness=1, highlightbackground=ACC)
             else:
                 btn.configure(bg=BTN, fg=FG,
@@ -5851,7 +5854,7 @@ class App(tk.Tk):
         self._batch_listbox = tk.Listbox(
             batch_frame, height=4,
             bg=FIELD, fg=FG, selectbackground=ACC,
-            selectforeground=BG,
+            selectforeground=ACC_FG,
             font="VT.Mono", relief="flat",
             highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=ACC,
@@ -6239,13 +6242,13 @@ class App(tk.Tk):
         btn_row.pack(fill="x")
 
         _PROFILE_LABELS = {
-            "fast":      ("Fast",     ""),
-            "balanced":  ("Balanced", ""),
-            "studio":    ("Studio",   ""),
-            "cinematic": ("Cinema",   ""),
+            "fast":      "Fast",
+            "balanced":  "Balanced",
+            "studio":    "Studio",
+            "cinematic": "Cinema",
         }
         self._profile_btns = {}
-        for name, (label, _icon) in _PROFILE_LABELS.items():
+        for name, label in _PROFILE_LABELS.items():
             btn = tk.Button(
                 btn_row, text=label,
                 bg=BTN, fg=FG,
@@ -6253,7 +6256,7 @@ class App(tk.Tk):
                 relief="flat", padx=6, pady=6,
                 cursor="hand2",
                 highlightthickness=1, highlightbackground=BORDER,
-                activebackground=ACC_SOFT, activeforeground=ACC,
+                activebackground=ACC_SOFT, activeforeground=FG,
                 command=lambda n=name: self._apply_profile(n),
             )
             btn.pack(side="left", padx=(0, 4), fill="x", expand=True)
@@ -6559,12 +6562,6 @@ class App(tk.Tk):
 
     def _build_voice_buttons(self):
         """Rebuild voice pill-buttons for the selected target language."""
-        # Detect parent bg (CARD when inside the lang/voice card, BG otherwise)
-        try:
-            parent_bg = self._voice_frame.master.cget("bg")
-        except Exception:
-            parent_bg = BG
-
         for w in self._voice_frame.winfo_children():
             w.destroy()
         lang_key = list(LANGUAGES.keys())[self._tgt_combo.current()]
@@ -6576,9 +6573,9 @@ class App(tk.Tk):
             cur = self._voice.get()
             for btn_v, btn_w in _pill_map.items():
                 if btn_v == cur:
-                    btn_w.configure(bg=ACC_SOFT, fg=ACC)
+                    btn_w.configure(bg=ACC_SOFT, fg=FG, highlightbackground=ACC)
                 else:
-                    btn_w.configure(bg=BTN, fg=FG)
+                    btn_w.configure(bg=BTN, fg=FG, highlightbackground=BORDER)
 
         _pill_map = {}
         for v in voices:
@@ -6589,10 +6586,10 @@ class App(tk.Tk):
                 indicatoron=False,
                 bg=BTN, fg=FG,
                 selectcolor=ACC_SOFT,
-                activebackground=ACC_SOFT, activeforeground=ACC,
+                activebackground=ACC_SOFT, activeforeground=FG,
                 font="VT.Base",
                 relief="flat", padx=10, pady=4,
-                highlightthickness=1, highlightbackground=BORDER,
+                highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
                 cursor="hand2",
                 command=_refresh_pills,
             )
