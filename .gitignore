@@ -43,3 +43,6 @@ _dev/
 
 # Claude Code local session state (notes, settings, scheduled tasks)
 .claude/
+
+# Claude Code SDD scratch workspace
+.superpowers/
