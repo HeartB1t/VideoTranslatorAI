@@ -123,5 +123,55 @@ class ColorMappingTests(unittest.TestCase):
         self.assertEqual(mapping[old.BG], new.BG)
 
 
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class SettingsDialogSmokeTests(unittest.TestCase):
+    def test_open_apply_reset_close(self):
+        import json
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        import video_translator_gui as gui
+
+        saved_stdout, saved_stderr = sys.stdout, sys.stderr
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "config.json"
+            cfg_path.write_text(json.dumps({"ui_theme": "slate", "ui_accent": "rose",
+                                            "ui_scale": "large", "ui_lang": "en"}), encoding="utf-8")
+            with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
+                    mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
+                    mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
+                    mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
+                app = gui.App()
+                try:
+                    app.withdraw()
+                    self.assertEqual(app._theme.palette.name, "slate")
+                    self.assertEqual(app._ui_lang.get(), "en")
+                    app._open_settings()
+                    self.assertTrue(app._settings_win.winfo_exists())
+                    app._ui_theme_var.set("light")
+                    app._apply_ui_settings()
+                    self.assertEqual(app._theme.palette.name, "light")
+                    self.assertEqual(app.cget("bg"), app._theme.palette.BG)
+                    self.assertEqual(app._settings_win.cget("bg"), app._theme.palette.BG)
+                    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["ui_theme"], "light")
+                    # an explicit accent dot keeps its own colour across accent changes
+                    rose_dot = app._accent_dots["rose"]
+                    app._ui_accent_var.set("teal")
+                    app._apply_ui_settings()
+                    self.assertEqual(rose_dot.cget("fg"), gui._ACCENTS["rose"])
+                    app._reset_ui_settings()
+                    self.assertEqual(app._theme.palette.name, "graphite")
+                    self.assertEqual(app._ui_scale_var.get(), "normal")
+                    self.assertEqual(app._ui_lang.get(), "en")  # reset keeps the language
+                    app._close_settings()
+                    self.assertFalse(getattr(app, "_settings_win", None) and app._settings_win.winfo_exists())
+                finally:
+                    app._destroying = True
+                    app.destroy()
+                    sys.stdout, sys.stderr = saved_stdout, saved_stderr
+
+
 if __name__ == "__main__":
     unittest.main()

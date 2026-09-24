@@ -310,6 +310,15 @@ from videotranslator.ui_theme import resolve_palette as _resolve_palette  # noqa
 from videotranslator.ui_theme import normalize_ui_settings as _normalize_ui_settings  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
+from videotranslator.ui_theme import (  # noqa: E402
+    ACCENTS as _ACCENTS,
+    ACCENT_CHOICES as _ACCENT_CHOICES,
+    DEFAULT_ACCENT as _DEFAULT_ACCENT,
+    DEFAULT_SCALE as _DEFAULT_SCALE,
+    DEFAULT_THEME as _DEFAULT_THEME,
+    SCALES as _SCALES,
+    THEME_CHOICES as _THEME_CHOICES,
+)
 
 _DEFAULT_PALETTE = _resolve_palette("graphite")
 for _name, _field in _GLOBAL_ALIASES.items():
@@ -5508,6 +5517,10 @@ class App(tk.Tk):
         self._set_window_icon()
 
         self._ui_lang   = tk.StringVar(value=self._ui_settings["ui_lang"])
+        self._ui_theme_var  = tk.StringVar(value=self._ui_settings["ui_theme"])
+        self._ui_accent_var = tk.StringVar(value=self._ui_settings["ui_accent"])
+        self._ui_scale_var  = tk.StringVar(value=self._ui_settings["ui_scale"])
+        self._settings_win  = None
         self._model     = tk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self._lang_src  = tk.StringVar(value="auto")
         self._lang_tgt  = tk.StringVar(value="it")
@@ -6052,7 +6065,7 @@ class App(tk.Tk):
     def _card(self, parent, **pack):
         """Surface card with a 1 px border; returns the inner padded frame."""
         outer = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
-                         highlightbackground=BORDER)
+                         highlightbackground=BORDER, highlightcolor=BORDER)
         outer.pack(fill="x", **pack)
         inner = tk.Frame(outer, bg=SURFACE)
         inner.pack(fill="both", expand=True, padx=12, pady=10)
@@ -6175,7 +6188,7 @@ class App(tk.Tk):
     # ── _build_ui sub-methods ───────────────────────────────────────────────
 
     def _build_header(self, parent):
-        """Top header bar: logo, subtitle, status badges, UI lang selector."""
+        """Top header bar: logo, subtitle, status badges, settings gear."""
         # Outer header frame - spans both columns
         header_wrap = tk.Frame(parent, bg=BG)
         header_wrap.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -6194,7 +6207,7 @@ class App(tk.Tk):
         tk.Label(logo_block, text="Open source dubbing studio",
                  font="VT.Small", bg=BG, fg=FG2).pack(side="left", padx=(10, 0), pady=(6, 0))
 
-        # ── Status + lang selector (right) ────────────────────────────────
+        # ── Status + settings gear (right) ────────────────────────────────
         right = tk.Frame(header, bg=BG)
         right.grid(row=0, column=1, sticky="e")
 
@@ -6208,21 +6221,12 @@ class App(tk.Tk):
         self._status_badge(badges, "Wav2Lip",
                            OK if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
 
-        # UI language selector
-        lang_sel = tk.Frame(right, bg=BG)
-        lang_sel.pack(side="left")
-        self._lbl_ui_lang = tk.Label(
-            lang_sel, text=self._s("label_ui_lang"),
-            bg=BG, fg=FG2, font="VT.Small")
-        self._lbl_ui_lang.pack(side="left", padx=(0, 4))
-        self._ui_lang_combo = ttk.Combobox(
-            lang_sel,
-            values=[lbl for _, lbl in UI_LANG_OPTIONS],
-            state="readonly", width=20)
-        _codes = [code for code, _ in UI_LANG_OPTIONS]
-        self._ui_lang_combo.current(_codes.index(self._ui_lang.get()) if self._ui_lang.get() in _codes else 0)
-        self._ui_lang_combo.pack(side="left")
-        self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
+        self._btn_settings = tk.Label(right, text="⚙", bg=BG, fg=FG2, font="VT.Title",
+                                      cursor="hand2", padx=4)
+        self._btn_settings.pack(side="left")
+        self._btn_settings.bind("<Button-1>", lambda e: self._open_settings())
+        self._btn_settings.bind("<Enter>", lambda e: self._btn_settings.configure(fg=FG))
+        self._btn_settings.bind("<Leave>", lambda e: self._btn_settings.configure(fg=FG2))
 
         # Thin border line under header
         tk.Frame(header_wrap, bg=BORDER, height=1).grid(
@@ -6878,8 +6882,207 @@ class App(tk.Tk):
         save_config({"ui_lang": self._ui_lang.get()})
         self._apply_lang()
 
-    def _apply_lang(self):
+    # ── Settings window ─────────────────────────────────────────────────────
+
+    def _segmented(self, parent, options, variable, command):
+        """Row of flat toggle buttons bound to ``variable``.
+
+        ``options`` is a list of ``(value, label)``. The returned row exposes
+        ``_refresh()`` to re-read the selection colours after a theme change.
+        """
+        row = tk.Frame(parent, bg=parent.cget("bg"))
+        buttons = {}
+
+        def refresh(*_):
+            cur = variable.get()
+            for value, b in buttons.items():
+                if value == cur:
+                    b.configure(bg=ACC_SOFT, fg=FG, highlightbackground=ACC)
+                else:
+                    b.configure(bg=BTN, fg=FG, highlightbackground=BORDER)
+
+        def choose(value):
+            variable.set(value)
+            refresh()
+            command()
+
+        for value, label in options:
+            b = tk.Button(row, text=label, bg=BTN, fg=FG, font="VT.Base",
+                          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+                          activebackground=ACC_SOFT, activeforeground=FG,
+                          highlightthickness=1, highlightbackground=BORDER,
+                          command=lambda v=value: choose(v))
+            b.pack(side="left", padx=(0, 4))
+            buttons[value] = b
+        refresh()
+        row._refresh = refresh
+        return row
+
+    def _theme_options(self):
+        """(value, label) pairs for the theme row; Graphite/Slate/Neon are proper nouns."""
+        labels = {"auto": self._s("theme_auto"), "light": self._s("theme_light")}
+        return [(k, labels.get(k, k.capitalize())) for k in _THEME_CHOICES]
+
+    def _scale_options(self):
+        return [(k, self._s(f"size_{k}")) for k in _SCALES]
+
+    def _refresh_accent_dots(self):
+        """Re-paint the accent dots: own colour, theme accent for "default", ring on the selection."""
+        if not getattr(self, "_accent_dots", None):
+            return
+        cur = self._ui_accent_var.get()
+        for value, d in self._accent_dots.items():
+            if not d.winfo_exists():
+                continue
+            d.configure(fg=ACC if value == "default" else _ACCENTS[value],
+                        bg=SURFACE,
+                        highlightbackground=FG if value == cur else SURFACE)
+
+    def _open_settings(self):
+        if self._settings_win is not None and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            self._settings_win.focus_force()
+            return
+        win = tk.Toplevel(self, bg=BG)
+        self._settings_win = win
+        win.title(self._s("settings_title"))
+        win.resizable(False, False)
+        win.transient(self)
+        win.protocol("WM_DELETE_WINDOW", self._close_settings)
+        body = tk.Frame(win, bg=BG, padx=20, pady=16)
+        body.pack(fill="both", expand=True)
+
+        # Appearance
+        self._lbl_settings_appearance = tk.Label(
+            body, text=self._s("settings_appearance").upper(), bg=BG, fg=FG2, font="VT.SmallBold")
+        self._lbl_settings_appearance.pack(anchor="w")
+        card = self._card(body, pady=(6, 14))
+
+        self._lbl_settings_theme = tk.Label(card, text=self._s("settings_theme"),
+                                            bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_settings_theme.pack(anchor="w")
+        self._seg_theme = self._segmented(card, self._theme_options(),
+                                          self._ui_theme_var, self._apply_ui_settings)
+        self._seg_theme.pack(anchor="w", pady=(4, 12))
+
+        self._lbl_settings_accent = tk.Label(card, text=self._s("settings_accent"),
+                                             bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_settings_accent.pack(anchor="w")
+        dots = tk.Frame(card, bg=SURFACE)
+        dots.pack(anchor="w", pady=(4, 12))
+        self._accent_dots = {}
+
+        def choose_accent(value):
+            self._ui_accent_var.set(value)
+            self._apply_ui_settings()
+
+        for value in _ACCENT_CHOICES:
+            d = tk.Label(dots, text="●", bg=SURFACE, font="VT.Title", cursor="hand2",
+                         padx=4, highlightthickness=2, highlightbackground=SURFACE)
+            d.pack(side="left", padx=(0, 2))
+            d.bind("<Button-1>", lambda e, v=value: choose_accent(v))
+            self._accent_dots[value] = d
+        self._lbl_accent_default = tk.Label(dots, text=self._s("accent_default"),
+                                            bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_accent_default.pack(side="left", padx=(8, 0))
+        self._refresh_accent_dots()
+
+        self._lbl_settings_size = tk.Label(card, text=self._s("settings_text_size"),
+                                           bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_settings_size.pack(anchor="w")
+        self._seg_scale = self._segmented(card, self._scale_options(),
+                                          self._ui_scale_var, self._apply_ui_settings)
+        self._seg_scale.pack(anchor="w", pady=(4, 0))
+
+        # Language
+        self._lbl_settings_language = tk.Label(
+            body, text=self._s("settings_language").upper(), bg=BG, fg=FG2, font="VT.SmallBold")
+        self._lbl_settings_language.pack(anchor="w")
+        lang_card = self._card(body, pady=(6, 14))
+        self._lbl_ui_lang = tk.Label(lang_card, text=self._s("label_ui_lang"),
+                                     bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_ui_lang.pack(anchor="w")
+        self._ui_lang_combo = ttk.Combobox(
+            lang_card, values=[lbl for _, lbl in UI_LANG_OPTIONS], state="readonly", width=24)
+        _codes = [code for code, _ in UI_LANG_OPTIONS]
+        self._ui_lang_combo.current(_codes.index(self._ui_lang.get()) if self._ui_lang.get() in _codes else 0)
+        self._ui_lang_combo.pack(anchor="w", pady=(4, 0))
+        self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
+
+        # Buttons
+        btns = tk.Frame(body, bg=BG)
+        btns.pack(fill="x")
+        _wr, self._btn_settings_reset = self._flat_btn(
+            btns, text=self._s("btn_reset"), command=self._reset_ui_settings)
+        _wr.pack(side="left")
+        _wc, self._btn_settings_close = self._flat_btn(
+            btns, text=self._s("btn_close"), primary=True, command=self._close_settings)
+        _wc.pack(side="right")
+
+        # Centre over the main window
+        win.update_idletasks()
+        x = self.winfo_rootx() + (self.winfo_width() - win.winfo_reqwidth()) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - win.winfo_reqheight()) // 2
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+        win.focus_force()
+
+    def _apply_ui_settings(self):
+        """Apply the dialog's current choices live and persist them."""
+        settings = {
+            "ui_theme": self._ui_theme_var.get(),
+            "ui_accent": self._ui_accent_var.get(),
+            "ui_scale": self._ui_scale_var.get(),
+            "ui_lang": self._ui_lang.get(),
+        }
+        self._theme.apply(settings, recolor=True)
+        self._ui_settings = dict(self._theme.settings)
+        save_config({k: self._ui_settings[k] for k in ("ui_theme", "ui_accent", "ui_scale")})
+        # Selection states re-read the (new) globals: the colour mapping alone
+        # cannot tell a selected dot from one that merely shares the old accent.
+        if self._settings_win is not None and self._settings_win.winfo_exists():
+            for row in (self._seg_theme, self._seg_scale):
+                row._refresh()
+            self._refresh_accent_dots()
+        self._update_profile_buttons()
+
+    def _reset_ui_settings(self):
+        self._ui_theme_var.set(_DEFAULT_THEME)
+        self._ui_accent_var.set(_DEFAULT_ACCENT)
+        self._ui_scale_var.set(_DEFAULT_SCALE)
+        self._apply_ui_settings()
+
+    def _close_settings(self):
+        if self._settings_win is not None and self._settings_win.winfo_exists():
+            self._settings_win.destroy()
+        self._settings_win = None
+
+    def _relabel_settings(self):
+        """Refresh the dialog's texts after a UI language change."""
+        if self._settings_win is None or not self._settings_win.winfo_exists():
+            return
+        self._settings_win.title(self._s("settings_title"))
+        self._lbl_settings_appearance.configure(text=self._s("settings_appearance").upper())
+        self._lbl_settings_theme.configure(text=self._s("settings_theme"))
+        self._lbl_settings_accent.configure(text=self._s("settings_accent"))
+        self._lbl_accent_default.configure(text=self._s("accent_default"))
+        self._lbl_settings_size.configure(text=self._s("settings_text_size"))
+        self._lbl_settings_language.configure(text=self._s("settings_language").upper())
         self._lbl_ui_lang.configure(text=self._s("label_ui_lang"))
+        self._btn_settings_reset.configure(text=self._s("btn_reset"))
+        self._btn_settings_close.configure(text=self._s("btn_close"))
+        # Rebuild the two segmented rows so their labels are translated
+        theme_parent, scale_parent = self._seg_theme.master, self._seg_scale.master
+        self._seg_theme.destroy()
+        self._seg_theme = self._segmented(theme_parent, self._theme_options(),
+                                          self._ui_theme_var, self._apply_ui_settings)
+        self._seg_theme.pack(anchor="w", pady=(4, 12), after=self._lbl_settings_theme)
+        self._seg_scale.destroy()
+        self._seg_scale = self._segmented(scale_parent, self._scale_options(),
+                                          self._ui_scale_var, self._apply_ui_settings)
+        self._seg_scale.pack(anchor="w", pady=(4, 0), after=self._lbl_settings_size)
+
+    def _apply_lang(self):
+        self._relabel_settings()
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
         self._lbl_model.configure(text=self._s("label_model"))
