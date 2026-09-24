@@ -393,6 +393,7 @@ class GuiThemedDefaultsTests(unittest.TestCase):
             self.assertEqual(app._lbl_status.cget("fg"), p.FG2)
 
 
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class LayoutTests(unittest.TestCase):
     def test_every_card_sits_in_the_right_pane_and_the_left_is_the_player_area(self):
         # The operator asked for every card on the right (input first, the
