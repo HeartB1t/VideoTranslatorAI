@@ -5626,17 +5626,20 @@ class App(tk.Tk):
         kwargs.pop("bg", None)
         kwargs.pop("activebackground", None)
         kwargs.pop("activeforeground", None)
+        # Compatibility shim: drop the legacy "glow" keyword of old call sites
         kwargs.pop("glow", None)
+        fg = kwargs.pop("fg", ACC_FG if primary else FG)
+        cursor = kwargs.pop("cursor", "hand2")
         wrap = tk.Frame(parent, bg=ACC if primary else BORDER, padx=1, pady=1)
         btn = tk.Button(
             wrap,
             bg=ACC if primary else BTN,
-            fg=ACC_FG if primary else FG,
+            fg=fg,
             activebackground=ACC_HOVER if primary else BORDER,
             activeforeground=ACC_FG if primary else FG,
-            disabledforeground=FG2,
+            disabledforeground=ACC_FG if primary else FG2,
             relief="flat", bd=0, highlightthickness=0,
-            cursor="hand2",
+            cursor=cursor,
             font=kwargs.pop("font", "VT.Bold" if primary else "VT.Base"),
             padx=kwargs.pop("padx", 10), pady=kwargs.pop("pady", 4),
             **kwargs,
@@ -5914,10 +5917,12 @@ class App(tk.Tk):
         self._url_text.bind("<FocusOut>", self._url_focus_out)
         _wd, self._btn_download = self._flat_btn(
             url_row, primary=True, text=self._s("btn_download"),
-            command=self._start_download, padx=10, pady=4)
+            command=self._start_download)
         # Packed before the text field so the fixed-size button keeps its width
         _wd.pack(side="right", padx=(6, 0))
         self._url_text.pack(side="left", fill="both", expand=True)
+        # Keyboard traversal follows stacking order: keep the field before the button
+        self._url_text.lift(_wd)
 
     def _build_advanced_panel(self, parent):
         """Left-pane: collapsible accordion sections for all advanced options."""
