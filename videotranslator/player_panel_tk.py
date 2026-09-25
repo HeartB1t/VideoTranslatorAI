@@ -396,6 +396,20 @@ class PlayerPanel(_P1PlayerPanel):
             self.playlist_button, lambda: self._ui_s("player_btn_playlist"),
             colors_fn=self._tip_colors,
         ))
+        self.audio_button = tk.Button(
+            info, text="A/B", command=lambda: self._activate("toggle_audio"),
+            relief="flat", bd=0, padx=5, pady=2, font="VT.Small",
+            bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
+            activeforeground=palette.ACC_FG, state="disabled",
+        )
+        self.audio_button.pack(side="right", padx=(4, 0))
+        self.subtitles_button = tk.Button(
+            info, text="CC", command=lambda: self._activate("toggle_subtitles"),
+            relief="flat", bd=0, padx=5, pady=2, font="VT.Small",
+            bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
+            activeforeground=palette.ACC_FG, state="disabled",
+        )
+        self.subtitles_button.pack(side="right", padx=(4, 0))
 
         self.transport_row = tk.Frame(self.controls_frame, bg=palette.SURFACE)
         self.transport_row.pack(fill="x", padx=6, pady=(2, 6))
@@ -576,6 +590,10 @@ class PlayerPanel(_P1PlayerPanel):
 
     def render(self, state: PlayerState, *, position: float | None) -> None:
         self._state = state
+        self.audio_button.configure(state="normal" if state.ab_available else "disabled")
+        self.subtitles_button.configure(state="normal" if state.subs_available else "disabled")
+        self.subtitles_button.configure(
+            relief="sunken" if state.subs_available and state.subs_visible else "flat")
         if not self._dragging:
             self._position = position
         hours = bool(state.duration is not None and state.duration >= 3600)
@@ -689,6 +707,10 @@ class PlayerPanel(_P1PlayerPanel):
             activeforeground=palette.ACC_FG, highlightbackground=palette.SURFACE,
             highlightcolor=palette.ACC,
         )
+        for button in (self.audio_button, self.subtitles_button):
+            button.configure(bg=palette.BTN, fg=palette.FG,
+                             activebackground=palette.ACC_HOVER,
+                             activeforeground=palette.ACC_FG)
         self.now_playing_label.configure(bg=palette.SURFACE, fg=palette.FG2)
         self.elapsed_label.configure(bg=palette.SURFACE, fg=palette.FG2)
         self.duration_label.configure(bg=palette.SURFACE, fg=palette.FG2)

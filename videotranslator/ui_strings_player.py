@@ -62,6 +62,9 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_vo_fallback_used": "L'uscita video hardware non ha funzionato: uso un'alternativa più lenta.",
         "player_busy": "Il player è occupato, attendi.",
         "player_tip_results_busy": "I risultati potranno essere aperti al termine del lavoro in corso",
+        "settings_player": "Player",
+        "opt_player_autoload": "Carica automaticamente nel player i video tradotti",
+        "opt_keep_original_audio": "Includi l'audio originale come traccia alternativa",
     },
     "en": {
         "player_badge": "Player",
@@ -112,6 +115,9 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_vo_fallback_used": "Hardware video output failed: using a slower fallback.",
         "player_busy": "The player is busy, please wait.",
         "player_tip_results_busy": "Results can be opened when the running job ends",
+        "settings_player": "Player",
+        "opt_player_autoload": "Automatically load translated videos in the player",
+        "opt_keep_original_audio": "Include the original audio as an alternate track",
     },
     "ar": {
         "player_badge": "المشغل",
@@ -1314,6 +1320,40 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_tip_results_busy": "Có thể mở kết quả khi tác vụ đang chạy kết thúc",
     },
 }
+
+# P3 settings labels, localized for every supported interface language.
+_P3_SETTINGS_STRINGS = {
+    "ar": ("المشغل", "تحميل الفيديوهات المترجمة تلقائيًا في المشغل", "إضافة الصوت الأصلي كمسار بديل"),
+    "zh": ("播放器", "自动在播放器中加载已翻译视频", "将原始音频作为备用音轨加入"),
+    "cs": ("Přehrávač", "Automaticky načítat přeložená videa do přehrávače", "Přidat původní zvuk jako alternativní stopu"),
+    "da": ("Afspiller", "Indlæs automatisk oversatte videoer i afspilleren", "Medtag original lyd som et alternativt lydspor"),
+    "nl": ("Speler", "Vertaalde video's automatisch in de speler laden", "Originele audio als alternatieve audiotrack toevoegen"),
+    "fi": ("Soitin", "Lataa käännetyt videot automaattisesti soittimeen", "Sisällytä alkuperäinen ääni vaihtoehtoisena ääniraitana"),
+    "fr": ("Lecteur", "Charger automatiquement les vidéos traduites dans le lecteur", "Inclure l’audio original comme piste alternative"),
+    "de": ("Player", "Übersetzte Videos automatisch im Player laden", "Originalton als alternative Audiospur hinzufügen"),
+    "el": ("Πρόγραμμα αναπαραγωγής", "Αυτόματη φόρτωση μεταφρασμένων βίντεο", "Συμπερίληψη του αρχικού ήχου ως εναλλακτικού κομματιού"),
+    "hi": ("प्लेयर", "अनुवादित वीडियो प्लेयर में अपने आप खोलें", "मूल ऑडियो को वैकल्पिक ट्रैक के रूप में शामिल करें"),
+    "hu": ("Lejátszó", "Lefordított videók automatikus betöltése a lejátszóba", "Eredeti hang hozzáadása alternatív hangsávként"),
+    "id": ("Pemutar", "Muat video terjemahan secara otomatis ke pemutar", "Sertakan audio asli sebagai trek alternatif"),
+    "ja": ("プレーヤー", "翻訳済み動画をプレーヤーに自動読み込み", "元の音声を別の音声トラックとして含める"),
+    "ko": ("플레이어", "번역된 동영상을 플레이어에 자동으로 불러오기", "원본 오디오를 대체 오디오 트랙으로 포함"),
+    "no": ("Spiller", "Last oversatte videoer automatisk inn i spilleren", "Ta med original lyd som et alternativt lydspor"),
+    "pl": ("Odtwarzacz", "Automatycznie wczytuj przetłumaczone filmy do odtwarzacza", "Dołącz oryginalny dźwięk jako alternatywną ścieżkę"),
+    "pt": ("Reprodutor", "Carregar automaticamente vídeos traduzidos no reprodutor", "Incluir o áudio original como faixa alternativa"),
+    "ro": ("Player", "Încarcă automat videoclipurile traduse în player", "Include sunetul original ca pistă audio alternativă"),
+    "ru": ("Плеер", "Автоматически загружать переведённые видео в плеер", "Добавлять оригинальный звук как альтернативную дорожку"),
+    "es": ("Reproductor", "Cargar automáticamente los vídeos traducidos en el reproductor", "Incluir el audio original como pista alternativa"),
+    "sv": ("Spelare", "Läs in översatta videor automatiskt i spelaren", "Ta med originalljud som ett alternativt ljudspår"),
+    "tr": ("Oynatıcı", "Çevrilen videoları oynatıcıya otomatik yükle", "Orijinal sesi alternatif bir ses parçası olarak ekle"),
+    "uk": ("Програвач", "Автоматично завантажувати перекладені відео", "Додавати оригінальний звук як альтернативну доріжку"),
+    "vi": ("Trình phát", "Tự động tải video đã dịch vào trình phát", "Thêm âm thanh gốc làm bản âm thanh thay thế"),
+}
+for _lang, (_section, _autoload, _original) in _P3_SETTINGS_STRINGS.items():
+    PLAYER_UI_STRINGS[_lang].update({
+        "settings_player": _section,
+        "opt_player_autoload": _autoload,
+        "opt_keep_original_audio": _original,
+    })
 
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 

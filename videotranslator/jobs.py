@@ -8,6 +8,7 @@ testable contract for the many options passed into ``translate_video``.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -46,6 +47,7 @@ class TranslationJobConfig:
     difficulty_override: str | None = None
     hotwords: list[str] | None = field(default=None)
     ollama_use_cove: bool = True
+    keep_original_audio: bool = True
 
     def to_translate_video_kwargs(self) -> dict[str, Any]:
         """Return kwargs compatible with legacy ``translate_video``."""
@@ -66,6 +68,30 @@ class TranslationJobResult:
             or self.outputs.get("video_out")
         )
         return str(value) if value else None
+
+    @property
+    def subtitle_path(self) -> str | None:
+        value = self.outputs.get("srt") or self.outputs.get("subtitle")
+        return str(value) if value else None
+
+
+@dataclass(frozen=True)
+class JobOutput:
+    """Stable, UI-safe description of a completed pipeline artifact."""
+
+    video_path: str | None = None
+    subtitle_path: str | None = None
+    source_path: str | None = None
+    title: str | None = None
+
+    @classmethod
+    def from_result(cls, result: dict[str, Any] | TranslationJobResult,
+                    *, source_path: str | None = None) -> "JobOutput":
+        outputs = result.outputs if isinstance(result, TranslationJobResult) else result
+        normalized = TranslationJobResult(outputs=outputs or {})
+        video = normalized.output_path
+        return cls(video, normalized.subtitle_path, source_path,
+                   Path(video).name if video else None)
 
 
 @dataclass(frozen=True)

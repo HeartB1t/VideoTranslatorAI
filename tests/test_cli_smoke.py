@@ -27,6 +27,43 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--hotwords", proc.stdout)
         self.assertIn("--preflight", proc.stdout)
         self.assertIn("--preflight-player", proc.stdout)
+        self.assertIn("--no-original-audio", proc.stdout)
+
+    def _keep_original_audio_for(self, config, extra_args):
+        """Run the CLI with an isolated config and capture the kwarg that
+        reaches ``translate_video``."""
+        import video_translator_gui as legacy
+        from videotranslator.cli import _cli
+
+        captured = {}
+
+        def fake_translate(**kwargs):
+            captured.update(kwargs)
+            return {"video": "/tmp/out.mp4", "segments": []}
+
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as video, \
+                mock.patch.object(legacy, "check_dependencies", return_value=([], [])), \
+                mock.patch.object(legacy, "load_config", return_value=config), \
+                mock.patch.object(legacy, "load_hf_token", return_value=""), \
+                mock.patch.object(legacy, "translate_video", side_effect=fake_translate), \
+                contextlib.redirect_stdout(io.StringIO()):
+            _cli([video.name, "--lang-target", "it"] + extra_args)
+        return captured["keep_original_audio"]
+
+    def test_original_audio_kept_by_default(self):
+        self.assertTrue(self._keep_original_audio_for({}, []))
+
+    def test_no_original_audio_flag_disables_it(self):
+        self.assertFalse(self._keep_original_audio_for({}, ["--no-original-audio"]))
+
+    def test_config_can_disable_original_audio(self):
+        self.assertFalse(
+            self._keep_original_audio_for({"keep_original_audio": False}, []))
+
+    def test_flag_overrides_config_enabling_it(self):
+        self.assertFalse(
+            self._keep_original_audio_for(
+                {"keep_original_audio": True}, ["--no-original-audio"]))
 
     def test_translation_unavailable_exits_with_clear_message(self):
         import video_translator_gui as legacy

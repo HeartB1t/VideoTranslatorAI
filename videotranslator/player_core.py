@@ -276,6 +276,17 @@ class PlayerController:
             item = replace(item, srt_path=str(path))
         self._update(item=item, subs_available=True)
 
+    def update_segments_as_subtitles(self, segments: Sequence[dict], srt_path: Path) -> None:
+        """Rewrite the active editor preview subtitle and reload it in mpv."""
+        path = Path(srt_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(segments_to_srt(tuple(segments)), encoding="utf-8")
+        if self._backend is not None:
+            self._backend.reload_subtitles()
+        item = self.state.item
+        if item is not None:
+            self._update(item=replace(item, srt_path=str(path)), subs_available=True)
+
     def snapshot(self, dest_dir: Path, now: datetime) -> Path:
         if self.state.item is None or self._backend is None:
             raise RuntimeError("no media loaded")
@@ -432,6 +443,18 @@ def controls_visible(width_px: int, scale: float) -> frozenset[str]:
     if width_px < 380 * scale:
         hidden |= {"snapshot", "open_folder"}
     return CONTROLS - hidden
+
+
+def editor_geometry(right_x: int, right_w: int, main_x: int, main_y: int,
+                    main_h: int, screen_w: int, screen_h: int) -> tuple[int, int, int, int]:
+    """Return a right-column-anchored editor rectangle clamped to the screen."""
+    screen_w = max(1, int(screen_w))
+    screen_h = max(1, int(screen_h))
+    width = min(900, max(int(right_w), 520), max(1, screen_w - 40))
+    height = min(max(1, int(main_h)), max(1, screen_h - 80))
+    x = min(max(0, int(right_x)), max(0, screen_w - width))
+    y = min(max(0, int(main_y)), max(0, screen_h - height))
+    return x, y, width, height
 
 
 # -- keyboard and mouse -------------------------------------------------------

@@ -9,7 +9,6 @@ making the runner independently testable.
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,6 +82,7 @@ def translate_video(
     difficulty_override: str | None = None,
     hotwords: list[str] | None = None,
     ollama_use_cove: bool = True,
+    keep_original_audio: bool = True,
     *,
     runtime: PipelineRuntime,
 ) -> dict:
@@ -476,7 +476,10 @@ def translate_video(
             overlap_fade_enabled=overlap_fade_enabled,
             difficulty_profile=_resolved_profile,
         )
-        mux_video(video_in, track, output)
+        mux_video(
+            video_in, track, output,
+            original_audio_input=video_in if keep_original_audio else None,
+        )
 
         if use_lipsync:
             # TASK 2H: pre-check faces with cv2 Haar Cascade. Wav2Lip would
@@ -508,7 +511,13 @@ def translate_video(
                                                        overlap_fade_enabled=overlap_fade_enabled,
                                                        difficulty_profile=_resolved_profile)
                     synced = apply_lipsync(output, track_vocals, tmp_dir)
-                    shutil.move(synced, output)
+                    # Wav2Lip returns a video plus vocals-only audio. Re-mux
+                    # the full dubbed mix (voice + retained background) and
+                    # source audio, rather than replacing the muxed result.
+                    mux_video(
+                        synced, track, output,
+                        original_audio_input=video_in if keep_original_audio else None,
+                    )
                 except Exception as e:
                     print(f"     ! Lip sync failed ({e.__class__.__name__}: {e}), keeping video without lip sync.", flush=True)
 

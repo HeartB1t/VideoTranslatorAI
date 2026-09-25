@@ -732,7 +732,8 @@ class KeyboardAccessTests(unittest.TestCase):
                 return (list(app._seg_theme.winfo_children())
                         + [app._accent_dots[v] for v in gui._ACCENT_CHOICES]
                         + list(app._seg_scale.winfo_children())
-                        + [app._ui_lang_combo, app._btn_settings_reset,
+                        + [app._ui_lang_combo, app._chk_player_autoload,
+                           app._chk_keep_original_audio, app._btn_settings_reset,
                            app._btn_settings_close])
 
             order = expected()

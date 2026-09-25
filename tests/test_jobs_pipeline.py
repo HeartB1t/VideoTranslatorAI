@@ -1,6 +1,6 @@
 import unittest
 
-from videotranslator.jobs import PipelineProgressEvent, TranslationJobConfig
+from videotranslator.jobs import JobOutput, PipelineProgressEvent, TranslationJobConfig
 from videotranslator.pipeline import run_translation_job
 
 
@@ -12,6 +12,7 @@ class TranslationJobConfigTests(unittest.TestCase):
             translation_engine="llm_ollama",
             hotwords=["Strix", "Docker"],
             ollama_use_cove=False,
+            keep_original_audio=False,
         )
 
         kwargs = cfg.to_translate_video_kwargs()
@@ -21,9 +22,20 @@ class TranslationJobConfigTests(unittest.TestCase):
         self.assertEqual(kwargs["translation_engine"], "llm_ollama")
         self.assertEqual(kwargs["hotwords"], ["Strix", "Docker"])
         self.assertFalse(kwargs["ollama_use_cove"])
+        self.assertFalse(kwargs["keep_original_audio"])
 
 
 class PipelineWrapperTests(unittest.TestCase):
+    def test_job_output_normalizes_video_and_subtitle_paths(self):
+        output = JobOutput.from_result(
+            {"video": "translated.mp4", "srt": "translated.srt"},
+            source_path="source.mp4",
+        )
+        self.assertEqual(output.video_path, "translated.mp4")
+        self.assertEqual(output.subtitle_path, "translated.srt")
+        self.assertEqual(output.source_path, "source.mp4")
+        self.assertEqual(output.title, "translated.mp4")
+
     def test_run_translation_job_calls_runner_with_config_kwargs(self):
         seen = {}
 

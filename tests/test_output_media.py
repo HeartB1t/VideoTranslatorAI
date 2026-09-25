@@ -78,6 +78,49 @@ class OutputMediaTests(unittest.TestCase):
         self.assertEqual(cmd[-1], "out.mp4")
         self.assertEqual(kwargs["step"], "mux_video")
 
+    def test_mux_video_maps_named_dubbed_and_original_tracks(self):
+        calls = []
+        mux_video("in.mp4", "dub.wav", "out.mp4", original_audio_input="in.mp4",
+                  run_ffmpeg=lambda cmd, **kw: calls.append((cmd, kw)),
+                  log=lambda *_args, **_kwargs: None)
+        cmd = calls[0][0]
+        self.assertEqual(cmd.count("-i"), 2)
+        self.assertIn("0:a:0?", cmd)
+        self.assertIn("title=Dubbed", cmd)
+        self.assertIn("title=Original", cmd)
+        self.assertIn("handler_name=Dubbed", cmd)
+        self.assertIn("handler_name=Original", cmd)
+        self.assertIn("default", cmd)
+        # Per-stream codecs and bitrates as prescribed by the design (3.4):
+        # the dubbed track at 192k, the original at 160k.
+        self.assertEqual(cmd[cmd.index("-b:a:0") + 1], "192k")
+        self.assertEqual(cmd[cmd.index("-b:a:1") + 1], "160k")
+        self.assertEqual(cmd[cmd.index("-c:a:0") + 1], "aac")
+        self.assertEqual(cmd[cmd.index("-c:a:1") + 1], "aac")
+
+    def test_mux_video_single_track_when_original_not_kept(self):
+        calls = []
+        mux_video("in.mp4", "dub.wav", "out.mp4", original_audio_input=None,
+                  run_ffmpeg=lambda cmd, **kw: calls.append(cmd),
+                  log=lambda *_args, **_kwargs: None)
+        cmd = calls[0]
+        self.assertEqual(cmd.count("-i"), 2)  # video + dubbed only, no source
+        audio_maps = [cmd[i + 1] for i, item in enumerate(cmd[:-1])
+                      if item == "-map" and ":a:" in cmd[i + 1]]
+        self.assertEqual(audio_maps, ["1:a:0"])
+        self.assertNotIn("title=Original", cmd)
+        self.assertNotIn("handler_name=Original", cmd)
+
+    def test_mux_video_separate_original_input_precedes_output_options(self):
+        calls = []
+        mux_video("video.mp4", "dub.wav", "out.mp4", original_audio_input="source.mkv",
+                  run_ffmpeg=lambda cmd, **kw: calls.append(cmd),
+                  log=lambda *_args, **_kwargs: None)
+        cmd = calls[0]
+        inputs = [cmd[i + 1] for i, item in enumerate(cmd[:-1]) if item == "-i"]
+        self.assertEqual(inputs, ["video.mp4", "dub.wav", "source.mkv"])
+        self.assertIn("2:a:0?", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

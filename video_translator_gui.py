@@ -4925,6 +4925,7 @@ from videotranslator.output_media import (  # noqa: E402
     get_duration,
     mux_video as _mux_video_impl,
     save_subtitles,
+    segments_to_srt,
 )
 
 
@@ -5471,6 +5472,7 @@ def translate_video(
     difficulty_override: str | None = None,
     hotwords: list[str] | None = None,
     ollama_use_cove: bool = True,
+    keep_original_audio: bool = True,
 ) -> dict:
     """Compatibility wrapper for the modular pipeline runner."""
     return _translate_video_impl(
@@ -5505,6 +5507,7 @@ def translate_video(
         difficulty_override=difficulty_override,
         hotwords=hotwords,
         ollama_use_cove=ollama_use_cove,
+        keep_original_audio=keep_original_audio,
         runtime=_build_pipeline_runtime(),
     )
 
@@ -5605,7 +5608,8 @@ class _TkStreamRedirect(io.TextIOBase):
 # ═══════════════════════════════════════════════════════════
 
 class SubtitleEditor(tk.Toplevel):
-    def __init__(self, parent, segments: list[dict], on_confirm, ui_s=None):
+    def __init__(self, parent, segments: list[dict], on_confirm, ui_s=None,
+                 on_seek=None, on_change=None):
         super().__init__(parent)
         self._s = ui_s if callable(ui_s) else (lambda k: UI_STRINGS["it"].get(k, k))
         self.title(self._s("editor_title"))
@@ -5613,6 +5617,9 @@ class SubtitleEditor(tk.Toplevel):
         self.geometry("900x600")
         self.segments   = [s.copy() for s in segments]
         self.on_confirm = on_confirm
+        self._on_seek = on_seek
+        self._on_change = on_change
+        self._change_after_id = None
 
         # TASK 5C: filter state - when True, only segments with at least one
         # quality flag are shown. Useful on long videos (200+ segments) where
@@ -5692,6 +5699,7 @@ class SubtitleEditor(tk.Toplevel):
 
         self._populate()
         self._tree.bind("<Double-1>", self._on_edit)
+        self._tree.bind("<<TreeviewSelect>>", self._on_select)
         # Hover bindings for the per-row tooltip explaining why a row is
         # flagged. Motion fires often (every pixel) but the handler is
         # cheap (identify_row + dict lookup) so the cost is negligible.
@@ -5750,6 +5758,27 @@ class SubtitleEditor(tk.Toplevel):
                 s["text_tgt"],
             ), tags=tags)
 
+    def _on_select(self, _event=None):
+        selected = self._tree.selection()
+        if selected and self._on_seek is not None:
+            try:
+                self._on_seek(float(self.segments[int(selected[0])]["start"]))
+            except (ValueError, KeyError, IndexError):
+                pass
+
+    def _schedule_preview_update(self):
+        if self._on_change is None:
+            return
+        if self._change_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._change_after_id)
+        self._change_after_id = self.after(500, self._flush_preview_update)
+
+    def _flush_preview_update(self):
+        self._change_after_id = None
+        if self._on_change is not None:
+            self._on_change(self.segments)
+
     def _on_edit(self, event):
         item = self._tree.identify_row(event.y)
         col  = self._tree.identify_column(event.x)
@@ -5775,6 +5804,7 @@ class SubtitleEditor(tk.Toplevel):
         def save(_=None):
             self.segments[idx][field] = entry.get()
             self._populate()
+            self._schedule_preview_update()
             win.destroy()
 
         entry.bind("<Return>", save)
@@ -5870,6 +5900,10 @@ class SubtitleEditor(tk.Toplevel):
         # Make sure the orphan tooltip Toplevel is cleaned up when the
         # editor closes - otherwise it would linger as a ghost label.
         self._hide_tooltip()
+        if self._change_after_id is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._change_after_id)
+            self._change_after_id = None
         super().destroy()
 
     def _confirm(self):
@@ -5998,6 +6032,8 @@ class App(tk.Tk):
             None, self._player_settings, on_change=self._on_player_state,
             save=save_config)
         self._player_results: list[_player_core.MediaItem] = []
+        self._editor_open = False
+        self._editor_preview_srt: str | None = None
         self._player_init_running = False
         self._player_init_thread = None
         self._player_poll_after = None
@@ -7738,6 +7774,38 @@ class App(tk.Tk):
         self._ui_lang_combo.pack(anchor="w", pady=(4, 0))
         self._ui_lang_combo.bind("<<ComboboxSelected>>", self._on_ui_lang_change)
 
+        # Player options: keep these separate from appearance preferences so
+        # they remain available even when the integrated player is offline.
+        self._lbl_settings_player = tk.Label(
+            body, text=self._s("settings_player").upper(), bg=BG, fg=FG2,
+            font="VT.SmallBold")
+        self._lbl_settings_player.pack(anchor="w")
+        player_card = self._card(body, pady=(6, 14))
+        self._player_autoload_var = tk.BooleanVar(value=self._player_settings.autoload_result)
+        self._keep_original_audio_var = tk.BooleanVar(
+            value=self._player_settings.keep_original_audio)
+        self._chk_player_autoload = tk.Checkbutton(
+            player_card, text=self._s("opt_player_autoload"),
+            variable=self._player_autoload_var,
+            command=self._save_player_options,
+            bg=SURFACE, fg=FG, activebackground=SURFACE, activeforeground=FG,
+            selectcolor=BG, relief="flat", borderwidth=0, font="VT.Base",
+        )
+        self._chk_player_autoload.pack(anchor="w")
+        self._chk_keep_original_audio = tk.Checkbutton(
+            player_card, text=self._s("opt_keep_original_audio"),
+            variable=self._keep_original_audio_var,
+            command=self._save_player_options,
+            bg=SURFACE, fg=FG, activebackground=SURFACE, activeforeground=FG,
+            selectcolor=BG, relief="flat", borderwidth=0, font="VT.Base",
+        )
+        self._chk_keep_original_audio.pack(anchor="w")
+        self._player_credits_label = tk.Label(
+            player_card, text=self._player_panel.status_text(), bg=SURFACE,
+            fg=FG2, font="VT.Small", justify="left", wraplength=420,
+        )
+        self._player_credits_label.pack(anchor="w", pady=(4, 0))
+
         # Buttons
         btns = tk.Frame(body, bg=BG)
         btns.pack(fill="x")
@@ -7754,6 +7822,19 @@ class App(tk.Tk):
         y = self.winfo_rooty() + (self.winfo_height() - win.winfo_reqheight()) // 2
         win.geometry(f"+{max(0, x)}+{max(0, y)}")
         win.focus_force()
+
+    def _save_player_options(self):
+        self._player_settings = dataclasses.replace(
+            self._player_settings,
+            autoload_result=bool(self._player_autoload_var.get()),
+            keep_original_audio=bool(self._keep_original_audio_var.get()),
+        )
+        save_config({
+            _player_settings_module.PLAYER_AUTOLOAD_KEY:
+                self._player_settings.autoload_result,
+            _player_settings_module.KEEP_ORIGINAL_AUDIO_KEY:
+                self._player_settings.keep_original_audio,
+        })
 
     def _apply_ui_settings(self):
         """Apply the dialog's current choices live and persist them."""
@@ -7828,6 +7909,9 @@ class App(tk.Tk):
         self._lbl_accent_default.configure(text=self._s("accent_default"))
         self._lbl_settings_size.configure(text=self._s("settings_text_size"))
         self._lbl_settings_language.configure(text=self._s("settings_language").upper())
+        self._lbl_settings_player.configure(text=self._s("settings_player").upper())
+        self._chk_player_autoload.configure(text=self._s("opt_player_autoload"))
+        self._chk_keep_original_audio.configure(text=self._s("opt_keep_original_audio"))
         self._lbl_ui_lang.configure(text=self._s("label_ui_lang"))
         self._btn_settings_reset.configure(text=self._s("btn_reset"))
         self._btn_settings_close.configure(text=self._s("btn_close"))
@@ -8127,6 +8211,9 @@ class App(tk.Tk):
         if entry is not None and load_config().get("player_probe") != entry:
             save_config({"player_probe": entry})  # config writes stay on the Tk thread
         self._update_player_badge()
+        if (self._settings_win is not None and self._settings_win.winfo_exists()
+                and hasattr(self, "_player_credits_label")):
+            self._player_credits_label.configure(text=self._player_panel.status_text())
         if status.ok:
             if self._player_controller.state.item is None:
                 self._player_panel.show_ready(status)
@@ -8168,6 +8255,11 @@ class App(tk.Tk):
                             dragging=bool(args.get("dragging", False)))
         elif name == "volume":
             controller.set_volume(int(args.get("value", controller.state.volume)))
+        elif name == "toggle_audio":
+            target = "original" if controller.state.audio == "dubbed" else "dubbed"
+            controller.select_audio(target)
+        elif name == "toggle_subtitles":
+            controller.set_subtitles_visible(not controller.state.subs_visible)
         elif name == "mute":
             controller.toggle_mute()
         elif name == "snapshot":
@@ -8220,6 +8312,44 @@ class App(tk.Tk):
         index = next((i for i, item in enumerate(items)
                       if current is not None and item.path == current.path), None)
         self._player_controller.set_playlist(items, index=index)
+
+    def _on_job_outputs(self, outputs) -> None:
+        """Add completed artifacts to Results and optionally preview the first."""
+        if self._destroying or not outputs:
+            return
+        # With keep_original_audio the dubbed file already carries the original
+        # as an embedded track, so A/B switches between the two internal tracks.
+        # Passing the source as an external Original track too would be
+        # redundant and, if mpv reports the track list after file-loaded, could
+        # add a third track. Only offer the external source when NOT embedded;
+        # player_core still guards against a double add as a backstop.
+        embed_original = self._player_settings.keep_original_audio
+        for output in outputs:
+            video = getattr(output, "video_path", None)
+            if not video:
+                continue
+            item = _player_core.MediaItem(
+                path=str(video), kind="dubbed",
+                title=getattr(output, "title", None) or Path(video).name,
+                source_path=(None if embed_original
+                             else getattr(output, "source_path", None)),
+                srt_path=getattr(output, "subtitle_path", None),
+            )
+            self._player_results = [x for x in self._player_results if x.path != item.path]
+            self._player_results.append(item)
+        self._sync_player_playlist()
+        if self._player_settings.autoload_result and outputs:
+            first = next((x for x in outputs if getattr(x, "video_path", None)), None)
+            if first is not None:
+                path = str(first.video_path)
+                item = next((x for x in self._player_results if x.path == path), None)
+                if item is not None:
+                    items = self._source_media_items() + list(self._player_results)
+                    index = next((i for i, candidate in enumerate(items)
+                                  if candidate.path == item.path), None)
+                    self._player_controller.set_playlist(items, index=index)
+                    self._player_controller.load(item, paused=True)
+                    self._ensure_or_show_player_status()
 
     def _on_input_select(self, _event=None) -> None:
         selected = self._batch_listbox.curselection()
@@ -8868,6 +8998,8 @@ class App(tk.Tk):
             all_ok = True
             error_keys = []
             fallback_count = 0
+            from videotranslator.jobs import JobOutput
+            outputs = []
             handed_off_to_editor = False
             try:
                 for url in urls:
@@ -8906,6 +9038,9 @@ class App(tk.Tk):
                         )
                         result = translate_video(**cfg.to_translate_video_kwargs())
                         fallback_count += _count_fallback_segments(result)
+                        output = JobOutput.from_result(result)
+                        if output.video_path:
+                            outputs.append(output)
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {type(e).__name__}: {e}\n{traceback.format_exc()}\n")
@@ -8920,6 +9055,8 @@ class App(tk.Tk):
             finally:
                 _thread_local.redirect = None
             if not handed_off_to_editor:
+                if outputs:
+                    self.after(0, self._on_job_outputs, outputs)
                 self.after(0, self._on_done, all_ok,
                            _shared_error_key(error_keys), fallback_count)
 
@@ -9101,6 +9238,7 @@ class App(tk.Tk):
             ollama_url=ollama_url,
             ollama_slot_aware=ollama_slot_aware,
             ollama_thinking=ollama_thinking,
+            keep_original_audio=self._player_settings.keep_original_audio,
         )
 
     def _start_with_editor(self, video_path: str,
@@ -9183,7 +9321,43 @@ class App(tk.Tk):
             self._log_write("[i] Subtitles confirmed. Starting dubbing...\n")
             self._run_with_segments(video_path, edited, cleanup_path)
 
-        editor = SubtitleEditor(self, segments, on_confirm, ui_s=self._s)
+        self._editor_open = True
+        fd, self._editor_preview_srt = tempfile.mkstemp(
+            suffix=".srt", prefix="vtai_editor_preview_")
+        os.close(fd)
+        preview_path = Path(self._editor_preview_srt)
+        preview_path.write_text(
+            segments_to_srt(segments), encoding="utf-8")
+        preview_item = _player_core.MediaItem(
+            video_path, "source", Path(video_path).name,
+            srt_path=str(preview_path), temp=bool(cleanup_path),
+        )
+        self._player_controller.load(preview_item, paused=True)
+        self._ensure_or_show_player_status()
+
+        def on_seek(seconds):
+            # Ignore callbacks that fire after the editor is gone (the debounce
+            # is also cancelled in SubtitleEditor.destroy, this is the backstop).
+            if not self._editor_open:
+                return
+            self._player_controller.seek(seconds)
+
+        def on_change(changed_segments):
+            if not self._editor_open:
+                return
+            self._player_controller.update_segments_as_subtitles(
+                changed_segments, preview_path)
+
+        editor = SubtitleEditor(self, segments, on_confirm, ui_s=self._s,
+                                on_seek=on_seek, on_change=on_change)
+        editor.transient(self)
+        self._right_pane.update_idletasks()
+        editor_x, editor_y, editor_w, editor_h = _player_core.editor_geometry(
+            self._right_pane.winfo_rootx(), self._right_pane.winfo_width(),
+            self.winfo_rootx(), self.winfo_rooty(), self.winfo_height(),
+            self.winfo_screenwidth(), self.winfo_screenheight(),
+        )
+        editor.geometry(f"{editor_w}x{editor_h}+{editor_x}+{editor_y}")
 
         # Tkinter propagates <Destroy> to all child widgets; we filter to
         # react only to the destruction of the Toplevel itself (idempotency
@@ -9195,6 +9369,12 @@ class App(tk.Tk):
                 self._log_write("[i] Editor closed without confirmation - "
                                 "discarding download.\n")
                 self._cleanup_editor_tempfile(cleanup_path)
+            self._editor_open = False
+            self._player_controller.stop()
+            if self._editor_preview_srt:
+                with contextlib.suppress(OSError):
+                    os.remove(self._editor_preview_srt)
+                self._editor_preview_srt = None
 
         editor.bind("<Destroy>", on_editor_destroyed)
 
@@ -9219,7 +9399,12 @@ class App(tk.Tk):
                     video_in=video_path,
                     segments_override=segments,
                 )
-                translate_video(**cfg.to_translate_video_kwargs())
+                result = translate_video(**cfg.to_translate_video_kwargs())
+                from videotranslator.jobs import JobOutput
+                output = JobOutput.from_result(
+                    result, source_path=video_path if cleanup_path is None else None)
+                if output.video_path:
+                    self.after(0, self._on_job_outputs, [output])
                 self.after(0, self._on_done, True)
             except Exception as e:
                 self.after(0, self._log_write, f"[x] {e}\n{traceback.format_exc()}\n")
@@ -9246,6 +9431,8 @@ class App(tk.Tk):
             all_ok = True
             error_keys = []
             fallback_count = 0
+            from videotranslator.jobs import JobOutput
+            outputs = []
             try:
                 for i, f in enumerate(files):
                     self.after(0, self._log_write,
@@ -9258,6 +9445,9 @@ class App(tk.Tk):
                         )
                         result = translate_video(**cfg.to_translate_video_kwargs())
                         fallback_count += _count_fallback_segments(result)
+                        output = JobOutput.from_result(result, source_path=f)
+                        if output.video_path:
+                            outputs.append(output)
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {e}\n{traceback.format_exc()}\n")
@@ -9265,6 +9455,8 @@ class App(tk.Tk):
                         error_keys.append(_error_key_for(e))
             finally:
                 _thread_local.redirect = None
+            if outputs:
+                self.after(0, self._on_job_outputs, outputs)
             self.after(0, self._on_done, all_ok,
                        _shared_error_key(error_keys), fallback_count)
 

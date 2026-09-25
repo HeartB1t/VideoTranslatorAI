@@ -79,30 +79,39 @@ def mux_video(
     audio_track: str,
     output_path: str,
     *,
+    original_audio_input: str | None = None,
     run_ffmpeg: Callable[..., None] = run_ffmpeg,
     log: Callable[..., None] = print,
 ) -> None:
     """Mux the original video stream with the dubbed audio track."""
     log(f"[+] Muxing -> {output_path}", flush=True)
+    if original_audio_input is None:
+        # Keep the legacy command stable for callers that opt out.
+        command = [
+            "ffmpeg", "-y", "-i", video_input, "-i", audio_track,
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-map", "0:v:0", "-map", "1:a:0", output_path,
+        ]
+    else:
+        same_input = original_audio_input == video_input
+        command = ["ffmpeg", "-y", "-i", video_input, "-i", audio_track]
+        if not same_input:
+            command += ["-i", original_audio_input]
+        original_index = 0 if same_input else 2
+        command += [
+            "-c:v", "copy",
+            "-c:a:0", "aac", "-b:a:0", "192k",
+            "-c:a:1", "aac", "-b:a:1", "160k",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-metadata:s:a:0", "title=Dubbed",
+            "-metadata:s:a:0", "handler_name=Dubbed",
+            "-disposition:a:0", "default",
+            "-map", f"{original_index}:a:0?",
+            "-metadata:s:a:1", "title=Original",
+            "-metadata:s:a:1", "handler_name=Original",
+            "-disposition:a:1", "0", output_path,
+        ]
     run_ffmpeg(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            video_input,
-            "-i",
-            audio_track,
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "192k",
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            output_path,
-        ],
+        command,
         step="mux_video",
     )

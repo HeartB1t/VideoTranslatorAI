@@ -21,6 +21,8 @@ PLAYER_VOLUME_KEY = "player_volume"
 PLAYER_MUTED_KEY = "player_muted"
 PLAYER_AUDIO_KEY = "player_audio"
 PLAYER_SUBS_VISIBLE_KEY = "player_subs_visible"
+PLAYER_AUTOLOAD_KEY = "player_autoload_result"
+KEEP_ORIGINAL_AUDIO_KEY = "keep_original_audio"
 
 
 @dataclass(frozen=True)
@@ -85,9 +87,9 @@ def normalize_player_settings(cfg: Mapping[str, Any], *, sys_platform: str) -> P
         muted=_bool(cfg, PLAYER_MUTED_KEY, False),
         audio=_choice(cfg, PLAYER_AUDIO_KEY, AUDIO_CHOICES, "dubbed"),
         subs_visible=_bool(cfg, PLAYER_SUBS_VISIBLE_KEY, True),
-        autoload_result=_bool(cfg, "player_autoload_result", True),
+        autoload_result=_bool(cfg, PLAYER_AUTOLOAD_KEY, True),
         vo_profile=_choice(cfg, "player_vo_profile", vo_profiles_for(sys_platform), None),
-        keep_original_audio=_bool(cfg, "keep_original_audio", True),
+        keep_original_audio=_bool(cfg, KEEP_ORIGINAL_AUDIO_KEY, True),
     )
 
 
@@ -114,8 +116,8 @@ def settings_to_config(settings: PlayerSettings | LiveSettings) -> dict[str, Any
             PLAYER_MUTED_KEY: settings.muted,
             PLAYER_AUDIO_KEY: settings.audio,
             PLAYER_SUBS_VISIBLE_KEY: settings.subs_visible,
-            "player_autoload_result": settings.autoload_result,
-            "keep_original_audio": settings.keep_original_audio,
+            PLAYER_AUTOLOAD_KEY: settings.autoload_result,
+            KEEP_ORIGINAL_AUDIO_KEY: settings.keep_original_audio,
         }
         if settings.vo_profile is not None:
             cfg["player_vo_profile"] = settings.vo_profile

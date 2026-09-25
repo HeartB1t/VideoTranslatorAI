@@ -95,6 +95,17 @@ class ReflowTests(unittest.TestCase):
     def test_thresholds_follow_the_text_size(self):
         self.assertEqual(pc.controls_visible(500, 1.25), self.ALL - {"back", "forward"})
 
+    def test_editor_geometry_clamps_default_small_and_portrait_screens(self):
+        self.assertEqual(pc.editor_geometry(640, 460, 0, 0, 800, 1920, 1080),
+                         (640, 0, 520, 800))
+        x, y, width, height = pc.editor_geometry(700, 460, 0, 0, 900, 900, 600)
+        self.assertGreaterEqual(x, 0)
+        self.assertGreaterEqual(y, 0)
+        self.assertLessEqual(x + width, 900)
+        self.assertLessEqual(y + height, 600)
+        self.assertEqual(pc.editor_geometry(50, 600, 0, 0, 1800, 1080, 1920),
+                         (50, 0, 600, 1800))
+
 
 class KeyTests(unittest.TestCase):
     def test_every_action_has_a_key(self):
@@ -283,6 +294,19 @@ class PlayerControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.state.position, 4.0)
         self.assertEqual(self.controller.state.status, "paused")
         self.assertTrue(self.controller.state.subs_available)
+
+    def test_editor_subtitle_update_rewrites_file_and_reloads_track(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "preview.srt"
+            self.controller.load(MediaItem("source.mp4", "source", "source"))
+            self.controller.attach_backend(self.backend)
+            self.controller.show_segments_as_subtitles(
+                [{"start": 0, "end": 1, "text_tgt": "ciao"}], path)
+            self.controller.update_segments_as_subtitles(
+                [{"start": 0, "end": 1, "text_tgt": "salve"}], path)
+            self.assertIn("salve", path.read_text(encoding="utf-8"))
+            self.assertEqual(sum(call[0] == "reload_subtitles"
+                                 for call in self.backend.calls), 2)
 
     def test_audio_and_subtitle_selection_follow_track_events(self):
         self.controller.load(self.result)

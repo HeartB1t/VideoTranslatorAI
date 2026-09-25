@@ -11,7 +11,8 @@ import unittest
 from unittest import mock
 
 import video_translator_gui as legacy
-from videotranslator.jobs import TranslationJobConfig
+from videotranslator.jobs import JobOutput, TranslationJobConfig
+from videotranslator.player_settings import PlayerSettings
 from videotranslator.quality_flags import FLAG_TRANSLATION_FALLBACK
 from videotranslator.translation import TranslationUnavailableError
 
@@ -47,6 +48,7 @@ def _fake_app():
         _snapshot_params=lambda: TranslationJobConfig(video_in=""),
         _s=lambda key: legacy.UI_STRINGS["en"][key],
         _on_done=mock.Mock(),
+        _on_job_outputs=mock.Mock(),
         _open_editor=mock.Mock(),
         _cleanup_editor_tempfile=mock.Mock(),
     )
@@ -67,6 +69,21 @@ class _WorkerTestCase(unittest.TestCase):
 
 
 class BatchWorkerTests(_WorkerTestCase):
+    def test_outputs_are_forwarded_before_completion(self):
+        order = []
+        self.app._on_job_outputs = mock.Mock(side_effect=lambda _items: order.append("outputs"))
+        self.app._on_done = mock.Mock(side_effect=lambda *_args: order.append("done"))
+        with mock.patch.object(legacy, "translate_video", return_value={
+            "video": "/videos/translated.mp4", "srt": "/videos/translated.srt",
+            "segments": [],
+        }):
+            legacy.App._run_batch(self.app, ["/videos/source.mp4"])
+        self.assertEqual(order, ["outputs", "done"])
+        item = self.app._on_job_outputs.call_args.args[0][0]
+        self.assertEqual(item.video_path, "/videos/translated.mp4")
+        self.assertEqual(item.subtitle_path, "/videos/translated.srt")
+        self.assertEqual(item.source_path, "/videos/source.mp4")
+
     def run_batch(self, *outcomes):
         """One file per outcome: what ``translate_video`` returns or raises."""
         files = [f"/videos/clip{i}.mp4" for i in range(len(outcomes))]
@@ -107,6 +124,29 @@ class BatchWorkerTests(_WorkerTestCase):
 
 
 class UrlWorkerTests(_WorkerTestCase):
+    def test_url_output_is_forwarded_before_completion_without_temp_source(self):
+        order = []
+        self.app._on_job_outputs = mock.Mock(side_effect=lambda _items: order.append("outputs"))
+        self.app._on_done = mock.Mock(side_effect=lambda *_args: order.append("done"))
+
+        def fake_download(_url, out_dir):
+            path = os.path.join(out_dir, "video.mp4")
+            with open(path, "wb") as fh:
+                fh.write(b"video")
+            return path
+
+        with mock.patch.object(legacy, "download_youtube", side_effect=fake_download), \
+                mock.patch.object(legacy, "translate_video", return_value={
+                    "video": "/videos/translated.mp4", "srt": "/videos/translated.srt",
+                    "segments": [],
+                }):
+            legacy.App._dispatch_download(self.app, ["https://example.invalid/video"])
+
+        self.assertEqual(order, ["outputs", "done"])
+        item = self.app._on_job_outputs.call_args.args[0][0]
+        self.assertEqual(item.video_path, "/videos/translated.mp4")
+        self.assertIsNone(item.source_path)
+
     def run_urls(self, urls, translate_outcomes):
         """Download every URL (those containing "broken" raise), then feed
         ``translate_outcomes`` to ``translate_video`` in order."""
@@ -181,6 +221,79 @@ class EditorPhaseOneTests(_WorkerTestCase):
     def test_other_error_uses_generic_message(self):
         self.run_phase1(RuntimeError("disk full"))
         self.app._on_done.assert_called_once_with(False, None)
+
+
+def _player_settings(*, autoload, keep_original=True):
+    return PlayerSettings(
+        volume=100, muted=False, audio="dubbed", subs_visible=False,
+        autoload_result=autoload, vo_profile=None,
+        keep_original_audio=keep_original,
+    )
+
+
+def _job_outputs_app(*, autoload, keep_original=True):
+    return types.SimpleNamespace(
+        _destroying=False,
+        _player_results=[],
+        _player_settings=_player_settings(autoload=autoload, keep_original=keep_original),
+        _sync_player_playlist=mock.Mock(),
+        _source_media_items=lambda: [],
+        _player_controller=mock.Mock(),
+        _ensure_or_show_player_status=mock.Mock(),
+    )
+
+
+class OnJobOutputsTests(unittest.TestCase):
+    """The real ``_on_job_outputs`` handoff: Results, autoload and A/B source."""
+
+    def _output(self, path, *, source="/videos/src.mp4", srt=None):
+        return JobOutput(video_path=path, subtitle_path=srt,
+                         source_path=source, title=None)
+
+    def test_autoload_off_adds_results_without_loading(self):
+        app = _job_outputs_app(autoload=False)
+        legacy.App._on_job_outputs(app, [self._output("/videos/a.mp4")])
+        self.assertEqual([x.path for x in app._player_results], ["/videos/a.mp4"])
+        app._sync_player_playlist.assert_called_once()
+        app._player_controller.load.assert_not_called()
+        app._player_controller.set_playlist.assert_not_called()
+
+    def test_autoload_on_loads_only_the_first_of_three_paused(self):
+        app = _job_outputs_app(autoload=True)
+        outs = [self._output(f"/videos/{n}.mp4") for n in ("a", "b", "c")]
+        legacy.App._on_job_outputs(app, outs)
+        self.assertEqual([x.path for x in app._player_results],
+                         ["/videos/a.mp4", "/videos/b.mp4", "/videos/c.mp4"])
+        app._player_controller.load.assert_called_once()
+        self.assertEqual(app._player_controller.load.call_args.args[0].path,
+                         "/videos/a.mp4")
+        self.assertTrue(app._player_controller.load.call_args.kwargs.get("paused"))
+        app._player_controller.set_playlist.assert_called_once()
+
+    def test_results_are_deduplicated_by_path(self):
+        app = _job_outputs_app(autoload=False)
+        legacy.App._on_job_outputs(app, [self._output("/videos/a.mp4")])
+        legacy.App._on_job_outputs(app, [self._output("/videos/a.mp4")])
+        self.assertEqual([x.path for x in app._player_results], ["/videos/a.mp4"])
+
+    def test_source_path_dropped_when_original_is_embedded(self):
+        app = _job_outputs_app(autoload=False, keep_original=True)
+        legacy.App._on_job_outputs(
+            app, [self._output("/videos/a.mp4", source="/videos/src.mp4")])
+        self.assertIsNone(app._player_results[0].source_path)
+
+    def test_source_path_kept_when_original_not_embedded(self):
+        app = _job_outputs_app(autoload=False, keep_original=False)
+        legacy.App._on_job_outputs(
+            app, [self._output("/videos/a.mp4", source="/videos/src.mp4")])
+        self.assertEqual(app._player_results[0].source_path, "/videos/src.mp4")
+
+    def test_outputs_without_video_are_skipped(self):
+        app = _job_outputs_app(autoload=True)
+        legacy.App._on_job_outputs(
+            app, [JobOutput(video_path=None, subtitle_path="/videos/a.srt")])
+        self.assertEqual(app._player_results, [])
+        app._player_controller.load.assert_not_called()
 
 
 if __name__ == "__main__":

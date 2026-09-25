@@ -37,6 +37,8 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
     parser.add_argument("--voice", default=None)
     parser.add_argument("--tts-rate", default="+0%")
     parser.add_argument("--no-subs", action="store_true")
+    parser.add_argument("--no-original-audio", action="store_true",
+                        help="Do not include the source audio as an alternate track")
     parser.add_argument("--subs-only", action="store_true")
     parser.add_argument("--no-demucs", action="store_true")
     parser.add_argument("--translation-engine", default="google",
@@ -261,6 +263,10 @@ def _cli(argv: Sequence[str] | None = None) -> None:
             use_diarization=args.diarize,
             hf_token=hf_token_cli,
             use_lipsync=args.lipsync,
+            keep_original_audio=(
+                bool(cfg_cli.get("keep_original_audio", True))
+                and not args.no_original_audio
+            ),
             xtts_speed=xtts_speed_cli,
             ollama_model=args.ollama_model or cfg_cli.get("ollama_model") or "qwen3:8b",
             ollama_url=args.ollama_url or cfg_cli.get("ollama_url") or "http://localhost:11434",

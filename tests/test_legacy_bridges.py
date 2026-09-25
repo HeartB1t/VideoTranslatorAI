@@ -14,6 +14,11 @@ class LegacyTimingBridgeTests(unittest.TestCase):
         self.assertIs(legacy._estimate_tts_duration_s, timing.estimate_tts_duration_s)
         self.assertIs(legacy._compute_segment_speed, timing.compute_segment_speed)
 
+    def test_translation_bridge_forwards_keep_original_audio(self):
+        with mock.patch.object(legacy, "_translate_video_impl", return_value={}) as runner:
+            legacy.translate_video("source.mp4", keep_original_audio=False)
+        self.assertFalse(runner.call_args.kwargs["keep_original_audio"])
+
 
 class LegacySegmentBridgeTests(unittest.TestCase):
     def test_segment_helpers_are_extracted_module_functions(self):
