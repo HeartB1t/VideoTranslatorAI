@@ -32,7 +32,12 @@ class CliSmokeTests(unittest.TestCase):
         from videotranslator.cli import _cli
         from videotranslator.translation import TranslationUnavailableError
 
+        # Isolate from the machine: CI lacks the ML stack (check_dependencies
+        # would exit first) and the real config/keyring must not be read.
         with tempfile.NamedTemporaryFile(suffix=".mp4") as video, \
+                mock.patch.object(legacy, "check_dependencies", return_value=([], [])), \
+                mock.patch.object(legacy, "load_config", return_value={}), \
+                mock.patch.object(legacy, "load_hf_token", return_value=""), \
                 mock.patch.object(
                     legacy, "translate_video",
                     side_effect=TranslationUnavailableError("Google blocked"),

@@ -1,13 +1,9 @@
 import contextlib
 import io
+import sys
+import types
 import unittest
 from unittest import mock
-
-from deep_translator.exceptions import (
-    RequestError,
-    TooManyRequests,
-    TranslationNotFound,
-)
 
 from videotranslator import translation
 from videotranslator.quality_flags import FLAG_TRANSLATION_FALLBACK
@@ -50,6 +46,33 @@ class TranslationDispatcherTests(unittest.TestCase):
         self.assertTrue(seen["kwargs"]["thinking"])
 
 
+# The Google path imports deep_translator and requests lazily. CI installs
+# only lightweight deps, so the tests provide stand-in modules for both.
+class TooManyRequests(Exception):
+    pass
+
+
+class RequestError(Exception):
+    pass
+
+
+class TranslationNotFound(Exception):
+    pass
+
+
+def _fake_google_modules(translator_cls):
+    dt = types.ModuleType("deep_translator")
+    dt.GoogleTranslator = translator_cls
+    exc = types.ModuleType("deep_translator.exceptions")
+    exc.TooManyRequests = TooManyRequests
+    exc.RequestError = RequestError
+    exc.TranslationNotFound = TranslationNotFound
+    dt.exceptions = exc
+    req = types.ModuleType("requests")
+    req.RequestException = type("RequestException", (Exception,), {})
+    return {"deep_translator": dt, "deep_translator.exceptions": exc, "requests": req}
+
+
 class _FakeClock:
     """Stand-in for the ``time`` module: sleeps advance a virtual clock."""
 
@@ -70,7 +93,7 @@ class GoogleRateLimitTests(unittest.TestCase):
         clock = _FakeClock()
         fake_cls = mock.Mock()
         fake_cls.return_value.translate.side_effect = side_effect
-        with mock.patch("deep_translator.GoogleTranslator", fake_cls), \
+        with mock.patch.dict(sys.modules, _fake_google_modules(fake_cls)), \
                 mock.patch.object(translation, "time", clock), \
                 contextlib.redirect_stdout(io.StringIO()) as out:
             try:
