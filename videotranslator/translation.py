@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 from videotranslator.quality_flags import (
@@ -21,10 +22,45 @@ _GOOGLE_MAX_ATTEMPTS = 3        # per segment, backoff 2 s then 4 s
 _GOOGLE_BACKOFF_BASE = 2.0
 _GOOGLE_MAX_CONSECUTIVE_FAILURES = 3
 _GOOGLE_COOLDOWN = 30.0         # seconds before the probe request
+_GOOGLE_REQUEST_TIMEOUT = 30.0  # seconds per request (deep-translator sets none)
 
 
 class TranslationUnavailableError(RuntimeError):
     """The translation service failed for every non-empty segment."""
+
+
+def _google_translate_with_timeout(translator, text: str):
+    """Call translator.translate(text), raise TimeoutError after the timeout.
+
+    deep-translator calls requests.get without a timeout, so a hung
+    connection would block the job forever. Each request runs on its own
+    daemon thread: on timeout that thread is abandoned (it ends when the
+    connection finally answers or fails, or dies with the process), later
+    requests never queue behind it and it never blocks the interpreter exit.
+    A ThreadPoolExecutor worker would, because executor threads are joined
+    at exit even after shutdown(wait=False).
+    """
+    outcome: dict = {}
+
+    def request():
+        try:
+            outcome["text"] = translator.translate(text)
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    worker = threading.Thread(
+        target=request, name="google-translate-request", daemon=True,
+    )
+    worker.start()
+    worker.join(_GOOGLE_REQUEST_TIMEOUT)
+    if worker.is_alive():
+        raise TimeoutError(
+            f"no answer from Google Translate within "
+            f"{_GOOGLE_REQUEST_TIMEOUT:g} s"
+        )
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["text"]
 
 
 def _marian_normalize_lang(code: str) -> str:
@@ -264,7 +300,11 @@ def translate_segments(
     import requests
     if engine == "deepl":
         print("     ! DeepL key missing, falling back to Google Translate.", flush=True)
-    transient_errors = (TooManyRequests, RequestError, requests.RequestException)
+    # A request timeout is handled like throttling: retried with backoff and
+    # counted by the breaker.
+    transient_errors = (
+        TooManyRequests, RequestError, requests.RequestException, TimeoutError,
+    )
     translator = GoogleTranslator(source=src, target=target)
     last_request = None
     consecutive_failures = 0
@@ -303,9 +343,13 @@ def translate_segments(
                         time.sleep(wait)
                 last_request = time.monotonic()
                 try:
-                    text_tgt = translator.translate(text) or text
+                    text_tgt = _google_translate_with_timeout(translator, text) or text
                     break
                 except transient_errors as e:
+                    if isinstance(e, TimeoutError):
+                        # The abandoned request still holds the translator,
+                        # whose URL params translate() mutates: use a new one.
+                        translator = GoogleTranslator(source=src, target=target)
                     if attempt == attempts - 1:
                         print(f"     ! Error segment {i}: {e}", flush=True)
                         rate_limited = True

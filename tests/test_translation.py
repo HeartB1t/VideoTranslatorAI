@@ -1,6 +1,7 @@
 import contextlib
 import io
 import sys
+import threading
 import types
 import unittest
 from unittest import mock
@@ -88,6 +89,10 @@ class _FakeClock:
         self.now += seconds
 
 
+# Scripted answer for a request that never gets a reply (hung connection).
+_HANG = object()
+
+
 class GoogleRateLimitTests(unittest.TestCase):
     def _run(self, side_effect, segments):
         clock = _FakeClock()
@@ -101,6 +106,7 @@ class GoogleRateLimitTests(unittest.TestCase):
             finally:
                 self.log = out.getvalue()
                 self.calls = fake_cls.return_value.translate.call_count
+                self.translators_created = fake_cls.call_count
                 self.clock = clock
         return result
 
@@ -144,12 +150,18 @@ class GoogleRateLimitTests(unittest.TestCase):
         )
         self.assertEqual(self.log.count(warning), 1)
 
-    @staticmethod
-    def _scripted(*answers):
+    def _scripted(self, *answers):
         items = iter(answers)
+        # A _HANG answer blocks until the test ends. The wait is bounded so
+        # that a missing timeout fails the test instead of hanging the suite.
+        release = threading.Event()
+        self.addCleanup(release.set)
 
         def fake(text):
             item = next(items)
+            if item is _HANG:
+                release.wait(1.0)
+                return "late answer"
             if isinstance(item, Exception):
                 raise item
             return item
@@ -204,6 +216,28 @@ class GoogleRateLimitTests(unittest.TestCase):
         self.assertEqual(result[0]["text_tgt"], "A")
         self.assertNotIn(translation._GOOGLE_COOLDOWN, self.clock.sleeps)
         self.assertIn("3/4", self.log)
+
+    def test_hung_request_times_out_and_is_retried(self):
+        with mock.patch.object(translation, "_GOOGLE_REQUEST_TIMEOUT", 0.1):
+            result = self._run(self._scripted(_HANG, "ciao"), self._segs("hello"))
+        # The retry does not queue behind the hung request, which is still
+        # blocked, and it goes through a fresh translator.
+        self.assertEqual(result[0]["text_tgt"], "ciao")
+        self.assertNotIn("_quality_flags", result[0])
+        self.assertEqual(self.calls, 2)
+        self.assertEqual(self.translators_created, 2)
+        self.assertIn(translation._GOOGLE_BACKOFF_BASE, self.clock.sleeps)
+
+    def test_timeouts_trip_the_breaker_and_a_hung_probe_aborts(self):
+        segs = self._segs("a", "b", "c", "d", "e")
+        with mock.patch.object(translation, "_GOOGLE_REQUEST_TIMEOUT", 0.02), \
+                self.assertRaises(TranslationUnavailableError) as raised:
+            self._run(self._scripted(*[_HANG] * 10), segs)
+        # 3 segments x 3 attempts, then a single probe after the cooldown.
+        self.assertEqual(self.calls, 10)
+        self.assertEqual(self.clock.sleeps.count(translation._GOOGLE_COOLDOWN), 1)
+        self.assertIn("still blocking", str(raised.exception))
+        self.assertIn("no answer from Google Translate within 0.02 s", self.log)
 
     def test_request_error_is_retried(self):
         result = self._run([RequestError(), "ciao"], self._segs("hello"))
