@@ -8,3 +8,4 @@
 -r requirements-optional.txt
 -r requirements-wav2lip.txt
 -r requirements-gpu-cu124.txt
+-r requirements-player.txt

@@ -257,6 +257,7 @@ from videotranslator.timing import (  # noqa: E402
 from videotranslator.preflight import (  # noqa: E402
     find_missing_dependencies as _find_missing_dependencies,
     format_preflight_report as _format_preflight_report,
+    libmpv_native_check as _libmpv_native_check,
     run_preflight as _run_preflight,
 )
 REQUIRED_PACKAGES = {
@@ -8664,7 +8665,8 @@ class App(tk.Tk):
 
         def worker():
             try:
-                report = _run_preflight(required_packages=REQUIRED_PACKAGES)
+                report = _run_preflight(required_packages=REQUIRED_PACKAGES,
+                                        native_checks=(_libmpv_native_check,))
                 text = "\n" + _format_preflight_report(report) + "\n"
                 ok = report.ok
                 failed = report.required_failures

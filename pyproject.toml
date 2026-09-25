@@ -66,6 +66,9 @@ wav2lip = [
   "facexlib",
   "new-basicsr",
 ]
+player = [
+  "mpv>=1.0.6,<2",
+]
 gpu-cu124 = [
   "torch>=2.6.0,<2.8",
   "torchaudio==2.6.0",

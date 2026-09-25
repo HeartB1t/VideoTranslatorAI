@@ -26,6 +26,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--no-cove", proc.stdout)
         self.assertIn("--hotwords", proc.stdout)
         self.assertIn("--preflight", proc.stdout)
+        self.assertIn("--preflight-player", proc.stdout)
 
     def test_translation_unavailable_exits_with_clear_message(self):
         import video_translator_gui as legacy

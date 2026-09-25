@@ -1,0 +1,10 @@
+# Integrated video player (optional).
+#
+# python-mpv ("mpv" on PyPI) is a pure-Python wheel that loads the native
+# libmpv library:
+#   Linux: the distribution package (Debian, Ubuntu, Kali: libmpv2 or
+#   libmpv1; Fedora: mpv-libs; Arch: mpv; openSUSE: libmpv2).
+#   Windows: setup_windows.bat installs a libmpv build into mpv-runtime.
+# Never also install "python-mpv": it ships the same mpv.py module.
+
+mpv>=1.0.6,<2

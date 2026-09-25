@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import libmpv_runtime
 from .platforms import platform_info
 
 
@@ -111,6 +112,7 @@ DEFAULT_OPTIONAL_PACKAGES: tuple[PackageProbe, ...] = (
     PackageProbe("dlib", "dlib", False, "Wav2Lip face detector backend"),
     PackageProbe("facexlib", "facexlib", False, "Wav2Lip face helpers"),
     PackageProbe("basicsr", "new-basicsr", False, "Wav2Lip BasicSR-compatible package"),
+    PackageProbe("mpv", "mpv", False, "integrated video player (python-mpv)"),
 )
 
 DEFAULT_OPTIONAL_BINARIES: tuple[BinaryProbe, ...] = (
@@ -160,6 +162,7 @@ def run_preflight(
     required_optional_modules: Sequence[str] = (),
     required_binaries: Sequence[str] = ("ffmpeg", "ffprobe"),
     optional_binaries: Sequence[BinaryProbe] = DEFAULT_OPTIONAL_BINARIES,
+    native_checks: Sequence[Callable[[], PreflightCheck]] = (),
     min_free_gb: float = 20.0,
     disk_path: str | Path | None = None,
     sys_platform: str = sys.platform,
@@ -208,6 +211,9 @@ def run_preflight(
 
     for probe in optional_binaries:
         checks.append(_binary_check(probe, which=which))
+
+    for native_check in native_checks:
+        checks.append(_run_native_check(native_check))
 
     checks.append(
         _disk_space_check(
@@ -386,3 +392,26 @@ def _nvidia_gpu_check(*, which: Which, run: Run) -> PreflightCheck:
         False,
         line[0] if line else "nvidia-smi available",
     )
+
+
+LIBMPV_HINT = ("Linux: install the libmpv2 package (mpv-libs on Fedora, mpv on Arch); "
+               "Windows: run setup_windows.bat Repair or use Install in the player pane")
+
+
+def libmpv_native_check(*, required: bool = False,
+                        probe: Callable[[], Any] | None = None) -> PreflightCheck:
+    """native:libmpv through the subprocess probe, so a crashing library cannot end the report."""
+    status = (probe or libmpv_runtime.probe_in_subprocess)()
+    if libmpv_runtime.library_loaded(status):
+        profiles = ", ".join(status.vo_profiles_ok) or "none"
+        return PreflightCheck("native:libmpv", OK, required,
+                              f"{status.path} ({status.detail}; VO profiles: {profiles})")
+    return PreflightCheck("native:libmpv", MISSING if required else WARN, required,
+                          f"{status.reason}: {status.detail}", LIBMPV_HINT)
+
+
+def _run_native_check(native_check: Callable[[], PreflightCheck]) -> PreflightCheck:
+    try:
+        return native_check()
+    except Exception as exc:  # a diagnostic must never abort the whole report
+        return PreflightCheck("native:check", WARN, False, f"native check failed: {exc}")

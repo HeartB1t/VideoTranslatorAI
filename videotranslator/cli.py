@@ -5,7 +5,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 
 def _build_parser(legacy) -> argparse.ArgumentParser:
@@ -23,6 +24,12 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
         action="store_true",
         help="When used with --preflight, require Wav2Lip lip-sync packages "
              "(dlib, facexlib, basicsr) instead of reporting them as optional warnings",
+    )
+    parser.add_argument(
+        "--preflight-player",
+        action="store_true",
+        help="When used with --preflight, require the integrated video player "
+             "(python-mpv and a loadable libmpv) instead of reporting it as optional",
     )
     parser.add_argument("--model", default=legacy.DEFAULT_WHISPER_MODEL, choices=legacy.WHISPER_MODELS)
     parser.add_argument("--lang-source", default="auto")
@@ -137,6 +144,24 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
     return parser
 
 
+def preflight_options(*, lipsync: bool, player: bool,
+                      native_check: Callable[..., Any] | None = None) -> dict[str, Any]:
+    """run_preflight kwargs for --preflight-lipsync and --preflight-player (spec 8.1 item 6)."""
+    check = native_check
+    if check is None:
+        from videotranslator.preflight import libmpv_native_check
+        check = libmpv_native_check
+    modules: list[str] = []
+    if lipsync:
+        modules += ["dlib", "facexlib", "basicsr"]
+    if player:
+        modules.append("mpv")
+    return {
+        "required_optional_modules": tuple(modules),
+        "native_checks": (lambda: check(required=player),),
+    }
+
+
 def _cli(argv: Sequence[str] | None = None) -> None:
     """Full CLI implementation (extracted from the legacy monolith)."""
     import video_translator_gui as legacy
@@ -150,8 +175,7 @@ def _cli(argv: Sequence[str] | None = None) -> None:
     if args.preflight:
         report = legacy._run_preflight(
             required_packages=legacy.REQUIRED_PACKAGES,
-            required_optional_modules=("dlib", "facexlib", "basicsr")
-            if args.preflight_lipsync else (),
+            **preflight_options(lipsync=args.preflight_lipsync, player=args.preflight_player),
         )
         print(legacy._format_preflight_report(report))
         sys.exit(0 if report.ok else 1)

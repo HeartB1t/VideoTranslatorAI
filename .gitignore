@@ -46,3 +46,9 @@ _dev/
 
 # Claude Code SDD scratch workspace
 .superpowers/
+
+# Integrated player runtime: DLLs and archives fetched by
+# `python -m videotranslator.libmpv_runtime install` must never be committed.
+mpv-runtime/
+*.dll
+*.7z

@@ -138,6 +138,7 @@ The pipeline uses five GPU-accelerated components (faster-whisper, Demucs, XTTS,
    - Installs Git for Windows if not present
    - Installs all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, etc.)
    - Downloads and installs ffmpeg
+   - Installs the integrated video player (python-mpv plus a libmpv build in `mpv-runtime`). The step is optional: if it fails, everything else works and the player pane explains what is missing
    - Creates a **Public Desktop shortcut** (visible to every Windows account on the PC)
 
 > The installer is **multi-user**: everything is installed system-wide under `%ProgramFiles%\VideoTranslatorAI` and any Windows user on the machine finds the shortcut ready to go. VS C++ Build Tools are **no longer required** - the maintained `coqui-tts` fork ships pre-built wheels.
@@ -156,6 +157,10 @@ pip install --break-system-packages --index-url https://download.pytorch.org/whl
 # install missing packages on first run
 pip install --break-system-packages -r requirements.txt
 
+# Optional: the integrated video player (libmpv from the distribution, python-mpv from PyPI)
+sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
+pip install --break-system-packages -r requirements-player.txt
+
 # Optional: install the project as an editable Python package
 pip install --break-system-packages --no-deps -e .
 
@@ -169,6 +174,8 @@ videotranslatorai --preflight
 
 > On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows).
 
+> The header shows a **Player** badge. When libmpv or python-mpv is missing, the left pane says what is missing and offers **Install player**: on Linux it uses the package manager through pkexec (then `sudo -n`) and shows the manual command when neither works; on Windows it asks before downloading libmpv for the current user (about 32 MB).
+
 ### Requirement profiles
 
 | File | Purpose |
@@ -178,6 +185,7 @@ videotranslatorai --preflight
 | `requirements-optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, keyring. |
 | `requirements-wav2lip.txt` | Wav2Lip runtime and face-detection stack (`new-basicsr`, `facexlib`, `dlib`). |
 | `requirements-gpu-cu124.txt` | PyTorch stack tested with NVIDIA CUDA 12.4 wheels. |
+| `requirements-player.txt` | Integrated video player: python-mpv (needs libmpv from the system or from the Windows installer). |
 | `requirements-dev.txt` | Lightweight dependencies used by CI/unit tests. |
 
 ## Uninstall
@@ -202,7 +210,7 @@ No dedicated uninstaller - remove manually:
 # Python packages installed by the GUI's auto-installer
 pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub \
     yt-dlp pyloudnorm sentencepiece sacremoses pyannote.audio torchcodec \
-    coqui-tts transformers torch torchaudio torchvision new-basicsr basicsr facexlib dlib ctranslate2
+    coqui-tts transformers torch torchaudio torchvision new-basicsr basicsr facexlib dlib ctranslate2 mpv
 
 # User data and model caches
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
@@ -220,13 +228,14 @@ rm -f  ~/.videotranslatorai_config.json     # legacy config of versions <= 1.9, 
 ```bash
 python video_translator_gui.py --preflight
 python video_translator_gui.py --preflight --preflight-lipsync
+python video_translator_gui.py --preflight --preflight-player
 python -m videotranslator --preflight
 ```
 
 Runs local environment diagnostics without starting translation or installing
 anything. `--preflight-lipsync` treats Wav2Lip face packages as required,
 which is useful before enabling **Lip Sync**. The GUI exposes the same base
-check from the log panel's **Diagnostics** button.
+check from the log panel's **Diagnostics** button. `--preflight-player` treats the integrated video player (python-mpv and a loadable libmpv) as required. `python -m videotranslator.libmpv_runtime check` probes libmpv alone (exit 0 ready, 2 unavailable).
 
 ### GUI
 
@@ -375,3 +384,15 @@ Each tool has `-h`/`--help` for full options. They are self-contained and reuse 
 ## License
 
 MIT
+
+### Third-party components
+
+The repository code is MIT. The installers download the components below from their own sources at install time; the project does not redistribute them.
+
+- **libmpv** (https://github.com/mpv-player/mpv), the engine of the integrated video player. Windows: the LGPL build by zhongfly (https://github.com/zhongfly/mpv-winbuild) is tried first; a pinned GPL build by shinchiro (https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) is the fallback. `mpv-runtime\BUILD.txt` records the source, the licence flavour and the mpv commit, and the licence text sits next to the DLL. Linux: the distribution package (`libmpv2`, `libmpv1`, `mpv-libs` or `mpv`).
+- **FFmpeg** inside libmpv (LGPL or GPL, following the libmpv build).
+- **python-mpv** (`mpv` on PyPI), GPLv2+ or LGPLv2.1+.
+- **7-Zip `7zr.exe`** 26.03 (LGPL), used by the Windows installer to extract libmpv and deleted afterwards.
+- **Vulkan loader** (Khronos, MIT and Apache-2.0), downloaded on Windows only when `vulkan-1.dll` is missing.
+- **edge-tts** (LGPLv3), used by the dubbing pipeline.
+- **MarianMT models** (Helsinki-NLP), downloaded from the Hugging Face Hub at first use under their own licences (Apache-2.0 for the `opus-mt` models, CC-BY-4.0 for `opus-mt-tc-big`).
