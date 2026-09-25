@@ -6,19 +6,29 @@ reads ``BG``, ``ACC``, ``CARD``... keeps working), reconfigures the named
 fonts (Tk then updates every widget that uses them) and, when widgets
 already exist, walks the widget tree replacing every colour option whose
 value belongs to the previous palette with the same role in the new one.
+
+The ``auto`` theme never waits for the OS dark-mode probe, which can take
+seconds: it paints with the last known value and probes in a background
+thread; a late answer that changes the palette is re-applied on the Tk
+thread through the same recolour path.
 """
 
 from __future__ import annotations
 
+import queue
+import threading
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import font as tkfont, ttk
 
 from videotranslator.ui_theme import (
     SCALES,
     Palette,
     detect_system_dark,
+    needs_auto_reapply,
     normalize_ui_settings,
     resolve_palette,
+    settle_system_dark,
 )
 
 # name -> (family role, base point size, weight, slant)
@@ -53,6 +63,9 @@ COLOR_OPTIONS = (
     "selectbackground", "selectforeground", "disabledforeground",
     "troughcolor", "selectcolor", "readonlybackground",
 )
+
+# How often the Tk thread looks for the answer of the background probe.
+SYSTEM_DARK_POLL_MS = 100
 
 
 def pick_family(root: tk.Misc, candidates, fallback_font: str) -> str:
@@ -142,13 +155,32 @@ def recolor_widget_tree(root: tk.Misc, mapping: dict[str, str]) -> int:
 
 
 class ThemeManager:
-    def __init__(self, root: tk.Misc, module_globals: dict):
+    """Applies UI settings to a Tk root; see the module docstring.
+
+    ``system_dark`` is the last known OS dark-mode value (``None`` when
+    unknown: ``auto`` then paints dark until the probe answers). Both
+    callbacks run on the Tk thread: ``on_system_dark(value)`` when a probe
+    brings a known value different from the one held, so the caller can
+    cache it; ``on_reapplied()`` after that value re-applied the palette, so
+    the caller can refresh what the colour mapping cannot tell apart.
+    """
+
+    def __init__(self, root: tk.Misc, module_globals: dict,
+                 system_dark: bool | None = None,
+                 on_system_dark: Callable[[bool], None] | None = None,
+                 on_reapplied: Callable[[], None] | None = None):
         self.root = root
         self._globals = module_globals
         self.palette: Palette | None = None
         self.settings: dict = normalize_ui_settings({})
         self.scale: float = 1.0
-        self._system_dark: bool | None = None
+        self._system_dark: bool | None = system_dark if isinstance(system_dark, bool) else None
+        self._on_system_dark = on_system_dark
+        self._on_reapplied = on_reapplied
+        self._detector: threading.Thread | None = None
+        self._detected: queue.SimpleQueue = queue.SimpleQueue()
+        self._poll_id: str | None = None
+        self._closed = False
         self._last_theme: str | None = None
         self._fonts: dict[str, tkfont.Font] = {}
         self._sans = pick_family(root, SANS_CANDIDATES, "TkDefaultFont")
@@ -163,7 +195,7 @@ class ThemeManager:
         self.settings = normalize_ui_settings(merged)
         theme = self.settings["ui_theme"]
         if theme == "auto" and self._last_theme != "auto":
-            self._system_dark = detect_system_dark()
+            self._start_system_dark_probe()
         system_dark = self._system_dark if theme == "auto" else None
         new = resolve_palette(theme, self.settings["ui_accent"], system_dark)
         old = self.palette
@@ -178,6 +210,72 @@ class ThemeManager:
         self.palette = new
         self._last_theme = theme
         return new
+
+    def close(self) -> None:
+        """Stop taking probe answers in; call it before destroying the root."""
+        self._closed = True
+        if self._poll_id is not None:
+            try:
+                self.root.after_cancel(self._poll_id)
+            except tk.TclError:
+                pass
+            self._poll_id = None
+
+    # -- system dark-mode probe ------------------------------------------
+
+    def _start_system_dark_probe(self) -> None:
+        """Probe the OS in a background thread; a running probe is reused."""
+        if self._closed or (self._detector is not None and self._detector.is_alive()):
+            return
+        self._detector = threading.Thread(
+            target=self._probe_system_dark, name="vt-system-dark", daemon=True)
+        self._detector.start()
+        if self._poll_id is None:
+            self._poll_id = self.root.after(SYSTEM_DARK_POLL_MS, self._poll_system_dark)
+
+    def _probe_system_dark(self) -> None:
+        # Worker thread: no Tk call here, the answer goes through the queue.
+        try:
+            value = detect_system_dark()
+        except Exception:
+            value = None
+        self._detected.put(value)
+
+    def _poll_system_dark(self) -> None:
+        """Tk thread: take in the probe answers, keep polling while one runs."""
+        self._poll_id = None
+        if self._closed:
+            return
+        try:
+            if not self.root.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        # Read before draining: a probe seen finished has already queued
+        # its answer, so the drain below cannot miss it.
+        running = self._detector is not None and self._detector.is_alive()
+        if running:
+            self._poll_id = self.root.after(SYSTEM_DARK_POLL_MS, self._poll_system_dark)
+        while True:
+            try:
+                detected = self._detected.get_nowait()
+            except queue.Empty:
+                break
+            self._take_system_dark(detected)
+
+    def _take_system_dark(self, detected: bool | None) -> None:
+        previous = self._system_dark
+        current = settle_system_dark(previous, detected)
+        if current == previous:
+            return
+        self._system_dark = current
+        if self._on_system_dark is not None:
+            self._on_system_dark(current)
+        if self.palette is not None and needs_auto_reapply(self.settings["ui_theme"],
+                                                           previous, current):
+            self.apply(self.settings, recolor=True)
+            if self._on_reapplied is not None:
+                self._on_reapplied()
 
     # -- internals -----------------------------------------------------
 

@@ -321,7 +321,9 @@ from videotranslator.ui_theme import (  # noqa: E402
     DEFAULT_SCALE as _DEFAULT_SCALE,
     DEFAULT_THEME as _DEFAULT_THEME,
     SCALES as _SCALES,
+    SYSTEM_DARK_KEY as _SYSTEM_DARK_KEY,
     THEME_CHOICES as _THEME_CHOICES,
+    cached_system_dark as _cached_system_dark,
 )
 
 _DEFAULT_PALETTE = _resolve_palette("graphite")
@@ -5616,7 +5618,13 @@ class App(tk.Tk):
         self._panel_order = _normalize_panel_order(_ocfg.get("ui_panel_order"))
         self._drag = None
         self._drag_indicator = None
-        self._theme = _ThemeManager(self, module_globals=globals())
+        # With the "auto" theme the OS probe runs in the background: the
+        # first paint uses the value cached by the previous run.
+        self._theme = _ThemeManager(
+            self, module_globals=globals(),
+            system_dark=_cached_system_dark(_ocfg),
+            on_system_dark=self._remember_system_dark,
+            on_reapplied=self._refresh_theme_dependents)
         self._theme.apply(self._ui_settings, recolor=False)
         self.title("Video Translator AI")
         self.resizable(True, True)
@@ -7346,13 +7354,23 @@ class App(tk.Tk):
         self._theme.apply(settings, recolor=True)
         self._ui_settings = dict(self._theme.settings)
         save_config({k: self._ui_settings[k] for k in ("ui_theme", "ui_accent", "ui_scale")})
-        # Selection states re-read the (new) globals: the colour mapping alone
-        # cannot tell a selected dot from one that merely shares the old accent.
+        self._refresh_theme_dependents()
+
+    def _refresh_theme_dependents(self):
+        """Repaint what the colour mapping of a theme change cannot handle.
+
+        Selection states re-read the (new) globals: the colour mapping alone
+        cannot tell a selected dot from one that merely shares the old accent.
+        """
         if self._settings_win is not None and self._settings_win.winfo_exists():
             for row in (self._seg_theme, self._seg_scale):
                 row._refresh()
             self._refresh_accent_dots()
         self._update_profile_buttons()
+
+    def _remember_system_dark(self, value):
+        """Cache the OS dark-mode answer so the next start paints with it."""
+        save_config({_SYSTEM_DARK_KEY: value})
 
     def _reset_ui_settings(self):
         if self._panel_order != list(_PANEL_IDS):
@@ -8378,6 +8396,7 @@ class App(tk.Tk):
             if not messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
                 return
         self._destroying = True
+        self._theme.close()
         # Snapshot under lock, then terminate outside the lock so worker
         # threads calling _register_subprocess/_unregister_subprocess on
         # another subprocess are not blocked while a slow kill is in flight.

@@ -209,6 +209,62 @@ class NormalizeSettingsTests(unittest.TestCase):
             self.assertTrue(0.5 < v < 2.0)
 
 
+class SystemDarkCacheTests(unittest.TestCase):
+    """M7: the auto theme paints from a cached value while the OS probe runs."""
+
+    def test_cache_key_name(self):
+        self.assertEqual(ui_theme.SYSTEM_DARK_KEY, "ui_last_system_dark")
+
+    def test_cached_value_is_read_when_it_is_a_bool(self):
+        self.assertIs(ui_theme.cached_system_dark({"ui_last_system_dark": True}), True)
+        self.assertIs(ui_theme.cached_system_dark({"ui_last_system_dark": False}), False)
+
+    def test_cached_value_absent_or_malformed_is_unknown(self):
+        for cfg in ({}, {"ui_last_system_dark": None}, {"ui_last_system_dark": "false"},
+                    {"ui_last_system_dark": 0}, {"ui_last_system_dark": 1},
+                    {"ui_last_system_dark": [True]}, {"ui_last_system_dark": {}},
+                    None, "nope", ["ui_last_system_dark"]):
+            with self.subTest(cfg=cfg):
+                self.assertIsNone(ui_theme.cached_system_dark(cfg))
+
+    def test_unknown_cache_paints_dark(self):
+        self.assertEqual(
+            resolve_palette("auto", system_dark=ui_theme.cached_system_dark({})).name,
+            DEFAULT_THEME)
+
+    def test_known_detection_replaces_the_previous_value(self):
+        for previous in (None, True, False):
+            for detected in (True, False):
+                with self.subTest(previous=previous, detected=detected):
+                    self.assertIs(ui_theme.settle_system_dark(previous, detected), detected)
+
+    def test_unknown_detection_keeps_the_previous_value(self):
+        for previous in (None, True, False):
+            with self.subTest(previous=previous):
+                self.assertIs(ui_theme.settle_system_dark(previous, None), previous)
+
+    def test_reapply_only_when_auto_switches_between_dark_and_light(self):
+        cases = {
+            (None, True): False, (True, None): False, (True, True): False,
+            (False, False): False, (None, None): False,
+            (None, False): True, (True, False): True,
+            (False, True): True, (False, None): True,
+        }
+        for (before, after), expected in cases.items():
+            with self.subTest(before=before, after=after):
+                self.assertIs(ui_theme.needs_auto_reapply("auto", before, after), expected)
+                # The decision matches the palettes resolve_palette would paint.
+                changes = (resolve_palette("auto", system_dark=before).name
+                           != resolve_palette("auto", system_dark=after).name)
+                self.assertIs(changes, expected)
+
+    def test_reapply_never_needed_outside_auto(self):
+        for theme in CONCRETE_THEMES + ["banana", None]:
+            for before, after in itertools.product((None, True, False), repeat=2):
+                with self.subTest(theme=theme, before=before, after=after):
+                    self.assertFalse(ui_theme.needs_auto_reapply(theme, before, after))
+
+
 class DetectSystemDarkTests(unittest.TestCase):
     def _runner(self, table):
         """Build a fake runner: command tuple -> (rc, stdout) or None."""

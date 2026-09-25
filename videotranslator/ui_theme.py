@@ -235,6 +235,11 @@ def _ensure_distinct(colors: dict[str, str],
     return out
 
 
+def auto_is_dark(system_dark: bool | None) -> bool:
+    """Whether ``auto`` paints dark: only a known light system gives light."""
+    return system_dark is not False
+
+
 def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
                     system_dark: bool | None = None) -> Palette:
     """Build the fully resolved palette for ``theme`` and ``accent``.
@@ -246,7 +251,7 @@ def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
     if not isinstance(theme, str) or theme not in THEME_CHOICES:
         theme = DEFAULT_THEME
     if theme == "auto":
-        theme = "light" if system_dark is False else DEFAULT_THEME
+        theme = DEFAULT_THEME if auto_is_dark(system_dark) else "light"
     base = THEMES[theme]
     acc_base = ACCENTS[accent] if isinstance(accent, str) and accent in ACCENTS else str(base["ACC"])
     acc, hover, soft, fg = derive_accent(acc_base, str(base["SURFACE"]), bool(base["dark"]))
@@ -276,6 +281,35 @@ def normalize_ui_settings(cfg: object, lang_codes: set[str] | None = None) -> di
         "ui_scale": pick("ui_scale", SCALES, DEFAULT_SCALE),
         "ui_lang": lang,
     }
+
+
+# -- Auto theme: cached system value -------------------------------------
+#
+# The OS probes below can take seconds, so the GUI runs them in the
+# background and paints first with the value the previous run found, cached
+# in the config under ``SYSTEM_DARK_KEY``.
+
+SYSTEM_DARK_KEY = "ui_last_system_dark"
+
+
+def cached_system_dark(cfg: object) -> bool | None:
+    """The system value cached in a config dict; ``None`` if absent or malformed."""
+    value = cfg.get(SYSTEM_DARK_KEY) if isinstance(cfg, dict) else None
+    return value if isinstance(value, bool) else None
+
+
+def settle_system_dark(previous: bool | None, detected: bool | None) -> bool | None:
+    """The value to keep after a probe: a known answer wins, unknown keeps ``previous``."""
+    return previous if detected is None else detected
+
+
+def needs_auto_reapply(theme: object, before: bool | None, after: bool | None) -> bool:
+    """Whether the system value moving from ``before`` to ``after`` changes the palette.
+
+    Only the ``auto`` theme follows the system, and only a move between a
+    dark and a light result changes what it paints (unknown counts as dark).
+    """
+    return theme == "auto" and auto_is_dark(before) != auto_is_dark(after)
 
 
 # -- System dark-mode detection --------------------------------------------

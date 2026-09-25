@@ -1,4 +1,6 @@
 import contextlib
+import threading
+import time
 import tkinter as tk
 import unittest
 from tkinter import font as tkfont, ttk
@@ -156,17 +158,210 @@ class ThemeManagerTkTests(unittest.TestCase):
         self.assertEqual(style.lookup("Horizontal.TProgressbar", "background"), p.ACC)
         self.assertEqual(style.lookup("Treeview", "background"), p.FIELD)
 
-    def test_auto_theme_caches_system_dark_detection(self):
-        with mock.patch.object(self.mod, "detect_system_dark", return_value=False) as stub:
-            p1 = self.tm.apply({"ui_theme": "auto"}, recolor=False)
-            p2 = self.tm.apply({"ui_theme": "auto"}, recolor=False)
-            self.assertEqual(stub.call_count, 1)
-            self.assertEqual(p1.name, "light")
-            self.assertEqual(p2.name, "light")
+class _GatedDetector:
+    """Stand-in for ``detect_system_dark`` that answers only once released."""
 
-            self.tm.apply({"ui_theme": "graphite"}, recolor=False)
-            self.tm.apply({"ui_theme": "auto"}, recolor=False)
-            self.assertEqual(stub.call_count, 2)
+    def __init__(self, value):
+        self.value = value
+        self.entered = threading.Event()
+        self.released = threading.Event()
+        self.threads = []
+
+    def __call__(self):
+        self.threads.append(threading.current_thread())
+        self.entered.set()
+        self.released.wait(10)
+        return self.value
+
+
+def _pump_until(root, condition, timeout=5.0):
+    """Run the Tk event loop until ``condition()`` holds; False on timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        root.update()
+        if condition():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _pending_timers(root):
+    return root.tk.splitlist(root.tk.call("after", "info"))
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class AutoThemeDetectionTests(unittest.TestCase):
+    """M7: the OS dark-mode probe runs off the Tk thread, its answer comes back late."""
+
+    def setUp(self):
+        from videotranslator import ui_theme_tk
+        self.mod = ui_theme_tk
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.on_system_dark = mock.Mock()
+        self.on_reapplied = mock.Mock()
+
+    def tearDown(self):
+        for after_id in _pending_timers(self.root):
+            self.root.after_cancel(after_id)
+        self.root.destroy()
+
+    def _gated(self, value):
+        detector = _GatedDetector(value)
+        self.addCleanup(detector.released.set)
+        return detector
+
+    def _manager(self, detector, system_dark=None, root=None):
+        patcher = mock.patch.object(self.mod, "detect_system_dark", detector)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        tm = self.mod.ThemeManager(root or self.root, module_globals={},
+                                   system_dark=system_dark,
+                                   on_system_dark=self.on_system_dark,
+                                   on_reapplied=self.on_reapplied)
+        self.addCleanup(tm.close)
+        return tm
+
+    def _settle(self, tm, detector):
+        """Let the detector answer and the Tk thread take the answer in."""
+        detector.released.set()
+        tm._detector.join(5)
+        self.assertFalse(tm._detector.is_alive())
+        self.assertTrue(_pump_until(self.root, lambda: not _pending_timers(self.root)))
+
+    def test_apply_does_not_wait_for_the_detector(self):
+        detector = self._gated(False)
+        tm = self._manager(detector)
+        start = time.monotonic()
+        p = tm.apply({"ui_theme": "auto"}, recolor=False)
+        self.assertLess(time.monotonic() - start, 5.0)
+        self.assertEqual(p.name, "graphite")  # nothing cached yet: dark
+        detector.released.set()
+        tm._detector.join(5)
+        self.assertEqual(len(detector.threads), 1)
+        self.assertIsNot(detector.threads[0], threading.main_thread())
+
+    def test_cached_value_paints_first(self):
+        for cached, expected in ((False, "light"), (True, "graphite"), ("yes", "graphite")):
+            with self.subTest(cached=cached):
+                tm = self._manager(self._gated(None), system_dark=cached)
+                self.assertEqual(tm.apply({"ui_theme": "auto"}, recolor=False).name, expected)
+
+    def test_late_answer_reapplies_through_the_recolour_path(self):
+        detector = self._gated(False)
+        tm = self._manager(detector)
+        old = tm.apply({"ui_theme": "auto"}, recolor=False)
+        ring = tk.Frame(self.root, bg=old.BG, highlightthickness=2,
+                        highlightbackground=old.BG, highlightcolor=old.ACC)
+        label = tk.Label(ring, bg=old.SURFACE, fg=old.FG)
+        detector.released.set()
+        tm._detector.join(5)
+        # The worker never applies anything itself: only the Tk loop does.
+        self.assertIs(tm.palette, old)
+        self.assertTrue(_pump_until(self.root, lambda: tm.palette is not old))
+        new = tm.palette
+        self.assertEqual(new.name, "light")
+        self.assertEqual(ring.cget("bg"), new.BG)
+        self.assertEqual(ring.cget("highlightbackground"), new.BG)
+        self.assertEqual(ring.cget("highlightcolor"), new.ACC)
+        self.assertEqual(label.cget("bg"), new.SURFACE)
+        self.assertEqual(label.cget("fg"), new.FG)
+        self.assertEqual(tm._globals["BG"], new.BG)
+        self.on_system_dark.assert_called_once_with(False)
+        self.on_reapplied.assert_called_once_with()
+        self.assertTrue(_pump_until(self.root, lambda: not _pending_timers(self.root)))
+
+    def test_answer_that_keeps_the_palette_does_not_reapply(self):
+        cases = ((None, True, [mock.call(True)]), (True, True, []),
+                 (False, False, []), (False, None, []), (None, None, []))
+        for cached, detected, remembered in cases:
+            with self.subTest(cached=cached, detected=detected):
+                self.on_system_dark.reset_mock()
+                self.on_reapplied.reset_mock()
+                detector = self._gated(detected)
+                tm = self._manager(detector, system_dark=cached)
+                before = tm.apply({"ui_theme": "auto"}, recolor=False)
+                self._settle(tm, detector)
+                self.assertIs(tm.palette, before)
+                self.assertEqual(self.on_system_dark.call_args_list, remembered)
+                self.on_reapplied.assert_not_called()
+
+    def test_answer_after_leaving_auto_only_updates_the_cache(self):
+        detector = self._gated(False)
+        tm = self._manager(detector)
+        tm.apply({"ui_theme": "auto"}, recolor=False)
+        graphite = tm.apply({"ui_theme": "graphite"}, recolor=True)
+        self._settle(tm, detector)
+        self.assertIs(tm.palette, graphite)
+        self.on_system_dark.assert_called_once_with(False)
+        self.on_reapplied.assert_not_called()
+        # Back to auto: the value learnt meanwhile paints at once, and a
+        # fresh probe starts.
+        self.assertEqual(tm.apply({"ui_theme": "auto"}, recolor=True).name, "light")
+        tm._detector.join(5)
+        self.assertEqual(len(detector.threads), 2)
+
+    def test_one_probe_per_switch_to_auto(self):
+        detector = self._gated(True)
+        tm = self._manager(detector)
+        tm.apply({"ui_theme": "auto"}, recolor=False)
+        tm.apply({"ui_theme": "auto", "ui_accent": "rose"}, recolor=True)
+        self._settle(tm, detector)
+        self.assertEqual(len(detector.threads), 1)
+        tm.apply({"ui_theme": "graphite"}, recolor=True)
+        tm.apply({"ui_theme": "auto"}, recolor=True)
+        tm._detector.join(5)
+        self.assertEqual(len(detector.threads), 2)
+
+    def test_back_to_auto_while_probing_waits_for_the_running_probe(self):
+        detector = self._gated(False)
+        tm = self._manager(detector)
+        tm.apply({"ui_theme": "auto"}, recolor=False)
+        tm.apply({"ui_theme": "graphite"}, recolor=True)
+        tm.apply({"ui_theme": "auto"}, recolor=True)
+        self._settle(tm, detector)
+        self.assertEqual(len(detector.threads), 1)
+        self.assertEqual(tm.palette.name, "light")
+        self.on_reapplied.assert_called_once_with()
+
+    def test_close_drops_a_pending_answer(self):
+        detector = self._gated(False)
+        tm = self._manager(detector)
+        before = tm.apply({"ui_theme": "auto"}, recolor=False)
+        self.assertTrue(_pending_timers(self.root))
+        tm.close()
+        self.assertEqual(_pending_timers(self.root), ())
+        detector.released.set()
+        tm._detector.join(5)
+        for _ in range(20):
+            self.root.update()
+            time.sleep(0.01)
+        self.assertIs(tm.palette, before)
+        self.on_system_dark.assert_not_called()
+        self.on_reapplied.assert_not_called()
+        # A closed manager starts no new probe.
+        tm.apply({"ui_theme": "graphite"}, recolor=True)
+        tm.apply({"ui_theme": "auto"}, recolor=True)
+        self.assertEqual(len(detector.threads), 1)
+        self.assertEqual(_pending_timers(self.root), ())
+
+    def test_answer_for_a_destroyed_root_touches_nothing(self):
+        root = tk.Tk()
+        root.withdraw()
+        detector = self._gated(False)
+        tm = self._manager(detector, root=root)
+        before = tm.apply({"ui_theme": "auto"}, recolor=False)
+        detector.released.set()
+        tm._detector.join(5)
+        # Destroyed without close(): drop its timer so it cannot fire in a
+        # later test, then run by hand what that timer would have run.
+        for after_id in _pending_timers(root):
+            root.after_cancel(after_id)
+        root.destroy()
+        tm._poll_system_dark()
+        self.assertIs(tm.palette, before)
+        self.on_system_dark.assert_not_called()
+        self.on_reapplied.assert_not_called()
 
 
 class ScaledSizeTests(unittest.TestCase):
@@ -337,6 +532,69 @@ class SettingsDialogSmokeTests(unittest.TestCase):
             self.assertEqual(app._ui_lang.get(), "en")  # reset keeps the language
             app._close_settings()
             self.assertFalse(getattr(app, "_settings_win", None) and app._settings_win.winfo_exists())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class AutoThemeStartupTests(unittest.TestCase):
+    """M7: the window paints without waiting for the OS dark-mode probe."""
+
+    def _gated(self, value):
+        from videotranslator import ui_theme_tk
+
+        detector = _GatedDetector(value)
+        self.addCleanup(detector.released.set)
+        patcher = mock.patch.object(ui_theme_tk, "detect_system_dark", detector)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return detector
+
+    def test_paints_from_the_cache_then_follows_the_late_answer(self):
+        import json
+
+        detector = self._gated(False)
+        cfg = {"ui_theme": "auto", "ui_accent": "default", "ui_lang": "en",
+               "ui_last_system_dark": True}
+        with built_app(cfg) as (gui, app, cfg_path):
+            self.assertEqual(app._theme.palette.name, "graphite")
+            self.assertTrue(detector.entered.wait(5))
+            self.assertEqual(len(detector.threads), 1)
+            self.assertIsNot(detector.threads[0], threading.main_thread())
+            app._open_settings()
+            gear = app._btn_settings
+            detector.released.set()
+            self.assertTrue(_pump_until(app, lambda: app._theme.palette.name == "light"))
+            p = app._theme.palette
+            self.assertEqual(gui.BG, p.BG)
+            self.assertEqual(app.cget("bg"), p.BG)
+            self.assertEqual(app._settings_win.cget("bg"), p.BG)
+            self.assertEqual(gear.cget("highlightcolor"), p.ACC)
+            self.assertEqual(gear.cget("highlightbackground"), p.BG)
+            # Graphite's own accent is the blue swatch: the colour mapping
+            # alone would repaint that dot, the refresh gives it back.
+            self.assertEqual(app._accent_dots["blue"].cget("fg"), gui._ACCENTS["blue"])
+            self.assertEqual(app._accent_dots["default"].cget("fg"), p.ACC)
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertIs(saved["ui_last_system_dark"], False)
+            self.assertEqual(saved["ui_theme"], "auto")
+
+    def test_close_stops_waiting_for_the_answer(self):
+        import json
+
+        detector = self._gated(False)
+        with built_app({"ui_theme": "auto", "ui_lang": "en"}) as (gui, app, cfg_path):
+            before = app._theme.palette
+            self.assertEqual(before.name, "graphite")
+            with mock.patch.object(app, "destroy") as destroy:
+                app._on_close()
+            destroy.assert_called_once_with()
+            detector.released.set()
+            app._theme._detector.join(5)
+            for _ in range(20):
+                app.update()
+                time.sleep(0.01)
+            self.assertIs(app._theme.palette, before)
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertNotIn("ui_last_system_dark", saved)
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
