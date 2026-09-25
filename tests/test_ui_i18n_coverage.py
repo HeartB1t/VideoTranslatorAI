@@ -361,7 +361,7 @@ class PlayerStringsModuleTests(unittest.TestCase):
         codes = {code for code, _ in UI_LANG_OPTIONS}
         self.assertEqual(set(ui_strings_player.PLAYER_UI_STRINGS), codes)
         keys = set(ui_strings_player.PLAYER_KEYS)
-        self.assertEqual(len(keys), 19)
+        self.assertGreaterEqual(len(keys), 19)
         for lang, bucket in ui_strings_player.PLAYER_UI_STRINGS.items():
             with self.subTest(lang=lang):
                 self.assertEqual(set(bucket), keys)

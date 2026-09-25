@@ -33,6 +33,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Riproduzione video: mpv (libmpv), {license}",
         "player_license_system": "libreria di sistema",
         "live_err_busy_install": "È in corso un'installazione: attendi che finisca.",
+        "player_playlist_sources": "Sorgenti",
+        "player_playlist_results": "Risultati",
     },
     "en": {
         "player_badge": "Player",
@@ -54,6 +56,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Video playback: mpv (libmpv), {license}",
         "player_license_system": "system library",
         "live_err_busy_install": "An installation is running: wait for it to finish.",
+        "player_playlist_sources": "Sources",
+        "player_playlist_results": "Results",
     },
     "ar": {
         "player_badge": "المشغل",
@@ -75,6 +79,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "تشغيل الفيديو: mpv (libmpv)، {license}",
         "player_license_system": "مكتبة النظام",
         "live_err_busy_install": "هناك عملية تثبيت جارية: انتظر حتى تنتهي.",
+        "player_playlist_sources": "المصادر",
+        "player_playlist_results": "النتائج",
     },
     "zh": {
         "player_badge": "播放器",
@@ -96,6 +102,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "视频播放: mpv (libmpv), {license}",
         "player_license_system": "系统库",
         "live_err_busy_install": "正在进行安装: 请等待其完成。",
+        "player_playlist_sources": "源文件",
+        "player_playlist_results": "结果",
     },
     "cs": {
         "player_badge": "Přehrávač",
@@ -117,6 +125,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Přehrávání videa: mpv (libmpv), {license}",
         "player_license_system": "systémová knihovna",
         "live_err_busy_install": "Probíhá instalace: počkejte, až skončí.",
+        "player_playlist_sources": "Zdroje",
+        "player_playlist_results": "Výsledky",
     },
     "da": {
         "player_badge": "Afspiller",
@@ -138,6 +148,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videoafspilning: mpv (libmpv), {license}",
         "player_license_system": "systembibliotek",
         "live_err_busy_install": "En installation er i gang: vent, til den er færdig.",
+        "player_playlist_sources": "Kilder",
+        "player_playlist_results": "Resultater",
     },
     "nl": {
         "player_badge": "Speler",
@@ -159,6 +171,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videoweergave: mpv (libmpv), {license}",
         "player_license_system": "systeembibliotheek",
         "live_err_busy_install": "Er loopt een installatie: wacht tot deze klaar is.",
+        "player_playlist_sources": "Bronnen",
+        "player_playlist_results": "Resultaten",
     },
     "fi": {
         "player_badge": "Soitin",
@@ -180,6 +194,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videotoisto: mpv (libmpv), {license}",
         "player_license_system": "järjestelmäkirjasto",
         "live_err_busy_install": "Asennus on käynnissä: odota, että se valmistuu.",
+        "player_playlist_sources": "Lähteet",
+        "player_playlist_results": "Tulokset",
     },
     "fr": {
         "player_badge": "Lecteur",
@@ -201,6 +217,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Lecture vidéo : mpv (libmpv), {license}",
         "player_license_system": "bibliothèque système",
         "live_err_busy_install": "Une installation est en cours : attendez qu'elle se termine.",
+        "player_playlist_sources": "Sources",
+        "player_playlist_results": "Résultats",
     },
     "de": {
         "player_badge": "Player",
@@ -222,6 +240,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videowiedergabe: mpv (libmpv), {license}",
         "player_license_system": "Systembibliothek",
         "live_err_busy_install": "Eine Installation läuft: Warten Sie, bis sie abgeschlossen ist.",
+        "player_playlist_sources": "Quellen",
+        "player_playlist_results": "Ergebnisse",
     },
     "el": {
         "player_badge": "Αναπαραγωγέας",
@@ -243,6 +263,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Αναπαραγωγή βίντεο: mpv (libmpv), {license}",
         "player_license_system": "βιβλιοθήκη συστήματος",
         "live_err_busy_install": "Εκτελείται μια εγκατάσταση: περιμένετε να ολοκληρωθεί.",
+        "player_playlist_sources": "Πηγές",
+        "player_playlist_results": "Αποτελέσματα",
     },
     "hi": {
         "player_badge": "प्लेयर",
@@ -264,6 +286,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "वीडियो प्लेबैक: mpv (libmpv), {license}",
         "player_license_system": "सिस्टम लाइब्रेरी",
         "live_err_busy_install": "एक इंस्टॉलेशन चल रहा है: उसके पूरा होने तक प्रतीक्षा करें।",
+        "player_playlist_sources": "स्रोत",
+        "player_playlist_results": "परिणाम",
     },
     "hu": {
         "player_badge": "Lejátszó",
@@ -285,6 +309,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videolejátszás: mpv (libmpv), {license}",
         "player_license_system": "rendszerkönyvtár",
         "live_err_busy_install": "Telepítés van folyamatban: várja meg, amíg befejeződik.",
+        "player_playlist_sources": "Források",
+        "player_playlist_results": "Eredmények",
     },
     "id": {
         "player_badge": "Pemutar",
@@ -306,6 +332,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Pemutaran video: mpv (libmpv), {license}",
         "player_license_system": "pustaka sistem",
         "live_err_busy_install": "Sedang ada pemasangan: tunggu hingga selesai.",
+        "player_playlist_sources": "Sumber",
+        "player_playlist_results": "Hasil",
     },
     "ja": {
         "player_badge": "プレーヤー",
@@ -327,6 +355,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "動画再生: mpv (libmpv), {license}",
         "player_license_system": "システムライブラリ",
         "live_err_busy_install": "インストールを実行中です: 完了するまでお待ちください。",
+        "player_playlist_sources": "ソース",
+        "player_playlist_results": "結果",
     },
     "ko": {
         "player_badge": "플레이어",
@@ -348,6 +378,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "동영상 재생: mpv (libmpv), {license}",
         "player_license_system": "시스템 라이브러리",
         "live_err_busy_install": "설치가 진행 중입니다: 완료될 때까지 기다리세요.",
+        "player_playlist_sources": "소스",
+        "player_playlist_results": "결과",
     },
     "no": {
         "player_badge": "Spiller",
@@ -369,6 +401,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videoavspilling: mpv (libmpv), {license}",
         "player_license_system": "systembibliotek",
         "live_err_busy_install": "En installasjon pågår: vent til den er ferdig.",
+        "player_playlist_sources": "Kilder",
+        "player_playlist_results": "Resultater",
     },
     "pl": {
         "player_badge": "Odtwarzacz",
@@ -390,6 +424,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Odtwarzanie wideo: mpv (libmpv), {license}",
         "player_license_system": "biblioteka systemowa",
         "live_err_busy_install": "Trwa instalacja: poczekaj, aż się zakończy.",
+        "player_playlist_sources": "Źródła",
+        "player_playlist_results": "Wyniki",
     },
     "pt": {
         "player_badge": "Player",
@@ -411,6 +447,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Reprodução de vídeo: mpv (libmpv), {license}",
         "player_license_system": "biblioteca do sistema",
         "live_err_busy_install": "Há uma instalação em andamento: aguarde a conclusão.",
+        "player_playlist_sources": "Fontes",
+        "player_playlist_results": "Resultados",
     },
     "ro": {
         "player_badge": "Player",
@@ -432,6 +470,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Redare video: mpv (libmpv), {license}",
         "player_license_system": "bibliotecă de sistem",
         "live_err_busy_install": "O instalare este în curs: așteptați să se termine.",
+        "player_playlist_sources": "Surse",
+        "player_playlist_results": "Rezultate",
     },
     "ru": {
         "player_badge": "Плеер",
@@ -453,6 +493,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Воспроизведение видео: mpv (libmpv), {license}",
         "player_license_system": "системная библиотека",
         "live_err_busy_install": "Идёт установка: дождитесь её завершения.",
+        "player_playlist_sources": "Исходные файлы",
+        "player_playlist_results": "Результаты",
     },
     "es": {
         "player_badge": "Reproductor",
@@ -474,6 +516,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Reproducción de vídeo: mpv (libmpv), {license}",
         "player_license_system": "biblioteca del sistema",
         "live_err_busy_install": "Hay una instalación en curso: espera a que termine.",
+        "player_playlist_sources": "Fuentes",
+        "player_playlist_results": "Resultados",
     },
     "sv": {
         "player_badge": "Spelare",
@@ -495,6 +539,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Videouppspelning: mpv (libmpv), {license}",
         "player_license_system": "systembibliotek",
         "live_err_busy_install": "En installation pågår: vänta tills den är klar.",
+        "player_playlist_sources": "Källor",
+        "player_playlist_results": "Resultat",
     },
     "tr": {
         "player_badge": "Oynatıcı",
@@ -516,6 +562,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Video oynatma: mpv (libmpv), {license}",
         "player_license_system": "sistem kitaplığı",
         "live_err_busy_install": "Bir yükleme devam ediyor: bitmesini bekleyin.",
+        "player_playlist_sources": "Kaynaklar",
+        "player_playlist_results": "Sonuçlar",
     },
     "uk": {
         "player_badge": "Плеєр",
@@ -537,6 +585,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Відтворення відео: mpv (libmpv), {license}",
         "player_license_system": "системна бібліотека",
         "live_err_busy_install": "Триває встановлення: зачекайте, доки воно завершиться.",
+        "player_playlist_sources": "Джерела",
+        "player_playlist_results": "Результати",
     },
     "vi": {
         "player_badge": "Trình phát",
@@ -558,6 +608,8 @@ PLAYER_UI_STRINGS: dict[str, dict[str, str]] = {
         "player_credits": "Phát video: mpv (libmpv), {license}",
         "player_license_system": "thư viện hệ thống",
         "live_err_busy_install": "Đang có một quá trình cài đặt: hãy chờ đến khi hoàn tất.",
+        "player_playlist_sources": "Nguồn",
+        "player_playlist_results": "Kết quả",
     },
 }
 
