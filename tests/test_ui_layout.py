@@ -2,7 +2,8 @@
 import unittest
 
 from videotranslator.ui_layout import (
-    PANEL_IDS, drop_index, move_panel, normalize_panel_order,
+    PANEL_IDS, RIGHT_COLUMN_MIN_WIDTH, drop_index, move_panel,
+    normalize_panel_order, right_column_width,
 )
 
 DEFAULT = list(PANEL_IDS)
@@ -86,6 +87,18 @@ class DropIndexTests(unittest.TestCase):
 
     def test_no_spans(self):
         self.assertEqual(drop_index(123, []), 0)
+
+
+class RightColumnWidthTests(unittest.TestCase):
+    def test_never_below_the_minimum(self):
+        self.assertEqual(RIGHT_COLUMN_MIN_WIDTH, 460)
+        for asked in (0, 1, 300, 459, 460):
+            with self.subTest(asked=asked):
+                self.assertEqual(right_column_width(asked), 460)
+
+    def test_widens_when_the_cards_ask_for_more(self):
+        self.assertEqual(right_column_width(461), 461)
+        self.assertEqual(right_column_width(530), 530)
 
 
 if __name__ == "__main__":

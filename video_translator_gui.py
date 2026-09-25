@@ -313,6 +313,8 @@ from videotranslator.ui_layout import PANEL_IDS as _PANEL_IDS  # noqa: E402
 from videotranslator.ui_layout import normalize_panel_order as _normalize_panel_order  # noqa: E402
 from videotranslator.ui_layout import move_panel as _move_panel  # noqa: E402
 from videotranslator.ui_layout import drop_index as _drop_index  # noqa: E402
+from videotranslator.ui_layout import RIGHT_COLUMN_MIN_WIDTH as _RIGHT_COLUMN_MIN_WIDTH  # noqa: E402
+from videotranslator.ui_layout import right_column_width as _right_column_width  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator.ui_theme import (  # noqa: E402
@@ -5964,11 +5966,11 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Minimum window size + reasonable default geometry so the window
         # remains usable on small displays (1366×768, 1280×720) and at
-        # Windows scaling 125%/150%. The form area is wrapped in a Canvas
-        # with a vertical Scrollbar (see `_build_ui`), so even when the
-        # window is resized below the form's natural height the user can
-        # scroll to reach every control. Log + progress bar stay outside
-        # the canvas and remain visible at all times.
+        # Windows scaling 125%/150%. The card column is wrapped in its own
+        # Canvas with a vertical Scrollbar (see `_build_ui`), so even when
+        # the window is shorter than the cards the user can scroll to reach
+        # every control. Header, player pane, log and progress bar stay
+        # outside that canvas and remain visible at all times.
         self.minsize(900, 600)
         self.geometry("1100x780")
         self.after(100, self._fit_to_screen)
@@ -6625,6 +6627,7 @@ class App(tk.Tk):
         title_lbl = tk.Label(hdr, text=title_text, bg=SURFACE, fg=FG, font="VT.Base")
         title_lbl.pack(side="left", padx=(2, 0), pady=6)
         body = tk.Frame(outer, bg=SURFACE, padx=24, pady=6)
+        outer._accordion_body = body  # measured by _cards_widest_width
 
         def toggle(e=None):
             if body.winfo_manager():
@@ -6721,10 +6724,13 @@ class App(tk.Tk):
 
     def _build_header(self, parent):
         """Top header bar: logo, subtitle, status badges, settings gear."""
-        # Outer header frame - spans both columns
+        # Outer header frame: root row 0, fixed above the body (it never
+        # scrolls). Kept as _header_frame so the player's fullscreen can
+        # hide it (spec 3.1).
         header_wrap = tk.Frame(parent, bg=BG)
-        header_wrap.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header_wrap.grid(row=0, column=0, sticky="ew")
         header_wrap.columnconfigure(1, weight=1)
+        self._header_frame = header_wrap
 
         header = tk.Frame(header_wrap, bg=BG)
         header.grid(row=0, column=0, columnspan=2, sticky="ew",
@@ -7259,56 +7265,35 @@ class App(tk.Tk):
     # ── Main _build_ui entry point ─────────────────────────────────────────
 
     def _build_ui(self):
-        # ── Root grid layout ──────────────────────────────────────────────
-        # row 0 = scrollable canvas (entire form)
-        # row 1 = log panel (always visible, outside canvas)
-        # row 2 = progress bar
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=0)
-        self.grid_rowconfigure(2, weight=0)
+        # ── Root grid (player design, spec 2026-09-25 section 3.1) ────────
+        # row 0 = header, fixed: it never scrolls
+        # row 1 = body: column 0 = the player pane, which fills the height
+        #         and never scrolls; column 1 = the card column, scrolled
+        #         alone by its own canvas
+        # row 2 = log panel
+        # row 3 = progress bar
+        # Only row 1 stretches and no row or column keeps a minimum size, so
+        # the player's fullscreen can grid_remove() rows 0, 2, 3 and the card
+        # column and hand the whole window to the player.
+        for row, weight in ((0, 0), (1, 1), (2, 0), (3, 0)):
+            self.grid_rowconfigure(row, weight=weight)
         self.grid_columnconfigure(0, weight=1)
 
-        # ── Scrollable canvas ─────────────────────────────────────────────
-        self._main_canvas = tk.Canvas(self, bg=BG, highlightthickness=0)
-        self._main_canvas.grid(row=0, column=0, sticky="nsew")
-        main_vsb = ttk.Scrollbar(self, orient="vertical",
-                                 command=self._main_canvas.yview)
-        main_vsb.grid(row=0, column=1, sticky="ns")
-        self._main_canvas.configure(yscrollcommand=main_vsb.set)
+        # Header first: it is also the first Tab stop of the window.
+        self._build_header(self)
 
-        self._main_frame = tk.Frame(self._main_canvas, bg=BG)
-        self._main_canvas_window = self._main_canvas.create_window(
-            (0, 0), window=self._main_frame, anchor="nw")
+        # ── Body (root row 1) ─────────────────────────────────────────────
+        body = tk.Frame(self, bg=BG)
+        body.grid(row=1, column=0, sticky="nsew", padx=(16, 0), pady=(8, 8))
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=0)
+        self._body = body
 
-        # Keep scrollregion in sync with the inner frame's natural size.
-        self._main_frame.bind("<Configure>", self._on_main_frame_configure)
-        # Stretch the inner frame to the canvas width so the existing
-        # column-weighted grid still expands horizontally as expected.
-        self._main_canvas.bind("<Configure>", self._on_main_canvas_configure)
-
-        # ── Two-column content layout ─────────────────────────────────────
-        # row 0: header (spans both cols)
-        # row 1: separator
-        # row 2: content frame (left = player area, right = every card)
-        self._main_frame.columnconfigure(0, weight=1)
-        self._main_frame.columnconfigure(1, weight=0)
-
-        # Header (row 0 - includes its own accent bottom line)
-        self._build_header(self._main_frame)
-
-        # Content frame (row 1 - header accent line at bottom of row 0 acts as separator)
-        self._main_frame.rowconfigure(1, weight=1)
-        content = tk.Frame(self._main_frame, bg=BG)
-        content.grid(row=1, column=0, columnspan=2, sticky="nsew",
-                     padx=16, pady=(8, 8))
-        content.columnconfigure(0, weight=1)
-        # The right column holds every setting card, so it needs room for
-        # the expanded accordion sections (model radios, key entries).
-        content.columnconfigure(1, minsize=460, weight=0)
-
-        # Left pane: reserved for the video player (backlog). Until it
-        # exists, a dark surface in the FIELD colour marks the area.
-        left = tk.Frame(content, bg=BG)
+        # Left pane: the video player's host (a FIELD-coloured surface until
+        # the player exists). It sits outside every canvas, so it follows the
+        # window height and a wheel over it scrolls nothing.
+        left = tk.Frame(body, bg=BG)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
         self._left_pane = left
         self._player_area = tk.Frame(left, bg=FIELD, highlightthickness=1,
@@ -7316,11 +7301,31 @@ class App(tk.Tk):
                                      highlightcolor=BORDER)
         self._player_area.pack(fill="both", expand=True)
 
-        # Right pane: input, translation, profile, start, then the settings
-        # accordion. Every control lives in this column.
-        right = tk.Frame(content, bg=BG)
-        right.grid(row=0, column=1, sticky="new")
+        # Right column: input, translation, profile, start, then the settings
+        # accordion, in a canvas that scrolls only this column. The canvas
+        # takes the width of the cards' widest state, never below 460 px
+        # (_sync_right_column); its height follows the window.
+        column = tk.Frame(body, bg=BG)
+        column.grid(row=0, column=1, sticky="ns")
+        column.rowconfigure(0, weight=1)
+        self._right_column = column
+        self._right_canvas = tk.Canvas(column, bg=BG, highlightthickness=0,
+                                       width=_RIGHT_COLUMN_MIN_WIDTH)
+        self._right_canvas.grid(row=0, column=0, sticky="ns", padx=(0, 16))
+        self._right_vsb = ttk.Scrollbar(column, orient="vertical",
+                                        command=self._right_canvas.yview)
+        self._right_vsb.grid(row=0, column=1, sticky="ns")
+        self._right_canvas.configure(yscrollcommand=self._right_vsb.set)
+
+        right = tk.Frame(self._right_canvas, bg=BG)
         self._right_pane = right
+        self._right_canvas_window = self._right_canvas.create_window(
+            (0, 0), window=right, anchor="nw")
+        # Keep width, scroll region and top pin in sync with the cards
+        # (accordion toggles, drags, relabels) and with the window.
+        right.bind("<Configure>", self._sync_right_column)
+        self._right_canvas.bind("<Configure>", self._on_right_canvas_configure)
+
         self._build_input_section(right)
         self._build_lang_voice_section(right)
         self._build_profile_section(right)
@@ -7329,10 +7334,10 @@ class App(tk.Tk):
         # Built in the default order; apply the order the user saved.
         self._repack_panels()
 
-        # ── Log panel (root row 1, outside canvas) ────────────────────────
+        # ── Log panel (root row 2) ────────────────────────────────────────
         log_frame = tk.Frame(self, bg=BG)
-        log_frame.grid(row=1, column=0, columnspan=2, padx=16,
-                       pady=(0, 4), sticky="nsew")
+        log_frame.grid(row=2, column=0, padx=16, pady=(0, 4), sticky="nsew")
+        self._log_frame = log_frame
         log_frame.rowconfigure(1, weight=1)
         log_frame.columnconfigure(0, weight=1)
 
@@ -7378,36 +7383,26 @@ class App(tk.Tk):
         self._log.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
 
-        # ── Progress bar (root row 2) ─────────────────────────────────────
+        # ── Progress bar (root row 3) ─────────────────────────────────────
         self._progress = ttk.Progressbar(self, mode="indeterminate", length=500)
-        self._progress.grid(row=2, column=0, columnspan=2,
-                            padx=16, pady=(0, 12))
+        self._progress.grid(row=3, column=0, padx=16, pady=(0, 12))
 
-        # ── Mouse-wheel scrolling ──────────────────────────────────────────
-        self._bind_mousewheel(self._main_canvas)
-        self._bind_mousewheel(self._main_frame)
+        # ── Mouse-wheel scrolling: the card column only ───────────────────
+        # One call covers the canvas and every card (they are its
+        # descendants). The header, the player pane and the log stay unbound.
+        self._bind_mousewheel(self._right_canvas)
 
         # Initial summary line
         self._update_start_summary()
 
-    def _row_label(self, row, text):
-        # All form rows live inside `self._main_frame` (a child of the
-        # scrollable canvas built in `_build_ui`). Anchoring labels to the
-        # root would break the scrolling layout, so we route them through
-        # the inner frame just like every other form widget.
-        lbl = tk.Label(self._main_frame, text=text, bg=BG, fg=FG2,
-                       font="VT.Bold", anchor="e")
-        lbl.grid(row=row, column=0, sticky="e", padx=(16, 8), pady=7)
-        return lbl
-
-    # ── Mouse wheel scrolling for the form canvas ──────────────────────────
+    # ── Scrolling of the card column ───────────────────────────────────────
 
     @staticmethod
     def _canvas_content_fits(canvas) -> bool:
         """True when the canvas content is not taller than the canvas itself.
 
-        Scrolling in that case only shifts the form down and leaves an empty
-        band above the header, so callers skip the scroll and pin the view.
+        Scrolling in that case only shifts the cards down and leaves an empty
+        band above the first card, so callers skip the scroll and pin the view.
         """
         bbox = canvas.bbox("all")
         if not bbox:
@@ -7417,18 +7412,55 @@ class App(tk.Tk):
             height = canvas.winfo_reqheight()
         return bbox[3] - bbox[1] <= height
 
-    def _on_main_frame_configure(self, event):
-        self._main_canvas.configure(scrollregion=self._main_canvas.bbox("all"))
-        if self._canvas_content_fits(self._main_canvas):
-            self._main_canvas.yview_moveto(0)
+    def _cards_widest_width(self):
+        """Width the cards ask for with every accordion section open.
 
-    def _on_main_canvas_configure(self, event):
-        self._main_canvas.itemconfig(self._main_canvas_window, width=event.width)
-        if self._canvas_content_fits(self._main_canvas):
-            self._main_canvas.yview_moveto(0)
+        A closed section's body still computes the size it would ask for
+        (Tk propagates the requested size of unmapped frames), so the column
+        can take its widest state up front: opening or closing a section
+        then never changes the column's width, nor the player's (spec 9, P0).
+        """
+        widest = self._right_pane.winfo_reqwidth()
+        card = getattr(self, "_advanced_card", None)  # settings card, inner frame
+        if card is not None:
+            # border and padding between that inner frame and the column
+            chain = card.master.winfo_reqwidth() - card.winfo_reqwidth()
+            for section in card.winfo_children():
+                body = getattr(section, "_accordion_body", None)
+                if body is not None:
+                    widest = max(widest, body.winfo_reqwidth() + chain)
+        return widest
+
+    def _sync_right_column(self, _event=None):
+        """Fit the card column's canvas to its cards.
+
+        Runs on every size change of the cards (accordion toggles, drags,
+        relabels). The canvas takes the width of the cards' widest state,
+        never less than 460 px (0216809); the scroll region follows the
+        content; a column that fits is pinned to the top, so no empty band
+        can open above the first card (fd7eacc).
+        """
+        canvas = getattr(self, "_right_canvas", None)
+        if canvas is None:
+            return
+        try:
+            width = _right_column_width(self._cards_widest_width())
+            if int(canvas.cget("width")) != width:
+                canvas.configure(width=width)
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            if self._canvas_content_fits(canvas):
+                canvas.yview_moveto(0)
+        except tk.TclError:
+            pass  # the window is being destroyed
+
+    def _on_right_canvas_configure(self, event):
+        """Stretch the cards to the canvas width; pin a column that fits."""
+        self._right_canvas.itemconfig(self._right_canvas_window, width=event.width)
+        if self._canvas_content_fits(self._right_canvas):
+            self._right_canvas.yview_moveto(0)
 
     def _on_mousewheel(self, event):
-        """Scroll the form canvas in response to a wheel event.
+        """Scroll the card column in response to a wheel event over it.
 
         Cross-platform delta normalisation:
           * Linux delivers Button-4 (up) / Button-5 (down) without `delta`.
@@ -7436,10 +7468,10 @@ class App(tk.Tk):
             of 120 (positive = up).
         """
         # Defensive: the canvas may have been destroyed mid-shutdown.
-        if not hasattr(self, "_main_canvas"):
+        if not hasattr(self, "_right_canvas"):
             return
         try:
-            if self._canvas_content_fits(self._main_canvas):
+            if self._canvas_content_fits(self._right_canvas):
                 return
         except tk.TclError:
             return
@@ -7448,7 +7480,7 @@ class App(tk.Tk):
         else:
             delta = int(-1 * (event.delta / 120))
         try:
-            self._main_canvas.yview_scroll(delta, "units")
+            self._right_canvas.yview_scroll(delta, "units")
         except tk.TclError:
             # Window being destroyed
             pass

@@ -1,15 +1,19 @@
-"""Pure helpers for the movable panels of the settings column.
+"""Pure helpers for the card column of the main window.
 
 The GUI stacks its cards (input, translation, profile, start, settings) in
-one column and lets the user reorder them by dragging a handle. Everything
-that does not need Tk lives here so it can be unit-tested without a display:
-the canonical panel ids, the normalisation of the persisted order, the move
-operation and the drop-position maths.
+one column that scrolls in its own canvas, and lets the user reorder them by
+dragging a handle. Everything that does not need Tk lives here so it can be
+unit-tested without a display: the canonical panel ids, the normalisation of
+the persisted order, the move operation, the drop-position maths and the
+column's width rule.
 """
 from __future__ import annotations
 
 PANEL_IDS: tuple[str, ...] = ("input", "translation", "profile", "start", "settings")
 """Canonical panel ids, in the default top-to-bottom order."""
+
+RIGHT_COLUMN_MIN_WIDTH = 460
+"""Minimum width in px of the card column (hints wrap at 370 px inside it)."""
 
 
 def normalize_panel_order(value: object) -> list[str]:
@@ -62,3 +66,13 @@ def drop_index(pointer_y: float, spans: list[tuple[float, float]]) -> int:
         else:
             break
     return idx
+
+
+def right_column_width(content_width: int) -> int:
+    """Canvas width of the card column whose cards ask for ``content_width`` px.
+
+    Never below :data:`RIGHT_COLUMN_MIN_WIDTH`, wider when the cards ask for
+    more: the rule of the grid column (``minsize=460``, weight 0) that held
+    the cards before they moved into their own scroll canvas.
+    """
+    return max(RIGHT_COLUMN_MIN_WIDTH, int(content_width))

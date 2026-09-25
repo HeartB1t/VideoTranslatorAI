@@ -819,10 +819,12 @@ class LayoutTests(unittest.TestCase):
             self.assertEqual(app._left_pane.pack_slaves(), [app._player_area])
             p = app._theme.palette
             self.assertEqual(app._player_area.cget("bg"), p.FIELD)
-            content = app._right_pane.master
-            self.assertGreaterEqual(int(content.grid_columnconfigure(1)["minsize"]), 460)
+            # P0 layout: the cards live in the right column's own scroll
+            # canvas, at least 460 px wide; the left pane is a body cell.
+            self.assertIs(app._right_pane.master, app._right_canvas)
+            self.assertGreaterEqual(int(app._right_canvas.cget("width")), 460)
+            self.assertIs(app._left_pane.master, app._body)
             # Tk reports sticky in its own letter order: compare as sets.
-            self.assertEqual(set(app._right_pane.grid_info()["sticky"]), set("new"))
             self.assertEqual(set(app._left_pane.grid_info()["sticky"]), set("nsew"))
 
     def test_panels_follow_the_saved_order_and_drag_reorders_and_persists(self):
