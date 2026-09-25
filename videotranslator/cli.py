@@ -15,6 +15,9 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
     parser.add_argument("input", nargs="?", help="Input video")
     parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument(
+        "--output-dir",
+        help="Folder for translated files (default: <videos>/VideoTranslatorAI)")
+    parser.add_argument(
         "--preflight",
         action="store_true",
         help="Run local diagnostics and exit without starting translation",
@@ -249,6 +252,7 @@ def _cli(argv: Sequence[str] | None = None) -> None:
         job = TranslationJobConfig(
             video_in=f,
             output=args.output if len(files) == 1 else None,
+            output_dir=args.output_dir or cfg_cli.get("output_dir") or None,
             model=args.model,
             lang_source=args.lang_source,
             lang_target=args.lang_target,

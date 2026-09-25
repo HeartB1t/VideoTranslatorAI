@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from videotranslator.output_media import get_duration, mux_video, save_subtitles
+from videotranslator.platforms import APP_OUTPUT_DIR_NAME
 
 DEFAULT_LANG = "it"
 
@@ -83,6 +84,7 @@ def translate_video(
     hotwords: list[str] | None = None,
     ollama_use_cove: bool = True,
     keep_original_audio: bool = True,
+    output_dir: str | None = None,
     *,
     runtime: PipelineRuntime,
 ) -> dict:
@@ -148,19 +150,16 @@ def translate_video(
     voice = voice or LANGUAGES[lang_target]["voices"][0]
     stem  = Path(video_in).stem
     if not output:
-        input_dir = Path(video_in).parent
-        tmp_root  = Path(tempfile.gettempdir())
-        try:
-            input_dir.relative_to(tmp_root)
-            is_tmp = True
-        except ValueError:
-            is_tmp = False
-        if is_tmp:
-            videos_dir = _default_videos_dir()
-            videos_dir.mkdir(parents=True, exist_ok=True)
-            output = str(videos_dir / f"{stem}_{lang_target}.mp4")
+        # All translated files land in one folder, the same on Windows and
+        # Linux: the configured output_dir when set, otherwise the default
+        # <videos>/VideoTranslatorAI. We no longer scatter outputs next to
+        # each input video.
+        if output_dir:
+            base_dir = Path(output_dir).expanduser()
         else:
-            output = str(input_dir / f"{stem}_{lang_target}.mp4")
+            base_dir = _default_videos_dir() / APP_OUTPUT_DIR_NAME
+        base_dir.mkdir(parents=True, exist_ok=True)
+        output = str(base_dir / f"{stem}_{lang_target}.mp4")
     output_base = str(Path(output).with_suffix(""))
 
     print(f"[i] {Path(video_in).name} | {lang_source}→{lang_target} | {voice}", flush=True)

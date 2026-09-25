@@ -253,6 +253,12 @@ def windows_known_videos_dir(sys_platform: str | None = None) -> Path | None:
     return None
 
 
+# One dedicated folder, identical on Windows and Linux, where translated files
+# land by default. It is a subfolder of the user's videos directory so the
+# output is easy to find; the user can override it with an explicit folder.
+APP_OUTPUT_DIR_NAME = "VideoTranslatorAI"
+
+
 def default_videos_dir(
     sys_platform: str | None = None,
     home: Path | None = None,
@@ -284,6 +290,36 @@ def default_videos_dir(
             return known_folder
 
     return home / "Videos"
+
+
+def default_output_dir(
+    sys_platform: str | None = None,
+    home: Path | None = None,
+    *,
+    xdg_videos_dir: Callable[[], Path | None] | None = None,
+    windows_videos_dir: Callable[[], Path | None] | None = None,
+) -> Path:
+    """The default single output folder: ``<videos>/VideoTranslatorAI``."""
+    return default_videos_dir(
+        sys_platform, home,
+        xdg_videos_dir=xdg_videos_dir,
+        windows_videos_dir=windows_videos_dir,
+    ) / APP_OUTPUT_DIR_NAME
+
+
+def resolve_output_dir(
+    configured: str | None,
+    sys_platform: str | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Return the configured output folder when set, else the default one.
+
+    An empty or missing configuration falls back to :func:`default_output_dir`
+    so translated files always land in one predictable place on both platforms.
+    """
+    if configured:
+        return Path(configured).expanduser()
+    return default_output_dir(sys_platform, home)
 
 
 def reveal_in_file_manager(

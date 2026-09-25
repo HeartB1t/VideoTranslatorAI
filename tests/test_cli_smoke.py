@@ -28,10 +28,11 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--preflight", proc.stdout)
         self.assertIn("--preflight-player", proc.stdout)
         self.assertIn("--no-original-audio", proc.stdout)
+        self.assertIn("--output-dir", proc.stdout)
 
-    def _keep_original_audio_for(self, config, extra_args):
-        """Run the CLI with an isolated config and capture the kwarg that
-        reaches ``translate_video``."""
+    def _translate_kwargs_for(self, config, extra_args):
+        """Run the CLI with an isolated config and capture the kwargs that
+        reach ``translate_video``."""
         import video_translator_gui as legacy
         from videotranslator.cli import _cli
 
@@ -48,7 +49,32 @@ class CliSmokeTests(unittest.TestCase):
                 mock.patch.object(legacy, "translate_video", side_effect=fake_translate), \
                 contextlib.redirect_stdout(io.StringIO()):
             _cli([video.name, "--lang-target", "it"] + extra_args)
-        return captured["keep_original_audio"]
+        return captured
+
+    def _keep_original_audio_for(self, config, extra_args):
+        return self._translate_kwargs_for(config, extra_args)["keep_original_audio"]
+
+    def test_output_dir_flag_flows_to_translate_video(self):
+        self.assertEqual(
+            self._translate_kwargs_for({}, ["--output-dir", "/data/out"])["output_dir"],
+            "/data/out",
+        )
+
+    def test_output_dir_from_config_when_flag_absent(self):
+        self.assertEqual(
+            self._translate_kwargs_for({"output_dir": "/cfg/out"}, [])["output_dir"],
+            "/cfg/out",
+        )
+
+    def test_output_dir_flag_overrides_config(self):
+        self.assertEqual(
+            self._translate_kwargs_for(
+                {"output_dir": "/cfg/out"}, ["--output-dir", "/flag/out"])["output_dir"],
+            "/flag/out",
+        )
+
+    def test_output_dir_is_none_by_default(self):
+        self.assertIsNone(self._translate_kwargs_for({}, [])["output_dir"])
 
     def test_original_audio_kept_by_default(self):
         self.assertTrue(self._keep_original_audio_for({}, []))

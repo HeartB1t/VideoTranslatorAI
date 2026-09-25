@@ -5,10 +5,13 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from subprocess import CompletedProcess, CalledProcessError, TimeoutExpired
 
 from videotranslator.platforms import (
+    APP_OUTPUT_DIR_NAME,
     Wav2LipPaths,
+    default_output_dir,
     default_videos_dir,
     linux_xdg_videos_dir,
     platform_info,
+    resolve_output_dir,
     reveal_in_file_manager,
     resolve_app_paths,
     resolve_wav2lip_paths,
@@ -158,6 +161,21 @@ class PlatformTests(unittest.TestCase):
             ),
             Path(r"D:\Media"),
         )
+
+    def test_default_output_dir_is_a_videos_subfolder(self):
+        home = Path("/home/tester")
+        self.assertEqual(
+            default_output_dir("linux", home, xdg_videos_dir=lambda: None),
+            home / "Videos" / APP_OUTPUT_DIR_NAME,
+        )
+
+    def test_resolve_output_dir_prefers_the_configured_folder(self):
+        self.assertEqual(resolve_output_dir("/data/out"), Path("/data/out"))
+
+    def test_resolve_output_dir_defaults_to_the_app_folder(self):
+        # The exact parent depends on the machine's videos dir; the leaf is fixed.
+        self.assertEqual(resolve_output_dir(None).name, APP_OUTPUT_DIR_NAME)
+        self.assertEqual(resolve_output_dir("").name, APP_OUTPUT_DIR_NAME)
 
     def test_default_videos_dir_windows_falls_back_to_home_videos(self):
         self.assertEqual(

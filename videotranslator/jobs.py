@@ -18,6 +18,7 @@ class TranslationJobConfig:
 
     video_in: str
     output: str | None = None
+    output_dir: str | None = None
     model: str = "small"
     lang_source: str = "auto"
     lang_target: str = "it"

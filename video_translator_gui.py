@@ -5473,6 +5473,7 @@ def translate_video(
     hotwords: list[str] | None = None,
     ollama_use_cove: bool = True,
     keep_original_audio: bool = True,
+    output_dir: str | None = None,
 ) -> dict:
     """Compatibility wrapper for the modular pipeline runner."""
     return _translate_video_impl(
@@ -5508,6 +5509,7 @@ def translate_video(
         hotwords=hotwords,
         ollama_use_cove=ollama_use_cove,
         keep_original_audio=keep_original_audio,
+        output_dir=output_dir,
         runtime=_build_pipeline_runtime(),
     )
 
@@ -9216,6 +9218,7 @@ class App(tk.Tk):
         return TranslationJobConfig(
             video_in=video_in,
             output=self._output_var.get().strip() or None,
+            output_dir=(cfg.get("output_dir") or None),
             model=self._model.get(),
             lang_source=self._lang_src.get(),
             lang_target=self._lang_tgt.get(),

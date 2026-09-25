@@ -311,6 +311,7 @@ videotranslatorai video.mp4 --lang-target en
 | `--no-subs` | Skip `.srt` generation | - |
 | `--no-demucs` | Skip voice/music separation | - |
 | `--output` / `-o` | Output file path | auto |
+| `--output-dir` | Folder for translated files (one place, Windows and Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Process multiple files | - |
 
 ### Heavy Smoke Tests
