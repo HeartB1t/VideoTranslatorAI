@@ -138,7 +138,11 @@ class GoogleRateLimitTests(unittest.TestCase):
         self.assertEqual([s["text_tgt"] for s in result], ["ONE", "two", "THREE"])
         self.assertNotIn("_quality_flags", result[0])
         self.assertIn(FLAG_TRANSLATION_FALLBACK, result[1]["_quality_flags"])
-        self.assertIn("1/3", self.log)
+        warning = (
+            "Google Translate failed on 1/3 segments: they keep the source "
+            "text and are flagged in the subtitle editor."
+        )
+        self.assertEqual(self.log.count(warning), 1)
 
     @staticmethod
     def _scripted(*answers):
