@@ -249,7 +249,7 @@ Grafted ideas (the source is in brackets):
 | CT2, R1 | `gpu_context=x11` is invalid on Debian/Kali 0.41; `MPV()` raises and leaks the half-created core | Linux chain `x11egl -> x11vk -> x11sw`; the probe subprocess reports which profiles' options the build accepts, so the in-process `MPV()` never gets an invalid option | 3.1 |
 | CT3, R2 | the draft's YouTube live selectors select nothing (video-only avc1 HLS plus audio-only 233/234 with `acodec=None`) | selector `bv*[height<=H][vcodec^=avc1]+ba/b[height<=H]`; unknown codecs probed with ffprobe before the ingest | 4.5 |
 | CT4 | python-mpv's stream read callback copies byte by byte (8-13 MB/s, GIL held) | raw ctypes registration of `vtlive` with `ctypes.memmove`; strong references to every CFUNCTYPE until `close` | 4.6 |
-| CT5 | C6 REFUTED: mpv displaces Tk's X error handler at VO init and every VO uninit leaves Xlib's exiting default | `X11ErrorGuard` captures Tk's handler before the first VO init and restores it after each VO uninit; in-process VO re-creation only if S1 proves the restore | 2.2, 3.1 |
+| CT5 | C6 REFUTED: mpv displaces Tk's X error handler at VO init and every VO uninit leaves Xlib's exiting default | `X11ErrorGuard` captures Tk's handler before the first VO init and restores it after each VO uninit; S1 (d) proved the restore, so in-process VO re-creation is enabled on Linux | 2.2, 3.1 |
 | CT6, R3 | `time-pos` is clamped while a seek or load is pending | validity rules and a `playback-restart` epoch in `PlaybackClock`; the scheduler reacts to epochs, not to raw jumps | 2.2, 4.11 |
 | CT7, R4 | `vtlive` semantics: seek return value ignored, `b""` is a permanent EOF, size read only at open, close arrives about 106 ms after `idle-active`, positions relative to the first `seek(0)` | `MpvStreamAdapter` contract rewritten (blocking reads, exact seeks or an error, relative positions, a `closed` Event); stop waits on that Event | 4.6, 4.15 |
 | CT8, R7 | C24 REFUTED: `-reconnect*` never reach HLS segment requests; `-seg_max_retry` exists only in FFmpeg >= 6.0 | `-rw_timeout` kept (it reaches segments); `-seg_max_retry 3` added only when the local ffmpeg is >= 6.0; `IngestPolicy` stall detection stays the real guard | 4.5 |
@@ -493,7 +493,8 @@ a one-line public alias is added in that file as part of P4.
 `libmpv_runtime.py`
 ```python
 MIN_API = (1, 108)                        # python-mpv import gate (mpv.py:565, [CT] 3)
-TESTED_FLOOR = (0, 34)                    # lowest mpv release covered by S1/S3 (Q13);
+TESTED_FLOOR = (0, 34)                    # lowest mpv release covered by S1 (f) (PASS on
+                                          # 0.34.1) and S3 (2) (pending) (Q13);
                                           # below it: reason libmpv-too-old
 AF_TARGET_MIN = (0, 37)                   # `af-command ... <target>` exists from 0.37 ([CT] C29)
 RUNTIME_DIR_NAME = "mpv-runtime"          # hyphen: never importable ([03] 3.2 namespace trap)
@@ -640,7 +641,10 @@ class EventBridge:                         # the ONLY path from mpv threads to c
     def post(self, kind: str, payload: object = None) -> None
         # deque(maxlen=512); when full, the oldest "log" entries go first; kinds include
         # file-loaded, end-file, playback-restart (event id 21, mpv.py:305), click,
-        # dblclick, wheel, log, stream-error, stream-closed
+        # dblclick, wheel, log, stream-error, stream-closed. The adapter drops mpv event
+        # ids it does not know before posting: 0.34.1 (API 1.109) also delivers the
+        # pre-2.0 ids 9, 10, 12, 13, 19 as plain ints ([S1] (f)); no strict enum lookup
+        # anywhere on the event path
     def latest(self, name: str) -> tuple[object, float] | None           # value, stamp
     def drain(self) -> "BridgeSnapshot"      # Tk: changed props + events since last drain
     def close(self) -> None                  # later writes dropped; reads keep last values
@@ -716,8 +720,12 @@ class X11ErrorGuard:                        # Linux, Tk windowing system "x11" o
 # Why: mpv installs its handler at VO init (x11_common.c:697) and every VO uninit sets
 # XSetErrorHandler(NULL) (x11_common.c:914), leaving Xlib's default, which EXITS the
 # process on any X error ([CT] finding 5, RUN on Xvfb: `_XDefaultError` after terminate).
-# Restoring from ctypes is UNVERIFIED as a fix: spike S1 proves it or in-process VO
-# re-creation is disabled (3.1).
+# Restoring from ctypes is CONFIRMED as a fix by spike S1 (S1-X, [S1] (d), Kali 0.41,
+# libX11 1.8.13, Tk 8.6.18, Xvfb): after restore() the pointer equals the captured one and
+# an X error on Tk's connection is survived, also after a forced x11egl failure; in-process
+# VO re-creation is therefore enabled (3.1). mpv resets the handler at the very end of
+# mpv_terminate_destroy, so Xlib's default stays in place for under 2 ms before restore()
+# on the helper thread ([S1] (c), 40/40).
 
 def register_raw_stream_protocol(mpv_module: ModuleType, handle, name: str,
                                  open_adapter: Callable[[str], "MpvStreamAdapter | None"],
@@ -858,11 +866,13 @@ def handles_player_key(widget_class: str, keysym: str, *, focus_in_player: bool)
     # (button.tcl:104-112, ttk/button.tcl:23,42-43, ttk/scale.tcl:29-33, [CC] G5), so a
     # global action would double-fire (space on Start = start a job AND toggle play).
 def mouse_action(name: str, state: str) -> str | None
-    # python-mpv key-binding callbacks give state strings such as "dm-", "um-", "p--"
-    # ([CT] finding 14). MBTN_LEFT acts on the "u" state only (toggle pause);
-    # MBTN_LEFT_DBL on "p" or "d" (toggle fullscreen); WHEEL_UP/WHEEL_DOWN on "p" or "d"
-    # only (volume +-5); everything else None. A double click therefore toggles pause
-    # twice (net unchanged) and then fullscreen, as VLC does.
+    # python-mpv key-binding callbacks give state strings "dm-", "um-", "p--" on 0.41 and
+    # "dm", "um", "p-" ("pm" for injected keypresses) on 0.34.1 and 0.35.1 ([CT] finding
+    # 14, [S1] (f)); only state[0] is used, never the whole string. MBTN_LEFT acts on "u"
+    # only (toggle pause); MBTN_LEFT_DBL on "p" or "d" (toggle fullscreen);
+    # WHEEL_UP/WHEEL_DOWN on "p" or "d" only (volume +-5; a real wheel notch arrives as
+    # "d" then "u"); everything else None. A double click therefore toggles pause twice
+    # (net unchanged) and then fullscreen, as VLC does.
 def editor_geometry(right_x: int, right_w: int, main_x: int, main_y: int, main_h: int,
                     screen_w: int, screen_h: int) -> tuple[int, int, int, int]   # 3.5
 def playlist_groups(sources: Sequence[MediaItem], results: Sequence[MediaItem], *,
@@ -1434,8 +1444,11 @@ Poll loop:
   `clock.on_playback_restart`; then `clock.observe(..., seeking=...)` (ignored while the
   value is invalid, 2.2); then `controller.apply_events(snapshot, clock.now(mono))`, then
   `panel.render(state, position=clock.now(mono))`; `click`/`dblclick`/`wheel` events go
-  through `mouse_action` and then `video_host.focus_set()`, so a click on the video never
-  leaves Tk shortcuts dead if the child window took focus ([CC] G17);
+  through `mouse_action` and then `video_host.focus_set()`. The click lands on mpv's child
+  window, which is not a Tk widget, so without this Tk's focus stays where it was and the
+  keys go there (an Entry kept them in 6/6 [S1] (e) baseline trials); mpv itself never
+  takes the X focus (`input_vo_keyboard=no`, 36/36 clicks). With `focus_set()` the keys
+  reach `_on_player_key` (30/30, verifier 8/8) ([CC] G17);
 - every 5th tick it also renders `session.status()`.
 The after id is kept and cancelled on close. Nothing in the app cancels `after` today
 ([01] 9).
@@ -1522,7 +1535,7 @@ review.
 | `MPVEventHandlerThread`, one per instance | python-mpv (`mpv.py:910-913`) | `bridge.set_latest/post` | Tk calls (including `after`); `terminate`; `wait_*`; sleeping |
 | `mpv-cmd` (video instance) | `MpvBackend` | executes queued user commands (load, stop, seek, pause, volume/mute via `apply_mix` when the mixer owner is "cmd", tracks, subtitles, `af`, screenshot via `command_async`) | Tk |
 | libmpv stream threads (not Python-created) | libmpv via `stream_cb` | `MpvStreamAdapter.read/seek` (blocking on the store Condition); `cancel` from another mpv thread about 0.1 s after `stop` (non-blocking, [CT] C13 RUN: thread `Dummy-N`); `close` (sets `closed`); `bridge.post` | Tk; ANY libmpv call on the same instance (deadlock, stream_cb.h:48-51); session state other than the store; printing |
-| `player-init` (short) | `_ensure_player` via `_redirecting_thread_factory` | subprocess probe, `load_mpv`, `create_video_backend`, VO fallback re-creation (only if S1 proved `X11ErrorGuard.restore`, 3.1); posts `after(0, _on_player_ready, ...)` | widgets |
+| `player-init` (short) | `_ensure_player` via `_redirecting_thread_factory` | subprocess probe, `load_mpv`, `create_video_backend`, VO fallback re-creation (enabled: S1-X passed, 3.1); posts `after(0, _on_player_ready, ...)` | widgets; any Tk call, even `winfo_id` (the wid is read on Tk before the thread starts, 3.1 step 2; [S1] (d) hit `RuntimeError('main thread is not in main loop')` doing it here) |
 | `live-ingest` (+ stderr drain) | `LiveSession` | yt-dlp resolve, ffmpeg Popen (registered), `store.append`, `IngestPolicy`, free-space checks | Tk; mpv |
 | `live-decode` | `LiveSession` | `AudioDecoder`, then `StreamingVad`, then `UtteranceSegmenter`; `edge.observe`; `SeekIndex.add`; never blocks on downstream for streams | Whisper; Tk; mpv |
 | `live-asr` | `LiveSession` | owns `PersistentWhisper` (loads and frees it), `LanguageLock`, `SentenceAssembler` | Tk; mpv |
@@ -1806,9 +1819,16 @@ free.
 
 Fullscreen:
 - `grid_remove()` hides rows 0, 2, 3 and column 1;
+- column 1's `minsize` and `weight` are set to 0, and the player pane's padding and
+  highlight thickness to 0; all are saved on entry and restored on exit. A
+  `grid_remove()`d widget does not collapse a column that has a `minsize`: with today's
+  `minsize=460` the host stopped at 1460x1080 on a 1920x1080 screen ([S1] (b), 10/10
+  cycles of the first batch);
 - the root gets `attributes("-fullscreen", True)`;
 - the host frame is never unmapped and never reparented. mpv's own `fullscreen` does
-  nothing when `wid` is used ([04] 11).
+  nothing when `wid` is used ([04] 11). [S1] (b): 50/50 cycles (verifier 9/9) filled the
+  screen exactly, `wmctrl -l` count unchanged, the same mpv child window, no mpv window
+  created or mapped at root level; the layout settles in about 0.055 s.
 
 Lifecycle:
 1. Startup: the panel shows the idle placeholder. A daemon thread runs
@@ -1856,19 +1876,22 @@ Lifecycle:
      mpv keeps playing audio only.
    - Linux first: `X11ErrorGuard.restore()` runs on Tk as soon as the failure is detected,
      because the failed VO's uninit has just left Xlib's exiting default handler in place
-     ([CT] finding 5). The exposure window is at most one poll (50 ms).
-   - Then, ONLY IF spike S1 proved that `restore()` protects the process (the "S1-X"
-     criterion in 9), `player-init` terminates the instance on its own thread, calls
-     `restore()` again right after `terminate()` returns, recreates the instance with
+     ([CT] finding 5). The exposure window is at most one poll (50 ms); [S1] (d) detected
+     the forced failure 10 to 21 ms after `loadfile` with a 10 ms pump.
+   - Then (S1-X PASSED, [S1] (d): after a forced `x11egl` failure, `restore()` on Tk, a
+     terminate + `restore()` and an in-process re-creation with `x11sw`, a deliberate X
+     error on Tk's connection was survived in 40/40 runs, 120/120 triggers), `player-init`
+     terminates the instance on its own thread, calls `restore()` again right after
+     `terminate()` returns, recreates the instance with
      `next_vo_profile(..., accepted=vo_profiles_ok)`, reloads the item, and posts
      `player_vo_fallback_used`. On success the working profile is persisted in
-     `player_vo_profile`. At most 2 re-creations per app run ([04] 5.2 rule 6).
-   - If S1-X fails, no in-process re-creation happens on Linux: the instance is
-     terminated on `player-init` (so mpv cannot retry a VO init at the next load and
-     reset the handler again), `restore()` runs, the next accepted profile is persisted,
-     the placeholder shows `player_restart_required`, and the new profile is used at the
-     next app start. Windows has no X error handler issue and always re-creates
-     in-process.
+     `player_vo_profile`. At most 2 re-creations per app run ([04] 5.2 rule 6). Windows
+     has no X error handler issue and re-creates the same way.
+   - Only if `X11ErrorGuard.captured` is False on Linux (libX11 not loadable through
+     ctypes, so nothing can be restored), no in-process re-creation happens: the instance
+     is terminated on `player-init` (so mpv cannot retry a VO init at the next load and
+     reset the handler again), the next accepted profile is persisted, the placeholder
+     shows `player_restart_required`, and the new profile is used at the next app start.
    - Linux chain: `x11egl` (default: Tk is X11-only and runs on XWayland; without it mpv
      opens a separate Wayland window, [04] 4.2), then `x11vk` (`gpu_api=vulkan`,
      `gpu_context=x11vk`), then `x11sw` (`vo=x11`, software). `x11glx` is gone:
@@ -1894,14 +1917,20 @@ Lifecycle:
 
 | Kind | Options |
 |---|---|
-| video, all | `wid`, `vo=gpu`, `hwdec=auto-safe`, `keep_open=yes`, `idle=yes`, `force_window=yes` (VO created once, no flash between files; it does NOT keep Tk's X error handler, see step 5), `osc=no`, `osd_level=0` (the live `osd-overlay` still renders at level 0, [CT] C40 RUN), `input_default_bindings=no`, `input_vo_keyboard=no`, `load_scripts=no`, `config=no`, `ytdl=no`, `sub_auto=no`, `audio_file_auto=no`, `terminal=no`, `audio_buffer=0.2` (a MINIMUM: the device may use a larger buffer, mpv 0.41 man; the lead and duck latencies are therefore measured, not derived), `loglevel=warn`, `log_handler`. All accepted by 0.41 ([CT] 3 RUN). |
+| video, all | `wid`, `vo=gpu`, `hwdec=auto-safe`, `keep_open=yes`, `idle=yes`, `force_window=yes` (VO created once, no flash between files; it does NOT keep Tk's X error handler, see step 5), `osc=no`, `osd_level=0` (the live `osd-overlay` still renders at level 0, [CT] C40 RUN), `input_default_bindings=no`, `input_vo_keyboard=no`, `load_scripts=no`, `config=no`, `ytdl=no`, `sub_auto=no`, `audio_file_auto=no`, `terminal=no`, `audio_buffer=0.2` (a MINIMUM: the device may use a larger buffer, mpv 0.41 man; the lead and duck latencies are therefore measured, not derived), `loglevel=warn`, `log_handler`. All accepted by 0.34.1, 0.35.1 and 0.41 ([CT] 3 RUN; [S1] (f): 41 option rows on fresh handles, 0 rejected; all options together + `mpv_initialize` per Linux profile rc 0; `MPV(**options)` never raises). |
 | video, Linux | `x11egl`: `gpu_context=x11egl`; `x11vk`: `gpu_api=vulkan`, `gpu_context=x11vk`; `x11sw`: `vo=x11` |
 | video, Windows | `wid = winfo_id() & 0xFFFFFFFF` (mpv 0.41 man `--wid`: cast to uint32 on win32, [CT] 3); `d3d11-warp` adds `gpu_api=d3d11`, `d3d11_warp=yes`; `d3d11_flip=no` only if S4 shows that the flip model paints over the placeholder sibling |
 | voice | `vid=no`, `force_window=no`, `idle=yes`, `keep_open=no`, `ytdl=no`, `load_scripts=no`, `config=no`, `terminal=no`, `cache=no`, `audio_buffer=0.2`; per clip the `start` property is set to the clip's leading silence before `loadfile` |
 | stream session (set by mpv-cmd as properties before `loadfile`, restored at the next file load) | `rebase_start_time=no`, `cache=yes`, `force_seekable=yes` (seeking a live source fails without it, [04] 13.4 RUN; forward cache seeks on `vtlive` confirmed, [CT] C16 RUN), `demuxer_max_bytes=256MiB`, `demuxer_max_back_bytes=32MiB`, `cache_pause=yes`, `cache_pause_wait=1` |
 | file session (live on a local file) | none; only the duck filter (4.13) |
 
-Headless tests and Xvfb GUI checks use the `x11sw` profile.
+Headless tests and Xvfb GUI checks use the `x11sw` profile. `x11egl` is not usable for
+pixel checks on Xvfb: without DRI3, Mesa's software EGL presented video in only 3 to 4 of
+6 fresh processes, and when it presents nothing the host stays black although
+`video-params` is valid and no warning is logged ([S1] supplementary). `x11egl`, the Linux
+default, is checked on a real GPU display only (P2 manual item).
+Xvfb GUI tests also set `hwdec=no`: `hwdec=auto-safe` picked `vulkan-copy` even under a
+private Xvfb, i.e. a real Vulkan device of the host ([S1] tooling).
 
 ### 3.2 F1 Preview
 
@@ -2123,13 +2152,18 @@ A loudness jump on switch is accepted in v1.
     space then still acts on the player and never also on that button. Typing in the URL
     box or pressing space on a Tab-focused Start button never reaches the player.
 - Mouse over the video goes to mpv's child window ([CT] C1 RUN: child window
-  `("x11" "mpv")` inside the Tk frame). python-mpv delivers two callbacks per click
-  (`dm-`, then `um-`), and a double click delivers two clicks and then `MBTN_LEFT_DBL`
-  (`p--`) ([CT] finding 14 RUN). `mouse_action` acts on one state only: click (on `u`)
-  toggles pause, double click toggles fullscreen (so pause toggles twice, net unchanged,
-  as in VLC), a wheel notch (on `p`/`d`) changes the volume by 5. After each mapped event
-  Tk calls `video_host.focus_set()` ([CC] G17; whether the mpv child can hold keyboard
-  focus is UNVERIFIED on Windows, S4).
+  `("x11" "mpv")` inside the Tk frame, `("gl" "mpv")` with `x11egl`, [S1] (f)); the Tk
+  host frame receives no Button events. python-mpv delivers two callbacks per click
+  (`dm-`, then `um-` on 0.41; `dm`, then `um` on 0.34.1 and 0.35.1), and a double click
+  delivers two clicks and then `MBTN_LEFT_DBL` (`p--` on 0.41, `p-` on 0.34.1/0.35.1); a
+  real wheel notch arrives as `d` then `u` ([CT] finding 14 RUN, [S1] (f)).
+  `mouse_action` decides on the first character of the state and acts on one state
+  only: click (on `u`) toggles pause, double click toggles fullscreen (so pause toggles
+  twice, net unchanged, as in VLC), a wheel notch (on `p`/`d`) changes the volume by 5.
+  After each mapped event Tk calls `video_host.focus_set()` ([CC] G17). On X11 this is
+  required, because a click on mpv's child does not move Tk's focus, and sufficient
+  ([S1] (e) 30/30, verifier 8/8). Whether the mpv child can hold keyboard focus on
+  Windows is UNVERIFIED (S4).
 
 ---
 
@@ -2740,7 +2774,11 @@ Tick at 50 Hz (`Event.wait(0.02)`):
     (`escape-ass` exists only from 0.38).
   - Style: `{\an2\fs<px>\bord2\shad0}` with `px = round(40 * theme.scale)`; `{\i1}` marks
     fallback lines.
-  - Removal: `format=none`.
+  - Removal: `format=none` only. Never hide with `hidden=True`: on 0.34.1 and 0.35.1 a
+    `hidden=True` update while paused does not redraw, and a later `format=none` on that
+    hidden overlay does not either, so the stale line stays until the next video frame
+    ([S1] (f); 0.41 redraws in every case). `format=none` or `data=""` on a visible
+    overlay redraws at once on all three versions.
   - The overlay is inside the video, so it also works in fullscreen, and it sits above
     file subtitles.
 - File results use `sub-add` (3.5).
@@ -3063,7 +3101,7 @@ Typical values are much lower: caption ready about 0.6 s and voice about 1.6 s o
 | 4 | libmpv too old (Debian 11, Ubuntu 20.04: 0.32) | API < 1.108, or `mpv_version` < `TESTED_FLOOR` | `player_libmpv_too_old {version}` | none; no reinstall loop |
 | 5 | DLL cannot load | OSError (WinError 126 or other) in the subprocess probe | `player_vulkan_missing` when `%SystemRoot%\System32\vulkan-1.dll` is absent, else `player_libmpv_load_failed` (possible antivirus quarantine, [06] 5) | installer Repair or per-user install (fetches the Vulkan fallback, Q2) |
 | 6 | DLL crashes the probe process | non-zero exit without JSON, or timeout | `player_probe_crashed` | never loaded in-process; Repair or another build |
-| 7 | video output cannot start | `detect_vo_failure` | nothing if the chain recovers (`player_vo_fallback_used` through `panel.notify`); else `player_err_video_output` | Linux: `X11ErrorGuard.restore()` at once; VO profile chain (3.1), persisted; in-process only if S1-X passed, else `player_restart_required` and the next profile at the next start |
+| 7 | video output cannot start | `detect_vo_failure` | nothing if the chain recovers (`player_vo_fallback_used` through `panel.notify`); else `player_err_video_output` | Linux: `X11ErrorGuard.restore()` at once; VO profile chain (3.1), persisted; re-created in process (S1-X passed, [S1] (d)); only when the guard could not capture, `player_restart_required` and the next profile at the next start |
 | 7b | the probe accepted no VO profile | `vo_profiles_ok` empty | `player_err_video_output` | none; detail in the log |
 | 8 | file not playable | `end-file` reason error | `player_err_load {name}` | stays idle; detail in the log |
 | 9 | snapshot fails | `command_async` error reply | `player_snapshot_failed` | none |
@@ -3142,8 +3180,14 @@ If `_running` or `live_active`, ask (`msg_confirm_stop` or `live_confirm_stop`).
    - `X11ErrorGuard.restore()` right after the video terminate returns: the VO uninit has
      just set Xlib's exiting default, and Tk keeps processing X events until `destroy()`
      ([CT] finding 5).
-   `terminate()` never runs on the mpv event thread or on the Tk thread. [CT] C5 RUN:
-   `terminate()` from a helper thread while Tk pumps took 10 ms on Linux; python-mpv joins
+   `terminate()` never runs on the mpv event thread or on the Tk thread. [S1] (c) RUN on
+   Linux (0.41, a file playing): `terminate()` from a helper thread while Tk pumps took
+   0.05 to 0.35 s, 110/110 under 1 s, no hang, Tk kept pumping (0.12 to 0.35 s with
+   `hwdec=auto-safe`, whose Vulkan teardown is the slow part; 0.05 to 0.09 s with
+   `hwdec=no`; [CT] C5's 10 ms was without playback); embedded terminate on 0.34.1 and
+   0.35.1 took 0.002 to 0.006 s ([S1] (f)). mpv resets the handler to Xlib's default at
+   the very end of `mpv_terminate_destroy`, so the default is in place for under 2 ms
+   before `restore()` (40/40). python-mpv joins
    its event thread without a timeout (mpv.py:1157-1173), which is safe only because our
    callbacks never block. The backend holds the only `mpv.MPV` reference, and
    `terminate()` clears `handle` first (mpv.py:1163), so `MPV.__del__` can never run a
@@ -3164,7 +3208,11 @@ window.
   warnings, and one summary per minute ("live: 14 seg, 0 drop, lag 11.9 s, asr p90 0.21 s,
   margin p90 3.1 s, max gap 4.0 s").
 - mpv `log_handler` lines reach the log through the bridge, deduplicated per message in
-  10 s windows.
+  10 s windows. Known harmless lines are not shown as errors ([S1] (f)): on 0.34.1/0.35.1
+  without CUDA, `hwdec=auto-safe` logs "AVHWDeviceContext: Cannot load libcuda.so.1" and
+  "Could not dynamically load CUDA" (2 `error` lines per load); 0.41 with FFmpeg 8.1 logs
+  "av_log callback called with bad parameters" twice per load; `x11sw` logs "this legacy
+  VO has bad performance".
 - The ingest's stderr ring goes to `ffmpeg.log` in the session dir and, on failure, its
   first line goes to the user message.
 
@@ -3206,8 +3254,8 @@ window.
 | `test_system_packages.py` | manager detection; apt libmpv2/libmpv1 choice; zypper `libmpv2`; plans per manager, no `-Sy`; privilege order `pkexec`, `sudo -n`, and NO plain `sudo`; `manual_command`; `run_plan` with a fake runner and DEVNULL stdin; `pip_install_command` flags equal `_install_deps`'s; `refresh_import_paths` with fake `site`/`importlib` (user site added only when it exists and is missing from `sys.path`); `ComponentInstaller`: `on_done` posted once, `restart_required` when `find_spec` still fails, never touches a `_running` attribute |
 | `test_subprocess_utils.py` (extend) | `no_window_kwargs("win32")` has `creationflags` CREATE_NO_WINDOW; `{}` on linux |
 | `test_platforms.py` (extend) | `pid_alive` POSIX branch with a fake `os.kill` (ProcessLookupError, PermissionError); Windows branch with a fake kernel32 (STILL_ACTIVE 259, exited, access denied) and an assertion that `os.kill` is never called on win32; `process_start_token` from a fake `/proc/<pid>/stat`; `reveal_in_file_manager` builds `explorer /select,"C:\\a b\\c.mp4"` as one string on win32, `["xdg-open", dir]` on linux, falls back to `os.startfile` when Popen raises |
-| `test_player_engine.py` | `build_mpv_options` per platform, kind and profile (x11egl/x11vk/x11sw, never `gpu_context=x11`, never d3d11 options off win32, unsigned wid, `ytdl=no`, `audio_buffer=0.2`); `next_vo_profile` skips profiles not in `accepted`; `detect_vo_failure` on the two exact 0.41 strings; `stream_session_options`; `duck_channel_for` ((0, 36) volume, (0, 37) af, None volume); `af_duck_command` ends with the target `volume`; `EventBridge` coalescing, stamps, bounded deque drop order, close; `PlaybackClock` extrapolation, freeze on pause/cache/seeking, speed, values ignored while seeking, while a restart is expected and below `first_pts`, epoch increments on `playback-restart` (the [CT] trace 1007.52 -> 7.14 -> 1007.56 replayed); `CommandQueue` coalescing and full policy; `VolumeMixer` maths, versions, owner switch, thread safety; `X11ErrorGuard` with a fake libX11 (capture reads and restores the pointer, restore sets it, no-op when not captured); `register_raw_stream_protocol` with a fake backend: open parses the offset, read copies with memmove into a ctypes buffer, CFUNCTYPE objects kept until close, a raising adapter returns -1 and posts `stream-error`; `MpvBackend` with a `FakeMpvModule` (records kwargs, commands, property writes, observers, key bindings, terminate): per-file options written as properties before `command("loadfile", uri, "replace")`, never `MPV.loadfile`; callbacks only touch the bridge, never raise; terminate refused on the event thread |
-| `test_player_core.py` | load/playlist/next/previous; pending load replayed on `attach_backend`; A/B with 2 tracks, with external source, unavailable; audio preference reapplied; subtitle add/toggle/reload; seek maths and drag mode; `format_clock`; `snapshot_path` collisions; `release_for_job`/`release`/`is_released`; `remove_items` (loaded source removed -> stop, dubbed unaffected); `PLAYER_KEYS` complete; `handles_player_key` table (every interactive class False outside the player, True inside, True on Frame/Label/None); `mouse_action` table from the [CT] event traces (click `dm-`+`um-` = one toggle, double click = two toggles + fullscreen, wheel `p`/`d` once); `playlist_groups` with a running job; `editor_geometry` clamps (small screen, portrait screen, default window); `controls_visible` thresholds; `STATUS_KEYS` |
+| `test_player_engine.py` | `build_mpv_options` per platform, kind and profile (x11egl/x11vk/x11sw, never `gpu_context=x11`, never d3d11 options off win32, unsigned wid, `ytdl=no`, `audio_buffer=0.2`); `next_vo_profile` skips profiles not in `accepted`; `detect_vo_failure` on the two exact strings (identical on 0.34.1, 0.35.1 and 0.41; `x11sw` logs only "Error opening/initializing the selected video_out", [S1] (f)); `stream_session_options`; `duck_channel_for` ((0, 36) volume, (0, 37) af, None volume); `af_duck_command` ends with the target `volume`; `EventBridge` coalescing, stamps, bounded deque drop order, close; unknown int event ids (9, 10, 12, 13, 19 from 0.34.1) dropped without raising; `PlaybackClock` extrapolation, freeze on pause/cache/seeking, speed, values ignored while seeking, while a restart is expected and below `first_pts`, epoch increments on `playback-restart` (the [CT] trace 1007.52 -> 7.14 -> 1007.56 replayed); `CommandQueue` coalescing and full policy; `VolumeMixer` maths, versions, owner switch, thread safety; `X11ErrorGuard` with a fake libX11 (capture reads and restores the pointer, restore sets it, no-op when not captured); `register_raw_stream_protocol` with a fake backend: open parses the offset, read copies with memmove into a ctypes buffer, CFUNCTYPE objects kept until close, a raising adapter returns -1 and posts `stream-error`; `MpvBackend` with a `FakeMpvModule` (records kwargs, commands, property writes, observers, key bindings, terminate): per-file options written as properties before `command("loadfile", uri, "replace")`, never `MPV.loadfile`; callbacks only touch the bridge, never raise; terminate refused on the event thread |
+| `test_player_core.py` | load/playlist/next/previous; pending load replayed on `attach_backend`; A/B with 2 tracks, with external source, unavailable; audio preference reapplied; subtitle add/toggle/reload; seek maths and drag mode; `format_clock`; `snapshot_path` collisions; `release_for_job`/`release`/`is_released`; `remove_items` (loaded source removed -> stop, dubbed unaffected); `PLAYER_KEYS` complete; `handles_player_key` table (every interactive class False outside the player, True inside, True on Frame/Label/None); `mouse_action` table from the [CT] and [S1] (f) event traces, with the 3-char (0.41) and 2-char (0.34.1/0.35.1) forms (click `dm-`+`um-` and `dm`+`um` = one toggle; double click `dm-, um-, dm-, DBL p--, um-` and `dm, um, dm, DBL p-, um` = two toggles + fullscreen; wheel `dm-`+`um-`, `dm`+`um`, `pm-` and `pm` = one step); `playlist_groups` with a running job; `editor_geometry` clamps (small screen, portrait screen, default window); `controls_visible` thresholds; `STATUS_KEYS` |
 | `test_player_settings.py` | every key: defaults, clamping, wrong types, platform-specific `vo_profile`, `live_file_ahead_s` range and default by dub on/off |
 | `test_live_health.py` | breaker transitions, doubling cooldown, half-open probe, quota lock, one warning per episode; `RollingStats`; `parse_fault_spec`; `set(STATUS_KEYS) == LIVE_STATES` |
 | `test_live_segment.py` | segmenter over synthetic probability scripts: start/end, padding, soft cut, hard cut, discontinuity flush, reset with gen; assembler: punctuation, media-time hold, word/span/char caps, multi-sentence split |
@@ -3288,8 +3336,14 @@ output pasted into the plan; an optional CI job is Q14.
   - `rebase-start-time=no` PTS equality, and `time-pos` ignored during a seek;
   - terminate under 1 s while an observer is busy.
 - `test_player_real_x11.py` runs only with `VTAI_REAL_MPV=1` and a `DISPLAY` that is a
-  private Xvfb (never the operator's `:0`): embedding, placeholder lift/lower,
-  `mouse_action` with `xdotool` clicks, and the `X11ErrorGuard` check of S1-X.
+  private Xvfb (never the operator's `:0`), with the `x11sw` profile: embedding,
+  placeholder lift/lower, `mouse_action` with `xdotool` clicks, and the `X11ErrorGuard`
+  check of S1-X: capture, create, terminate, `restore()`, then trigger T1
+  (`tk.Toplevel(use=hex(<id of a destroyed Tk frame>))` must raise `TclError` and the
+  process must survive), and the same after a forced `x11egl` failure
+  (`__EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent/none.json` in the test's environment;
+  Xvfb flags cannot remove EGL). A raw ctypes `XGetWindowAttributes` on an unknown window
+  is NOT a valid trigger: it ends the process even under Tk's own handler ([S1] (d)).
 - `test_live_av_reader.py` runs only when `av` and ffmpeg exist: ffmpeg writes a TS through
   `LiveStore` in bursts while `TailReader` + PyAV decode it (the [05] 1.4 prototype); PTS
   continuity and sample count.
@@ -3336,7 +3390,10 @@ output pasted into the plan; an optional CI job is Q14.
     desktop shortcut), with a Marian model download during the session (tqdm output);
   - the `max gap` value from the log per platform.
 - GUI checks follow the project rule: find the window with `wmctrl -l` before and after
-  the launch and close it by id, never by name.
+  the launch and close it by id, never by name. On a private Xvfb with xfwm4, `wmctrl -l`
+  1.07 segfaults (rc -11) when the Tk window has no `WM_CLIENT_MACHINE`, which Tk sets
+  only on `wm client`: harnesses call `app.wm_client(<name>)` first, or read
+  `xprop -root _NET_CLIENT_LIST` instead ([S1] tooling; S5 uses the same check).
 
 ---
 
@@ -3385,7 +3442,7 @@ output pasted into the plan; an optional CI job is Q14.
 |---|---|---|
 | Kali rolling, Debian 12/13/sid | `libmpv2` (0.35.1 to 0.41.0) | yes (0.35/0.36 use VolumeDuck) |
 | Debian 11 | `libmpv1` 0.32.0 | no (too old) |
-| Ubuntu 22.04 | `libmpv1` 0.34.1 | yes if the S1/S3 container checks pass (Q13); AfDuck unavailable (< 0.37), VolumeDuck used |
+| Ubuntu 22.04 | `libmpv1` 0.34.1 | yes if the S3 (2) container check passes (Q13; S1 (f) passed on 0.34.1); AfDuck unavailable (< 0.37), VolumeDuck used |
 | Ubuntu 24.04, 25.x | `libmpv2` 0.37.0 / 0.40.0 | yes |
 | Ubuntu 20.04 | `libmpv1` 0.32.0 | no |
 | Fedora 43/44 | `mpv-libs` (official repo) | yes |
@@ -3609,8 +3666,8 @@ Sequencing: the backlog work lands first, because it touches `_build_ui`,
 - the concurrent `translation.py` work.
 Then this order:
 - Plan 0 (spikes) runs first, in parallel with P0/P1;
-- P2 needs S1 (S1-X decides in-process VO re-creation on Linux) and S5 for its Wayland
-  item;
+- P2 needs S1 (done 2026-09-25: GO; S1-X passed, so in-process VO re-creation on Linux is
+  enabled) and S5 for its Wayland item;
 - P4 needs P2 only: the time-domain equality it depends on (C17/C18) is already
   confirmed within 25 ms by [CT] RUN, so the draft's hidden P4 -> S2 dependency is gone
   ([CC] 7);
@@ -3632,7 +3689,8 @@ MBTN/WHEEL on 0.41 (C4), two instances (C28 headless), `lavf://file:` follow on 
 (C14), blocking reads and raw-domain seeks on the custom stream (C13, C16, C19), time
 domains (C17, C18), scaletempo2 (C32), Edge CBR duration (C34), the VAD wrapper (C37).
 
-- S1 Embed on X11 (Kali 0.41; items (f) also on 0.34.1 and 0.35.1 headless):
+- S1 Embed on X11 (Kali 0.41; items (f) also on 0.34.1 and 0.35.1 headless). DONE
+  2026-09-25, verdict GO; results in `_dev/spikes/player/S1/S1-results.md`:
   - (a) resize with accordion toggling and card drag: the video fills the host after each
     of 20 resizes (screenshot pixel check at the four corners of the host);
   - (b) root fullscreen enter/exit 10 times: the video fills the screen, no separate
@@ -3641,11 +3699,13 @@ domains (C17, C18), scaletempo2 (C32), Edge CBR duration (C34), the VAD wrapper 
     hang;
   - (d) S1-X, the X error guard: `capture()`, create and terminate the video instance,
     `restore()`; then (1) the handler pointer equals the captured one, and (2) a
-    deliberate X error on Tk's connection does not end the process (candidate trigger: a
-    `tk.Toplevel(use=...)` on the id of a destroyed X window; the trigger itself is
-    UNVERIFIED, alternative: `XGetWindowAttributes` through ctypes on Tk's `Display*`
-    from `winfo` data). 20 runs, plus the same after a forced VO failure (`x11egl` on an
-    Xvfb without EGL). PASS enables in-process VO re-creation on Linux (3.1);
+    deliberate X error on Tk's connection does not end the process (trigger T1: a
+    `tk.Toplevel(use=...)` on the id of a destroyed Tk frame; or T2c: ctypes
+    `XGetWindowAttributes` on Tk's `Display*` wrapped in `Tk_CreateErrorHandler`. An
+    unwrapped ctypes `XGetWindowAttributes` is fatal even under Tk's own handler and
+    cannot tell a working guard from a broken one). 20 runs, plus the same after a forced
+    VO failure (`x11egl` with `__EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent/none.json`;
+    Xvfb flags cannot remove EGL). PASS enables in-process VO re-creation on Linux (3.1);
   - (e) focus: after a click on the video, `focus_get()` is inside the player pane and a
     key reaches `_on_player_key` ([CC] G17);
   - (f) command checks on 0.34.1, 0.35.1 and 0.41: every option of 3.1 accepted,
@@ -3654,6 +3714,11 @@ domains (C17, C18), scaletempo2 (C32), Edge CBR duration (C34), the VAD wrapper 
     `sub-add`, `playback-restart` events delivered. A failure on 0.34.1 moves
     `TESTED_FLOOR` to (0, 35) (Q13).
   - Go: (a)-(c) and (e) pass. (d) and (f) choose fallbacks, they do not stop the project.
+  - Result (2026-09-25): GO. (a) 156/156 resizes, (b) 50/50 cycles, (c) 80/80
+    terminates, (e) 30/30 trials, each reproduced by an independent verifier; (d) PASS,
+    so in-process VO re-creation is enabled; (f) PASS on 0.34.1, 0.35.1 and 0.41 (C56
+    refuted literally, handled by `state[0]`). Details:
+    `_dev/spikes/player/S1/S1-results.md`.
 - S2 Growing-store transport (gates P6):
   - candidates B (`vtlive://` with the raw ctypes registration), A (`lavf://file:` +
     `follow=1`) and C (local HLS EVENT), with ffmpeg writing a real YouTube live (split
@@ -3817,10 +3882,15 @@ phase starts.
     (Windows) [manual];
   - fullscreen enter/exit on both monitors of this machine [Xvfb plus manual when
     allowed];
-  - VO chain: a `player_vo_profile` not in `vo_profiles_ok` is skipped; on an Xvfb
-    without EGL the `x11egl` failure is detected, `restore()` runs, the fallback works
-    (in-process if S1-X passed, else the restart message), and the process survives
-    [opt-in real test];
+  - `x11egl`, the Linux default, on the real display of this machine (NVIDIA, both
+    monitors), when the operator allows it: embed, window and log-row resizes,
+    fullscreen enter/exit and the S1 (e) focus check; a black host while `video-params`
+    is valid is a FAIL, because `detect_vo_failure` cannot see that state [manual,
+    screenshots];
+  - VO chain: a `player_vo_profile` not in `vo_profiles_ok` is skipped; with EGL removed
+    (`__EGL_VENDOR_LIBRARY_FILENAMES=/nonexistent/none.json` on Xvfb) the `x11egl`
+    failure is detected, `restore()` runs, the next profile is re-created in process and
+    plays, and the process survives trigger T1 after each `restore()` [opt-in real test];
   - reflow at 360, 460 and 700 px hides exactly the planned controls [Tk test];
   - a theme switch recolours the controls live while the video stays black; a language
     switch relabels every control and tooltip [Tk test plus screenshot];
@@ -4123,10 +4193,12 @@ Q13. Lowest supported libmpv on Linux ([CC] G11).
 - Facts: python-mpv imports with API >= 1.108 (mpv 0.33); Ubuntu 22.04 ships libmpv1
   0.34.1 (Launchpad, [CT] R6) and is still in standard support (until 2027, UNVERIFIED
   here); AfDuck needs 0.37, so 0.34-0.36 always use
-  VolumeDuck; the draft tested only 0.35 and 0.41.
-- Options: (a) `TESTED_FLOOR = (0, 34)`, conditional on the S1 (f) and S3 (2) container
-  checks on 0.34.1; (b) `TESTED_FLOOR = (0, 35)` (Debian 12 and newer only).
-- Recommended: (a), falling back to (b) automatically if the 0.34.1 checks fail.
+  VolumeDuck; the draft tested only 0.35 and 0.41. S1 (f) passed on 0.34.1 (19/19 checks
+  in 4/4 runs, 2026-09-25), with two version differences handled in the design (2-char
+  mouse states, pre-2.0 event ids).
+- Options: (a) `TESTED_FLOOR = (0, 34)`, conditional on the S3 (2) container check on
+  0.34.1 (S1 (f) done); (b) `TESTED_FLOOR = (0, 35)` (Debian 12 and newer only).
+- Recommended: (a), falling back to (b) automatically if the S3 (2) check on 0.34.1 fails.
 
 Q14. CI coverage of the Tk tests ([CC] T1).
 - Facts: every Tk test skips in CI today (no display, `tests/test_ui_theme_tk.py:9-17`),
@@ -4144,26 +4216,27 @@ Q14. CI coverage of the Tk tests ([CC] T1).
 
 ### 11.1 Claims and their final status
 
-Every technical claim the design depends on, with its status after the two critiques and
-the [FD] checks.
+Every technical claim the design depends on, with its status after the two critiques, the
+[FD] checks and spike S1 ([S1], 2026-09-25).
 - Status values: CONFIRMED (RUN or SRC as stated), PARTLY (confirmed in one setting, the
   rest open), REFUTED (the draft was wrong; the correction is already in this design),
   UNVERIFIED (neither run nor primary source; a spike or phase item settles it).
 - "Settled in": the spike item (9, Plan 0) or phase acceptance that closes it.
 - "If false": the pre-specified fallback.
 - Sources: [CT] = critique-technical.md (probe scripts under `probe/`), [CC] =
-  critique-completeness.md, [FD] = checks of this final design (preamble).
+  critique-completeness.md, [FD] = checks of this final design (preamble), [S1] = spike S1
+  results (`_dev/spikes/player/S1/S1-results.md`, 2026-09-25).
 
 Claims C1-C49 (from the draft):
 
 | # | Claim | Used in | Final status and source | Settled in | If false |
 |---|---|---|---|---|---|
-| C1 | mpv `wid` embedding in a Tk frame on X11 works and mpv resizes its child | 3.1 | CONFIRMED: RUN [CT] p10 (Xvfb, `vo=x11`, child `("x11" "mpv")` resized 640x400 -> 900x560); SRC `x11_common.c:1262-1266, 1778-1788` (v0.41.0). GPU VOs not run | S1 (a) with `x11egl` | render API (v2); stop at S1 |
+| C1 | mpv `wid` embedding in a Tk frame on X11 works and mpv resizes its child | 3.1 | PARTLY: CONFIRMED for `x11sw`, RUN [CT] p10 and [S1] (a) 156/156 resizes (accordion, card drag, root geometry) and (b) 50/50 root fullscreen cycles on Xvfb, verifier 36/36 and 9/9; SRC `x11_common.c:1262-1266, 1778-1788` (v0.41.0). `x11egl` on Xvfb (Mesa software EGL, no DRI3) presented video in only 3-4 of 6 fresh processes, with valid `video-params`; `x11egl` on a real GPU UNVERIFIED | P2 manual item (`x11egl` on the real display) | next profile of the VO chain (`x11vk`, `x11sw`) set in `player_vo_profile`; render API (v2) |
 | C2 | Under Wayland, Tk on XWayland with `gpu-context=x11egl` stays embedded | 3.1 | UNVERIFIED (no Wayland session here; third-party report only, [04] 4.2) | S5 | "X11 session required", explained in the placeholder |
 | C3 | A Tk sibling placeholder stacks above mpv's child and can be lowered | 2.3 | CONFIRMED on X11: RUN [CT] p10 (centre pixel = placeholder colour when lifted, video when lowered). Windows d3d11 flip model UNVERIFIED | S4 (3) | `d3d11_flip=no`; else idle logo via `osd-overlay` |
-| C4 | `register_key_binding` (define-section) delivers MBTN/WHEEL on 0.41 | 3.1, 3.7 | CONFIRMED: RUN [CT] p1 (keypress) and p11 (real xdotool clicks); no deprecation warning at loglevel v; documented deprecated "except for mpv-internal uses" in 0.34, 0.35, 0.41, master | S1 (f) on 0.34/0.35 | `keybind` + `script-message` in the adapter |
-| C5 | `terminate()` on a helper thread while Tk pumps never hangs | 6.4 | PARTLY: RUN [CT] Linux 10 ms; Windows UNVERIFIED; issue #114 open (https://api.github.com/repos/jaseg/python-mpv/issues/114); `__del__` risk closed by single ownership (mpv.py:1153-1155, 1163) | S1 (c), S4 (4) | longer bounded wait, destroy anyway (daemon thread) |
-| C6 | `force_window=yes` keeps Tk's X error handler until exit | 3.1 | REFUTED: RUN [CT] p10 (mpv's handler from the first VO init, Xlib default after terminate); SRC `x11_common.c:697, 914`, tkError.c:24,102-104. Corrected by `X11ErrorGuard` (C50) | S1 (d) | no in-process VO re-creation; restart message |
+| C4 | `register_key_binding` (define-section) delivers MBTN/WHEEL on 0.41 | 3.1, 3.7 | CONFIRMED: RUN [CT] p1 (keypress) and p11 (real xdotool clicks); RUN [S1] (f) on 0.34.1, 0.35.1 and 0.41 (keypress injection and real xdotool clicks on an embedded instance); no deprecation warning at loglevel v; documented deprecated "except for mpv-internal uses" in 0.34, 0.35, 0.41, master | S1 (f) (done) | `keybind` + `script-message` in the adapter |
+| C5 | `terminate()` on a helper thread while Tk pumps never hangs | 6.4 | PARTLY: Linux CONFIRMED, RUN [S1] (c): 80/80 (runner) and 30/30 (verifier) under 1 s with a file playing, 0.05-0.35 s, no hang, Tk pumping throughout ([CT]'s 10 ms was without playback); 0.002-0.006 s on 0.34.1/0.35.1 ([S1] (f)); Windows UNVERIFIED; issue #114 open (https://api.github.com/repos/jaseg/python-mpv/issues/114); `__del__` risk closed by single ownership (mpv.py:1153-1155, 1163) | S4 (4) | longer bounded wait, destroy anyway (daemon thread) |
+| C6 | `force_window=yes` keeps Tk's X error handler until exit | 3.1 | REFUTED: RUN [CT] p10 (mpv's handler from the first VO init, Xlib default after terminate), re-confirmed by [S1] (c) in 80/80 runs; SRC `x11_common.c:697, 914`, tkError.c:24,102-104. Corrected by `X11ErrorGuard` (C50, CONFIRMED by [S1] (d)) | S1 (d) (done) | `X11ErrorGuard`; the restart message only when the guard cannot capture |
 | C7 | `d3d11-warp` works in `wid` mode on a VM without 3D | 3.1 | UNVERIFIED; the Linux build rejects the options (RUN [CT]), emitted only on win32 | S4 (5) | `player_err_video_output` (documented) |
 | C8 | `vulkan-1.dll` is a hard import and the LunarG loader satisfies it | 8.3 | PARTLY: hard import CONFIRMED (objdump RUN [CT], empty delay-import directory); archive and DLL hashes CONFIRMED (RUN [CT]); member path CORRECTED to `VulkanRT-X64-1.4.357.0-Components/x64/vulkan-1.dll`; absence on VMs UNVERIFIED (shinchiro issue #831 open) | S4 (5) | `player_vulkan_missing` |
 | C9 | The renamed `mpv-2.dll` in a prepended PATH dir is found first | 2.2, 8.3 | CONFIRMED by SRC: python-mpv tries `mpv-2.dll`, `libmpv-2.dll`, `mpv-1.dll` over PATH (mpv.py:39-45); CPython nt `find_library` returns the first PATH hit (ctypes/util.py 49-62); dependencies resolve via `add_dll_directory`, never PATH ([CT] C9). Not run on Windows | S4 (2) | narrow PATH while no job runs |
@@ -4206,19 +4279,19 @@ Claims C1-C49 (from the draft):
 | C46 | The GitHub asset `digest` is present for zhongfly releases | 8.3 | CONFIRMED today for the 3 newest releases (RUN [CT] via the API); future presence UNVERIFIED; integrity against transport errors only | P1 | `sha256.txt`, then the pinned G1 |
 | C47 | SourceForge serves the 7z to Python urllib | 8.3 | CONFIRMED from Linux with the exact client and UA (RUN [CT], hashes match); Windows UNVERIFIED | S4 (7) | GitHub mirror; content-type check |
 | C48 | openSUSE ships `libmpv2` | 8.2 | CONFIRMED: Tumbleweed 0.41.0+git20260918, Leap 15.6 0.36.0 backports ([CT]) | done | generic `{cmd}` hint |
-| C49 | The VO failure log strings reliably signal a VO failure | 3.1 | CONFIRMED as strings and path: RUN [CT] without a display (`MPV()` does not raise, audio-only playback continues, `video-params` None); both strings in the Windows DLL | S1, S5 | hidden "Change video output" command (v1.1) |
+| C49 | The VO failure log strings reliably signal a VO failure | 3.1 | CONFIRMED as strings and path: RUN [CT] without a display (`MPV()` does not raise, audio-only playback continues, `video-params` None); both strings in the Windows DLL; RUN [S1] (f): both strings on 0.34.1 and 0.35.1 too for `x11egl`/`x11vk` without a display, `x11sw` logs only the second; RUN [S1] (d): a forced `x11egl` failure on X11 logs both, audio continues. Not a signal for a VO that initialises but presents nothing (seen with `x11egl` on Xvfb, C1) | S5 | hidden "Change video output" command (v1.1) |
 
 Claims introduced by the final design (C50-C73):
 
 | # | Claim | Used in | Final status and source | Settled in | If false |
 |---|---|---|---|---|---|
-| C50 | `X11ErrorGuard.restore()` (ctypes `XSetErrorHandler`) restores Tk's handler and keeps the process alive after a VO uninit | 2.2, 3.1, 6.4 | UNVERIFIED as a fix; reading the pointer RUN [CT] | S1 (d) | no in-process VO re-creation on Linux; `player_restart_required` |
-| C51 | While mpv's VO is alive (mpv's X error handler installed, Tk's per-request handlers not running) Tk works normally in this app | 3.1 step 5 | UNVERIFIED | S1, P2 soak (the 20-close and theme/language checks) | render API (v2); nothing else can keep both handlers |
-| C52 | mpv's `XInitThreads()` at VO init, after Tk opened its display, is harmless | 3.1 | harmless with libX11 >= 1.8 per [CT] (UNVERIFIED on older libX11, possibly Ubuntu 22.04) | P7 on an Ubuntu 22.04 desktop if Q13 keeps 0.34 | `TESTED_FLOOR = (0, 35)` |
+| C50 | `X11ErrorGuard.restore()` (ctypes `XSetErrorHandler`) restores Tk's handler and keeps the process alive after a VO uninit | 2.2, 3.1, 6.4 | CONFIRMED in the S1-X scope (Kali, libmpv 0.41, libX11 1.8.13, Tk 8.6.18, Xvfb): RUN [S1] (d), pointer equal after restore in every run; T1 and T2c survived 20/20 each after terminate + restore and 20/20 each (60/60 triggers) after a forced `x11egl` failure with in-process re-creation; without restore the same triggers kill the process; verifier spot check 3/3. libX11 < 1.8 not run | S1 (d) (done) | no in-process VO re-creation on Linux; `player_restart_required` |
+| C51 | While mpv's VO is alive (mpv's X error handler installed, Tk's per-request handlers not running) Tk works normally in this app | 3.1 step 5 | PARTLY: RUN [S1] (d) "alive" mode: X errors on Tk's connection (T1, T2c) survived 6/6, mpv logged one "X11 error" line each, and Tk's embed code still raised its TclError (Xlib returned 0); an error Tk would treat as fatal is silently survived in that state. App-level behaviour UNVERIFIED | P2 soak (the 20-close and theme/language checks) | render API (v2); nothing else can keep both handlers |
+| C52 | mpv's `XInitThreads()` at VO init, after Tk opened its display, is harmless | 3.1 | PARTLY: harmless with libX11 >= 1.8 per [CT]; RUN [S1] (f): Tk frame + `wid` embed, `x11sw` and `x11egl`, short render and click runs without an X error in the Ubuntu 22.04 container (libX11 1.7.5) and the Debian 12 container (1.8.4) under Xvfb; no soak, no desktop session | P7 on an Ubuntu 22.04 desktop if Q13 keeps 0.34 | `TESTED_FLOOR = (0, 35)` |
 | C53 | A raw ctypes `vtlive` registration through `mpv.backend` and `MPV.handle` works on python-mpv 1.0.6-1.0.8 | 2.2, 4.6 | SRC (mpv.py:55,73 `backend`; :505-520 types; :617 and :1913 the add call); not run | S2 (B) | python-mpv's helper (byte loop), then S2 (5) likely picks A |
 | C54 | The probe subprocess can validate each VO profile's options on an uninitialised handle and read `mpv-version` after initialising with `vo=null` | 2.2, 3.1 | PARTLY: an invalid `gpu_context` fails at option-set time (RUN [CT] finding 2); reading `mpv-version` UNVERIFIED | P1 acceptance | read the version from `mpv_client_api_version` mapping only; validate profiles in-process under `try` and accept the leak once |
-| C55 | mpv emits `playback-restart` after every seek and load, also on `vtlive` | 2.2, 4.3, 4.11 | SRC (event id 21, mpv.py:305; input.rst); not run for this purpose | S1 (f), S2 (2) | validity from `seeking` plus a 300 ms settle timer |
-| C56 | The mouse state strings (`dm-`, `um-`, `p--`) are the same on 0.34-0.41 and on Windows | 3.7 | RUN on 0.41 X11 only ([CT] finding 14) | S1 (f), S4 (9) | per-version table in `mouse_action` |
+| C55 | mpv emits `playback-restart` after every seek and load, also on `vtlive` | 2.2, 4.3, 4.11 | PARTLY: SRC (event id 21, mpv.py:305; input.rst); RUN [S1] (f) for file loads and seeks on 0.34.1, 0.35.1 and 0.41 (after the load and after each of 5 paused exact seeks, 0.01-0.02 s); `vtlive` UNVERIFIED | S2 (2) | validity from `seeking` plus a 300 ms settle timer |
+| C56 | The mouse state strings (`dm-`, `um-`, `p--`) are the same on 0.34-0.41 and on Windows | 3.7 | REFUTED as written: RUN [S1] (f), real X11 clicks give `dm`, `um`, `p-` (keypress `pm`) on 0.34.1 and 0.35.1 and `dm-`, `um-`, `p--` on 0.41 (verifier CONFIRMED); the first character and the order are identical, and the correction (`mouse_action` decides on `state[0]`) is in 2.2 and 3.7. Windows UNVERIFIED | S4 (9) | per-version table in `mouse_action` |
 | C57 | Button/Radiobutton/Scale class bindings double-fire with a toplevel `<Key>` binding | 3.7 | SRC (button.tcl:104-112, ttk/button.tcl:23,42-43, ttk/scale.tcl:29-33, bindtags man page, [CC] G5); not run | P2 Tk test | n/a (the filter is then only stricter than needed) |
 | C58 | Under pythonw the original `sys.stdout`/`sys.stderr` are None, so `_GlobalRedirect` would raise on library writes | 1.3 R9, 2.4 | SRC (CPython Doc/library/sys.rst; video_translator_gui.py:5248-5252, 5711-5712, [CC] G2, [FD]); end to end UNVERIFIED | S4 (8) | n/a (the fix is harmless if the premise is false) |
 | C59 | `refresh_import_paths` makes a package installed into a user site dir created during this run importable without a restart | 2.2, 6.1 | SRC (site.py:380, `importlib.invalidate_caches`); not run | P1 acceptance | `player_restart_required` |
@@ -4237,6 +4310,15 @@ Claims introduced by the final design (C50-C73):
 | C72 | setup-python's tkinter works under `xvfb-run` on ubuntu-latest | Q14 | UNVERIFIED | Q14 trial job | keep local Xvfb gates |
 | C73 | The pinned shinchiro snapshot and current zhongfly builds behave like the 0.41.0 release for every command used | 8.3 | UNVERIFIED (master snapshots, [CT] C10) | S4 (1), (3), (9) | pin the source whose S4 run passes; reopen Q1 |
 
+Claims recorded by spike S1 (C74-C77):
+
+| # | Claim | Used in | Final status and source | Settled in | If false |
+|---|---|---|---|---|---|
+| C74 | An `osd-overlay` update with `hidden=True` while paused redraws at once on every supported mpv version | 4.12 | REFUTED: RUN [S1] (f): on 0.34.1 and 0.35.1 a `hidden=True` update while paused does not redraw (the text stays), and a later `format=none` on that hidden overlay does not either, until unpause or an exact seek; 0.41 redraws in every case; `format=none` or `data=""` on a visible overlay redraws at once on all three. Corrected in 4.12 (removal with `format=none` only, never `hidden=True`) | S1 (f) (done) | n/a (the correction holds on every version) |
+| C75 | python-mpv delivers only the mpv 2.x event ids on every supported version | 2.2, 7.2 | REFUTED: RUN [S1] (f): 0.34.1 (client API 1.109) also delivers the pre-2.0 ids 9, 10, 12, 13, 19, which python-mpv passes on as plain ints (harmless to python-mpv itself). Corrected in 2.2 (the adapter drops unknown ids, no strict enum lookup on the event path) and 7.2 (unit test) | S1 (f) (done) | n/a |
+| C76 | `x11egl` embedded in the Tk frame on Xvfb presents video reliably enough for pixel checks | 3.1, 7.5 | REFUTED: RUN [S1] supplementary: on Xvfb (no DRI3, Mesa software EGL) `x11egl` presented video in only 3 to 4 of 6 fresh processes (lifecycle runner: 4 of 14 runs black); when nothing is presented the host stays black with valid `video-params`, `current-vo=gpu` and no warning, so `detect_vo_failure` cannot see that state. Corrected in 3.1 (every Xvfb pixel check uses `x11sw`); `x11egl` on a real GPU UNVERIFIED (C1) | P2 manual item (`x11egl` on the real display) | next profile of the VO chain (`x11vk`, `x11sw`) set in `player_vo_profile` (as C1) |
+| C77 | `tk.Toplevel(use=hex(<id of a destroyed Tk frame>))` (trigger T1) is a valid X error trigger on Tk's connection: survived under Tk's handler, fatal under Xlib's default, so it tells a working guard from a broken one | 7.5, 9 | CONFIRMED: RUN [S1] (d)-4: with Tk's handler restored T1 raises `TclError` and the process survives (guard runs 20/20 on `x11egl`, 5/5 on `x11sw`; baseline without mpv 3/3); without `restore()` it kills the process (3/3, verifier 2/2). T2c (ctypes `XGetWindowAttributes` wrapped in `Tk_CreateErrorHandler`) also works. A raw ctypes `XGetWindowAttributes` (T2a) is NOT a valid trigger: fatal even under Tk's own handler (3/3, verifier 2/2), because Tk's `ErrorProc` falls back to the Xlib default for unknown windows (tkError.c:102-103, 225-295) | S1 (d) (done) | T2c |
+
 Already verified and needing no action:
 - Wav2Lip muxes its `--audio` input (local `inference.py:276`);
 - faster-whisper 1.2.1 requires `av>=11` and `onnxruntime<2,>=1.14` ([FD]);
@@ -4245,10 +4327,12 @@ Already verified and needing no action:
 - `_on_done` argument assertions in the worker tests (`tests/test_ui_worker_outcomes.py:177,183`);
 - the reserved colours `#000000`, `#a3a3a3`, `#c3c3c3` in `TK_DEFAULT_COLORS`
   (`videotranslator/ui_theme.py:43-49`);
-- python-mpv `osd_overlay()` NameError and the working `command("osd-overlay", ...)` form;
+- python-mpv `osd_overlay()` NameError and the working `command("osd-overlay", ...)` form
+  (the command form also renders on 0.34.1 and 0.35.1, [S1] (f));
   `escape-ass` from 0.38; mpv `fullscreen` is a no-op with `wid`; `--wid` cast to uint32
   on win32; the event thread is a daemon; `terminate()` joins without a timeout ([CT] 3);
-- every 3.1 option other than `gpu_context=x11` is accepted by 0.41 ([CT] 3 RUN);
+- every 3.1 option other than `gpu_context=x11` is accepted by 0.41 ([CT] 3 RUN) and by
+  0.34.1 and 0.35.1 ([S1] (f) RUN);
 - repo anchors re-checked by both critiques and [FD] at `c155227`.
 
 ### 11.2 Residual risks (ranked)
@@ -4259,10 +4343,14 @@ Already verified and needing no action:
    BUILD.txt, S4 on both sources, Q1. Residual: a future nightly can break behaviour
    that S4 did not cover.
 2. X11 error handling inside one process. While the VO lives, Tk's own X error handlers
-   never run (C51); the restore after a VO uninit is unproven (C50); older libX11 may
-   mind the late `XInitThreads` (C52). Mitigation: S1 (d), no in-process re-creation
-   without proof, restart message. Residual: an X error in a Tk path that expects its
-   own handler is only logged by mpv, with unknown effects.
+   never run (C51; [S1] (d) saw mpv's handler swallow errors Tk would treat as fatal);
+   the restore after a VO uninit is proven on Kali (C50) but Xlib's exiting default is in
+   place for under 2 ms at each terminate and for up to one poll after a VO failure;
+   older libX11 may mind the late `XInitThreads` (C52, short container runs only).
+   Mitigation: `X11ErrorGuard`, `restore()` right after every terminate and at once
+   after a VO failure, at most 2 re-creations per run. Residual: an X error in a Tk path
+   that expects its own handler is only logged by mpv, with unknown effects; an X error
+   on Tk's connection inside the sub-2 ms window still ends the process.
 3. YouTube live ingest fragility. The draft's selector already broke on today's YouTube
    formats ([CT] finding 3); split HLS inputs may drift apart (C62); audio codecs are
    unreported (C61). yt-dlp and YouTube change often, so the selector and codec probe
