@@ -12,6 +12,7 @@ title Video Translator AI - Setup v%SCRIPT_VERSION%
 :: -- Centralised paths (single source of truth) ------------------------------
 set "INSTALL_DIR=%ProgramFiles%\VideoTranslatorAI"
 set "FFMPEG_DIR=%INSTALL_DIR%\ffmpeg"
+set "MPV_DIR=%INSTALL_DIR%\mpv-runtime"
 set "WAV2LIP_DIR=%INSTALL_DIR%\wav2lip"
 set "WAV2LIP_REPO=%WAV2LIP_DIR%\Wav2Lip"
 set "WAV2LIP_MODEL=%WAV2LIP_DIR%\wav2lip_gan.pth"
@@ -24,6 +25,7 @@ set "SCRIPT_DIR=%~dp0"
 set "USER_CONFIG=%USERPROFILE%\.videotranslatorai_config.json"
 set "USER_HF_CACHE=%USERPROFILE%\.cache\huggingface"
 set "USER_XTTS_CACHE=%LOCALAPPDATA%\tts"
+set "USER_MPV_RUNTIME=%LOCALAPPDATA%\VideoTranslatorAI\mpv-runtime"
 set "USER_LEGACY_DIR=%USERPROFILE%\VideoTranslatorAI"
 set "USER_LEGACY_WAV2LIP=%USERPROFILE%\.local\share\wav2lip"
 set "USER_LEGACY_SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
@@ -123,20 +125,22 @@ call :preflight_network || exit /b 1
 
 call :legacy_cleanup_current
 
-call :step_python   "1/5"
+call :step_python   "1/6"
 if errorlevel 1 ( pause & exit /b 1 )
 
-call :step_copy_files "2/5"
+call :step_copy_files "2/6"
 if errorlevel 1 ( pause & exit /b 1 )
 
-call :step_install_deps "3/5" "0"
+call :step_install_deps "3/6" "0"
 if errorlevel 1 ( pause & exit /b 1 )
 
-call :step_ffmpeg "4/5" "0"
-call :step_shortcut "5/5"
+call :step_ffmpeg "4/6" "0"
+call :step_player "5/6"
+call :step_shortcut "6/6"
 
 call :validate_install
 if errorlevel 1 ( pause & exit /b 1 )
+call :player_check
 call :print_done "Installation complete"
 pause
 exit /b 0
@@ -152,6 +156,7 @@ echo.
 echo  This will:
 echo    - Re-copy the latest video_translator_gui.py and assets
 echo    - Re-run pip install to pick up new/missing packages
+echo    - Install or re-check the integrated video player (optional)
 echo    - Re-create the Public Desktop shortcut if missing
 echo    - Skip Python / Git / ffmpeg if already installed
 echo    - Keep your config (HF token in keyring stays intact)
@@ -174,25 +179,28 @@ if not exist "%INSTALL_DIR%" (
 
 call :preflight_network || exit /b 1
 
-call :step_python   "1/5"
+call :step_python   "1/6"
 if errorlevel 1 ( pause & exit /b 1 )
 
-call :step_copy_files "2/5"
+call :step_copy_files "2/6"
 if errorlevel 1 ( pause & exit /b 1 )
 
-call :step_install_deps "3/5" "1"
+call :step_install_deps "3/6" "1"
 
-call :step_ffmpeg "4/5" "1"
+call :step_ffmpeg "4/6" "1"
+
+call :step_player "5/6"
 
 if exist "%PUBLIC_SHORTCUT%" (
     echo.
-    echo [5/5] Desktop shortcut already present, skipping.
+    echo [6/6] Desktop shortcut already present, skipping.
 ) else (
-    call :step_shortcut "5/5"
+    call :step_shortcut "6/6"
 )
 
 call :validate_install
 if errorlevel 1 ( pause & exit /b 1 )
+call :player_check
 call :print_done "Repair complete"
 pause
 exit /b 0
@@ -388,6 +396,10 @@ if /i "!Q_PYA!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y pyannote.audio
 set "Q_MIS="
 set /p "Q_MIS=Remove pipeline utilities (yt-dlp, edge-tts, deep-translator, pydub, pyloudnorm, soundfile, sacremoses, sentencepiece) ? [Y/N]: "
 if /i "!Q_MIS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
+
+set "Q_MPV="
+set /p "Q_MPV=Remove the integrated video player package (mpv / python-mpv) ? [Y/N]: "
+if /i "!Q_MPV!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y mpv python-mpv
 
 :uninst_custom_tools
 echo.
@@ -620,7 +632,7 @@ goto :eof
 :: SUBROUTINES - install steps (shared between install + repair)
 :: ============================================================================
 
-:: %~1 = step label e.g. "1/5"
+:: %~1 = step label e.g. "1/6"
 :step_python
 echo [%~1] Checking Python...
 
@@ -1166,6 +1178,58 @@ exit /b 0
 
 
 :: %~1 = step label
+:: Optional integrated video player: python-mpv (pip) plus a libmpv build in
+:: %MPV_DIR%. Download, SHA256 checks, 7zr extraction and the load check all
+:: run in Python (videotranslator\libmpv_runtime.py), so no PowerShell exit
+:: code is involved. Any failure only disables the player: always exit 0.
+:step_player
+echo.
+echo [%~1] Installing the integrated video player (optional)...
+:: The pin lives in its own variable, quoted where it is used and never
+:: echoed: cmd.exe would read the comparison signs as redirections.
+set "MPV_PIN=mpv>=1.0.6,<2"
+"%PYTHON_EXE%" -m pip install "%MPV_PIN%" --quiet
+if errorlevel 1 goto step_player_disabled
+pushd "%INSTALL_DIR%" >nul 2>&1
+if errorlevel 1 goto step_player_disabled
+"%PYTHON_EXE%" -m videotranslator.libmpv_runtime install --dest "%MPV_DIR%"
+set "MPV_RC=%ERRORLEVEL%"
+popd >nul 2>&1
+if not "%MPV_RC%"=="0" goto step_player_disabled
+echo  [+] Integrated video player ready.
+exit /b 0
+
+:step_player_disabled
+echo.
+echo  ============================================
+echo    Integrated player disabled - everything else works
+echo  ============================================
+echo.
+echo   The application works without the player.
+echo   To retry, run setup_windows.bat again and
+echo   choose option [2] Repair / Update.
+echo.
+exit /b 0
+
+
+:: Runs after :validate_install. A failed check only warns: the application
+:: works without the integrated player.
+:player_check
+if not exist "%MPV_DIR%\mpv-2.dll" goto :eof
+pushd "%INSTALL_DIR%" >nul 2>&1
+if errorlevel 1 goto :eof
+"%PYTHON_EXE%" -m videotranslator.libmpv_runtime check --dir "%MPV_DIR%" >nul 2>&1
+set "MPV_CHECK_RC=%ERRORLEVEL%"
+popd >nul 2>&1
+if "%MPV_CHECK_RC%"=="0" (
+    echo  [+] Integrated video player check passed.
+) else (
+    echo  [!] Integrated video player check failed, code %MPV_CHECK_RC%. The application works without it.
+)
+goto :eof
+
+
+:: %~1 = step label
 :step_shortcut
 echo.
 echo [%~1] Creating Desktop shortcut...
@@ -1307,7 +1371,7 @@ if exist "%USER_CONFIG%" (
 exit /b 0
 
 :remove_user_caches_all
-echo  [*] Removing HF + XTTS model caches for all users ...
+echo  [*] Removing HF + XTTS model caches and the player runtime for all users ...
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\.cache\huggingface\hub" (
         for /d %%M in ("%%~U\.cache\huggingface\hub\models--*") do (
@@ -1318,18 +1382,23 @@ for /d %%U in ("%SystemDrive%\Users\*") do (
         echo      - %%~nxU : XTTS cache
         rmdir /S /Q "%%~U\AppData\Local\tts" 2>nul
     )
+    if exist "%%~U\AppData\Local\VideoTranslatorAI\mpv-runtime" (
+        echo      - %%~nxU : player runtime
+        rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI\mpv-runtime" 2>nul
+    )
 )
 echo  [+] Done.
 exit /b 0
 
 :remove_user_cache_current
-echo  [*] Removing HF + XTTS model cache for %USERNAME% ...
+echo  [*] Removing HF + XTTS model cache and the player runtime for %USERNAME% ...
 if exist "%USER_HF_CACHE%\hub" (
     for /d %%M in ("%USER_HF_CACHE%\hub\models--*") do (
         echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote" >nul && rmdir /S /Q "%%~M" 2>nul
     )
 )
 if exist "%USER_XTTS_CACHE%" rmdir /S /Q "%USER_XTTS_CACHE%" 2>nul
+if exist "%USER_MPV_RUNTIME%" rmdir /S /Q "%USER_MPV_RUNTIME%" 2>nul
 echo  [+] Done.
 exit /b 0
 
@@ -1357,6 +1426,7 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
     new-basicsr basicsr facexlib dlib dlib-bin ^
     pyannote.audio ^
     silero-vad keyring ^
+    mpv python-mpv ^
     yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
 echo  [+] Done.
 exit /b 0
