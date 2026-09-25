@@ -548,23 +548,47 @@ class AutoThemeStartupTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return detector
 
-    def test_paints_from_the_cache_then_follows_the_late_answer(self):
+    def test_paints_from_a_cached_light_value_then_follows_the_late_answer(self):
+        import json
+
+        # Only a cached False is distinguishable from no cache: unknown
+        # already paints dark.
+        detector = self._gated(True)
+        cfg = {"ui_theme": "auto", "ui_accent": "default", "ui_lang": "en",
+               "ui_last_system_dark": False}
+        with built_app(cfg) as (gui, app, cfg_path):
+            self.assertTrue(detector.entered.wait(5))
+            self.assertFalse(detector.released.is_set())
+            first = app._theme.palette
+            self.assertEqual(first.name, "light")
+            self.assertEqual(gui.BG, first.BG)
+            self.assertEqual(app.cget("bg"), first.BG)
+            self.assertEqual(len(detector.threads), 1)
+            self.assertIsNot(detector.threads[0], threading.main_thread())
+            gear = app._btn_settings
+            detector.released.set()
+            self.assertTrue(_pump_until(app, lambda: app._theme.palette.name == "graphite"))
+            p = app._theme.palette
+            self.assertEqual(gui.BG, p.BG)
+            self.assertEqual(app.cget("bg"), p.BG)
+            self.assertEqual(gear.cget("highlightcolor"), p.ACC)
+            self.assertEqual(gear.cget("highlightbackground"), p.BG)
+            saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+            self.assertIs(saved["ui_last_system_dark"], True)
+            self.assertEqual(saved["ui_theme"], "auto")
+
+    def test_late_answer_refreshes_what_the_colour_mapping_cannot_tell_apart(self):
         import json
 
         detector = self._gated(False)
-        cfg = {"ui_theme": "auto", "ui_accent": "default", "ui_lang": "en",
-               "ui_last_system_dark": True}
-        with built_app(cfg) as (gui, app, cfg_path):
+        with built_app({"ui_theme": "auto", "ui_accent": "default", "ui_lang": "en"}) \
+                as (gui, app, cfg_path):
             self.assertEqual(app._theme.palette.name, "graphite")
-            self.assertTrue(detector.entered.wait(5))
-            self.assertEqual(len(detector.threads), 1)
-            self.assertIsNot(detector.threads[0], threading.main_thread())
             app._open_settings()
             gear = app._btn_settings
             detector.released.set()
             self.assertTrue(_pump_until(app, lambda: app._theme.palette.name == "light"))
             p = app._theme.palette
-            self.assertEqual(gui.BG, p.BG)
             self.assertEqual(app.cget("bg"), p.BG)
             self.assertEqual(app._settings_win.cget("bg"), p.BG)
             self.assertEqual(gear.cget("highlightcolor"), p.ACC)
@@ -575,7 +599,6 @@ class AutoThemeStartupTests(unittest.TestCase):
             self.assertEqual(app._accent_dots["default"].cget("fg"), p.ACC)
             saved = json.loads(cfg_path.read_text(encoding="utf-8"))
             self.assertIs(saved["ui_last_system_dark"], False)
-            self.assertEqual(saved["ui_theme"], "auto")
 
     def test_close_stops_waiting_for_the_answer(self):
         import json
