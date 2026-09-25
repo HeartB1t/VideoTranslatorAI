@@ -6171,6 +6171,22 @@ class App(tk.Tk):
         btn.bind("<Leave>", _leave)
         return wrap, btn
 
+    @staticmethod
+    def _keyboard_operable(widget, action):
+        """Let a clickable Label take Tab focus and run ``action`` on Return, KP_Enter or space.
+
+        The caller gives the widget its focus ring (``highlightthickness``,
+        ``highlightcolor`` ACC, ``highlightbackground`` = its own background),
+        so the live recolour follows theme and accent changes.
+        """
+        def activate(_event):
+            action()
+            return "break"
+
+        widget.configure(takefocus=1)
+        for sequence in ("<Return>", "<KP_Enter>", "<space>"):
+            widget.bind(sequence, activate)
+
     def _card(self, parent, **pack):
         """Surface card with a 1 px border; returns the inner padded frame."""
         outer = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
@@ -6436,10 +6452,14 @@ class App(tk.Tk):
         self._status_badge(badges, "Wav2Lip",
                            OK if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
 
+        # Keyboard focus ring: bd/pady 0 offset its 2 px, so the header keeps its height.
         self._btn_settings = tk.Label(right, text="⚙", bg=BG, fg=FG2, font="VT.Title",
-                                      cursor="hand2", padx=4)
+                                      cursor="hand2", padx=4, pady=0, bd=0,
+                                      highlightthickness=2,
+                                      highlightbackground=BG, highlightcolor=ACC)
         self._btn_settings.pack(side="left")
         self._btn_settings.bind("<Button-1>", lambda e: self._open_settings())
+        self._keyboard_operable(self._btn_settings, self._open_settings)
         self._btn_settings.bind("<Enter>", lambda e: self._btn_settings.configure(fg=FG))
         self._btn_settings.bind("<Leave>", lambda e: self._btn_settings.configure(fg=FG2))
 
@@ -7206,7 +7226,11 @@ class App(tk.Tk):
         return _ACCENTS[value]
 
     def _refresh_accent_dots(self):
-        """Re-paint the accent dots: own colour, theme accent for "default", ring on the selection."""
+        """Re-paint the accent dots after a theme or accent change.
+
+        Own colour (the theme accent for "default"), FG ring on the
+        selection, ACC ring on the dot that has the keyboard focus.
+        """
         if not getattr(self, "_accent_dots", None):
             return
         cur = self._ui_accent_var.get()
@@ -7215,7 +7239,8 @@ class App(tk.Tk):
                 continue
             d.configure(fg=self._accent_dot_colour(value),
                         bg=SURFACE,
-                        highlightbackground=FG if value == cur else SURFACE)
+                        highlightbackground=FG if value == cur else SURFACE,
+                        highlightcolor=ACC)
 
     def _open_settings(self):
         if self._settings_win is not None and self._settings_win.winfo_exists():
@@ -7258,9 +7283,11 @@ class App(tk.Tk):
         for value in _ACCENT_CHOICES:
             d = tk.Label(dots, text="●", bg=SURFACE, fg=self._accent_dot_colour(value),
                          font="VT.Title", cursor="hand2",
-                         padx=4, highlightthickness=2, highlightbackground=SURFACE)
+                         padx=4, highlightthickness=2, highlightbackground=SURFACE,
+                         highlightcolor=ACC)
             d.pack(side="left", padx=(0, 2))
             d.bind("<Button-1>", lambda e, v=value: choose_accent(v))
+            self._keyboard_operable(d, lambda v=value: choose_accent(v))
             self._accent_dots[value] = d
             if value == "default":
                 # Caption sits next to its own dot, before the fixed accents
@@ -7366,6 +7393,10 @@ class App(tk.Tk):
         self._seg_scale = self._segmented(scale_parent, self._scale_options(),
                                           self._ui_scale_var, self._apply_ui_settings)
         self._seg_scale.pack(anchor="w", pady=(4, 0), after=self._lbl_settings_size)
+        # Tab follows the stacking order, where a new widget comes last:
+        # put each row back right after its label, before the accent dots.
+        self._seg_theme.lift(self._lbl_settings_theme)
+        self._seg_scale.lift(self._lbl_settings_size)
 
     def _apply_lang(self):
         self._relabel_settings()

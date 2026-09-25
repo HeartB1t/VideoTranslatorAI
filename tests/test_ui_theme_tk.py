@@ -252,6 +252,11 @@ def built_app(config):
                 finally:
                     if app is not None:
                         app._destroying = True
+                        # Tk timers outlive the app: a later test that runs
+                        # the event loop would fire them against its deleted
+                        # commands ("invalid command name" on stderr).
+                        for after_id in app.tk.splitlist(app.tk.call("after", "info")):
+                            app.after_cancel(after_id)
                         app.destroy()
     finally:
         sys.stdout, sys.stderr = saved_stdout, saved_stderr
@@ -332,6 +337,132 @@ class SettingsDialogSmokeTests(unittest.TestCase):
             self.assertEqual(app._ui_lang.get(), "en")  # reset keeps the language
             app._close_settings()
             self.assertFalse(getattr(app, "_settings_win", None) and app._settings_win.winfo_exists())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class KeyboardAccessTests(unittest.TestCase):
+    """M6: the header gear and the accent dots work without a mouse."""
+
+    ACTIVATE_KEYS = ("<Return>", "<KP_Enter>", "<space>")
+
+    def _show(self, window):
+        """Map ``window``: only a mapped window can take the keyboard focus."""
+        import time
+
+        window.deiconify()
+        deadline = time.monotonic() + 5
+        while not window.winfo_viewable() and time.monotonic() < deadline:
+            window.update()
+            time.sleep(0.01)
+        self.assertTrue(window.winfo_viewable())
+
+    def _focus(self, app, widget):
+        widget.focus_force()
+        self.assertIs(app.focus_get(), widget)
+
+    def _press(self, app, widget, key):
+        # Key events go to the focus widget. The key is sent right after
+        # focus_force, with no event loop in between, so the window manager
+        # cannot move the focus elsewhere first.
+        self._focus(app, widget)
+        widget.event_generate(key)
+
+    def _tab_walk(self, start, steps):
+        walk = [start]
+        for _ in range(steps):
+            walk.append(walk[-1].tk_focusNext())
+        return walk
+
+    def test_gear_takes_focus_and_opens_settings_with_each_activation_key(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            self._show(app)
+            gear = app._btn_settings
+            self.assertEqual(str(gear.cget("takefocus")), "1")
+            for key in self.ACTIVATE_KEYS:
+                with self.subTest(key=key):
+                    app._close_settings()
+                    self._press(app, gear, key)
+                    self.assertIsNotNone(app._settings_win)
+                    self.assertTrue(app._settings_win.winfo_exists())
+            app._close_settings()
+
+    def test_accent_dots_take_focus_and_select_with_each_activation_key(self):
+        import json
+
+        cfg = {"ui_theme": "graphite", "ui_accent": "default", "ui_lang": "en"}
+        with built_app(cfg) as (gui, app, cfg_path):
+            self._show(app)
+            app._open_settings()
+            self._show(app._settings_win)
+            for key, value in zip(self.ACTIVATE_KEYS, ("teal", "amber", "default")):
+                with self.subTest(key=key, accent=value):
+                    dot = app._accent_dots[value]
+                    self.assertEqual(str(dot.cget("takefocus")), "1")
+                    self._press(app, dot, key)
+                    self.assertEqual(app._ui_accent_var.get(), value)
+                    self.assertEqual(app._theme.settings["ui_accent"], value)
+                    saved = json.loads(cfg_path.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["ui_accent"], value)
+
+    def test_focus_rings_follow_theme_and_accent_changes_while_focused(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            self._show(app)
+            gear = app._btn_settings
+            self._focus(app, gear)
+            for theme, accent in (("graphite", "default"), ("light", "amber"), ("neon", "rose")):
+                app._ui_theme_var.set(theme)
+                app._ui_accent_var.set(accent)
+                app._apply_ui_settings()
+                p = app._theme.palette
+                with self.subTest(widget="gear", theme=theme, accent=accent):
+                    self.assertIs(app.focus_get(), gear)
+                    self.assertGreaterEqual(int(gear.cget("highlightthickness")), 2)
+                    self.assertEqual(gear.cget("highlightcolor"), p.ACC)
+                    self.assertEqual(gear.cget("highlightbackground"), p.BG)
+            app._open_settings()
+            self._show(app._settings_win)
+            focused_dot = app._accent_dots["teal"]
+            self._focus(app, focused_dot)
+            for theme, accent in (("slate", "violet"), ("light", "default"), ("graphite", "teal")):
+                app._ui_theme_var.set(theme)
+                app._ui_accent_var.set(accent)
+                app._apply_ui_settings()
+                p = app._theme.palette
+                self.assertIs(app.focus_get(), focused_dot)
+                for value, dot in app._accent_dots.items():
+                    with self.subTest(dot=value, theme=theme, accent=accent):
+                        self.assertGreaterEqual(int(dot.cget("highlightthickness")), 2)
+                        self.assertEqual(dot.cget("highlightcolor"), p.ACC)
+                        self.assertEqual(dot.cget("highlightbackground"),
+                                         p.FG if value == accent else p.SURFACE)
+                self.assertEqual(gear.cget("highlightcolor"), p.ACC)
+                self.assertEqual(gear.cget("highlightbackground"), p.BG)
+
+    def test_tab_reaches_the_gear_first_and_walks_the_settings_in_reading_order(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            self._show(app)
+            # The header is the first row of the window: its gear is the first stop.
+            self.assertIs(app.tk_focusNext(), app._btn_settings)
+            app._open_settings()
+            self._show(app._settings_win)
+
+            def expected():
+                return (list(app._seg_theme.winfo_children())
+                        + [app._accent_dots[v] for v in gui._ACCENT_CHOICES]
+                        + list(app._seg_scale.winfo_children())
+                        + [app._ui_lang_combo, app._btn_settings_reset,
+                           app._btn_settings_close])
+
+            order = expected()
+            self.assertEqual(self._tab_walk(order[0], len(order)), order + [order[0]])
+            # A UI language change rebuilds the two segmented rows: they must
+            # keep their place in the Tab order, not move after the dots.
+            fr_index = [code for code, _ in gui.UI_LANG_OPTIONS].index("fr")
+            app._ui_lang_combo.current(fr_index)
+            app._on_ui_lang_change()
+            app.update()
+            order = expected()
+            self.assertEqual(self._tab_walk(order[0], len(order)), order + [order[0]])
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
