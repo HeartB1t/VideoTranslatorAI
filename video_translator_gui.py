@@ -1039,7 +1039,7 @@ UI_STRINGS = {
         "section_audio": "Lyd",
         "section_voice_cloning": "Stemmekloning",
         "section_lip_sync": "Lip Sync",
-        "section_diarization": "Højttalerseparation",
+        "section_diarization": "Taleridentifikation",
         "section_model": "Model",
         "section_engine": "Oversættelsesmotor",
         "section_subtitles": "Undertekster",
