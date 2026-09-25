@@ -13,6 +13,7 @@ from unittest import mock
 from test_ui_theme_tk import HAS_DISPLAY, built_app
 from videotranslator.libmpv_runtime import LibmpvStatus
 from videotranslator.player_core import MediaItem, PlayerState
+from videotranslator.player_engine import InMemoryBackend
 from videotranslator.system_packages import InstallResult, PlayerInstallRequest
 from videotranslator.ui_theme import resolve_palette
 from videotranslator.ui_strings_player import PLAYER_UI_STRINGS
@@ -312,6 +313,147 @@ class HoverTipTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class GuiPlayerWiringTests(unittest.TestCase):
+    @staticmethod
+    def _attach_backend(app):
+        backend = InMemoryBackend(mixer=app._player_mixer)
+        app._player_backend = backend
+        app._player_controller.attach_backend(backend)
+        return backend
+
+    def test_selecting_an_input_previews_it_paused_and_builds_the_playlist(self):
+        with built_app({"ui_lang": "en", "player_volume": 73}) as (_gui, app, _):
+            backend = self._attach_backend(app)
+            app._batch_files[:] = ["/tmp/first.mp4", "/tmp/second.mkv"]
+            for path in app._batch_files:
+                app._batch_listbox.insert("end", Path(path).name)
+            app._batch_listbox.selection_set(1)
+            app._on_input_select()
+            self.assertEqual([item.path for item in app._player_controller.playlist],
+                             app._batch_files)
+            self.assertEqual(app._player_controller.state.item.path, "/tmp/second.mkv")
+            self.assertIn(("load", "/tmp/second.mkv", True, 0.0, {}), backend.calls)
+            self.assertEqual(app._player_controller.state.volume, 73)
+
+    def test_selecting_while_unavailable_keeps_the_install_explanation(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            app._on_player_status(MISSING, PlayerInstallRequest(manual_command=CMD))
+            app._batch_files.append("/tmp/first.mp4")
+            app._batch_listbox.insert("end", "first.mp4")
+            app._batch_listbox.selection_set(0)
+            app._on_input_select()
+            self.assertIn(CMD, app._player_panel.message_label.cget("text"))
+            self.assertIsNone(app._player_backend)
+
+    def test_remove_and_clear_release_loaded_source_before_mutating_the_list(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            backend = self._attach_backend(app)
+            app._batch_files[:] = ["/tmp/one.mp4", "/tmp/two.mp4"]
+            for path in app._batch_files:
+                app._batch_listbox.insert("end", Path(path).name)
+            app._batch_listbox.selection_set(0)
+            app._on_input_select()
+            app._remove_file()
+            self.assertEqual(app._batch_files, ["/tmp/two.mp4"])
+            self.assertIn(("stop",), backend.calls)
+            self.assertIsNone(app._player_controller.state.item)
+            app._clear_files()
+            self.assertEqual(app._player_controller.playlist, ())
+
+    def test_keyboard_filter_protects_form_controls_but_accepts_player_focus(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            backend = self._attach_backend(app)
+            app._player_controller.load(MediaItem("/tmp/a.mp4", "source", "a.mp4"))
+            app._url_text.focus_force()
+            app.update()
+            self.assertIsNone(app._on_player_key(SimpleNamespace(
+                keysym="space", widget=app._url_text)))
+            app._btn.focus_force()
+            app.update()
+            self.assertIsNone(app._on_player_key(SimpleNamespace(
+                keysym="space", widget=app._btn)))
+            app._player_panel.volume_scale.focus_force()
+            app.update()
+            self.assertEqual(app._on_player_key(SimpleNamespace(
+                keysym="space", widget=app._player_panel.volume_scale)), "break")
+            self.assertIn(("set_pause", False), backend.calls)
+
+    def test_fullscreen_hides_and_restores_every_non_player_region(self):
+        with built_app({"ui_lang": "en", "ui_log_visible": True}) as (_gui, app, _):
+            app._toggle_player_fullscreen(True)
+            self.assertTrue(app._player_fullscreen)
+            for widget in (app._header_frame, app._right_column, app._log_frame,
+                           app._progress):
+                self.assertEqual(widget.winfo_manager(), "")
+            self.assertEqual(int(app._player_area.cget("highlightthickness")), 0)
+            app._toggle_player_fullscreen(False)
+            self.assertFalse(app._player_fullscreen)
+            for widget in (app._header_frame, app._right_column, app._log_frame,
+                           app._progress):
+                self.assertEqual(widget.winfo_manager(), "grid")
+            self.assertEqual(int(app._player_area.cget("highlightthickness")), 1)
+
+    def test_a_dubbed_result_is_released_before_a_job_dispatches(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            backend = self._attach_backend(app)
+            item = MediaItem("/tmp/result.mp4", "dubbed", "result.mp4")
+            app._player_controller.load(item, paused=True)
+            app._player_bridge.set_latest("idle-active", True, time.monotonic())
+            dispatched = []
+            app._release_player_then(lambda: dispatched.append(True))
+            self.assertEqual(dispatched, [True])
+            self.assertIn(("stop",), backend.calls)
+
+    def test_video_output_failure_recreates_backend_with_the_next_profile(self):
+        with built_app({"ui_lang": "en"}) as (gui, app, _):
+            old = self._attach_backend(app)
+            app._player_status = READY
+            app._player_vo_profile = "x11egl"
+            app._player_guard = SimpleNamespace(captured=True, restore=mock.Mock())
+            item = MediaItem("/tmp/a.mp4", "source", "a.mp4")
+            app._player_controller.load(item, paused=True, start=3.0)
+            replacement = InMemoryBackend(mixer=app._player_mixer)
+
+            class ImmediateThread:
+                def __init__(self, target):
+                    self.target = target
+
+                def start(self):
+                    self.target()
+
+                def is_alive(self):
+                    return False
+
+            with mock.patch.object(
+                    app, "_redirecting_thread_factory",
+                    side_effect=lambda target, **_kw: ImmediateThread(target)), \
+                    mock.patch.object(gui._libmpv_runtime, "load_mpv", return_value=object()), \
+                    mock.patch.object(gui._player_engine, "create_video_backend",
+                                      return_value=replacement):
+                app._begin_player_vo_fallback()
+                app.update()
+            self.assertTrue(old.terminated)
+            self.assertIs(app._player_backend, replacement)
+            self.assertEqual(app._player_vo_profile, "x11sw")
+            self.assertIn(("load", item.path, True, 3.0, {}), replacement.calls)
+
+    def test_close_terminates_the_backend_before_destroying_the_tk_host(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            backend = self._attach_backend(app)
+            destroyed_after_terminate = []
+            original_destroy = app.destroy
+
+            def destroy():
+                destroyed_after_terminate.append(backend.terminated)
+
+            app.destroy = destroy
+            app._on_close()
+            deadline = time.monotonic() + 1.0
+            while not destroyed_after_terminate and time.monotonic() < deadline:
+                app.update()
+            self.assertEqual(destroyed_after_terminate, [True])
+            self.assertIn(("terminate", 3.0), backend.calls)
+            app.destroy = original_destroy
+
     def test_badge_and_placeholder_follow_the_status(self):
         with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
             self.assertEqual(app._player_badge_label.cget("text"), gui.UI_STRINGS["en"]["player_badge"])
@@ -409,11 +551,13 @@ class PlayerProbeResetTests(unittest.TestCase):
 
     def test_reset_removes_player_probe_and_keeps_other_keys(self):
         cfg = {"ui_theme": "light", "ui_accent": "default", "ui_scale": "normal",
-               "ui_lang": "en", "player_probe": {"fingerprint": "x", "status": {}}}
+               "ui_lang": "en", "player_vo_profile": "x11sw",
+               "player_probe": {"fingerprint": "x", "status": {}}}
         with built_app(cfg) as (gui, app, _):
             app._reset_ui_settings()
             saved = gui.load_config()
             self.assertNotIn("player_probe", saved)
+            self.assertNotIn("player_vo_profile", saved)
             self.assertEqual(saved.get("ui_lang"), "en")
             self.assertEqual(saved.get("ui_theme"), "graphite")
 

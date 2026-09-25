@@ -215,6 +215,13 @@ class PlayerControllerTests(unittest.TestCase):
         self.assertEqual(load_calls, [("load", self.result.path, False, 3.0, {})])
         self.assertEqual(controller.state.item, self.result)
 
+    def test_detach_backend_queues_the_current_item_for_recreation(self):
+        self.controller.load(self.source, paused=False, start=4.0)
+        self.controller.detach_backend()
+        replacement = InMemoryBackend()
+        self.controller.attach_backend(replacement)
+        self.assertIn(("load", self.source.path, False, 4.0, {}), replacement.calls)
+
     def test_playlist_navigation_stops_at_the_ends(self):
         third = MediaItem("/v/third.mp4", "source", "third.mp4")
         self.controller.set_playlist([self.source, self.result, third], index=1)

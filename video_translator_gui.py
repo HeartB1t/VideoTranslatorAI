@@ -13,6 +13,9 @@ import argparse
 import asyncio
 import dataclasses
 import contextlib
+import ctypes
+import ctypes.util
+import datetime
 import importlib.util
 import io
 import locale
@@ -24,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unicodedata
 import tkinter as tk
 from pathlib import Path
@@ -320,6 +324,10 @@ from videotranslator.ui_layout import WheelAccumulator as _WheelAccumulator  # n
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
+from videotranslator import platforms as _platforms  # noqa: E402
+from videotranslator import player_core as _player_core  # noqa: E402
+from videotranslator import player_engine as _player_engine  # noqa: E402
+from videotranslator import player_settings as _player_settings_module  # noqa: E402
 from videotranslator import system_packages as _system_packages  # noqa: E402
 from videotranslator.player_panel_tk import HoverTip as _HoverTip  # noqa: E402
 from videotranslator.player_panel_tk import PlayerPanel as _PlayerPanel  # noqa: E402
@@ -5978,6 +5986,32 @@ class App(tk.Tk):
         self._installing = False
         self._player_status = None
         self._player_install_request = None
+        self._player_settings = _player_settings_module.normalize_player_settings(
+            _ocfg, sys_platform=sys.platform)
+        self._player_bridge = _player_engine.EventBridge()
+        self._player_mixer = _player_engine.VolumeMixer(
+            user_volume=self._player_settings.volume,
+            muted=self._player_settings.muted)
+        self._player_clock = _player_engine.PlaybackClock()
+        self._player_backend = None
+        self._player_controller = _player_core.PlayerController(
+            None, self._player_settings, on_change=self._on_player_state,
+            save=save_config)
+        self._player_results: list[_player_core.MediaItem] = []
+        self._player_init_running = False
+        self._player_init_thread = None
+        self._player_poll_after = None
+        self._player_guard = None
+        self._player_vo_profile = self._player_settings.vo_profile
+        self._player_vo_retries = 0
+        self._player_loaded_at = None
+        self._player_video_params_seen = False
+        self._player_log_lines: list[str] = []
+        self._player_fallback_notice_pending = False
+        self._player_release_pending = False
+        self._player_fullscreen = False
+        self._close_started_at = None
+        self._close_done = None
 
         self._build_ui()
         # Restore log panel visibility from config (default collapsed in the
@@ -6835,8 +6869,9 @@ class App(tk.Tk):
             font="VT.Mono", relief="flat",
             highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=ACC,
-            activestyle="none")
+            activestyle="none", exportselection=False)
         self._batch_listbox.pack(side="left", fill="both", expand=True)
+        self._batch_listbox.bind("<<ListboxSelect>>", self._on_input_select)
         _sb = ttk.Scrollbar(batch_frame, command=self._batch_listbox.yview)
         self._batch_listbox.configure(yscrollcommand=_sb.set)
         _sb.pack(side="left", fill="y")
@@ -7342,7 +7377,9 @@ class App(tk.Tk):
         self._player_panel = _PlayerPanel(
             self._player_area, ui_s=self._s, make_button=self._flat_btn,
             on_command=self._on_player_command,
-            logo_path=Path(__file__).resolve().parent / "assets" / "icon_256.png")
+            logo_path=Path(__file__).resolve().parent / "assets" / "icon_256.png",
+            theme=self._theme, keyboard_operable=self._keyboard_operable,
+            log=self._player_log)
         self._player_panel.pack(fill="both", expand=True)
 
         # Right column: input, translation, profile, start, then the settings
@@ -7435,6 +7472,7 @@ class App(tk.Tk):
         # One call covers the canvas and every card (they are its
         # descendants). The header, the player pane and the log stay unbound.
         self._bind_mousewheel(self._right_canvas)
+        self.bind("<Key>", self._on_player_key, add="+")
 
         # Initial summary line
         self._update_start_summary()
@@ -7741,6 +7779,9 @@ class App(tk.Tk):
                 row._refresh()
             self._refresh_accent_dots()
         self._update_profile_buttons()
+        player_panel = getattr(self, "_player_panel", None)
+        if player_panel is not None:
+            player_panel.apply_theme()
         # Another text size changes the cards' width, and a large shrink can
         # leave the view below the content without any <Configure>.
         self.after_idle(self._sync_right_column)
@@ -7762,8 +7803,10 @@ class App(tk.Tk):
         # status check probes the library again. save_config merges and cannot
         # delete a key, hence the raw write of the whole file.
         cfg = load_config()
-        if "player_probe" in cfg:
-            del cfg["player_probe"]
+        player_keys = ("player_probe", "player_vo_profile")
+        if any(key in cfg for key in player_keys):
+            for key in player_keys:
+                cfg.pop(key, None)
             try:
                 _write_config_raw(cfg)
             except OSError as exc:
@@ -8033,8 +8076,9 @@ class App(tk.Tk):
 
     # -- Integrated player: availability and install (spec 9 P1) ------------
 
-    def _player_log(self, line: str) -> None:
+    def _player_log(self, *parts) -> None:
         """Log callback of the player modules: one English line without newline."""
+        line = str(parts[-1]) if parts else ""
         self._log_async(line + "\n")
 
     def _post_if_alive(self, fn) -> None:
@@ -8084,7 +8128,13 @@ class App(tk.Tk):
             save_config({"player_probe": entry})  # config writes stay on the Tk thread
         self._update_player_badge()
         if status.ok:
-            self._player_panel.show_ready(status)
+            if self._player_controller.state.item is None:
+                self._player_panel.show_ready(status)
+            else:
+                self._player_panel.render(
+                    self._player_controller.state,
+                    position=self._player_controller.state.position)
+                self._ensure_player()
         else:
             self._player_panel.show_unavailable(status, install_cmd=request.manual_command)
 
@@ -8093,9 +8143,415 @@ class App(tk.Tk):
         self._player_badge_dot.configure(fg={"ok": OK, "warn": WARN, "error": ERR}.get(level, FG2))
 
     def _on_player_command(self, name: str, args: dict) -> None:
-        """Every PlayerPanel action arrives here (P2 adds the transport commands)."""
+        """Route PlayerPanel intents on Tk; the controller owns player state."""
         if name == "install":
             self._install_player()
+            return
+        controller = self._player_controller
+        if name == "play_pause":
+            controller.play_pause()
+        elif name == "stop":
+            controller.stop()
+        elif name == "previous":
+            controller.previous()
+        elif name == "next":
+            controller.next()
+        elif name == "back_10":
+            self._player_clock.expect_restart()
+            controller.seek_relative(-10.0)
+        elif name == "forward_10":
+            self._player_clock.expect_restart()
+            controller.seek_relative(10.0)
+        elif name == "seek":
+            self._player_clock.expect_restart()
+            controller.seek(float(args.get("seconds", 0.0)),
+                            dragging=bool(args.get("dragging", False)))
+        elif name == "volume":
+            controller.set_volume(int(args.get("value", controller.state.volume)))
+        elif name == "mute":
+            controller.toggle_mute()
+        elif name == "snapshot":
+            try:
+                controller.snapshot(_platforms.default_videos_dir(), datetime.datetime.now())
+            except (OSError, RuntimeError) as exc:
+                self._player_panel.notify(
+                    "player_snapshot_failed", {"detail": str(exc), "path": ""})
+        elif name == "open_folder":
+            item = controller.state.item
+            if item is not None and item.kind != "live":
+                _platforms.reveal_in_file_manager(Path(item.path))
+        elif name == "playlist":
+            self._player_panel.show_playlist(
+                self._source_media_items(), self._player_results,
+                job_running=self._running)
+        elif name == "load_item":
+            item = args.get("item")
+            if isinstance(item, _player_core.MediaItem):
+                items = self._source_media_items() + list(self._player_results)
+                index = next((i for i, candidate in enumerate(items)
+                              if candidate.path == item.path), None)
+                self._player_controller.set_playlist(items, index=index)
+                controller.load(item, paused=True)
+                self._ensure_or_show_player_status()
+        elif name == "fullscreen":
+            self._toggle_player_fullscreen(not self._player_fullscreen)
+
+    def _on_player_state(self, state) -> None:
+        if state.status == "loading":
+            self._player_loaded_at = None
+            self._player_video_params_seen = False
+            self._player_log_lines.clear()
+        panel = getattr(self, "_player_panel", None)
+        if panel is not None:
+            panel.render(state, position=state.position)
+        if state.item is not None and self._player_backend is not None:
+            self._start_player_poll()
+
+    def _source_media_items(self) -> list[_player_core.MediaItem]:
+        return [
+            _player_core.MediaItem(path, "source", Path(path).name)
+            for path in self._batch_files
+        ]
+
+    def _sync_player_playlist(self) -> None:
+        current = self._player_controller.state.item
+        items = self._source_media_items() + list(self._player_results)
+        index = next((i for i, item in enumerate(items)
+                      if current is not None and item.path == current.path), None)
+        self._player_controller.set_playlist(items, index=index)
+
+    def _on_input_select(self, _event=None) -> None:
+        selected = self._batch_listbox.curselection()
+        if not selected or self._running:
+            return
+        index = int(selected[0])
+        if not 0 <= index < len(self._batch_files):
+            return
+        self._sync_player_playlist()
+        item = self._player_controller.playlist[index]
+        self._player_controller.load(item, paused=True)
+        self._ensure_or_show_player_status()
+
+    def _ensure_or_show_player_status(self) -> None:
+        if self._player_status is not None and not self._player_status.ok:
+            request = self._player_install_request or _system_packages.PlayerInstallRequest()
+            self._player_panel.show_unavailable(
+                self._player_status, install_cmd=request.manual_command)
+            return
+        self._ensure_player()
+
+    @staticmethod
+    def _load_libx11():
+        name = ctypes.util.find_library("X11") or "libX11.so.6"
+        return ctypes.CDLL(name)
+
+    def _ensure_player(self) -> None:
+        if self._destroying or self._player_backend is not None or self._player_init_running:
+            return
+        status = self._player_status
+        if status is None:
+            self._refresh_player_status()
+            return
+        if not status.ok:
+            return
+        accepted = tuple(status.vo_profiles_ok or ())
+        profile = self._player_vo_profile
+        if profile not in accepted:
+            profile = accepted[0] if accepted else None
+        if profile is None:
+            return
+        wid = self._player_panel.host_wid()
+        if (sys.platform.startswith("linux")
+                and self.tk.call("tk", "windowingsystem") == "x11"):
+            if self._player_guard is None:
+                self._player_guard = _player_engine.X11ErrorGuard(
+                    load_libx11=self._load_libx11)
+            self._player_guard.capture()
+        self._player_init_running = True
+
+        def work():
+            try:
+                module = _libmpv_runtime.load_mpv()
+                backend = _player_engine.create_video_backend(
+                    wid=wid, bridge=self._player_bridge, mixer=self._player_mixer,
+                    vo_profile=profile, mpv_module=module,
+                    sys_platform="win32" if sys.platform == "win32" else "linux",
+                    log=None)
+            except Exception as exc:
+                self._post_if_alive(lambda error=exc: self._on_player_init_failed(error))
+                return
+            if self._destroying:
+                backend.terminate(3.0)
+                if self._player_guard is not None:
+                    self._player_guard.restore()
+                return
+            self._post_if_alive(lambda: self._on_player_ready(backend, profile))
+
+        self._player_init_thread = self._redirecting_thread_factory(
+            work, name="player-init")
+        self._player_init_thread.start()
+
+    def _on_player_init_failed(self, exc: BaseException) -> None:
+        self._player_init_running = False
+        status = _libmpv_runtime.LibmpvStatus(
+            ok=False, reason="libmpv-load-failed",
+            detail=f"player initialization failed: {exc}")
+        self._on_player_status(status, _system_packages.PlayerInstallRequest())
+        self._player_log(f"[!] Player initialization failed: {exc}")
+
+    def _on_player_ready(self, backend, profile: str) -> None:
+        self._player_init_running = False
+        if self._destroying:
+            self._redirecting_thread_factory(
+                lambda: backend.terminate(3.0), name="player-late-close").start()
+            return
+        self._player_backend = backend
+        self._player_vo_profile = profile
+        self._player_controller.attach_backend(backend)
+        self._start_player_poll()
+
+    def _start_player_poll(self) -> None:
+        if self._destroying or self._player_poll_after is not None:
+            return
+        self._player_poll_after = self.after(50, self._player_tick)
+
+    @staticmethod
+    def _bridge_value(bridge, name: str, default=None):
+        value = bridge.latest(name)
+        return default if value is None else value[0]
+
+    def _player_tick(self) -> None:
+        self._player_poll_after = None
+        if self._destroying or self._player_backend is None:
+            return
+        now = time.monotonic()
+        snapshot = self._player_bridge.drain()
+        for event in snapshot.events:
+            if event.kind == "playback-restart":
+                self._player_clock.on_playback_restart(now)
+            elif event.kind == "file-loaded":
+                self._player_loaded_at = now
+                self._player_video_params_seen = False
+            elif event.kind == "mouse" and isinstance(event.payload, tuple):
+                action = _player_core.mouse_action(*event.payload)
+                if action is not None:
+                    self._on_player_mouse_action(action)
+            elif event.kind == "snapshot-saved":
+                self._player_panel.notify("player_snapshot_saved", dict(event.payload or {}))
+            elif event.kind == "snapshot-failed":
+                self._player_panel.notify("player_snapshot_failed", dict(event.payload or {}))
+            elif event.kind == "adapter-error":
+                self._player_log(f"[!] mpv adapter: {event.payload}")
+            elif event.kind == "log":
+                self._player_log_lines.append(str(event.payload))
+                del self._player_log_lines[:-100]
+                self._log_write(f"[mpv] {event.payload}\n")
+        video_params = self._bridge_value(self._player_bridge, "video-params")
+        if video_params:
+            self._player_video_params_seen = True
+            if self._player_fallback_notice_pending:
+                self._player_fallback_notice_pending = False
+                save_config({"player_vo_profile": self._player_vo_profile})
+                self._player_panel.notify("player_vo_fallback_used", {})
+        position_entry = self._player_bridge.latest("time-pos")
+        position = None if position_entry is None else position_entry[0]
+        stamp = now if position_entry is None else position_entry[1]
+        paused = bool(self._bridge_value(self._player_bridge, "pause", True))
+        cached = bool(self._bridge_value(self._player_bridge, "paused-for-cache", False))
+        seeking = bool(self._bridge_value(self._player_bridge, "seeking", False))
+        speed = self._bridge_value(self._player_bridge, "speed", 1.0)
+        try:
+            speed = float(speed)
+        except (TypeError, ValueError):
+            speed = 1.0
+        self._player_clock.observe(
+            position, stamp, speed=speed, running=not paused and not cached,
+            seeking=seeking)
+        clock_now = self._player_clock.now(now)
+        self._player_controller.apply_events(snapshot, clock_now)
+        self._player_panel.render(self._player_controller.state, position=clock_now)
+        if self._player_vo_failed(now):
+            self._begin_player_vo_fallback()
+            return
+        if self._player_controller.state.item is not None:
+            self._start_player_poll()
+
+    def _player_vo_failed(self, now: float) -> bool:
+        if self._player_init_running:
+            return False
+        tracks = self._bridge_value(self._player_bridge, "track-list", [])
+        has_video = any(
+            isinstance(track, dict) and track.get("type") == "video"
+            for track in (tracks or []))
+        return _player_engine.detect_vo_failure(
+            self._player_log_lines,
+            video_params_seen=self._player_video_params_seen,
+            has_video_track=has_video,
+            seconds_since_loaded=(
+                0.0 if self._player_loaded_at is None
+                else now - self._player_loaded_at))
+
+    def _begin_player_vo_fallback(self) -> None:
+        backend = self._player_backend
+        if backend is None:
+            return
+        accepted = tuple(self._player_status.vo_profiles_ok or ()) if self._player_status else ()
+        platform_key = "win32" if sys.platform == "win32" else "linux"
+        next_profile = _player_engine.next_vo_profile(
+            platform_key, self._player_vo_profile or "", accepted)
+        self._player_controller.detach_backend()
+        self._player_backend = None
+        self._player_init_running = True
+        if self._player_guard is not None:
+            self._player_guard.restore()
+        if next_profile is None or self._player_vo_retries >= 2:
+            self._terminate_failed_player(
+                backend, lambda: self._finish_player_vo_failure("video-output-error"))
+            return
+        if (platform_key == "linux"
+                and (self._player_guard is None or not self._player_guard.captured)):
+            save_config({"player_vo_profile": next_profile})
+            self._terminate_failed_player(
+                backend, lambda: self._finish_player_vo_restart_required(next_profile))
+            return
+        self._player_vo_retries += 1
+        wid = self._player_panel.host_wid()
+
+        def work():
+            try:
+                backend.terminate(3.0)
+                self._player_bridge.close()
+                if self._player_guard is not None:
+                    self._player_guard.restore()
+                module = _libmpv_runtime.load_mpv()
+                replacement_bridge = _player_engine.EventBridge()
+                replacement = _player_engine.create_video_backend(
+                    wid=wid, bridge=replacement_bridge, mixer=self._player_mixer,
+                    vo_profile=next_profile, mpv_module=module,
+                    sys_platform=platform_key, log=None)
+            except Exception as exc:
+                self._post_if_alive(
+                    lambda error=exc: self._on_player_init_failed(error))
+                return
+            if self._destroying:
+                replacement.terminate(3.0)
+                if self._player_guard is not None:
+                    self._player_guard.restore()
+                return
+            self._post_if_alive(
+                lambda: self._on_player_fallback_ready(
+                    replacement, replacement_bridge, next_profile))
+
+        self._player_init_thread = self._redirecting_thread_factory(
+            work, name="player-init")
+        self._player_init_thread.start()
+
+    def _terminate_failed_player(self, backend, on_done) -> None:
+        def work():
+            try:
+                backend.terminate(3.0)
+            finally:
+                self._player_bridge.close()
+                if self._player_guard is not None:
+                    self._player_guard.restore()
+                self._post_if_alive(on_done)
+
+        self._player_init_thread = self._redirecting_thread_factory(
+            work, name="player-init")
+        self._player_init_thread.start()
+
+    def _on_player_fallback_ready(self, backend, bridge, profile: str) -> None:
+        self._player_bridge = bridge
+        self._player_clock = _player_engine.PlaybackClock()
+        self._player_fallback_notice_pending = True
+        self._player_loaded_at = None
+        self._player_log_lines.clear()
+        self._on_player_ready(backend, profile)
+
+    def _finish_player_vo_failure(self, message_key: str) -> None:
+        self._player_init_running = False
+        self._player_controller.report_error(message_key)
+
+    def _finish_player_vo_restart_required(self, profile: str) -> None:
+        self._player_init_running = False
+        self._player_vo_profile = profile
+        status = dataclasses.replace(
+            self._player_status, ok=False, reason="restart-required",
+            detail="video output fallback will be used after restart")
+        self._on_player_status(status, _system_packages.PlayerInstallRequest())
+
+    def _on_player_mouse_action(self, action: str) -> None:
+        with contextlib.suppress(tk.TclError):
+            self._player_panel.video_host.focus_set()
+        command = {
+            "toggle_pause": "play_pause",
+            "toggle_fullscreen": "fullscreen",
+            "volume_up": "volume_up",
+            "volume_down": "volume_down",
+        }.get(action)
+        if command is not None:
+            self._dispatch_player_key_action(command)
+
+    def _widget_is_in_player(self, widget) -> bool:
+        current = widget
+        while current is not None:
+            if current is self._player_panel:
+                return True
+            current = getattr(current, "master", None)
+        return False
+
+    def _on_player_key(self, event):
+        focus_in_player = self._widget_is_in_player(getattr(event, "widget", None))
+        widget_class = None
+        with contextlib.suppress(tk.TclError, AttributeError):
+            widget_class = event.widget.winfo_class()
+        if not _player_core.handles_player_key(
+                widget_class, event.keysym, focus_in_player=focus_in_player):
+            return None
+        action = _player_core.PLAYER_KEYS[event.keysym]
+        if action == "exit_fullscreen" and not self._player_fullscreen:
+            return None
+        self._dispatch_player_key_action(action)
+        return "break"
+
+    def _dispatch_player_key_action(self, action: str) -> None:
+        if action == "volume_up":
+            self._on_player_command("volume", {
+                "value": self._player_controller.state.volume + 5})
+        elif action == "volume_down":
+            self._on_player_command("volume", {
+                "value": self._player_controller.state.volume - 5})
+        elif action == "exit_fullscreen":
+            self._toggle_player_fullscreen(False)
+        else:
+            self._on_player_command(action, {})
+
+    def _toggle_player_fullscreen(self, on: bool) -> None:
+        on = bool(on)
+        if on == self._player_fullscreen:
+            return
+        self._player_fullscreen = on
+        if on:
+            self._header_frame.grid_remove()
+            self._right_column.grid_remove()
+            self._log_frame.grid_remove()
+            self._progress.grid_remove()
+            self._body.grid_configure(padx=0, pady=0)
+            self._left_pane.grid_configure(padx=0)
+            self._player_area.configure(highlightthickness=0)
+        else:
+            self._header_frame.grid()
+            self._right_column.grid()
+            self._log_frame.grid()
+            self._progress.grid()
+            self._body.grid_configure(padx=(16, 0), pady=(8, 8))
+            self._left_pane.grid_configure(padx=(0, 16))
+            self._player_area.configure(highlightthickness=1)
+            if not self._log_visible:
+                self._log_container.grid_remove()
+        with contextlib.suppress(tk.TclError):
+            self.attributes("-fullscreen", on)
+        self._player_panel.set_fullscreen_layout(on)
 
     def _install_player(self) -> None:
         if self._installing:
@@ -8347,7 +8803,7 @@ class App(tk.Tk):
         return [u.strip() for u in raw.splitlines() if u.strip()]
 
     def _start_download(self):
-        if self._running or self._ollama_setup_in_flight:
+        if self._running or self._ollama_setup_in_flight or self._player_release_pending:
             return
         urls = self._get_urls()
         if not urls:
@@ -8367,7 +8823,7 @@ class App(tk.Tk):
                 on_ready=lambda ok: self._start_download_after_ollama(ok, urls)
             )
             return
-        self._dispatch_download(urls)
+        self._release_player_then(lambda: self._dispatch_download(urls))
 
     def _start_download_after_ollama(self, ok: bool, urls: list[str]) -> None:
         # Release the pre-flight guard whether we proceed (dispatch will
@@ -8384,7 +8840,7 @@ class App(tk.Tk):
             return
         if not ok:
             self._log_write("[i] Ollama non pronto: la pipeline usera' il fallback Google.\n")
-        self._dispatch_download(urls)
+        self._release_player_then(lambda: self._dispatch_download(urls))
 
     def _dispatch_download(self, urls: list[str]) -> None:
         self._running = True
@@ -8477,15 +8933,22 @@ class App(tk.Tk):
             if p not in self._batch_files:
                 self._batch_files.append(p)
                 self._batch_listbox.insert("end", Path(p).name)
+        self._sync_player_playlist()
 
     def _remove_file(self):
-        for i in reversed(self._batch_listbox.curselection()):
+        indexes = tuple(self._batch_listbox.curselection())
+        removed = [self._batch_files[i] for i in indexes]
+        self._player_controller.remove_items(removed)
+        for i in reversed(indexes):
             self._batch_files.pop(i)
             self._batch_listbox.delete(i)
+        self._sync_player_playlist()
 
     def _clear_files(self):
+        self._player_controller.remove_items(tuple(self._batch_files))
         self._batch_files.clear()
         self._batch_listbox.delete(0, "end")
+        self._sync_player_playlist()
 
     def _browse_output(self):
         p = filedialog.asksaveasfilename(
@@ -8499,7 +8962,7 @@ class App(tk.Tk):
     # ── Translation start ─────────────────────────────────────────────────────
 
     def _start(self):
-        if self._running or self._ollama_setup_in_flight:
+        if self._running or self._ollama_setup_in_flight or self._player_release_pending:
             return
         if not self._batch_files:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_video"))
@@ -8541,10 +9004,36 @@ class App(tk.Tk):
     def _dispatch_start(self) -> None:
         """Route to editor or batch - common entry point for _start and
         _start_after_ollama."""
+        self._release_player_then(self._dispatch_start_now)
+
+    def _dispatch_start_now(self) -> None:
         if self._edit_subs.get() and len(self._batch_files) == 1:
             self._start_with_editor(self._batch_files[0])
         else:
             self._run_batch(self._batch_files)
+
+    def _release_player_then(self, dispatch) -> None:
+        """Release a dubbed output before a job may overwrite it, without blocking Tk."""
+        if self._player_release_pending:
+            return
+        if not self._player_controller.release_for_job():
+            dispatch()
+            return
+        self._player_release_pending = True
+        deadline = time.monotonic() + 2.0
+
+        def poll():
+            if self._destroying:
+                return
+            if (self._player_controller.is_released({
+                    "idle-active": self._player_bridge.latest("idle-active")})
+                    or time.monotonic() >= deadline):
+                self._player_release_pending = False
+                dispatch()
+            else:
+                self.after(50, poll)
+
+        poll()
 
     def _snapshot_params(self, video_in: str = "") -> "TranslationJobConfig":
         """Reads all Tk vars on the main thread and returns an immutable TranslationJobConfig."""
@@ -8933,11 +9422,56 @@ class App(tk.Tk):
             messagebox.showerror(self._s("msg_error_t"), self._s(error_key or "msg_error"))
 
     def _on_close(self):
+        if self._destroying:
+            return
         if self._running:
             if not messagebox.askyesno(self._s("msg_confirm"), self._s("msg_confirm_stop")):
                 return
+        self._begin_close()
+
+    def _begin_close(self) -> None:
+        """Stop native player resources before destroying their Tk host window."""
         self._destroying = True
         self._theme.close()
+        if self._player_poll_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._player_poll_after)
+            self._player_poll_after = None
+        self._close_started_at = time.monotonic()
+        self._close_done = threading.Event()
+        backend = self._player_backend
+        guard = self._player_guard
+        init_thread = self._player_init_thread
+        if backend is None and (init_thread is None or not init_thread.is_alive()):
+            self._player_bridge.close()
+            if guard is not None:
+                guard.restore()
+            self._close_done.set()
+            self._finish_close()
+            return
+
+        def work():
+            try:
+                self._player_bridge.close()
+                if backend is not None:
+                    backend.terminate(3.0)
+                if init_thread is not None and init_thread.is_alive():
+                    init_thread.join(6.0)
+            finally:
+                if guard is not None:
+                    guard.restore()
+                self._close_done.set()
+
+        self._redirecting_thread_factory(work, name="app-close").start()
+        self.after(0, self._finish_close)
+
+    def _finish_close(self) -> None:
+        if self._close_done is None:
+            return
+        if (not self._close_done.is_set()
+                and time.monotonic() - self._close_started_at < 10.0):
+            self.after(50, self._finish_close)
+            return
         # Snapshot under lock, then terminate outside the lock so worker
         # threads calling _register_subprocess/_unregister_subprocess on
         # another subprocess are not blocked while a slow kill is in flight.

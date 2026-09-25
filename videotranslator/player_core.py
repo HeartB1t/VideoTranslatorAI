@@ -124,6 +124,17 @@ class PlayerController:
         item, paused, start = pending
         backend.load(item.path, paused=paused, start=start, options=None)
 
+    def detach_backend(self) -> None:
+        """Detach a failed backend and retain the current load for its replacement."""
+        self._backend = None
+        if self.state.item is not None:
+            self._pending_load = (
+                self.state.item, self._paused, max(0.0, float(self.state.position)))
+
+    def report_error(self, message_key: str) -> None:
+        self._pending_load = None
+        self._update(status="error", message_key=message_key, message_params={})
+
     def load(self, item: MediaItem, *, paused: bool = True, start: float = 0.0) -> None:
         start = max(0.0, float(start))
         self._paused = bool(paused)
