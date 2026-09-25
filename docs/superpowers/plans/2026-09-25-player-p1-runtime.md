@@ -6056,3 +6056,39 @@ Append a `[player-p1]` section to `_dev/CHANGELOG.md` (gitignored, not committed
 | CI green | the full gate of every task; push only on operator request |
 
 Operator items to hand over at the end (not runnable on this machine): the Windows 11 and VirtualBox runs of `setup_windows.bat` install and Repair (S4 (1), including the `PYANNOTE_PIN` quoting check), the Windows per-user install from the pythonw shortcut, the "DLL removed" badge on Windows, and the Debian 12 VM pkexec install with and without cancelling.
+
+## Evidence
+
+Recorded on 2026-09-25 by the controller (no subagents), Kali, private Xvfb only. Every task
+commit was pushed and CI was green on each.
+
+```
+fc77209 feat(player): show the player status in the header and the left pane
+d487f61 feat(installer): install the integrated video player on Windows
+530c348 feat(player): declare python-mpv as an optional profile and diagnose libmpv
+fe43d2e feat(player): Linux package plans and a component installer for the player
+042a0eb feat(player): install libmpv on Windows with verified downloads and a load check
+c626ff4 feat(player): detect and probe libmpv without loading it in the GUI process
+4baaefa i18n: add the integrated player strings module in 26 languages
+af6784c fix(gui): keep worker output safe under pythonw and hide child consoles
+```
+
+- Suite at the end of the phase: headless `OK (skipped=71)`, private Xvfb `OK (skipped=4)`.
+- Real libmpv 0.41 (unpacked, no system install), `python -m videotranslator.libmpv_runtime check --json`:
+  no library -> `libmpv-missing`, exit 2; library + python-mpv -> `ok`, API `[2, 5]`, mpv `[0, 41]`,
+  `vo_profiles_ok` `["x11egl", "x11vk", "x11sw"]`, exit 0; library only -> `python-mpv-missing`, exit 2.
+- C59: the local python-mpv wheel installed by `ComponentInstaller` into a user site that did not
+  exist at start is importable without a restart (`restart_required=False`).
+- `python video_translator_gui.py --preflight --preflight-player`: `[MISSING] python:mpv (required)`,
+  `[MISSING] native:libmpv (required)` with the hint, exit 1.
+- GUI on a private Xvfb, 1100x780 (screenshots in `_dev/screenshots/player-p1-2026-09-25/`, the app
+  built in-process and destroyed by object, never searched by window name):
+  - `p1-a-missing.png`: libmpv-missing, amber badge, message with `sudo apt install libmpv2`, Install shown. PASS.
+  - `p1-b-pymod.png`: python-mpv-missing, amber badge, Install shown. PASS.
+  - `p1-c-ready.png`: ok, green badge, "Player pronto (mpv 0.41)", Install hidden, the probe cached in `player_probe` with the fingerprint of `libmpv.so.2.5.0`. PASS.
+  - `p1-c2-cached.png`: second launch uses the cached probe. PASS.
+  - With P0 in place the whole placeholder is visible without scrolling.
+- Codex second opinions: `_dev/codex-reviews/2026-09-25-p1-task4-windows-installer.md` (two fixes),
+  `_dev/codex-reviews/2026-09-25-p1-task7-batch-quoting.md` (one fix).
+- Operator items still open (need Windows or a Debian VM): Windows install and Repair (S4 (1)), per-user
+  install from the pythonw shortcut without a console, Linux GUI install through pkexec on a Debian 12 VM.
