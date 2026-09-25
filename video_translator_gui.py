@@ -3834,6 +3834,12 @@ UI_LANG_OPTIONS = [
 ]
 UI_LANG_CODES = {code for code, _ in UI_LANG_OPTIONS}
 
+# Player and live-mode strings live in their own module (spec 2.6, Q5) and are
+# merged here, so UI_STRINGS stays the single runtime dictionary. merge_into
+# never raises: problems are logged at startup and caught by the i18n tests.
+from videotranslator.ui_strings_player import merge_into as _merge_player_strings  # noqa: E402
+_PLAYER_STRING_PROBLEMS = _merge_player_strings(UI_STRINGS)
+
 
 # ═══════════════════════════════════════════════════════════
 #  PIPELINE FUNCTIONS
@@ -5971,6 +5977,8 @@ class App(tk.Tk):
             self._btn_log_toggle.configure(text=self._s("btn_log_show"))
         else:
             self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
+        for problem in _PLAYER_STRING_PROBLEMS:
+            self._log_write(f"[!] Player strings: {problem}\n")
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Minimum window size + reasonable default geometry so the window
         # remains usable on small displays (1366×768, 1280×720) and at

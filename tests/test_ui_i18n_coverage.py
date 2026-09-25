@@ -4,10 +4,17 @@ import unittest
 from pathlib import Path
 
 import video_translator_gui as legacy
+from videotranslator import ui_strings_player
 from test_ui_theme_tk import HAS_DISPLAY, built_app
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_PATH = ROOT / "video_translator_gui.py"
+GUI_PATH = ROOT / "video_translator_gui.py"
+# Tk glue modules call ui_s(...) too (spec 2.6): every key scan covers them.
+SOURCE_PATHS = [GUI_PATH, *sorted((ROOT / "videotranslator").glob("*_tk.py"))]
+
+
+def _source_text() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in SOURCE_PATHS)
 
 UI_STRINGS = legacy.UI_STRINGS
 UI_LANG_OPTIONS = legacy.UI_LANG_OPTIONS
@@ -88,7 +95,7 @@ class UIStringsValueSanityTests(unittest.TestCase):
 
 class UIStringsUsedKeysTests(unittest.TestCase):
     def test_keys_called_in_source_exist_in_it_and_en(self):
-        source = SOURCE_PATH.read_text(encoding="utf-8")
+        source = _source_text()
         used_keys = sorted(set(_S_CALL_RE.findall(source)))
 
         self.assertTrue(
@@ -169,7 +176,7 @@ class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
         }
 
     def test_every_fstring_family_in_source_is_known(self):
-        source = SOURCE_PATH.read_text(encoding="utf-8")
+        source = _source_text()
         found = set(self._FSTRING_RE.findall(source))
         self.assertTrue(found, "no f-string _s(...) call found: the scan regex is probably broken")
         unknown = sorted(found - set(self._families()))
@@ -186,7 +193,7 @@ class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
         self.assertEqual(missing, [], f"dynamic keys missing: {missing}")
 
     def test_checkbox_helper_keys_exist_in_every_language(self):
-        source = SOURCE_PATH.read_text(encoding="utf-8")
+        source = _source_text()
         keys = sorted(set(self._CB_RE.findall(source)))
         self.assertGreaterEqual(len(keys), 5, "cb(...) scan found too few keys")
         missing = [(lang, key) for key in keys for lang in sorted(UI_STRINGS)
@@ -201,7 +208,7 @@ class PanelAndAccordionTitleSourceTests(unittest.TestCase):
 
     @staticmethod
     def _title_calls():
-        tree = ast.parse(SOURCE_PATH.read_text(encoding="utf-8"), filename=str(SOURCE_PATH))
+        tree = ast.parse(GUI_PATH.read_text(encoding="utf-8"), filename=str(GUI_PATH))
         calls = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -345,6 +352,83 @@ class TitleUpperCaseTests(unittest.TestCase):
         self.assertEqual(title_upper(UI_STRINGS["it"]["panel_input"], "it"), "INPUT")
         self.assertEqual(
             title_upper(UI_STRINGS["en"]["panel_translation"], "en"), "TRANSLATION")
+
+
+class PlayerStringsModuleTests(unittest.TestCase):
+    """ui_strings_player (spec 2.6, Q5): complete, merged, never colliding."""
+
+    def test_every_player_key_exists_in_all_26_languages(self):
+        codes = {code for code, _ in UI_LANG_OPTIONS}
+        self.assertEqual(set(ui_strings_player.PLAYER_UI_STRINGS), codes)
+        keys = set(ui_strings_player.PLAYER_KEYS)
+        self.assertEqual(len(keys), 19)
+        for lang, bucket in ui_strings_player.PLAYER_UI_STRINGS.items():
+            with self.subTest(lang=lang):
+                self.assertEqual(set(bucket), keys)
+
+    def test_merged_values_are_the_module_values(self):
+        for lang, bucket in ui_strings_player.PLAYER_UI_STRINGS.items():
+            for key, value in bucket.items():
+                self.assertEqual(UI_STRINGS[lang][key], value,
+                                 f"{lang}.{key} collides with a GUI file value")
+
+    def test_merge_into_a_clean_copy_reports_nothing(self):
+        keys = set(ui_strings_player.PLAYER_KEYS)
+        clean = {lang: {k: v for k, v in bucket.items() if k not in keys}
+                 for lang, bucket in UI_STRINGS.items()}
+        self.assertEqual(ui_strings_player.merge_into(clean), [])
+        self.assertEqual(clean["ja"]["player_badge"],
+                         ui_strings_player.PLAYER_UI_STRINGS["ja"]["player_badge"])
+
+    def test_merge_into_never_raises_and_reports_problems(self):
+        target = {"it": {"player_badge": "diverso"}}
+        problems = ui_strings_player.merge_into(target)
+        self.assertEqual(target["it"]["player_badge"], "diverso")  # existing value wins
+        self.assertIn("collision it.player_badge", problems)
+        self.assertIn("unknown language 'en'", problems)
+        self.assertEqual(set(target), {"it"})
+
+    def test_merge_is_idempotent(self):
+        copy = {lang: dict(bucket) for lang, bucket in UI_STRINGS.items()}
+        self.assertEqual(ui_strings_player.merge_into(copy), [])
+
+    def test_gui_file_does_not_define_player_keys(self):
+        source = GUI_PATH.read_text(encoding="utf-8")
+        defined = [key for key in ui_strings_player.PLAYER_KEYS
+                   if re.search(rf'"{re.escape(key)}"\s*:', source)]
+        self.assertEqual(defined, [])
+
+    def test_no_problem_was_reported_at_import(self):
+        self.assertEqual(legacy._PLAYER_STRING_PROBLEMS, [])
+
+
+class PlayerModuleLiteralKeyTests(unittest.TestCase):
+    """Keys carried as plain literals by the player and live modules exist in
+    all 26 languages, so a typo fails CI (spec 2.6). The module list grows
+    with the phases; a pattern with no match yet is fine."""
+
+    _KEY_RE = re.compile(r"^(player|live|deps|settings)_[a-z0-9_]+$")
+    _PATTERNS = ("libmpv_runtime.py", "system_packages.py", "player_*.py", "live_*.py")
+
+    @classmethod
+    def _modules(cls):
+        base = ROOT / "videotranslator"
+        found = set()
+        for pattern in cls._PATTERNS:
+            found.update(base.glob(pattern))
+        return sorted(found)
+
+    def test_literal_keys_exist_in_every_language(self):
+        missing = []
+        for path in self._modules():
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                        and self._KEY_RE.match(node.value)):
+                    missing.extend((path.name, node.value, lang)
+                                   for lang in sorted(UI_STRINGS)
+                                   if node.value not in UI_STRINGS[lang])
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":
