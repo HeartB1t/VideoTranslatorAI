@@ -1832,7 +1832,7 @@ UI_STRINGS = {
         "section_voice_cloning": "वॉयस क्लोनिंग",
         "section_lip_sync": "लिप सिंक",
         "section_diarization": "वक्ता पहचान",
-        "section_model": "नमूना",
+        "section_model": "मॉडल",
         "section_engine": "अनुवाद इंजन",
         "section_subtitles": "उपशीर्षक",
         "section_hotwords": "मुख्य शब्द",
