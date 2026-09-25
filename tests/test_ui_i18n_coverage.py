@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 import video_translator_gui as legacy
-from videotranslator import ui_strings_player
+from videotranslator import libmpv_runtime, ui_strings_player
 from test_ui_theme_tk import HAS_DISPLAY, built_app
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -428,6 +428,20 @@ class PlayerModuleLiteralKeyTests(unittest.TestCase):
                     missing.extend((path.name, node.value, lang)
                                    for lang in sorted(UI_STRINGS)
                                    if node.value not in UI_STRINGS[lang])
+        self.assertEqual(missing, [])
+
+
+class PlayerReasonKeyTests(unittest.TestCase):
+    """Every LibmpvStatus reason maps to a key that exists in 26 languages (spec 2.6)."""
+
+    def test_reason_maps_cover_every_reason(self):
+        self.assertEqual(set(libmpv_runtime.REASON_KEYS), set(libmpv_runtime.REASONS))
+        self.assertEqual(set(libmpv_runtime.REASON_KEYS_WIN32), set(libmpv_runtime.REASONS))
+
+    def test_reason_keys_exist_in_every_language(self):
+        keys = set(libmpv_runtime.REASON_KEYS.values()) | set(libmpv_runtime.REASON_KEYS_WIN32.values())
+        missing = [(lang, key) for key in sorted(keys) for lang in sorted(UI_STRINGS)
+                   if key not in UI_STRINGS[lang]]
         self.assertEqual(missing, [])
 
 
