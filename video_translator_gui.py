@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import unicodedata
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -375,6 +376,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Voice Cloning",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Diarization",
+        "section_model": "Modello",
+        "section_engine": "Motore traduzione",
+        "section_subtitles": "Sottotitoli",
+        "section_hotwords": "Parole chiave",
         "label_model_hint":   "← veloce / preciso → (turbo: qualità large-v3, ~6-8× più veloce su GPU)",
         "label_ui_lang":      "🌐 Lingua UI:",
         "btn_add":            "+ Aggiungi",
@@ -508,6 +513,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Voice Cloning",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Diarization",
+        "section_model": "Model",
+        "section_engine": "Translation engine",
+        "section_subtitles": "Subtitles",
+        "section_hotwords": "Hotwords",
         "label_model_hint":   "← fast / accurate → (turbo: large-v3 quality, ~6-8× faster on GPU)",
         "label_ui_lang":      "🌐 UI Language:",
         "btn_add":            "+ Add",
@@ -641,6 +650,10 @@ UI_STRINGS = {
         "section_voice_cloning": "استنساخ الصوت",
         "section_lip_sync": "مزامنة الشفاه",
         "section_diarization": "تمييز المتحدثين",
+        "section_model": "نموذج",
+        "section_engine": "محرك الترجمة",
+        "section_subtitles": "الترجمة",
+        "section_hotwords": "كلمات مفتاحية",
         "label_model_hint": "← سريع / دقيق → (turbo: جودة large-v3، أسرع بـ 6-8× على GPU)",
         "label_ui_lang": "لغة واجهة المستخدم:",
         "btn_add": "+ أضف",
@@ -771,6 +784,10 @@ UI_STRINGS = {
         "section_voice_cloning": "语音克隆",
         "section_lip_sync": "唇形同步",
         "section_diarization": "多说话人分离",
+        "section_model": "模型",
+        "section_engine": "翻译引擎",
+        "section_subtitles": "字幕",
+        "section_hotwords": "关键词",
         "label_model_hint": "← 快速/准确 → (turbo：large-v3 质量，GPU 上快约 6-8 倍)",
         "label_ui_lang": "用户界面语言：",
         "btn_add": "+ 添加",
@@ -901,6 +918,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Hlasové klonování",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Rozpoznávání mluvčích",
+        "section_model": "Model",
+        "section_engine": "Překladač",
+        "section_subtitles": "Titulky",
+        "section_hotwords": "Klíčová slova",
         "label_model_hint": "← rychlé / přesné → (turbo: kvalita large-v3, ~6-8× rychlejší na GPU)",
         "label_ui_lang": "Jazyk uživatelského rozhraní:",
         "btn_add": "+ Přidat",
@@ -1031,6 +1052,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Stemmekloning",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Højttalerseparation",
+        "section_model": "Model",
+        "section_engine": "Oversættelsesmotor",
+        "section_subtitles": "Undertekster",
+        "section_hotwords": "Nøgleord",
         "label_model_hint": "← hurtig / præcis → (turbo: large-v3 kvalitet, ~6-8× hurtigere på GPU)",
         "label_ui_lang": "UI sprog:",
         "btn_add": "+ Tilføj",
@@ -1161,6 +1186,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Spraakklonen",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Sprekerdiarisatie",
+        "section_model": "Model",
+        "section_engine": "Vertaalengine",
+        "section_subtitles": "Ondertiteling",
+        "section_hotwords": "Trefwoorden",
         "label_model_hint": "← snel / nauwkeurig → (turbo: large-v3 kwaliteit, ~6-8× sneller op GPU)",
         "label_ui_lang": "UI-taal:",
         "btn_add": "+ Toevoegen",
@@ -1291,6 +1320,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Äänen kloonaus",
         "section_lip_sync": "Huulisynkka",
         "section_diarization": "Puhujan tunnistus",
+        "section_model": "Malli",
+        "section_engine": "Käännöskone",
+        "section_subtitles": "Tekstitykset",
+        "section_hotwords": "Avainsanat",
         "label_model_hint": "← nopea / tarkka → (turbo: large-v3 -laatu, ~6-8× nopeampi GPU:lla)",
         "label_ui_lang": "Käyttöliittymän kieli:",
         "btn_add": "+ Lisää",
@@ -1421,6 +1454,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Clonage vocal",
         "section_lip_sync": "Synchronisation labiale",
         "section_diarization": "Diarisation",
+        "section_model": "Modèle",
+        "section_engine": "Moteur de traduction",
+        "section_subtitles": "Sous-titres",
+        "section_hotwords": "Mots-clés",
         "label_model_hint": "← rapide / précis → (turbo : qualité large-v3, ~6-8× plus rapide sur GPU)",
         "label_ui_lang": "Langue de l'interface utilisateur :",
         "btn_add": "+ Ajouter",
@@ -1551,6 +1588,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Voice Cloning",
         "section_lip_sync": "Lippensynchronisation",
         "section_diarization": "Sprechertrennung",
+        "section_model": "Modell",
+        "section_engine": "Übersetzungs-Engine",
+        "section_subtitles": "Untertitel",
+        "section_hotwords": "Schlüsselwörter",
         "label_model_hint": "← schnell / genau → (turbo: large-v3-Qualität, ~6-8× schneller auf GPU)",
         "label_ui_lang": "UI-Sprache:",
         "btn_add": "+ Hinzufügen",
@@ -1681,6 +1722,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Κλωνοποίηση φωνής",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Διαχωρισμός ομιλητών",
+        "section_model": "Μοντέλο",
+        "section_engine": "Μηχανή μετάφρασης",
+        "section_subtitles": "Υπότιτλοι",
+        "section_hotwords": "Λέξεις-κλειδιά",
         "label_model_hint": "← γρήγορο / ακριβές → (turbo: ποιότητα large-v3, ~6-8× ταχύτερο σε GPU)",
         "label_ui_lang": "Γλώσσα διεπαφής χρήστη:",
         "btn_add": "+ Προσθήκη",
@@ -1811,6 +1856,10 @@ UI_STRINGS = {
         "section_voice_cloning": "वॉयस क्लोनिंग",
         "section_lip_sync": "लिप सिंक",
         "section_diarization": "वक्ता पहचान",
+        "section_model": "नमूना",
+        "section_engine": "अनुवाद इंजन",
+        "section_subtitles": "उपशीर्षक",
+        "section_hotwords": "मुख्य शब्द",
         "label_model_hint": "← तेज़/सटीक → (turbo: large-v3 गुणवत्ता, GPU पर ~6-8× तेज़)",
         "label_ui_lang": "यूआई भाषा:",
         "btn_add": "+ जोड़ें",
@@ -1941,6 +1990,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Hangklónozás",
         "section_lip_sync": "Ajakszinkron",
         "section_diarization": "Beszélőelkülönítés",
+        "section_model": "Modell",
+        "section_engine": "Fordítómotor",
+        "section_subtitles": "Feliratok",
+        "section_hotwords": "Kulcsszavak",
         "label_model_hint": "← gyors / pontos → (turbo: large-v3 minőség, ~6-8× gyorsabb GPU-n)",
         "label_ui_lang": "UI nyelv:",
         "btn_add": "+ Hozzáadás",
@@ -2071,6 +2124,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Kloning Suara",
         "section_lip_sync": "Sinkronisasi Bibir",
         "section_diarization": "Pemisahan pembicara",
+        "section_model": "Model",
+        "section_engine": "Mesin terjemahan",
+        "section_subtitles": "Subtitle",
+        "section_hotwords": "Kata kunci",
         "label_model_hint": "← cepat / akurat → (turbo: kualitas large-v3, ~6-8× lebih cepat di GPU)",
         "label_ui_lang": "Bahasa UI:",
         "btn_add": "+ Tambahkan",
@@ -2201,6 +2258,10 @@ UI_STRINGS = {
         "section_voice_cloning": "音声クローン作成",
         "section_lip_sync": "リップシンク",
         "section_diarization": "話者ダイアライゼーション",
+        "section_model": "モデル",
+        "section_engine": "翻訳エンジン",
+        "section_subtitles": "字幕",
+        "section_hotwords": "キーワード",
         "label_model_hint": "← 速い / 正確 → (turbo: large-v3 品質、GPUで約6-8倍高速)",
         "label_ui_lang": "UI言語:",
         "btn_add": "+追加",
@@ -2331,6 +2392,10 @@ UI_STRINGS = {
         "section_voice_cloning": "음성 복제",
         "section_lip_sync": "립싱크",
         "section_diarization": "화자 분리",
+        "section_model": "모델",
+        "section_engine": "번역 엔진",
+        "section_subtitles": "자막",
+        "section_hotwords": "키워드",
         "label_model_hint": "← 빠르다 / 정확하다 → (turbo: large-v3 품질, GPU에서 ~6-8배 빠름)",
         "label_ui_lang": "UI 언어:",
         "btn_add": "+ 추가",
@@ -2461,6 +2526,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Stemmekloning",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Taleridentifikasjon",
+        "section_model": "Modell",
+        "section_engine": "Oversettelsesmotor",
+        "section_subtitles": "Undertekster",
+        "section_hotwords": "Nøkkelord",
         "label_model_hint": "← rask / nøyaktig → (turbo: large-v3 kvalitet, ~6-8× raskere på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Legg til",
@@ -2591,6 +2660,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Klonowanie głosu",
         "section_lip_sync": "Synchronizacja ust",
         "section_diarization": "Rozpoznawanie mówców",
+        "section_model": "Model",
+        "section_engine": "Silnik tłumaczenia",
+        "section_subtitles": "Napisy",
+        "section_hotwords": "Słowa kluczowe",
         "label_model_hint": "← szybki / dokładny → (turbo: jakość large-v3, ~6-8× szybsze na GPU)",
         "label_ui_lang": "Język interfejsu:",
         "btn_add": "+ Dodaj",
@@ -2721,6 +2794,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Clonagem de voz",
         "section_lip_sync": "Sincronização labial",
         "section_diarization": "Diarização",
+        "section_model": "Modelo",
+        "section_engine": "Motor de tradução",
+        "section_subtitles": "Legendas",
+        "section_hotwords": "Palavras-chave",
         "label_model_hint": "← rápido / preciso → (turbo: qualidade large-v3, ~6-8× mais rápido na GPU)",
         "label_ui_lang": "Idioma da interface do usuário:",
         "btn_add": "+ Adicionar",
@@ -2851,6 +2928,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Clonarea vocii",
         "section_lip_sync": "Lip Sync",
         "section_diarization": "Identificare vorbitori",
+        "section_model": "Model",
+        "section_engine": "Motor de traducere",
+        "section_subtitles": "Subtitrări",
+        "section_hotwords": "Cuvinte cheie",
         "label_model_hint": "← rapid / precis → (turbo: calitate large-v3, ~6-8× mai rapid pe GPU)",
         "label_ui_lang": "Limba UI:",
         "btn_add": "+ Adăugați",
@@ -2981,6 +3062,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Голосовое клонирование",
         "section_lip_sync": "Синхронизация губ",
         "section_diarization": "Разделение дикторов",
+        "section_model": "Модель",
+        "section_engine": "Движок перевода",
+        "section_subtitles": "Субтитры",
+        "section_hotwords": "Ключевые слова",
         "label_model_hint": "← быстро / точно → (turbo: качество large-v3, ~6-8× быстрее на GPU)",
         "label_ui_lang": "Язык пользовательского интерфейса:",
         "btn_add": "+ Добавить",
@@ -3111,6 +3196,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Clonación de voz",
         "section_lip_sync": "Sincronización labial",
         "section_diarization": "Diarización",
+        "section_model": "Modelo",
+        "section_engine": "Motor de traducción",
+        "section_subtitles": "Subtítulos",
+        "section_hotwords": "Palabras clave",
         "label_model_hint": "← rápido / preciso → (turbo: calidad large-v3, ~6-8× más rápido en GPU)",
         "label_ui_lang": "Idioma de la interfaz de usuario:",
         "btn_add": "+ Agregar",
@@ -3241,6 +3330,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Röstkloning",
         "section_lip_sync": "Läppsynk",
         "section_diarization": "Talaridentifiering",
+        "section_model": "Modell",
+        "section_engine": "Översättningsmotor",
+        "section_subtitles": "Undertexter",
+        "section_hotwords": "Nyckelord",
         "label_model_hint": "← snabb / exakt → (turbo: large-v3-kvalitet, ~6-8× snabbare på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Lägg till",
@@ -3371,6 +3464,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Ses Klonlama",
         "section_lip_sync": "Dudak Senkronu",
         "section_diarization": "Konuşmacı ayrıştırma",
+        "section_model": "Model",
+        "section_engine": "Çeviri motoru",
+        "section_subtitles": "Altyazılar",
+        "section_hotwords": "Anahtar kelimeler",
         "label_model_hint": "← hızlı / doğru → (turbo: large-v3 kalitesi, GPU'da ~6-8× daha hızlı)",
         "label_ui_lang": "Kullanıcı Arayüzü Dili:",
         "btn_add": "+ Ekle",
@@ -3501,6 +3598,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Клонування голосу",
         "section_lip_sync": "Синхронізація губ",
         "section_diarization": "Розділення дикторів",
+        "section_model": "Модель",
+        "section_engine": "Рушій перекладу",
+        "section_subtitles": "Субтитри",
+        "section_hotwords": "Ключові слова",
         "label_model_hint": "← швидко / точно → (turbo: якість large-v3, ~6-8× швидше на GPU)",
         "label_ui_lang": "Мова інтерфейсу користувача:",
         "btn_add": "+ Додати",
@@ -3631,6 +3732,10 @@ UI_STRINGS = {
         "section_voice_cloning": "Nhân bản giọng nói",
         "section_lip_sync": "Đồng bộ môi",
         "section_diarization": "Phân tách người nói",
+        "section_model": "Người mẫu",
+        "section_engine": "Công cụ dịch",
+        "section_subtitles": "Phụ đề",
+        "section_hotwords": "Từ khóa",
         "label_model_hint": "← nhanh / chính xác → (turbo: chất lượng large-v3, ~6-8× nhanh hơn trên GPU)",
         "label_ui_lang": "Ngôn ngữ giao diện người dùng:",
         "btn_add": "+ Thêm",
@@ -6412,6 +6517,26 @@ class App(tk.Tk):
         inner.pack(fill="both", expand=True, padx=12, pady=10)
         return inner
 
+    @staticmethod
+    def _title_upper(text, lang):
+        """Upper-case a UI title the way ``lang`` actually capitalizes it.
+
+        Plain ``str.upper()`` gets two languages wrong: Turkish has two
+        distinct letters for I (dotted lower-case 'i' upper-cases to 'İ',
+        not 'I'), and Greek all-caps text drops the acute accent that
+        Python's default upper-casing keeps. Both fixes live here so
+        ``_section_title`` (card titles) and ``_apply_lang`` (their
+        language-switch refresh) share one implementation.
+        """
+        if lang == "tr":
+            text = text.replace("i", "İ")
+        upper = text.upper()
+        if lang == "el":
+            decomposed = unicodedata.normalize("NFD", upper)
+            stripped = "".join(ch for ch in decomposed if ch != "\u0301")
+            upper = unicodedata.normalize("NFC", stripped)
+        return upper
+
     def _section_title(self, parent, text):
         """Small upper-case section label in muted colour.
 
@@ -6420,7 +6545,7 @@ class App(tk.Tk):
         """
         bg = parent.cget("bg") if "bg" in parent.keys() else SURFACE
         f = tk.Frame(parent, bg=bg)
-        lbl = tk.Label(f, text=text.upper(), bg=bg, fg=FG2,
+        lbl = tk.Label(f, text=self._title_upper(text, self._ui_lang.get()), bg=bg, fg=FG2,
                        font="VT.SmallBold")
         lbl.pack(side="left")
         return f, lbl
@@ -6797,8 +6922,8 @@ class App(tk.Tk):
             return w
 
         # ── 1. WHISPER MODEL ──────────────────────────────────────────────
-        sect, body, _, _ = self._make_accordion_section(
-            adv, self._s("label_model"))
+        sect, body, _, self._lbl_section_model = self._make_accordion_section(
+            adv, self._s("section_model"))
         sect.pack(fill="x")
         mf = tk.Frame(body, bg=SURFACE)
         mf.pack(anchor="w", pady=4)
@@ -6811,8 +6936,6 @@ class App(tk.Tk):
                 activeforeground=RED if "large" in m else FG,
                 highlightbackground=SURFACE, highlightcolor=ACC,
                 font="VT.Base").grid(row=i // 4, column=i % 4, sticky="w", padx=3)
-        # Hidden label refs required by _apply_lang
-        self._lbl_model      = tk.Label(body, text="", bg=SURFACE)
         self._lbl_model_hint = tk.Label(
             body, text=self._s("label_model_hint"),
             bg=SURFACE, fg=FG2, font="VT.Small",
@@ -6822,8 +6945,8 @@ class App(tk.Tk):
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
         # body2 uses grid layout so _ollama_row/_deepl_row work with
         # grid_remove()/grid() as called by _on_engine_change().
-        sect2, body2, _, _ = self._make_accordion_section(
-            adv, self._s("label_engine"))
+        sect2, body2, _, self._lbl_section_engine = self._make_accordion_section(
+            adv, self._s("section_engine"))
         sect2.pack(fill="x")
         body2.columnconfigure(0, weight=1)
 
@@ -7013,11 +7136,9 @@ class App(tk.Tk):
         self._hf_row.grid_remove()
 
         # ── 7. SUBTITLES ──────────────────────────────────────────────────
-        sect7, body7, _, _ = self._make_accordion_section(
-            adv, self._s("label_options"))
+        sect7, body7, _, self._lbl_section_subtitles = self._make_accordion_section(
+            adv, self._s("section_subtitles"))
         sect7.pack(fill="x")
-        # Hidden ref for _apply_lang
-        self._lbl_options = tk.Label(body7, text="", bg=SURFACE)
         _opy = {"pady": (4, 0)}
         self._chk_subs_only = cb(body7, "opt_subs_only",
                                  self._subs_only, self._on_subs_only)
@@ -7029,8 +7150,8 @@ class App(tk.Tk):
         self._chk_edit_subs.pack(anchor="w", pady=(4, 4))
 
         # ── 8. HOTWORDS ───────────────────────────────────────────────────
-        sect8, body8, _, _ = self._make_accordion_section(
-            adv, self._s("label_hotwords"))
+        sect8, body8, _, self._lbl_section_hotwords = self._make_accordion_section(
+            adv, self._s("section_hotwords"))
         sect8.pack(fill="x")
         self._hotwords_row = tk.Frame(body8, bg=SURFACE)
         self._hotwords_row.pack(anchor="w", fill="x", pady=4)
@@ -7646,19 +7767,19 @@ class App(tk.Tk):
 
     def _apply_lang(self):
         self._relabel_settings()
-        self._lbl_panel_input.configure(text=self._s("panel_input").upper())
-        self._lbl_panel_translation.configure(text=self._s("panel_translation").upper())
-        self._lbl_panel_profile.configure(text=self._s("panel_profile").upper())
-        self._lbl_panel_start.configure(text=self._s("panel_start").upper())
+        lang = self._ui_lang.get()
+        self._lbl_panel_input.configure(text=self._title_upper(self._s("panel_input"), lang))
+        self._lbl_panel_translation.configure(text=self._title_upper(self._s("panel_translation"), lang))
+        self._lbl_panel_profile.configure(text=self._title_upper(self._s("panel_profile"), lang))
+        self._lbl_panel_start.configure(text=self._title_upper(self._s("panel_start"), lang))
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
-        self._lbl_model.configure(text=self._s("label_model"))
+        self._lbl_section_model.configure(text=self._s("section_model"))
         self._lbl_model_hint.configure(text=self._s("label_model_hint"))
         self._lbl_from.configure(text=self._s("label_from"))
         self._lbl_to.configure(text=self._s("label_to"))
         self._lbl_voice.configure(text=self._s("label_voice"))
         self._lbl_tts_rate.configure(text=self._s("label_tts_rate"))
-        self._lbl_options.configure(text=self._s("label_options"))
         self._lbl_url.configure(text=self._s("label_url"))
         if not self._running:
             self._btn_download.configure(text=self._s("btn_download"))
@@ -7672,6 +7793,7 @@ class App(tk.Tk):
         self._btn_browse.configure(text=self._s("btn_browse"))
         if not self._running:
             self._btn.configure(text=self._s("btn_start"))
+        self._lbl_section_subtitles.configure(text=self._s("section_subtitles"))
         self._chk_subs_only.configure(text=self._s("opt_subs_only"))
         self._chk_no_subs.configure(text=self._s("opt_no_subs"))
         self._lbl_section_audio.configure(text=self._s("section_audio"))
@@ -7681,6 +7803,7 @@ class App(tk.Tk):
         self._chk_xtts.configure(text=self._s("opt_xtts"))
         self._lbl_section_lip_sync.configure(text=self._s("section_lip_sync"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
+        self._lbl_section_engine.configure(text=self._s("section_engine"))
         self._lbl_engine.configure(text=self._s("label_engine"))
         self._rb_eng_google.configure(text=self._s("engine_google"))
         self._rb_eng_deepl.configure(text=self._s("engine_deepl"))
@@ -7695,6 +7818,7 @@ class App(tk.Tk):
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
         self._lbl_hf_hint.configure(text=self._s("hint_hf_token"))
+        self._lbl_section_hotwords.configure(text=self._s("section_hotwords"))
         self._lbl_hotwords.configure(text=self._s("label_hotwords"))
         self._lbl_hotwords_hint.configure(text=self._s("hint_hotwords"))
         # Log panel labels

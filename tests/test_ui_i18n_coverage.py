@@ -251,28 +251,48 @@ class PanelAndAccordionTitleI18nTests(unittest.TestCase):
         "start": "panel_start",
     }
     _SECTION_TITLE_ATTRS = {
+        "_lbl_section_model": "section_model",
+        "_lbl_section_engine": "section_engine",
         "_lbl_section_audio": "section_audio",
         "_lbl_section_voice_cloning": "section_voice_cloning",
         "_lbl_section_lip_sync": "section_lip_sync",
         "_lbl_section_diarization": "section_diarization",
+        "_lbl_section_subtitles": "section_subtitles",
+        "_lbl_section_hotwords": "section_hotwords",
     }
+    # "fr" used to be the switch target, but several of these keys (e.g.
+    # section_audio, "Audio" in both it and fr) share the exact same value
+    # in the two languages, so a missing retext line could pass silently.
+    # "ja" differs from "it" on every key above, so a dropped refresh line
+    # always shows up as a real assertion failure.
+    _TARGET_LANG = "ja"
 
     def test_panel_titles_follow_ui_language_and_ids_stay_stable(self):
         with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            for key in self._PANEL_TITLE_KEYS.values():
+                self.assertNotEqual(
+                    gui.UI_STRINGS["it"][key], gui.UI_STRINGS[self._TARGET_LANG][key],
+                    f"{key!r} must differ between it and {self._TARGET_LANG!r}, "
+                    "otherwise the switch below cannot prove the label was retexted",
+                )
             for panel_id, key in self._PANEL_TITLE_KEYS.items():
                 with self.subTest(panel=panel_id):
                     label = getattr(app, f"_lbl_panel_{panel_id}")
-                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["it"][key].upper())
+                    self.assertEqual(
+                        label.cget("text"),
+                        gui.App._title_upper(gui.UI_STRINGS["it"][key], "it"))
             panel_ids_before = sorted(app._panels.keys())
             order_before = list(app._panel_order)
 
-            app._ui_lang.set("fr")
+            app._ui_lang.set(self._TARGET_LANG)
             app._apply_lang()
 
             for panel_id, key in self._PANEL_TITLE_KEYS.items():
                 with self.subTest(panel=panel_id):
                     label = getattr(app, f"_lbl_panel_{panel_id}")
-                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["fr"][key].upper())
+                    self.assertEqual(
+                        label.cget("text"),
+                        gui.App._title_upper(gui.UI_STRINGS[self._TARGET_LANG][key], self._TARGET_LANG))
             # The language switch retexts the labels only: panel identity
             # and the saved drag order are keyed by id, never by title text.
             self.assertEqual(sorted(app._panels.keys()), panel_ids_before)
@@ -280,18 +300,51 @@ class PanelAndAccordionTitleI18nTests(unittest.TestCase):
 
     def test_accordion_section_titles_follow_ui_language(self):
         with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            for key in self._SECTION_TITLE_ATTRS.values():
+                self.assertNotEqual(
+                    gui.UI_STRINGS["it"][key], gui.UI_STRINGS[self._TARGET_LANG][key],
+                    f"{key!r} must differ between it and {self._TARGET_LANG!r}, "
+                    "otherwise the switch below cannot prove the label was retexted",
+                )
             for attr, key in self._SECTION_TITLE_ATTRS.items():
                 with self.subTest(section=attr):
                     label = getattr(app, attr)
                     self.assertEqual(label.cget("text"), gui.UI_STRINGS["it"][key])
 
-            app._ui_lang.set("fr")
+            app._ui_lang.set(self._TARGET_LANG)
             app._apply_lang()
 
             for attr, key in self._SECTION_TITLE_ATTRS.items():
                 with self.subTest(section=attr):
                     label = getattr(app, attr)
-                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["fr"][key])
+                    self.assertEqual(label.cget("text"), gui.UI_STRINGS[self._TARGET_LANG][key])
+
+
+class TitleUpperCaseTests(unittest.TestCase):
+    """_title_upper() must follow language-specific capitalization rules
+    where plain str.upper() gets them wrong: Turkish dotted/dotless I, and
+    Greek all-caps dropping the acute accent. A pure staticmethod, so this
+    needs no Tk display."""
+
+    def test_turkish_dotted_i_and_dotless_i(self):
+        title_upper = legacy.App._title_upper
+        self.assertEqual(title_upper(UI_STRINGS["tr"]["panel_input"], "tr"), "GİRİŞ")
+        self.assertEqual(title_upper(UI_STRINGS["tr"]["panel_translation"], "tr"), "ÇEVİRİ")
+        self.assertEqual(
+            title_upper(UI_STRINGS["tr"]["panel_profile"], "tr"), "İŞ AKIŞI PROFİLİ")
+
+    def test_greek_all_caps_drops_the_acute_accent(self):
+        title_upper = legacy.App._title_upper
+        self.assertEqual(title_upper(UI_STRINGS["el"]["panel_input"], "el"), "ΕΙΣΟΔΟΣ")
+        self.assertEqual(title_upper(UI_STRINGS["el"]["panel_translation"], "el"), "ΜΕΤΑΦΡΑΣΗ")
+        self.assertEqual(
+            title_upper(UI_STRINGS["el"]["panel_profile"], "el"), "ΠΡΟΦΙΛ ΕΡΓΑΣΙΑΣ")
+
+    def test_other_languages_still_use_plain_upper(self):
+        title_upper = legacy.App._title_upper
+        self.assertEqual(title_upper(UI_STRINGS["it"]["panel_input"], "it"), "INPUT")
+        self.assertEqual(
+            title_upper(UI_STRINGS["en"]["panel_translation"], "en"), "TRANSLATION")
 
 
 if __name__ == "__main__":
