@@ -1,11 +1,14 @@
 """player_core pure helpers (spec 2.2, 2.3 reflow, 3.7 keys and mouse)."""
 
 import unittest
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 from videotranslator import player_core as pc
+from videotranslator.player_engine import BridgeEvent, BridgeSnapshot, InMemoryBackend
 from videotranslator.player_core import MediaItem
+from videotranslator.player_settings import PlayerSettings
 
 
 class ClockAndSeekMathsTests(unittest.TestCase):
@@ -164,6 +167,208 @@ class PlaylistGroupTests(unittest.TestCase):
         self.assertEqual(pc.playlist_groups(src, res, job_running=True),
                          [("player_playlist_sources", src, True),
                           ("player_playlist_results", res, False)])
+
+
+class PlayerControllerTests(unittest.TestCase):
+    def setUp(self):
+        self.backend = InMemoryBackend()
+        self.saved = []
+        self.states = []
+        settings = PlayerSettings(
+            volume=80,
+            muted=False,
+            audio="dubbed",
+            subs_visible=True,
+            autoload_result=True,
+            vo_profile=None,
+            keep_original_audio=True,
+        )
+        self.controller = pc.PlayerController(
+            self.backend,
+            settings,
+            on_change=self.states.append,
+            save=self.saved.append,
+        )
+        self.backend.calls.clear()
+        self.source = MediaItem("/v/source.mp4", "source", "source.mp4")
+        self.result = MediaItem("/v/result.mp4", "dubbed", "result.mp4",
+                                source_path="/v/source.mp4", srt_path="/v/result.srt")
+
+    def test_load_sets_state_and_calls_backend(self):
+        self.controller.load(self.source, paused=True, start=2.5)
+        self.assertEqual(self.backend.calls, [("load", self.source.path, True, 2.5, {})])
+        self.assertEqual(self.controller.state.status, "loading")
+        self.assertEqual(self.controller.state.item, self.source)
+        self.assertEqual(self.controller.state.position, 2.5)
+        self.assertTrue(self.states)
+
+    def test_attach_backend_replays_only_the_last_pending_load(self):
+        settings = PlayerSettings(100, False, "dubbed", True, True, None, True)
+        states = []
+        controller = pc.PlayerController(None, settings, on_change=states.append,
+                                         save=lambda _cfg: None)
+        controller.load(self.source, paused=True, start=0)
+        controller.load(self.result, paused=False, start=3)
+        backend = InMemoryBackend()
+        controller.attach_backend(backend)
+        load_calls = [call for call in backend.calls if call[0] == "load"]
+        self.assertEqual(load_calls, [("load", self.result.path, False, 3.0, {})])
+        self.assertEqual(controller.state.item, self.result)
+
+    def test_playlist_navigation_stops_at_the_ends(self):
+        third = MediaItem("/v/third.mp4", "source", "third.mp4")
+        self.controller.set_playlist([self.source, self.result, third], index=1)
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        self.controller.next()
+        self.controller.next()
+        self.controller.previous()
+        self.assertEqual([call[1] for call in self.backend.calls if call[0] == "load"],
+                         [third.path, self.result.path])
+
+    def test_play_pause_stop_and_seek_intents(self):
+        self.controller.load(self.source, paused=True)
+        self.backend.calls.clear()
+        self.controller.play_pause()
+        self.controller.play_pause()
+        self.controller.seek(12.0)
+        self.controller.seek(13.0, dragging=True)
+        self.controller.seek_relative(-10)
+        self.controller.stop()
+        self.assertEqual(self.backend.calls, [
+            ("set_pause", False),
+            ("set_pause", True),
+            ("seek", 12.0, "exact"),
+            ("seek", 13.0, "keyframes"),
+            ("seek", -10.0, "relative"),
+            ("stop",),
+        ])
+        self.assertEqual(self.controller.state.status, "idle")
+        self.assertIsNone(self.controller.state.item)
+
+    def test_volume_and_mute_update_mixer_state_and_config(self):
+        self.controller.set_volume(200)
+        self.controller.toggle_mute()
+        self.assertEqual(self.controller.state.volume, 130)
+        self.assertTrue(self.controller.state.muted)
+        self.assertEqual(self.saved, [{"player_volume": 130}, {"player_muted": True}])
+        mix_calls = [call for call in self.backend.calls if call[0] == "apply_mix"]
+        self.assertEqual(len(mix_calls), 2)
+        self.assertEqual(mix_calls[-1][1].voice_volume, 0.0)
+
+    def test_file_loaded_adds_missing_external_audio_and_subtitles(self):
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        snapshot = BridgeSnapshot(
+            changed={
+                "track-list": ([{"id": 1, "type": "audio", "title": "Dubbed"}], 1.0),
+                "duration": (20.0, 1.0),
+                "pause": (True, 1.0),
+            },
+            events=(BridgeEvent("file-loaded"),),
+        )
+        self.controller.apply_events(snapshot, 4.0)
+        self.assertIn(("add_external_audio", self.result.source_path, "Original"),
+                      self.backend.calls)
+        self.assertIn(("add_subtitles", self.result.srt_path, "Translated"),
+                      self.backend.calls)
+        self.assertEqual(self.controller.state.duration, 20.0)
+        self.assertEqual(self.controller.state.position, 4.0)
+        self.assertEqual(self.controller.state.status, "paused")
+        self.assertTrue(self.controller.state.subs_available)
+
+    def test_audio_and_subtitle_selection_follow_track_events(self):
+        self.controller.load(self.result)
+        self.controller.apply_events(BridgeSnapshot(changed={
+            "track-list": ([
+                {"id": 3, "type": "audio", "title": "Dubbed"},
+                {"id": 4, "type": "audio", "title": "Original"},
+            ], 1.0),
+        }, events=()), 0.0)
+        self.backend.calls.clear()
+        self.assertTrue(self.controller.select_audio("original"))
+        self.assertFalse(self.controller.select_audio("missing"))
+        self.controller.set_subtitles_visible(False)
+        self.assertEqual(self.backend.calls, [
+            ("select_audio", 4),
+            ("set_subtitles_visible", False),
+        ])
+        self.assertEqual(self.saved, [
+            {"player_audio": "original"},
+            {"player_subs_visible": False},
+        ])
+
+    def test_unrelated_events_do_not_restore_an_old_audio_preference(self):
+        settings = PlayerSettings(100, False, "original", True, True, None, True)
+        backend = InMemoryBackend()
+        controller = pc.PlayerController(backend, settings, on_change=lambda _state: None,
+                                         save=lambda _cfg: None)
+        controller.load(self.result)
+        controller.apply_events(BridgeSnapshot(changed={
+            "track-list": ([
+                {"id": 3, "type": "audio", "title": "Dubbed"},
+                {"id": 4, "type": "audio", "title": "Original"},
+            ], 1.0),
+        }, events=()), 0.0)
+        self.assertEqual(controller.state.audio, "original")
+        controller.select_audio("dubbed")
+        backend.calls.clear()
+        controller.apply_events(BridgeSnapshot(changed={"duration": (20.0, 2.0)},
+                                               events=()), 1.0)
+        self.assertEqual(controller.state.audio, "dubbed")
+        self.assertNotIn(("select_audio", 4), backend.calls)
+
+    def test_show_segments_rewrites_preview_and_snapshot_uses_unique_path(self):
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        with tempfile.TemporaryDirectory() as tmp:
+            srt = Path(tmp) / "preview.srt"
+            self.controller.show_segments_as_subtitles(
+                [{"start": 0, "end": 1, "text_tgt": "ciao"}], srt)
+            self.assertIn("ciao", srt.read_text(encoding="utf-8"))
+            first = Path(tmp) / "result_00-00-00.png"
+            first.write_bytes(b"taken")
+            shot = self.controller.snapshot(Path(tmp), datetime(2026, 9, 25, 20, 0))
+        self.assertTrue(str(shot).endswith("result_00-00-00_2.png"))
+        self.assertEqual(self.backend.calls, [
+            ("add_subtitles", str(srt), "Translated"),
+            ("reload_subtitles",),
+            ("set_subtitles_visible", True),
+            ("screenshot", str(shot)),
+        ])
+
+    def test_remove_and_release_rules_only_stop_held_files(self):
+        self.controller.set_playlist([self.source, self.result], index=0)
+        self.controller.load(self.source)
+        self.backend.calls.clear()
+        self.controller.remove_items([self.source.path])
+        self.assertEqual(self.backend.calls, [("stop",)])
+        self.assertEqual(self.controller.playlist, (self.result,))
+
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        self.assertTrue(self.controller.release_for_job())
+        self.assertEqual(self.backend.calls, [("stop",)])
+
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        self.assertTrue(self.controller.release(self.result.source_path))
+        self.assertEqual(self.backend.calls, [("stop",)])
+        self.assertFalse(self.controller.release("/other.mp4"))
+
+    def test_result_removal_does_not_stop_a_loaded_result(self):
+        self.controller.set_playlist([self.result], index=0)
+        self.controller.load(self.result)
+        self.backend.calls.clear()
+        self.controller.remove_items([self.result.path])
+        self.assertEqual(self.backend.calls, [])
+        self.assertEqual(self.controller.state.item, self.result)
+
+    def test_is_released_accepts_raw_or_stamped_latest_values(self):
+        self.assertTrue(self.controller.is_released({"idle-active": True}))
+        self.assertTrue(self.controller.is_released({"idle-active": (True, 2.0)}))
+        self.assertFalse(self.controller.is_released({"idle-active": (False, 2.0)}))
+        self.assertFalse(self.controller.is_released({}))
 
 
 if __name__ == "__main__":

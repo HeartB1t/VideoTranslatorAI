@@ -8,6 +8,7 @@ from videotranslator.output_media import (
     get_duration,
     mux_video,
     save_subtitles,
+    segments_to_srt,
 )
 
 
@@ -32,6 +33,16 @@ class OutputMediaTests(unittest.TestCase):
                 content = fh.read()
             self.assertIn("00:00:00,000 --> 00:00:01,500", content)
             self.assertIn("ciao", content)
+
+    def test_segments_to_srt_is_pure_and_keeps_export_semantics(self):
+        content = segments_to_srt([
+            {"start": 0.0, "end": 1.5, "text_tgt": " ciao ", "text": "hello"},
+            {"start": 2.0, "end": 3.0, "text": "fallback"},
+        ])
+        self.assertEqual(content, (
+            "1\n00:00:00,000 --> 00:00:01,500\nciao\n\n"
+            "2\n00:00:02,000 --> 00:00:03,000\n\n\n"
+        ))
 
     def test_get_duration_parses_ffprobe_json(self):
         def fake_run(*_args, **_kwargs):

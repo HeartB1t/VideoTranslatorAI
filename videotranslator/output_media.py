@@ -18,6 +18,20 @@ def format_srt_timestamp(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
 
 
+def segments_to_srt(segments: list[dict] | tuple[dict, ...]) -> str:
+    """Render translated segments as SRT without touching the filesystem."""
+    blocks = []
+    for index, segment in enumerate(segments, 1):
+        text = (segment.get("text_tgt") or "").strip()
+        blocks.append(
+            f"{index}\n"
+            f"{format_srt_timestamp(segment['start'])} --> "
+            f"{format_srt_timestamp(segment['end'])}\n"
+            f"{text}\n\n"
+        )
+    return "".join(blocks)
+
+
 def save_subtitles(
     segments: list[dict],
     output_base: str,
@@ -27,14 +41,7 @@ def save_subtitles(
     """Write translated segments to an SRT file and return its path."""
     path = output_base + ".srt"
     with open(path, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, 1):
-            text = (seg.get("text_tgt") or "").strip()
-            f.write(
-                f"{i}\n"
-                f"{format_srt_timestamp(seg['start'])} --> "
-                f"{format_srt_timestamp(seg['end'])}\n"
-                f"{text}\n\n"
-            )
+        f.write(segments_to_srt(segments))
     log(f"[+] Subtitles: {path}", flush=True)
     return path
 

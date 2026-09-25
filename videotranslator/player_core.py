@@ -9,10 +9,20 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+
+from .output_media import segments_to_srt
+from .player_engine import BridgeSnapshot
+from .player_settings import (
+    PLAYER_AUDIO_KEY,
+    PLAYER_MUTED_KEY,
+    PLAYER_SUBS_VISIBLE_KEY,
+    PLAYER_VOLUME_KEY,
+    PlayerSettings,
+)
 
 
 @dataclass(frozen=True)
@@ -23,6 +33,301 @@ class MediaItem:
     source_path: str | None = None    # original, when it can be added as external audio
     srt_path: str | None = None
     temp: bool = False                # owned temp file (URL editor flow)
+
+
+@dataclass(frozen=True)
+class PlayerState:
+    status: str
+    item: MediaItem | None
+    position: float
+    duration: float | None
+    volume: int
+    muted: bool
+    audio: str
+    ab_available: bool
+    subs_available: bool
+    subs_visible: bool
+    message_key: str | None = None
+    message_params: dict = field(default_factory=dict)
+
+
+class PlayerController:
+    """Tk-thread state machine backed by a non-blocking PlayerBackend."""
+
+    def __init__(self, backend, settings: PlayerSettings, *,
+                 on_change: Callable[[PlayerState], None],
+                 save: Callable[[dict], None]) -> None:
+        self._backend = backend
+        self._settings = settings
+        self._on_change = on_change
+        self._save = save
+        self._playlist: list[MediaItem] = []
+        self._playlist_index: int | None = None
+        self._pending_load: tuple[MediaItem, bool, float] | None = None
+        self._paused = True
+        self._dubbed_track: int | None = None
+        self._original_track: int | None = None
+        self.state = PlayerState(
+            status="idle" if backend is not None else "initializing",
+            item=None,
+            position=0.0,
+            duration=None,
+            volume=settings.volume,
+            muted=settings.muted,
+            audio=settings.audio,
+            ab_available=False,
+            subs_available=False,
+            subs_visible=settings.subs_visible,
+        )
+        if backend is not None:
+            self._apply_initial_mix(backend)
+
+    @property
+    def playlist(self) -> tuple[MediaItem, ...]:
+        return tuple(self._playlist)
+
+    def _apply_initial_mix(self, backend) -> None:
+        backend.mixer.set_user_volume(self.state.volume)
+        backend.mixer.set_muted(self.state.muted)
+        backend.apply_mix()
+
+    def _update(self, **changes) -> None:
+        new_state = replace(self.state, **changes)
+        if new_state != self.state:
+            self.state = new_state
+            self._on_change(new_state)
+
+    def attach_backend(self, backend) -> None:
+        self._backend = backend
+        self._apply_initial_mix(backend)
+        pending = self._pending_load
+        self._pending_load = None
+        if pending is None:
+            self._update(status="idle")
+            return
+        item, paused, start = pending
+        backend.load(item.path, paused=paused, start=start, options=None)
+
+    def load(self, item: MediaItem, *, paused: bool = True, start: float = 0.0) -> None:
+        start = max(0.0, float(start))
+        self._paused = bool(paused)
+        self._dubbed_track = None
+        self._original_track = None
+        for index, candidate in enumerate(self._playlist):
+            if candidate.path == item.path:
+                self._playlist_index = index
+                break
+        self._update(
+            status="loading",
+            item=item,
+            position=start,
+            duration=None,
+            audio="dubbed",
+            ab_available=False,
+            subs_available=bool(item.srt_path),
+            message_key=None,
+            message_params={},
+        )
+        if self._backend is None:
+            self._pending_load = (item, bool(paused), start)
+            return
+        self._pending_load = None
+        self._backend.load(item.path, paused=bool(paused), start=start, options=None)
+
+    def set_playlist(self, items: Sequence[MediaItem], index: int | None = None) -> None:
+        self._playlist = list(items)
+        if index is None:
+            self._playlist_index = None
+        elif 0 <= index < len(self._playlist):
+            self._playlist_index = int(index)
+        else:
+            raise IndexError("playlist index out of range")
+
+    def play_pause(self) -> None:
+        if self.state.item is None or self._backend is None:
+            return
+        self._paused = not self._paused
+        self._backend.set_pause(self._paused)
+        self._update(status="paused" if self._paused else "playing")
+
+    def stop(self) -> None:
+        if self._backend is not None:
+            self._backend.stop()
+        self._pending_load = None
+        self._paused = True
+        self._dubbed_track = None
+        self._original_track = None
+        self._update(
+            status="idle",
+            item=None,
+            position=0.0,
+            duration=None,
+            audio="dubbed",
+            ab_available=False,
+            subs_available=False,
+            message_key=None,
+            message_params={},
+        )
+
+    def _move(self, delta: int) -> None:
+        if not self._playlist:
+            return
+        index = self._playlist_index
+        if index is None and self.state.item is not None:
+            index = next((i for i, item in enumerate(self._playlist)
+                          if item.path == self.state.item.path), None)
+        if index is None:
+            index = 0 if delta > 0 else len(self._playlist) - 1
+        target = index + delta
+        if 0 <= target < len(self._playlist):
+            self._playlist_index = target
+            self.load(self._playlist[target], paused=True)
+
+    def next(self) -> None:
+        self._move(1)
+
+    def previous(self) -> None:
+        self._move(-1)
+
+    def seek(self, seconds: float, *, dragging: bool = False) -> None:
+        if self.state.item is None or self._backend is None:
+            return
+        target = max(0.0, float(seconds))
+        self._backend.seek(target, "keyframes" if dragging else "exact")
+        self._update(position=target)
+
+    def seek_relative(self, delta: float) -> None:
+        if self.state.item is None or self._backend is None:
+            return
+        self._backend.seek(float(delta), "relative")
+
+    def set_volume(self, value: int) -> None:
+        value = min(130, max(0, int(value)))
+        if value == self.state.volume:
+            return
+        if self._backend is not None:
+            self._backend.mixer.set_user_volume(value)
+            self._backend.apply_mix()
+        self._update(volume=value)
+        self._save({PLAYER_VOLUME_KEY: value})
+
+    def toggle_mute(self) -> None:
+        muted = not self.state.muted
+        if self._backend is not None:
+            self._backend.mixer.set_muted(muted)
+            self._backend.apply_mix()
+        self._update(muted=muted)
+        self._save({PLAYER_MUTED_KEY: muted})
+
+    def select_audio(self, which: str) -> bool:
+        track_id = {"dubbed": self._dubbed_track,
+                    "original": self._original_track}.get(which)
+        if track_id is None or self._backend is None:
+            return False
+        self._backend.select_audio(track_id)
+        self._update(audio=which)
+        self._save({PLAYER_AUDIO_KEY: which})
+        return True
+
+    def set_subtitles_visible(self, visible: bool) -> None:
+        visible = bool(visible)
+        if self._backend is not None:
+            self._backend.set_subtitles_visible(visible)
+        self._update(subs_visible=visible)
+        self._save({PLAYER_SUBS_VISIBLE_KEY: visible})
+
+    def show_segments_as_subtitles(self, segments: Sequence[dict], srt_path: Path) -> None:
+        path = Path(srt_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(segments_to_srt(tuple(segments)), encoding="utf-8")
+        if self._backend is not None:
+            self._backend.add_subtitles(str(path), "Translated")
+            self._backend.reload_subtitles()
+            self._backend.set_subtitles_visible(self.state.subs_visible)
+        item = self.state.item
+        if item is not None:
+            item = replace(item, srt_path=str(path))
+        self._update(item=item, subs_available=True)
+
+    def snapshot(self, dest_dir: Path, now: datetime) -> Path:
+        if self.state.item is None or self._backend is None:
+            raise RuntimeError("no media loaded")
+        dest_dir = Path(dest_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        path = snapshot_path(dest_dir, self.state.item.title, self.state.position, now)
+        self._backend.screenshot(str(path))
+        return path
+
+    def remove_items(self, paths: Sequence[str]) -> None:
+        removed = set(paths)
+        self._playlist = [item for item in self._playlist if item.path not in removed]
+        self._playlist_index = next(
+            (index for index, item in enumerate(self._playlist)
+             if self.state.item is not None and item.path == self.state.item.path),
+            None,
+        )
+        if (self.state.item is not None and self.state.item.kind == "source"
+                and self.state.item.path in removed):
+            self.stop()
+
+    def release_for_job(self) -> bool:
+        if self.state.item is None or self.state.item.kind != "dubbed":
+            return False
+        self.stop()
+        return True
+
+    def release(self, path: str) -> bool:
+        item = self.state.item
+        if item is None or path not in (item.path, item.source_path):
+            return False
+        self.stop()
+        return True
+
+    @staticmethod
+    def is_released(latest: Mapping) -> bool:
+        value = latest.get("idle-active")
+        if isinstance(value, tuple) and len(value) == 2:
+            value = value[0]
+        return value is True
+
+    def apply_events(self, snapshot: BridgeSnapshot, clock_now: float | None) -> None:
+        changed = snapshot.changed
+        tracks_value = changed.get("track-list")
+        if tracks_value is not None:
+            self._dubbed_track, self._original_track = pick_audio_track_ids(tracks_value[0])
+        duration_value = changed.get("duration")
+        duration = self.state.duration if duration_value is None else duration_value[0]
+        pause_value = changed.get("pause")
+        if pause_value is not None:
+            self._paused = bool(pause_value[0])
+        status = self.state.status
+        if self.state.item is not None and pause_value is not None:
+            status = "paused" if self._paused else "playing"
+        item = self.state.item
+        for event in snapshot.events:
+            if event.kind == "file-loaded" and item is not None and self._backend is not None:
+                if item.source_path and self._original_track is None:
+                    self._backend.add_external_audio(item.source_path, "Original")
+                if item.srt_path:
+                    self._backend.add_subtitles(item.srt_path, "Translated")
+                    self._backend.set_subtitles_visible(self.state.subs_visible)
+            elif event.kind == "end-file" and item is not None:
+                reason = event.payload.get("reason") if isinstance(event.payload, dict) else event.payload
+                status = "paused" if reason in (None, "eof", "stop") else "error"
+        available = self._dubbed_track is not None and self._original_track is not None
+        audio = self.state.audio if available else "dubbed"
+        if (available and tracks_value is not None and self._settings.audio == "original"
+                and self.state.audio != "original" and self._backend is not None):
+            self._backend.select_audio(self._original_track)
+            audio = "original"
+        self._update(
+            status=status,
+            position=self.state.position if clock_now is None else max(0.0, float(clock_now)),
+            duration=duration,
+            audio=audio,
+            ab_available=available,
+            subs_available=bool(item and item.srt_path),
+        )
 
 
 # -- time and seek maths ----------------------------------------------------

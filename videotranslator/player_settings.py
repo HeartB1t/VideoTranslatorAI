@@ -17,6 +17,10 @@ AUDIO_CHOICES = ("dubbed", "original")
 SYNC_MODES = ("delayed", "live")
 LIVE_ENGINES = ("marian", "ollama", "google", "deepl")
 LIVE_MAX_HEIGHTS = (480, 720, 1080)
+PLAYER_VOLUME_KEY = "player_volume"
+PLAYER_MUTED_KEY = "player_muted"
+PLAYER_AUDIO_KEY = "player_audio"
+PLAYER_SUBS_VISIBLE_KEY = "player_subs_visible"
 
 
 @dataclass(frozen=True)
@@ -77,10 +81,10 @@ def vo_profiles_for(sys_platform: str) -> tuple[str, ...]:
 
 def normalize_player_settings(cfg: Mapping[str, Any], *, sys_platform: str) -> PlayerSettings:
     return PlayerSettings(
-        volume=_int(cfg, "player_volume", 100, 0, 130),
-        muted=_bool(cfg, "player_muted", False),
-        audio=_choice(cfg, "player_audio", AUDIO_CHOICES, "dubbed"),
-        subs_visible=_bool(cfg, "player_subs_visible", True),
+        volume=_int(cfg, PLAYER_VOLUME_KEY, 100, 0, 130),
+        muted=_bool(cfg, PLAYER_MUTED_KEY, False),
+        audio=_choice(cfg, PLAYER_AUDIO_KEY, AUDIO_CHOICES, "dubbed"),
+        subs_visible=_bool(cfg, PLAYER_SUBS_VISIBLE_KEY, True),
         autoload_result=_bool(cfg, "player_autoload_result", True),
         vo_profile=_choice(cfg, "player_vo_profile", vo_profiles_for(sys_platform), None),
         keep_original_audio=_bool(cfg, "keep_original_audio", True),
@@ -106,10 +110,10 @@ def settings_to_config(settings: PlayerSettings | LiveSettings) -> dict[str, Any
     """Flat keys for ``save_config``. Optional values that are unset stay absent."""
     if isinstance(settings, PlayerSettings):
         cfg: dict[str, Any] = {
-            "player_volume": settings.volume,
-            "player_muted": settings.muted,
-            "player_audio": settings.audio,
-            "player_subs_visible": settings.subs_visible,
+            PLAYER_VOLUME_KEY: settings.volume,
+            PLAYER_MUTED_KEY: settings.muted,
+            PLAYER_AUDIO_KEY: settings.audio,
+            PLAYER_SUBS_VISIBLE_KEY: settings.subs_visible,
             "player_autoload_result": settings.autoload_result,
             "keep_original_audio": settings.keep_original_audio,
         }
