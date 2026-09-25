@@ -115,4 +115,28 @@ in `_dev/CHANGELOG.md`. Operator items: x11egl on the real NVIDIA display, Windo
 
 ## Evidence
 
-Filled by Task 9.
+Recorded on 2026-09-25 with libmpv 0.41.0 and python-mpv 1.0.8 on a private
+1400x900 Xvfb display with xfwm4. The harness and raw JSON are under
+`_dev/player_p2_app_evidence.py` and
+`_dev/screenshots/player-p2-2026-09-25/`.
+
+- Preview latency: 10 alternating real loads, median 0.4532 s and maximum 0.6013 s.
+  Pass: median is below 1 s.
+- Close: 20 independent processes, each with one playing App and one Tk interpreter;
+  20/20 clean closes below 2 s, maximum 0.1595 s. The backend terminated before the
+  host was destroyed.
+- VO fallback: forced `x11egl` failure with an invalid EGL vendor file; the App detected
+  it, restored the captured X11 handler, recreated once with `x11sw`, received fresh
+  `video-params`, and closed in 0.1601 s. Pass.
+- Native adapter smoke: 2/2 passed (embedded load, seek, snapshot, bounded terminate;
+  forced EGL failure, `x11sw` fallback and deliberate X error survived).
+- `app-1100x780.png`: pass. The selected file is loaded, the placeholder is unmapped,
+  duration and all controls are visible, and the card column does not resize the video.
+- `app-fullscreen.png`: pass. xfwm4 reports 1400x900+0+0; header, card column, log,
+  progress, padding and border are absent, while the controls remain reachable.
+- Automated gate after the visual fix: 1040 tests passed with 6 skips both headless and
+  under Xvfb; py_compile, forbidden-dash scan and `git diff --check` passed.
+
+Operator items that need hardware outside this environment remain: `x11egl` on the real
+NVIDIA display, Windows 11 at 100 and 150 percent DPI, and a Wayland desktop. These are
+platform checks, not known failures; Linux X11 and the software fallback are green.

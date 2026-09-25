@@ -568,9 +568,10 @@ class PlayerPanel(_P1PlayerPanel):
     def _show_placeholder(self, visible: bool) -> None:
         self.placeholder_visible = bool(visible)
         if visible:
+            self._layout_video()
             self.placeholder.lift()
         else:
-            self.placeholder.lower(self.video_host)
+            self.placeholder.place_forget()
         self.controls_frame.lift()
 
     def render(self, state: PlayerState, *, position: float | None) -> None:
@@ -700,8 +701,11 @@ class PlayerPanel(_P1PlayerPanel):
 
     def _layout_video(self) -> None:
         reserved = max(1, self.controls_frame.winfo_reqheight())
-        for widget in (self.video_host, self.placeholder):
-            widget.place_configure(relx=0, rely=0, relwidth=1, relheight=1, height=-reserved)
+        self.video_host.place_configure(
+            relx=0, rely=0, relwidth=1, relheight=1, height=-reserved)
+        if self.placeholder_visible:
+            self.placeholder.place_configure(
+                relx=0, rely=0, relwidth=1, relheight=1, height=-reserved)
         self.controls_frame.lift()
 
     def _on_panel_resize(self, event: Any) -> None:

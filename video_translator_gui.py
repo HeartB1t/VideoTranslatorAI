@@ -8198,6 +8198,7 @@ class App(tk.Tk):
 
     def _on_player_state(self, state) -> None:
         if state.status == "loading":
+            self._player_clock.expect_restart()
             self._player_loaded_at = None
             self._player_video_params_seen = False
             self._player_log_lines.clear()
@@ -8346,8 +8347,8 @@ class App(tk.Tk):
                 self._player_log_lines.append(str(event.payload))
                 del self._player_log_lines[:-100]
                 self._log_write(f"[mpv] {event.payload}\n")
-        video_params = self._bridge_value(self._player_bridge, "video-params")
-        if video_params:
+        video_params = snapshot.changed.get("video-params")
+        if video_params is not None and video_params[0]:
             self._player_video_params_seen = True
             if self._player_fallback_notice_pending:
                 self._player_fallback_notice_pending = False

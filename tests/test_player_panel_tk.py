@@ -183,8 +183,12 @@ class PlayerPanelTests(unittest.TestCase):
         self.assertEqual(self.panel.duration_label.cget("text"), "02:05")
         self.assertEqual(round(float(self.panel.volume_scale.get())), 72)
         self.assertFalse(self.panel.placeholder_visible)
+        self.assertEqual(self.panel.placeholder.winfo_manager(), "")
+        self.panel._layout_video()
+        self.assertEqual(self.panel.placeholder.winfo_manager(), "")
         self.panel.render(self._state(status="idle", item=None, duration=None), position=None)
         self.assertTrue(self.panel.placeholder_visible)
+        self.assertEqual(self.panel.placeholder.winfo_manager(), "place")
         self.assertEqual(self.panel.message_label.cget("text"), _en("player_idle_hint"))
 
     def test_every_control_dispatches_and_reflow_hides_only_planned_icons(self):
@@ -435,6 +439,16 @@ class GuiPlayerWiringTests(unittest.TestCase):
             self.assertIs(app._player_backend, replacement)
             self.assertEqual(app._player_vo_profile, "x11sw")
             self.assertIn(("load", item.path, True, 3.0, {}), replacement.calls)
+
+    def test_a_new_load_does_not_reuse_stale_video_params(self):
+        with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            self._attach_backend(app)
+            app._player_bridge.set_latest("video-params", {"w": 640}, time.monotonic())
+            app._player_bridge.drain()
+            app._player_controller.load(
+                MediaItem("/tmp/new.mp4", "source", "new.mp4"), paused=True)
+            app._player_tick()
+            self.assertFalse(app._player_video_params_seen)
 
     def test_close_terminates_the_backend_before_destroying_the_tk_host(self):
         with built_app({"ui_lang": "en"}) as (_gui, app, _):
