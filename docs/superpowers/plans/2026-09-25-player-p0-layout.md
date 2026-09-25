@@ -1633,29 +1633,104 @@ sezione 9, fase P0). Commit locali <hash Task 1>, <hash Task 2>, <hash Task 3> s
 
 - [ ] **Step 8: Fill the Evidence section of this plan**
 
-Replace the paragraph under `## Evidence` at the end of this file with:
-- P0_BASE and `git log --oneline P0_BASE..HEAD` (the three task commits);
-- `git diff --stat P0_BASE..HEAD` and the net line change of `video_translator_gui.py`;
-- the full content of `tk-tests-run3.txt` in a fenced block, and the last three lines of runs 1 and 2;
-- the last three lines of `suite-xvfb.txt` and of `suite-headless.txt`;
-- the full `driver-output.txt` in a fenced block;
-- the six screenshot paths (`_dev/screenshots/player-p0-2026-09-25/NN-....png`), each with its one-line verdict from Step 6.
+Replace the paragraph under `## Evidence
 
-- [ ] **Step 9: Check dashes and commit the plan**
+Recorded on 2026-09-25 by the controller (no subagents), on this Kali machine, private Xvfb only.
 
-```bash
-unset DISPLAY WAYLAND_DISPLAY; cd /home/kali/Scrivania/PROGETTI_ATTIVI/VideoTranslatorAI && grep -nP '[\x{2013}\x{2014}]' docs/superpowers/plans/2026-09-25-player-p0-layout.md _dev/CHANGELOG.md | head; echo "dash exit=$?"
+P0_BASE = `402c4a5`. Task commits (all pushed, CI green):
+
 ```
-Expected: no line from the plan. (`_dev/CHANGELOG.md` may still show historic lines further down; the new entry must add none.) Then:
-
-```bash
-unset DISPLAY WAYLAND_DISPLAY; cd /home/kali/Scrivania/PROGETTI_ATTIVI/VideoTranslatorAI && git add docs/superpowers/plans/2026-09-25-player-p0-layout.md && git commit -m "docs(plan): record the P0 layout evidence" -m "Tk layout test output (three runs on Xvfb), full suite on Xvfb and headless, the screenshot driver output and the six screenshots of the P0 layout, as required by the phase gates of the player spec (section 9)."
+0456f92 fix(ui): resync the card column after language, text size and voice changes
+7d12c29 fix(ui): scroll one unit per wheel notch, in the wheel's direction
+0fa0a13 ui: give the player pane the window height and scroll only the card column
 ```
 
-Windows note: this evidence is Linux only by design (private Xvfb). The first Windows look at the layout belongs to the P2 Windows items (spec 9, "from P2 on, each phase has at least one Windows item").
+```
+ tests/test_ui_layout.py       |  56 +++++-
+ tests/test_ui_layout_p0_tk.py | 422 ++++++++++++++++++++++++++++++++++++++++++
+ tests/test_ui_theme_tk.py     |   8 +-
+ video_translator_gui.py       | 273 +++++++++++++++------------
+ videotranslator/ui_layout.py  |  61 +++++-
+ 5 files changed, 696 insertions(+), 124 deletions(-)
+```
 
----
+Net change of `video_translator_gui.py`: +158 / -115.
 
-## Evidence
+Tk layout tests, run 3 of 3 (`tk-tests-run3.txt`):
 
-Task 4 replaces this paragraph with the recorded results listed in its Step 8. Nothing is recorded here before Tasks 1-3 have run.
+```
+test_width_follows_the_cards_after_relabels (test_ui_layout_p0_tk.ColumnSyncTests.test_width_follows_the_cards_after_relabels) ... [layout] column de normal: widest=454, canvas=(609, 69, 460, 643)
+[layout] column fi large: widest=493, canvas=(576, 72, 493, 638)
+ok
+test_a_column_that_fits_is_pinned_to_the_top (test_ui_layout_p0_tk.P0LayoutTests.test_a_column_that_fits_is_pinned_to_the_top) ... ok
+test_accordions_do_not_resize_the_player (test_ui_layout_p0_tk.P0LayoutTests.test_accordions_do_not_resize_the_player) ... [layout] accordions 900x600: before=(16, 69, 376, 463), opened=(16, 69, 376, 463), closed=(16, 69, 376, 463)
+[layout] accordions 1100x780: before=(16, 69, 576, 643), opened=(16, 69, 576, 643), closed=(16, 69, 576, 643)
+ok
+test_card_column_takes_its_widest_state_and_at_least_460_px (test_ui_layout_p0_tk.P0LayoutTests.test_card_column_takes_its_widest_state_and_at_least_460_px) ... [layout] column 900x600: closed=375, widest=461, canvas=(408, 69, 461, 463), pane=(408, 69, 461, 1169)
+[layout] column 1100x780: closed=375, widest=461, canvas=(608, 69, 461, 643), pane=(608, 69, 461, 1169)
+ok
+test_card_drag_in_the_scrolled_column_leaves_the_player_alone (test_ui_layout_p0_tk.P0LayoutTests.test_card_drag_in_the_scrolled_column_leaves_the_player_alone) ... [layout] drag 1100x780: before=(16, 69, 576, 643), during=(16, 69, 576, 643), after=(16, 69, 576, 643)
+ok
+test_hiding_rows_and_column_hands_the_window_to_the_player (test_ui_layout_p0_tk.P0LayoutTests.test_hiding_rows_and_column_hands_the_window_to_the_player) ... [layout] rows hidden 1100x780: player=(16, 8, 1068, 764)
+ok
+test_only_the_card_column_scrolls (test_ui_layout_p0_tk.P0LayoutTests.test_only_the_card_column_scrolls) ... [layout] scroll 900x600: before={'player': (16, 69, 376, 463), 'header': (0, 0, 900, 61), 'log': (16, 540, 868, 26)}, after={'player': (16, 69, 376, 463), 'header': (0, 0, 900, 61), 'log': (16, 540, 868, 26)}
+ok
+test_player_pane_fills_the_body_at_both_sizes (test_ui_layout_p0_tk.P0LayoutTests.test_player_pane_fills_the_body_at_both_sizes) ... [layout] fill 900x600: header=(0, 0, 900, 61), body=(16, 69, 884, 463), player=(16, 69, 376, 463), canvas=(408, 69, 461, 463), log=(16, 540, 868, 26)
+[layout] fill 1100x780: header=(0, 0, 1100, 61), body=(16, 69, 1084, 643), player=(16, 69, 576, 643), canvas=(608, 69, 461, 643), log=(16, 720, 1068, 26)
+ok
+test_root_rows_body_columns_and_hosts (test_ui_layout_p0_tk.P0LayoutTests.test_root_rows_body_columns_and_hosts) ... ok
+test_one_notch_one_unit_in_the_wheel_direction (test_ui_layout_p0_tk.WheelStepTests.test_one_notch_one_unit_in_the_wheel_direction) ... ok
+test_rebinding_the_voice_chips_does_not_stack_handlers (test_ui_layout_p0_tk.WheelStepTests.test_rebinding_the_voice_chips_does_not_stack_handlers) ... ok
+test_touchpad_deltas_scroll_once_per_notch (test_ui_layout_p0_tk.WheelStepTests.test_touchpad_deltas_scroll_once_per_notch) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 2.221s
+
+OK
+```
+
+Runs 1 and 2, last lines:
+
+```
+Ran 12 tests in 2.235s
+
+OK
+Ran 12 tests in 2.244s
+
+OK
+```
+
+Full suite on Xvfb and headless:
+
+```
+Ran 767 tests in 10.057s
+
+OK (skipped=4)
+Ran 767 tests in 2.540s
+
+OK (skipped=52)
+```
+
+Screenshot driver output (`driver-output.txt`):
+
+```
+top-level windows before 0, after 2, new ['0x2001c6', '0x200001'], app frame 0x20002f
+01-1100x780-it-graphite.png: window 1100x780, player (16, 69, 576, 643), column (608, 69, 461, 643), yview (0.0, 0.55)
+02-900x600-it-graphite.png: window 900x600, player (16, 69, 376, 463), column (408, 69, 461, 463), yview (0.0, 0.396)
+accordions opened: 8, player before (16, 69, 376, 463), after (16, 69, 376, 463)
+03-900x600-accordions-open-scrolled-to-bottom.png: window 900x600, player (16, 69, 376, 463), column (408, 69, 461, 463), yview (0.737, 1.0)
+04-900x600-log-visible.png: window 900x600, player (16, 69, 376, 275), column (408, 69, 461, 275), yview (0.0, 0.235)
+05-1100x780-light.png: window 1100x780, player (16, 69, 576, 643), column (608, 69, 461, 643), yview (0.0, 0.55)
+06-900x600-de-large.png: window 900x600, player (16, 72, 344, 458), column (376, 72, 493, 458), yview (0.0, 0.371)
+closed 0x20002f (gone: True); top-level windows now 1
+```
+
+Screenshots (`_dev/screenshots/player-p0-2026-09-25/`):
+- `01-1100x780-it-graphite.png`: header fixed across the top, player 576x643 from the header to the log bar, cards with their own scrollbar at the window edge, no band above the first card. PASS.
+- `02-900x600-it-graphite.png`: same layout at the minimum size, player 376x463, column 461 px. PASS.
+- `03-900x600-accordions-open-scrolled-to-bottom.png`: all 8 sections open, cards scrolled to the bottom, header still at the top, player unchanged (376x463). PASS.
+- `04-900x600-log-visible.png`: log shown, player shorter (376x275) but still from the header to the log. PASS.
+- `05-1100x780-light.png`: light theme on the new frames and on the column canvas, no dark strip. PASS.
+- `06-900x600-de-large.png`: German at the large size, column 493 px, no clipped label, player takes the rest. PASS. (Pre-existing, outside P0: the source-language combobox shows the Italian language names in every UI language.)
+
+Deviation from Task 2 as written: a `WheelAccumulator` sums `<MouseWheel>` deltas and scrolls one unit per 120, instead of one unit per small delta, so Windows precision touchpads (dozens of small deltas per gesture) do not over-scroll (plan-review advisory).
