@@ -5515,16 +5515,23 @@ class _GlobalRedirect(io.TextIOBase):
         redir = getattr(_thread_local, "redirect", None)
         if redir is not None:
             return redir.write(s)
+        if self._original is None:
+            # pythonw: sys.stdout/sys.stderr are None, so library output from
+            # threads without a GUI redirect (tqdm, warnings) is dropped
+            # instead of raising (spec R9).
+            return len(s)
         return self._original.write(s)
 
     def flush(self):
         redir = getattr(_thread_local, "redirect", None)
         if redir is not None:
             redir.flush()
-        else:
+        elif self._original is not None:
             self._original.flush()
 
     def fileno(self):
+        if self._original is None:
+            raise io.UnsupportedOperation("fileno")
         return self._original.fileno()
 
 
@@ -7958,6 +7965,22 @@ class App(tk.Tk):
         """Thread-safe helper: schedula log_write sul main thread."""
         if not self._destroying:
             self.after(0, self._log_write, text)
+
+    def _redirecting_thread_factory(self, target, name=None, daemon=True):
+        """Return a Thread that runs ``target`` with the GUI log redirect installed.
+
+        Library output of worker threads (pip, tqdm, warnings) then reaches
+        the log panel instead of the original stream, which is None under
+        pythonw (spec 2.4, R9). Call-compatible with threading.Thread.
+        """
+        def run():
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
+            try:
+                target()
+            finally:
+                _thread_local.redirect = None
+
+        return threading.Thread(target=run, name=name, daemon=daemon)
 
     def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
         """Worker thread: runs steps 1-4. Returns True if Ollama is ready.

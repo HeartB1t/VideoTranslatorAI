@@ -3,9 +3,11 @@ import unittest
 from pathlib import Path
 
 from videotranslator.subprocess_utils import (
+    CREATE_NO_WINDOW,
     ActiveSubprocessRegistry,
     command_for_log,
     common_subprocess_kwargs,
+    no_window_kwargs,
     normalize_command,
     text_subprocess_kwargs,
 )
@@ -91,6 +93,19 @@ class SubprocessUtilsTests(unittest.TestCase):
         registry.unregister(object())
 
         self.assertEqual(registry.snapshot(), [])
+
+
+class NoWindowKwargsTests(unittest.TestCase):
+    def test_windows_children_start_without_a_console(self):
+        self.assertEqual(no_window_kwargs("win32"), {"creationflags": 0x08000000})
+
+    def test_other_systems_get_no_extra_kwargs(self):
+        self.assertEqual(no_window_kwargs("linux"), {})
+        self.assertEqual(no_window_kwargs("darwin"), {})
+
+    def test_constant_matches_subprocess_when_it_exists(self):
+        self.assertEqual(
+            CREATE_NO_WINDOW, getattr(subprocess, "CREATE_NO_WINDOW", CREATE_NO_WINDOW))
 
 
 if __name__ == "__main__":

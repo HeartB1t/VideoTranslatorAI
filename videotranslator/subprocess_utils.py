@@ -79,3 +79,17 @@ class ActiveSubprocessRegistry:
     def snapshot(self) -> list[Any]:
         with self._lock:
             return list(self._items)
+
+
+# Win32 process creation flag: start a console program without opening a
+# console window (a pythonw parent has no console to share, so every child
+# would otherwise flash one). Fixed by the Win32 API; subprocess exposes the
+# name only on Windows.
+CREATE_NO_WINDOW = 0x08000000
+
+
+def no_window_kwargs(sys_platform: str) -> dict[str, int]:
+    """Return subprocess kwargs that keep a child's console hidden on Windows."""
+    if sys_platform == "win32":
+        return {"creationflags": CREATE_NO_WINDOW}
+    return {}
