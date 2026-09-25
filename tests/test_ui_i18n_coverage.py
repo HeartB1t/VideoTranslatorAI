@@ -409,6 +409,9 @@ class PlayerModuleLiteralKeyTests(unittest.TestCase):
 
     _KEY_RE = re.compile(r"^(player|live|deps|settings)_[a-z0-9_]+$")
     _PATTERNS = ("libmpv_runtime.py", "system_packages.py", "player_*.py", "live_*.py")
+    # player_settings.py is the home of the flat player_* / live_* CONFIG keys
+    # (spec 2.2, 2.5): its literals are config keys, not UI keys.
+    _CONFIG_MODULES = frozenset({"player_settings.py"})
 
     @classmethod
     def _modules(cls):
@@ -416,7 +419,7 @@ class PlayerModuleLiteralKeyTests(unittest.TestCase):
         found = set()
         for pattern in cls._PATTERNS:
             found.update(base.glob(pattern))
-        return sorted(found)
+        return sorted(path for path in found if path.name not in cls._CONFIG_MODULES)
 
     def test_literal_keys_exist_in_every_language(self):
         missing = []

@@ -15,6 +15,7 @@ MODULES = (
     "videotranslator.libmpv_runtime",
     "videotranslator.system_packages",
     "videotranslator.player_panel_tk",
+    "videotranslator.player_settings",
     "videotranslator.subprocess_utils",
     "videotranslator.ui_strings_player",
 )
