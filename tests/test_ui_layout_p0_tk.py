@@ -16,6 +16,7 @@ import sys
 import tkinter as tk
 import types
 import unittest
+from unittest import mock
 
 from test_ui_theme_tk import HAS_DISPLAY, _pump_until, built_app
 
@@ -376,6 +377,45 @@ class WheelStepTests(unittest.TestCase):
             app._voice_frame.event_generate("<Button-5>")
             app.update()
             self.assertEqual(app._right_canvas.yview()[0], expected)
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class ColumnSyncTests(unittest.TestCase):
+    def test_width_follows_the_cards_after_relabels(self):
+        # 0216809 after a relabel: it can change what the cards (or a closed
+        # section's body) ask for without changing the column's height, and
+        # then no <Configure> fires on the cards.
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, 1100, 780)
+            refreshes = (("ui language", app._apply_lang),
+                         ("theme and text size", app._apply_ui_settings),
+                         ("target language", app._on_lang_tgt_change))
+            for name, refresh in refreshes:
+                with self.subTest(refresh=name):
+                    with mock.patch.object(app, "_cards_widest_width",
+                                           return_value=530):
+                        refresh()
+                        app.update()
+                        self.assertEqual(int(app._right_canvas.cget("width")), 530)
+                        self.assertEqual(app._right_pane.winfo_width(), 530)
+                    refresh()
+                    app.update()
+                    self.assertEqual(int(app._right_canvas.cget("width")),
+                                     max(460, app._cards_widest_width()))
+            # Real long languages and a larger text size.
+            for lang, scale in (("de", "normal"), ("fi", "large")):
+                with self.subTest(lang=lang, scale=scale):
+                    app._ui_lang.set(lang)
+                    app._apply_lang()
+                    app._ui_scale_var.set(scale)
+                    app._apply_ui_settings()
+                    app.update()
+                    widest = app._cards_widest_width()
+                    _log(f"column {lang} {scale}", widest=widest,
+                         canvas=_geom(app._right_canvas))
+                    self.assertEqual(int(app._right_canvas.cget("width")),
+                                     max(460, widest))
+                    self.assertEqual(app._right_pane.winfo_width(), max(460, widest))
 
 
 if __name__ == "__main__":

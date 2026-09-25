@@ -7698,6 +7698,9 @@ class App(tk.Tk):
                 row._refresh()
             self._refresh_accent_dots()
         self._update_profile_buttons()
+        # Another text size changes the cards' width, and a large shrink can
+        # leave the view below the content without any <Configure>.
+        self.after_idle(self._sync_right_column)
 
     def _remember_system_dark(self, value):
         """Cache the OS dark-mode answer so the next start paints with it."""
@@ -7828,6 +7831,10 @@ class App(tk.Tk):
                 self._update_start_summary(),
             ))
         self._update_start_summary()
+        # A relabel can change what the cards ask for (closed accordion
+        # sections included) without changing their height, and then no
+        # <Configure> reaches _sync_right_column.
+        self.after_idle(self._sync_right_column)
 
     # ── Voice buttons ────────────────────────────────────────────────────────
 
@@ -7880,6 +7887,8 @@ class App(tk.Tk):
         except Exception:
             pass
         self._update_start_summary()
+        # New voice chips can change the cards' width.
+        self.after_idle(self._sync_right_column)
 
     def _update_rate_label(self, *_):
         try:
