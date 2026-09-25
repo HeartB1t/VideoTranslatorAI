@@ -3357,7 +3357,7 @@ output pasted into the plan; an optional CI job is Q14.
   - Windows 10 22H2 and Windows 11 24H2 at 100 %, 125 % and 150 % DPI;
   - VirtualBox Windows guest without 3D (Vulkan loader, d3d11-warp);
   - Ubuntu 22.04 (libmpv1 0.34.1) and Debian 12 (libmpv2 0.35.1) in containers,
-    headless (`vo=null`), for the S1/S3 command checks (Q13).
+    for the S1/S3 command checks (Q13): headless (`vo=null`) for the command checks, embedded under a private Xvfb for the S1 (f) mouse checks.
 - Player checks:
   - embedding and resize;
   - accordion toggling and card drag while playing (the video must not resize);
@@ -3684,7 +3684,7 @@ Debian 12 containers for the 0.34.1 and 0.35.1 checks. X11 runs use a private Xv
 unless the operator allows the real one.
 
 Already settled by [CT] (not repeated, only re-run as regressions in `test_player_real_*`):
-embedding and child resize (C1), placeholder lift/lower on X11 (C3), `register_key_binding`
+embedding and child resize (C1; x11sw profile only, x11egl on a real GPU display is a P2 manual item), placeholder lift/lower on X11 (C3), `register_key_binding`
 MBTN/WHEEL on 0.41 (C4), two instances (C28 headless), `lavf://file:` follow on Linux
 (C14), blocking reads and raw-domain seeks on the custom stream (C13, C16, C19), time
 domains (C17, C18), scaletempo2 (C32), Edge CBR duration (C34), the VAD wrapper (C37).
