@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = (
     "videotranslator.libmpv_runtime",
+    "videotranslator.system_packages",
     "videotranslator.subprocess_utils",
     "videotranslator.ui_strings_player",
 )
