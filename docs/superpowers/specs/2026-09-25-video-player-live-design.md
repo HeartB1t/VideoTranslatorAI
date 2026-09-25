@@ -1,9 +1,10 @@
-# Player video integrato e traduzione in tempo reale - Design (BOZZA)
+# Player video integrato e traduzione in tempo reale - Design
 
 **Data:** 2026-09-25
-**Stato:** BOZZA, non ancora approvata dall'operatore. Nessuna implementazione prima
-dell'approvazione. Decisioni aperte nella sezione 10 (Q1-Q14), ciascuna con una risposta
-consigliata.
+**Stato:** APPROVATA dall'operatore il 2026-09-25. Tutte le decisioni della sezione 10
+(Q1-Q14) sono risolte con la risposta consigliata, compresa Q1 (licenza: build Windows
+LGPL come sorgente primaria L1, build GPL G1 come riserva). Prossimo passo: piani di
+implementazione (sezione 9), a partire dal Plan 0 (spike).
 **Motore:** libmpv via python-mpv (approccio A, approvato dall'operatore il 2026-09-25).
 **Fonti:** le note di ricerca citate come [01]..[06], [CT], [CC], [parity], [sync], [mvp]
 e gli script di prova `probe/` sono locali e fuori da git
@@ -4013,6 +4014,9 @@ phase starts.
 ---
 
 ## 10 Open questions for the operator (decisions only)
+
+Decision record (2026-09-25): the operator approved the recommended answer of every
+question below, Q1 included.
 
 Q1 (red zone, licence). Which Windows libmpv build, from where?
 - Options:
