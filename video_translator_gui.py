@@ -319,6 +319,10 @@ from videotranslator.ui_layout import right_column_width as _right_column_width 
 from videotranslator.ui_layout import WheelAccumulator as _WheelAccumulator  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
+from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
+from videotranslator import system_packages as _system_packages  # noqa: E402
+from videotranslator.player_panel_tk import HoverTip as _HoverTip  # noqa: E402
+from videotranslator.player_panel_tk import PlayerPanel as _PlayerPanel  # noqa: E402
 from videotranslator.ui_theme import (  # noqa: E402
     ACCENTS as _ACCENTS,
     ACCENT_CHOICES as _ACCENT_CHOICES,
@@ -5968,6 +5972,12 @@ class App(tk.Tk):
         self._url_placeholder_active = True
         self._pending_pkgs_after_ffmpeg: list[str] = []
         self._preflight_running = False
+        # Integrated player (spec 9 P1): the last availability status, the
+        # install request computed with it, and the flag shared by every
+        # component install (startup ffmpeg/pip installs set it too).
+        self._installing = False
+        self._player_status = None
+        self._player_install_request = None
 
         self._build_ui()
         # Restore log panel visibility from config (default collapsed in the
@@ -5993,6 +6003,7 @@ class App(tk.Tk):
         self.after(100, self._fit_to_screen)
         self.after(200, self._check_deps_on_start)
         self.after(800, self._upgrade_ytdlp_in_background)
+        self.after(1500, self._refresh_player_status)
         self._optional_checked = False
 
         # Install global redirect once - routes print() to per-thread GUI log
@@ -6081,6 +6092,7 @@ class App(tk.Tk):
 
     def _install_ffmpeg(self):
         self._running = True
+        self._installing = True
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
         self._progress.start(12)
         self._log_write("[*] ffmpeg not found - installing automatically...\n")
@@ -6211,6 +6223,7 @@ class App(tk.Tk):
 
     def _ffmpeg_done(self, ok: bool):
         self._running = False
+        self._installing = False
         self._progress.stop()
         if ok:
             self._log_write("[✓] ffmpeg installed successfully.\n")
@@ -6231,6 +6244,7 @@ class App(tk.Tk):
 
     def _install_deps(self, packages):
         self._running = True
+        self._installing = True
         self._btn.configure(state="disabled", text=self._s("btn_installing"))
         self._progress.start(12)
         self._log_write(f"[*] Installing: {', '.join(packages)}\n")
@@ -6308,6 +6322,7 @@ class App(tk.Tk):
 
     def _install_done(self, ok, packages):
         self._running = False
+        self._installing = False
         self._progress.stop()
         self._btn.configure(state="normal", text=self._s("btn_start"))
         if ok:
@@ -6775,6 +6790,13 @@ class App(tk.Tk):
         has_wav2lip = importlib.util.find_spec("dlib") is not None
         self._status_badge(badges, "Wav2Lip",
                            OK if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
+        # Integrated player: grey until the background status check reports
+        # (_on_player_status); the tooltip gives the reason (spec 2.3).
+        self._player_badge = self._status_badge(badges, self._s("player_badge"), FG2)
+        self._player_badge.pack(side="left", padx=(8, 4))
+        self._player_badge_dot, self._player_badge_label = self._player_badge.winfo_children()
+        self._player_badge_tip = _HoverTip(self._player_badge, self._player_status_text,
+                                           colors_fn=lambda: (SEL, FG))
 
         # Keyboard focus ring: bd/pady 0 offset its 2 px, so the header keeps its height.
         self._btn_settings = tk.Label(right, text="⚙", bg=BG, fg=FG2, font="VT.Title",
@@ -7307,9 +7329,9 @@ class App(tk.Tk):
         body.columnconfigure(1, weight=0)
         self._body = body
 
-        # Left pane: the video player's host (a FIELD-coloured surface until
-        # the player exists). It sits outside every canvas, so it follows the
-        # window height and a wheel over it scrolls nothing.
+        # Left pane: the integrated player (P1 shows its status and Install).
+        # It sits outside every canvas, so it follows the window height and a
+        # wheel over it scrolls nothing.
         left = tk.Frame(body, bg=BG)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
         self._left_pane = left
@@ -7317,6 +7339,11 @@ class App(tk.Tk):
                                      highlightbackground=BORDER,
                                      highlightcolor=BORDER)
         self._player_area.pack(fill="both", expand=True)
+        self._player_panel = _PlayerPanel(
+            self._player_area, ui_s=self._s, make_button=self._flat_btn,
+            on_command=self._on_player_command,
+            logo_path=Path(__file__).resolve().parent / "assets" / "icon_256.png")
+        self._player_panel.pack(fill="both", expand=True)
 
         # Right column: input, translation, profile, start, then the settings
         # accordion, in a canvas that scrolls only this column. The canvas
@@ -7731,6 +7758,16 @@ class App(tk.Tk):
         self._ui_accent_var.set(_DEFAULT_ACCENT)
         self._ui_scale_var.set(_DEFAULT_SCALE)
         self._apply_ui_settings()
+        # Spec 2.5: Reset also forgets the cached libmpv probe, so the next
+        # status check probes the library again. save_config merges and cannot
+        # delete a key, hence the raw write of the whole file.
+        cfg = load_config()
+        if "player_probe" in cfg:
+            del cfg["player_probe"]
+            try:
+                _write_config_raw(cfg)
+            except OSError as exc:
+                self._log_write(f"[!] Could not reset the player probe cache: {exc}\n")
 
     def _close_settings(self):
         if self._settings_win is not None and self._settings_win.winfo_exists():
@@ -7768,6 +7805,8 @@ class App(tk.Tk):
 
     def _apply_lang(self):
         self._relabel_settings()
+        self._player_badge_label.configure(text=self._s("player_badge"))
+        self._player_panel.relabel()
         lang = self._ui_lang.get()
         self._lbl_panel_input.configure(text=self._title_upper(self._s("panel_input"), lang))
         self._lbl_panel_translation.configure(text=self._title_upper(self._s("panel_translation"), lang))
@@ -7991,6 +8030,124 @@ class App(tk.Tk):
 
         return threading.Thread(target=run, name=name, daemon=daemon)
 
+
+    # -- Integrated player: availability and install (spec 9 P1) ------------
+
+    def _player_log(self, line: str) -> None:
+        """Log callback of the player modules: one English line without newline."""
+        self._log_async(line + "\n")
+
+    def _post_if_alive(self, fn) -> None:
+        """Run ``fn`` on the Tk thread unless the window is closing.
+
+        Called from worker threads. Tkinter raises RuntimeError ("main thread
+        is not in main loop") once mainloop has ended during shutdown; the
+        result is then dropped, as _TkStreamRedirect already does.
+        """
+        if not self._destroying:
+            with contextlib.suppress(RuntimeError):
+                self.after(0, fn)
+
+    def _player_status_text(self) -> str:
+        panel = getattr(self, "_player_panel", None)
+        return panel.status_text() if panel is not None else self._s("player_badge")
+
+    def _refresh_player_status(self, *, force_probe: bool = False) -> None:
+        """Check libmpv and python-mpv on a worker. libmpv is never loaded here.
+
+        quick_presence only looks for the files; the probe runs in a child
+        process (a crashing library cannot take the app down) and only when
+        the cached result does not match the library on disk, or after an
+        install (plan decision 2).
+        """
+        cached = load_config().get("player_probe")
+
+        def work():
+            try:
+                status = _libmpv_runtime.resolve_status(cached=cached, force_probe=force_probe)
+                request = _system_packages.player_install_request(
+                    status, sys_platform=sys.platform,
+                    mpv_importable=importlib.util.find_spec("mpv") is not None)
+            except Exception as exc:  # the badge must never stay grey without a reason
+                status = _libmpv_runtime.LibmpvStatus(
+                    ok=False, reason="probe-crashed", detail=f"status check failed: {exc}")
+                request = _system_packages.PlayerInstallRequest()
+            self._post_if_alive(lambda: self._on_player_status(status, request))
+
+        self._redirecting_thread_factory(work, name="player-status").start()
+
+    def _on_player_status(self, status, request) -> None:
+        self._player_status = status
+        self._player_install_request = request
+        entry = _libmpv_runtime.cache_entry(status)
+        if entry is not None and load_config().get("player_probe") != entry:
+            save_config({"player_probe": entry})  # config writes stay on the Tk thread
+        self._update_player_badge()
+        if status.ok:
+            self._player_panel.show_ready(status)
+        else:
+            self._player_panel.show_unavailable(status, install_cmd=request.manual_command)
+
+    def _update_player_badge(self) -> None:
+        level = _libmpv_runtime.badge_level(self._player_status) if self._player_status else None
+        self._player_badge_dot.configure(fg={"ok": OK, "warn": WARN, "error": ERR}.get(level, FG2))
+
+    def _on_player_command(self, name: str, args: dict) -> None:
+        """Every PlayerPanel action arrives here (P2 adds the transport commands)."""
+        if name == "install":
+            self._install_player()
+
+    def _install_player(self) -> None:
+        if self._installing:
+            messagebox.showerror(self._s("msg_error_t"), self._s("live_err_busy_install"),
+                                 parent=self)
+            return
+        request = self._player_install_request
+        if request is None or request.empty:
+            self._refresh_player_status(force_probe=True)
+            return
+        windows_install = None
+        if request.windows_dest is not None:
+            question = self._s("player_install_confirm").format(size=request.download_mb)
+            if not messagebox.askyesno(self._s("msg_confirm"), question, parent=self):
+                return
+            dest = request.windows_dest
+
+            def windows_install():
+                return _libmpv_runtime.install_windows(dest, log=self._player_log)
+
+        self._installing = True
+        self._player_panel.show_install_progress("installing")
+        self._player_log("[*] Installing the integrated video player...")
+        self._player_installer().install(
+            pip_packages=request.pip_packages, system_plans=request.system_plans,
+            windows_install=windows_install, expect_modules=("mpv",),
+            on_done=self._on_player_install_done)
+
+    def _player_installer(self):
+        return _system_packages.ComponentInstaller(
+            runner=lambda cmd: _system_packages.run_streaming(cmd, log=self._player_log),
+            thread_factory=self._redirecting_thread_factory,
+            find_spec=importlib.util.find_spec,
+            refresh=_system_packages.refresh_import_paths,
+            log=self._player_log,
+            post=self._post_if_alive)
+
+    def _on_player_install_done(self, result) -> None:
+        self._installing = False
+        if not result.ok:
+            # The placeholder keeps the reason and, on Linux, the manual command.
+            self._player_panel.show_install_progress("failed")
+            self._player_log(f"[!] Player installation failed at step: {result.failed_step}")
+            return
+        self._player_panel.show_install_progress("ok")
+        if result.restart_required:
+            status = dataclasses.replace(
+                self._player_status, ok=False, reason="restart-required",
+                detail="installed, but not importable until the application restarts")
+            self._on_player_status(status, _system_packages.PlayerInstallRequest())
+            return
+        self._refresh_player_status(force_probe=True)
     def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
         """Worker thread: runs steps 1-4. Returns True if Ollama is ready.
 

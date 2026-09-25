@@ -438,6 +438,7 @@ def built_app(config):
             with mock.patch.object(gui, "CONFIG_PATH", cfg_path), \
                     mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
                     mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
+                    mock.patch.object(gui.App, "_refresh_player_status", lambda self, **kw: None), \
                     mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
                 app = None
                 try:
@@ -467,7 +468,7 @@ class BuiltAppStreamsTests(unittest.TestCase):
 
         class ExplodingApp:
             _check_deps_on_start = _upgrade_ytdlp_in_background = _fit_to_screen = \
-                lambda self: None
+                _refresh_player_status = lambda self, **kw: None
 
             def __init__(self):
                 sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
