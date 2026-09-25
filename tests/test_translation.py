@@ -291,7 +291,11 @@ class DeepLFailedBatchTests(unittest.TestCase):
             self.assertNotIn("_quality_flags", seg)
         self.assertEqual(result[50]["text_tgt"], "s50")
         self.assertIn(FLAG_TRANSLATION_FALLBACK, result[50]["_quality_flags"])
-        self.assertIn("1/51", self.log)
+        warning = (
+            "DeepL failed on 1/51 segments: they keep the source text and "
+            "are flagged in the subtitle editor."
+        )
+        self.assertEqual(self.log.count(warning), 1)
 
     def test_network_error_batch_is_flagged_and_counted(self):
         result = self._run(self._network_error)
