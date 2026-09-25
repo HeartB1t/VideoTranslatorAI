@@ -7,7 +7,12 @@ import unittest
 from unittest import mock
 
 from videotranslator import translation
-from videotranslator.quality_flags import FLAG_TRANSLATION_FALLBACK
+from videotranslator.quality_flags import (
+    FLAG_TRANSLATION_FALLBACK,
+    FLAG_WHISPER_SUSPICIOUS,
+    add_quality_flag,
+    compute_segment_quality_flags,
+)
 from videotranslator.translation import (
     TranslationUnavailableError,
     _marian_normalize_lang,
@@ -362,6 +367,122 @@ class DeepLFailedBatchTests(unittest.TestCase):
             self.assertNotIn("_quality_flags", seg)
         self.assertNotIn("failed", self.log)
         self.assertEqual(self.posts, 2)
+
+
+def _fake_ollama_translator(translate, fallback=None):
+    """Stand-in for translate_with_ollama: ``translate(text)`` is the
+    per-segment Ollama call. Like the real one, a failed segment gets the
+    fallback text (or keeps its source) and the translation_fallback flag
+    is set on the INPUT segment dict, then copied to the entry."""
+
+    def fake(segments, source, target, **kwargs):
+        entries = []
+        for seg in segments:
+            text = (seg.get("text") or "").strip()
+            if not text:
+                tr = ""
+            else:
+                try:
+                    tr = translate(text)
+                except Exception:
+                    tr = fallback(text) if fallback else text
+                    add_quality_flag(seg, FLAG_TRANSLATION_FALLBACK)
+            entry = {
+                "start": seg["start"], "end": seg["end"],
+                "text_src": text, "text_tgt": tr or text,
+            }
+            flags = compute_segment_quality_flags(seg)
+            if flags:
+                entry["_quality_flags"] = flags
+            entries.append(entry)
+        return entries
+
+    return fake
+
+
+def _ollama_timeout(text):
+    raise TimeoutError("Ollama did not answer")
+
+
+class OllamaEverySegmentFailedTests(unittest.TestCase):
+    """Ollama passes the health check but may fail on every segment."""
+
+    def _run(self, segments, translate, fallback=None):
+        modules = _fake_google_modules(mock.Mock())
+        google = modules["deep_translator"].GoogleTranslator
+        google.return_value.translate.side_effect = lambda text: f"google:{text}"
+        self.google_calls = google.return_value.translate
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.object(translation, "time", _FakeClock()), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            try:
+                return translate_segments(
+                    segments, "en", "it", engine="llm_ollama",
+                    ollama_translator=_fake_ollama_translator(translate, fallback),
+                )
+            finally:
+                self.log = out.getvalue()
+
+    @staticmethod
+    def _segs(*texts):
+        return [
+            {"start": float(i), "end": float(i) + 1.0, "text": t}
+            for i, t in enumerate(texts)
+        ]
+
+    def test_every_segment_failing_falls_back_to_google(self):
+        result = self._run(self._segs("hello", "", "world"), _ollama_timeout)
+        self.assertEqual(
+            [s["text_tgt"] for s in result], ["google:hello", "", "google:world"],
+        )
+        self.assertEqual(self.google_calls.call_count, 2)
+        for seg in result:
+            self.assertNotIn("_quality_flags", seg)
+        self.assertEqual(
+            self.log.count(
+                "Ollama failed on all 2 segments, falling back to Google Translate."
+            ),
+            1,
+        )
+
+    def test_google_fallback_keeps_upstream_flags_only(self):
+        segs = self._segs("hello", "world")
+        segs[0]["_quality_flags"] = [FLAG_WHISPER_SUSPICIOUS]
+        result = self._run(segs, _ollama_timeout)
+        self.assertEqual(result[0]["_quality_flags"], [FLAG_WHISPER_SUSPICIOUS])
+        self.assertNotIn("_quality_flags", result[1])
+        # The input segments no longer carry the flags Ollama added.
+        self.assertEqual(segs[0]["_quality_flags"], [FLAG_WHISPER_SUSPICIOUS])
+        self.assertNotIn("_quality_flags", segs[1])
+
+    def test_partial_failure_keeps_the_ollama_result(self):
+        def translate(text):
+            if text == "two":
+                raise TimeoutError("Ollama did not answer")
+            return text.upper()
+
+        result = self._run(self._segs("one", "two", "three"), translate)
+        self.assertEqual([s["text_tgt"] for s in result], ["ONE", "two", "THREE"])
+        self.assertIn(FLAG_TRANSLATION_FALLBACK, result[1]["_quality_flags"])
+        self.assertEqual(self.google_calls.call_count, 0)
+        self.assertNotIn("falling back to Google", self.log)
+
+    def test_fallback_text_on_every_segment_keeps_the_ollama_result(self):
+        result = self._run(
+            self._segs("one", "two"), _ollama_timeout,
+            fallback=lambda text: f"fallback:{text}",
+        )
+        self.assertEqual(
+            [s["text_tgt"] for s in result], ["fallback:one", "fallback:two"],
+        )
+        self.assertEqual(self.google_calls.call_count, 0)
+        self.assertNotIn("falling back to Google", self.log)
+
+    def test_only_empty_segments_keep_the_ollama_result(self):
+        result = self._run(self._segs("", "  "), _ollama_timeout)
+        self.assertEqual([s["text_tgt"] for s in result], ["", ""])
+        self.assertEqual(self.google_calls.call_count, 0)
+        self.assertNotIn("falling back to Google", self.log)
 
 
 if __name__ == "__main__":

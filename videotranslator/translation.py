@@ -63,6 +63,34 @@ def _google_translate_with_timeout(translator, text: str):
     return outcome["text"]
 
 
+_NO_FLAGS = object()
+
+
+def _snapshot_quality_flags(segments: list[dict]) -> list:
+    """Copy each segment's quality flags, so an engine's additions can be undone."""
+    snapshot = []
+    for seg in segments:
+        flags = seg.get("_quality_flags", _NO_FLAGS)
+        snapshot.append(list(flags) if isinstance(flags, list) else flags)
+    return snapshot
+
+
+def _restore_quality_flags(segments: list[dict], snapshot: list) -> None:
+    for seg, flags in zip(segments, snapshot):
+        if flags is _NO_FLAGS:
+            seg.pop("_quality_flags", None)
+        else:
+            seg["_quality_flags"] = flags
+
+
+def _kept_source_after_failure(entry: dict) -> bool:
+    """The engine failed on this entry and left its source text in place."""
+    return (
+        FLAG_TRANSLATION_FALLBACK in compute_segment_quality_flags(entry)
+        and entry.get("text_tgt") == entry.get("text_src")
+    )
+
+
 def _marian_normalize_lang(code: str) -> str:
     """Normalize language codes to the short form Helsinki-NLP models expect."""
     if not code:
@@ -104,10 +132,11 @@ def translate_segments(
         _effective_use_cove = ollama_use_cove
         if difficulty_profile is not None and not difficulty_profile.use_cove:
             _effective_use_cove = False
+        flags_before_ollama = _snapshot_quality_flags(segments)
         try:
             if ollama_translator is None:
                 raise RuntimeError("ollama_translator callback is required")
-            return ollama_translator(
+            ollama_result = ollama_translator(
                 segments, src, target,
                 model=ollama_model, api_url=ollama_url,
                 slot_aware=ollama_slot_aware, batch_size=1,
@@ -118,6 +147,30 @@ def translate_segments(
             )
         except Exception as e:
             print(f"     ! Ollama unavailable ({e}), falling back to Google Translate.", flush=True)
+            engine = "google"
+        else:
+            # Ollama answered the health check but may still fail on every
+            # segment (model stuck, timeouts): the result would dub the
+            # source language, so switch engine as if it were unreachable.
+            # Partial failures stay flagged in the Ollama result.
+            non_empty = [
+                entry for entry in ollama_result
+                if (entry.get("text_src") or "").strip()
+            ]
+            if not non_empty or not all(
+                _kept_source_after_failure(entry) for entry in non_empty
+            ):
+                return ollama_result
+            print(
+                f"     ! Ollama failed on all {len(non_empty)} segments, "
+                f"falling back to Google Translate.",
+                flush=True,
+            )
+            # Ollama flagged the input segment dicts it failed on and Google
+            # copies the input flags: undo Ollama's additions (upstream ones
+            # such as whisper_suspicious stay), or every segment Google
+            # translates would show up as a fallback in the editor.
+            _restore_quality_flags(segments, flags_before_ollama)
             engine = "google"
 
     # ── MarianMT local translation ──────────────────────────────────────────
