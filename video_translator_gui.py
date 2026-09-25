@@ -367,6 +367,14 @@ UI_STRINGS = {
         "label_voice":        "Voce:",
         "label_tts_rate":     "Velocità TTS:",
         "label_options":      "Opzioni:",
+        "panel_input": "Input",
+        "panel_translation": "Traduzione",
+        "panel_profile": "Profilo di lavoro",
+        "panel_start": "Avvio",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Voice Cloning",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Diarization",
         "label_model_hint":   "← veloce / preciso → (turbo: qualità large-v3, ~6-8× più veloce su GPU)",
         "label_ui_lang":      "🌐 Lingua UI:",
         "btn_add":            "+ Aggiungi",
@@ -492,6 +500,14 @@ UI_STRINGS = {
         "label_voice":        "Voice:",
         "label_tts_rate":     "TTS Speed:",
         "label_options":      "Options:",
+        "panel_input": "Input",
+        "panel_translation": "Translation",
+        "panel_profile": "Workflow profile",
+        "panel_start": "Start",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Voice Cloning",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Diarization",
         "label_model_hint":   "← fast / accurate → (turbo: large-v3 quality, ~6-8× faster on GPU)",
         "label_ui_lang":      "🌐 UI Language:",
         "btn_add":            "+ Add",
@@ -617,6 +633,14 @@ UI_STRINGS = {
         "label_voice": "صوت:",
         "label_tts_rate": "سرعة تحويل النص إلى كلام:",
         "label_options": "خيارات:",
+        "panel_input": "الإدخال",
+        "panel_translation": "ترجمة",
+        "panel_profile": "وضع العمل",
+        "panel_start": "البدء",
+        "section_audio": "الصوت",
+        "section_voice_cloning": "استنساخ الصوت",
+        "section_lip_sync": "مزامنة الشفاه",
+        "section_diarization": "تمييز المتحدثين",
         "label_model_hint": "← سريع / دقيق → (turbo: جودة large-v3، أسرع بـ 6-8× على GPU)",
         "label_ui_lang": "لغة واجهة المستخدم:",
         "btn_add": "+ أضف",
@@ -739,6 +763,14 @@ UI_STRINGS = {
         "label_voice": "嗓音：",
         "label_tts_rate": "TTS 速度：",
         "label_options": "选项：",
+        "panel_input": "输入",
+        "panel_translation": "翻译",
+        "panel_profile": "工作流程配置",
+        "panel_start": "开始",
+        "section_audio": "音频",
+        "section_voice_cloning": "语音克隆",
+        "section_lip_sync": "唇形同步",
+        "section_diarization": "多说话人分离",
         "label_model_hint": "← 快速/准确 → (turbo：large-v3 质量，GPU 上快约 6-8 倍)",
         "label_ui_lang": "用户界面语言：",
         "btn_add": "+ 添加",
@@ -861,6 +893,14 @@ UI_STRINGS = {
         "label_voice": "Hlas:",
         "label_tts_rate": "Rychlost TTS:",
         "label_options": "Možnosti:",
+        "panel_input": "Vstup",
+        "panel_translation": "Překlad",
+        "panel_profile": "Pracovní profil",
+        "panel_start": "Start",
+        "section_audio": "Zvuk",
+        "section_voice_cloning": "Hlasové klonování",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Rozpoznávání mluvčích",
         "label_model_hint": "← rychlé / přesné → (turbo: kvalita large-v3, ~6-8× rychlejší na GPU)",
         "label_ui_lang": "Jazyk uživatelského rozhraní:",
         "btn_add": "+ Přidat",
@@ -983,6 +1023,14 @@ UI_STRINGS = {
         "label_voice": "Stemme:",
         "label_tts_rate": "TTS hastighed:",
         "label_options": "Valgmuligheder:",
+        "panel_input": "Input",
+        "panel_translation": "Oversættelse",
+        "panel_profile": "Arbejdsprofil",
+        "panel_start": "Start",
+        "section_audio": "Lyd",
+        "section_voice_cloning": "Stemmekloning",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Højttalerseparation",
         "label_model_hint": "← hurtig / præcis → (turbo: large-v3 kvalitet, ~6-8× hurtigere på GPU)",
         "label_ui_lang": "UI sprog:",
         "btn_add": "+ Tilføj",
@@ -1105,6 +1153,14 @@ UI_STRINGS = {
         "label_voice": "Stem:",
         "label_tts_rate": "TTS-snelheid:",
         "label_options": "Opties:",
+        "panel_input": "Invoer",
+        "panel_translation": "Vertaling",
+        "panel_profile": "Werkprofiel",
+        "panel_start": "Start",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Spraakklonen",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Sprekerdiarisatie",
         "label_model_hint": "← snel / nauwkeurig → (turbo: large-v3 kwaliteit, ~6-8× sneller op GPU)",
         "label_ui_lang": "UI-taal:",
         "btn_add": "+ Toevoegen",
@@ -1227,6 +1283,14 @@ UI_STRINGS = {
         "label_voice": "Ääni:",
         "label_tts_rate": "TTS nopeus:",
         "label_options": "Vaihtoehdot:",
+        "panel_input": "Syöte",
+        "panel_translation": "Käännös",
+        "panel_profile": "Työnkulun profiili",
+        "panel_start": "Aloitus",
+        "section_audio": "Ääni",
+        "section_voice_cloning": "Äänen kloonaus",
+        "section_lip_sync": "Huulisynkka",
+        "section_diarization": "Puhujan tunnistus",
         "label_model_hint": "← nopea / tarkka → (turbo: large-v3 -laatu, ~6-8× nopeampi GPU:lla)",
         "label_ui_lang": "Käyttöliittymän kieli:",
         "btn_add": "+ Lisää",
@@ -1349,6 +1413,14 @@ UI_STRINGS = {
         "label_voice": "Voix:",
         "label_tts_rate": "Vitesse TTS :",
         "label_options": "Possibilités :",
+        "panel_input": "Entrée",
+        "panel_translation": "Traduction",
+        "panel_profile": "Profil de travail",
+        "panel_start": "Démarrage",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Clonage vocal",
+        "section_lip_sync": "Synchronisation labiale",
+        "section_diarization": "Diarisation",
         "label_model_hint": "← rapide / précis → (turbo : qualité large-v3, ~6-8× plus rapide sur GPU)",
         "label_ui_lang": "Langue de l'interface utilisateur :",
         "btn_add": "+ Ajouter",
@@ -1471,6 +1543,14 @@ UI_STRINGS = {
         "label_voice": "Stimme:",
         "label_tts_rate": "TTS-Geschwindigkeit:",
         "label_options": "Optionen:",
+        "panel_input": "Eingabe",
+        "panel_translation": "Übersetzung",
+        "panel_profile": "Workflow-Profil",
+        "panel_start": "Start",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Voice Cloning",
+        "section_lip_sync": "Lippensynchronisation",
+        "section_diarization": "Sprechertrennung",
         "label_model_hint": "← schnell / genau → (turbo: large-v3-Qualität, ~6-8× schneller auf GPU)",
         "label_ui_lang": "UI-Sprache:",
         "btn_add": "+ Hinzufügen",
@@ -1593,6 +1673,14 @@ UI_STRINGS = {
         "label_voice": "Φωνή:",
         "label_tts_rate": "Ταχύτητα TTS:",
         "label_options": "Επιλογές:",
+        "panel_input": "Είσοδος",
+        "panel_translation": "Μετάφραση",
+        "panel_profile": "Προφίλ εργασίας",
+        "panel_start": "Έναρξη",
+        "section_audio": "Ήχος",
+        "section_voice_cloning": "Κλωνοποίηση φωνής",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Διαχωρισμός ομιλητών",
         "label_model_hint": "← γρήγορο / ακριβές → (turbo: ποιότητα large-v3, ~6-8× ταχύτερο σε GPU)",
         "label_ui_lang": "Γλώσσα διεπαφής χρήστη:",
         "btn_add": "+ Προσθήκη",
@@ -1715,6 +1803,14 @@ UI_STRINGS = {
         "label_voice": "आवाज़:",
         "label_tts_rate": "टीटीएस स्पीड:",
         "label_options": "विकल्प:",
+        "panel_input": "इनपुट",
+        "panel_translation": "अनुवाद",
+        "panel_profile": "वर्कफ़्लो प्रोफ़ाइल",
+        "panel_start": "प्रारंभ",
+        "section_audio": "ऑडियो",
+        "section_voice_cloning": "वॉयस क्लोनिंग",
+        "section_lip_sync": "लिप सिंक",
+        "section_diarization": "वक्ता पहचान",
         "label_model_hint": "← तेज़/सटीक → (turbo: large-v3 गुणवत्ता, GPU पर ~6-8× तेज़)",
         "label_ui_lang": "यूआई भाषा:",
         "btn_add": "+ जोड़ें",
@@ -1837,6 +1933,14 @@ UI_STRINGS = {
         "label_voice": "Hang:",
         "label_tts_rate": "TTS sebesség:",
         "label_options": "Opciók:",
+        "panel_input": "Bemenet",
+        "panel_translation": "Fordítás",
+        "panel_profile": "Munkafolyamat profil",
+        "panel_start": "Indítás",
+        "section_audio": "Hang",
+        "section_voice_cloning": "Hangklónozás",
+        "section_lip_sync": "Ajakszinkron",
+        "section_diarization": "Beszélőelkülönítés",
         "label_model_hint": "← gyors / pontos → (turbo: large-v3 minőség, ~6-8× gyorsabb GPU-n)",
         "label_ui_lang": "UI nyelv:",
         "btn_add": "+ Hozzáadás",
@@ -1959,6 +2063,14 @@ UI_STRINGS = {
         "label_voice": "Suara:",
         "label_tts_rate": "Kecepatan TTS:",
         "label_options": "Pilihan:",
+        "panel_input": "Masukan",
+        "panel_translation": "Terjemahan",
+        "panel_profile": "Profil alur kerja",
+        "panel_start": "Mulai",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Kloning Suara",
+        "section_lip_sync": "Sinkronisasi Bibir",
+        "section_diarization": "Pemisahan pembicara",
         "label_model_hint": "← cepat / akurat → (turbo: kualitas large-v3, ~6-8× lebih cepat di GPU)",
         "label_ui_lang": "Bahasa UI:",
         "btn_add": "+ Tambahkan",
@@ -2081,6 +2193,14 @@ UI_STRINGS = {
         "label_voice": "声：",
         "label_tts_rate": "TTS速度:",
         "label_options": "オプション:",
+        "panel_input": "入力",
+        "panel_translation": "翻訳",
+        "panel_profile": "ワークフロー設定",
+        "panel_start": "開始",
+        "section_audio": "オーディオ",
+        "section_voice_cloning": "音声クローン作成",
+        "section_lip_sync": "リップシンク",
+        "section_diarization": "話者ダイアライゼーション",
         "label_model_hint": "← 速い / 正確 → (turbo: large-v3 品質、GPUで約6-8倍高速)",
         "label_ui_lang": "UI言語:",
         "btn_add": "+追加",
@@ -2203,6 +2323,14 @@ UI_STRINGS = {
         "label_voice": "목소리:",
         "label_tts_rate": "TTS 속도:",
         "label_options": "옵션:",
+        "panel_input": "입력",
+        "panel_translation": "번역",
+        "panel_profile": "워크플로 프로필",
+        "panel_start": "시작",
+        "section_audio": "오디오",
+        "section_voice_cloning": "음성 복제",
+        "section_lip_sync": "립싱크",
+        "section_diarization": "화자 분리",
         "label_model_hint": "← 빠르다 / 정확하다 → (turbo: large-v3 품질, GPU에서 ~6-8배 빠름)",
         "label_ui_lang": "UI 언어:",
         "btn_add": "+ 추가",
@@ -2325,6 +2453,14 @@ UI_STRINGS = {
         "label_voice": "Stemme:",
         "label_tts_rate": "TTS hastighet:",
         "label_options": "Alternativer:",
+        "panel_input": "Inndata",
+        "panel_translation": "Oversettelse",
+        "panel_profile": "Arbeidsprofil",
+        "panel_start": "Start",
+        "section_audio": "Lyd",
+        "section_voice_cloning": "Stemmekloning",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Taleridentifikasjon",
         "label_model_hint": "← rask / nøyaktig → (turbo: large-v3 kvalitet, ~6-8× raskere på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Legg til",
@@ -2447,6 +2583,14 @@ UI_STRINGS = {
         "label_voice": "Głos:",
         "label_tts_rate": "Prędkość TTS:",
         "label_options": "Opcje:",
+        "panel_input": "Wejście",
+        "panel_translation": "Tłumaczenie",
+        "panel_profile": "Profil pracy",
+        "panel_start": "Start",
+        "section_audio": "Dźwięk",
+        "section_voice_cloning": "Klonowanie głosu",
+        "section_lip_sync": "Synchronizacja ust",
+        "section_diarization": "Rozpoznawanie mówców",
         "label_model_hint": "← szybki / dokładny → (turbo: jakość large-v3, ~6-8× szybsze na GPU)",
         "label_ui_lang": "Język interfejsu:",
         "btn_add": "+ Dodaj",
@@ -2569,6 +2713,14 @@ UI_STRINGS = {
         "label_voice": "Voz:",
         "label_tts_rate": "Velocidade TTS:",
         "label_options": "Opções:",
+        "panel_input": "Entrada",
+        "panel_translation": "Tradução",
+        "panel_profile": "Perfil de trabalho",
+        "panel_start": "Início",
+        "section_audio": "Áudio",
+        "section_voice_cloning": "Clonagem de voz",
+        "section_lip_sync": "Sincronização labial",
+        "section_diarization": "Diarização",
         "label_model_hint": "← rápido / preciso → (turbo: qualidade large-v3, ~6-8× mais rápido na GPU)",
         "label_ui_lang": "Idioma da interface do usuário:",
         "btn_add": "+ Adicionar",
@@ -2691,6 +2843,14 @@ UI_STRINGS = {
         "label_voice": "Voce:",
         "label_tts_rate": "Viteza TTS:",
         "label_options": "Opțiuni:",
+        "panel_input": "Intrare",
+        "panel_translation": "Traducere",
+        "panel_profile": "Profil de lucru",
+        "panel_start": "Start",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Clonarea vocii",
+        "section_lip_sync": "Lip Sync",
+        "section_diarization": "Identificare vorbitori",
         "label_model_hint": "← rapid / precis → (turbo: calitate large-v3, ~6-8× mai rapid pe GPU)",
         "label_ui_lang": "Limba UI:",
         "btn_add": "+ Adăugați",
@@ -2813,6 +2973,14 @@ UI_STRINGS = {
         "label_voice": "Голос:",
         "label_tts_rate": "Скорость ТТС:",
         "label_options": "Параметры:",
+        "panel_input": "Вход",
+        "panel_translation": "Перевод",
+        "panel_profile": "Профиль работы",
+        "panel_start": "Начало",
+        "section_audio": "Аудио",
+        "section_voice_cloning": "Голосовое клонирование",
+        "section_lip_sync": "Синхронизация губ",
+        "section_diarization": "Разделение дикторов",
         "label_model_hint": "← быстро / точно → (turbo: качество large-v3, ~6-8× быстрее на GPU)",
         "label_ui_lang": "Язык пользовательского интерфейса:",
         "btn_add": "+ Добавить",
@@ -2935,6 +3103,14 @@ UI_STRINGS = {
         "label_voice": "Voz:",
         "label_tts_rate": "Velocidad TTS:",
         "label_options": "Opciones:",
+        "panel_input": "Entrada",
+        "panel_translation": "Traducción",
+        "panel_profile": "Perfil de trabajo",
+        "panel_start": "Inicio",
+        "section_audio": "Audio",
+        "section_voice_cloning": "Clonación de voz",
+        "section_lip_sync": "Sincronización labial",
+        "section_diarization": "Diarización",
         "label_model_hint": "← rápido / preciso → (turbo: calidad large-v3, ~6-8× más rápido en GPU)",
         "label_ui_lang": "Idioma de la interfaz de usuario:",
         "btn_add": "+ Agregar",
@@ -3057,6 +3233,14 @@ UI_STRINGS = {
         "label_voice": "Röst:",
         "label_tts_rate": "TTS hastighet:",
         "label_options": "Alternativ:",
+        "panel_input": "Indata",
+        "panel_translation": "Översättning",
+        "panel_profile": "Arbetsprofil",
+        "panel_start": "Start",
+        "section_audio": "Ljud",
+        "section_voice_cloning": "Röstkloning",
+        "section_lip_sync": "Läppsynk",
+        "section_diarization": "Talaridentifiering",
         "label_model_hint": "← snabb / exakt → (turbo: large-v3-kvalitet, ~6-8× snabbare på GPU)",
         "label_ui_lang": "UI-språk:",
         "btn_add": "+ Lägg till",
@@ -3179,6 +3363,14 @@ UI_STRINGS = {
         "label_voice": "Ses:",
         "label_tts_rate": "TTS Hızı:",
         "label_options": "Seçenekler:",
+        "panel_input": "Giriş",
+        "panel_translation": "Çeviri",
+        "panel_profile": "İş akışı profili",
+        "panel_start": "Başlangıç",
+        "section_audio": "Ses",
+        "section_voice_cloning": "Ses Klonlama",
+        "section_lip_sync": "Dudak Senkronu",
+        "section_diarization": "Konuşmacı ayrıştırma",
         "label_model_hint": "← hızlı / doğru → (turbo: large-v3 kalitesi, GPU'da ~6-8× daha hızlı)",
         "label_ui_lang": "Kullanıcı Arayüzü Dili:",
         "btn_add": "+ Ekle",
@@ -3301,6 +3493,14 @@ UI_STRINGS = {
         "label_voice": "Голос:",
         "label_tts_rate": "Швидкість TTS:",
         "label_options": "Опції:",
+        "panel_input": "Вхід",
+        "panel_translation": "Переклад",
+        "panel_profile": "Профіль роботи",
+        "panel_start": "Початок",
+        "section_audio": "Аудіо",
+        "section_voice_cloning": "Клонування голосу",
+        "section_lip_sync": "Синхронізація губ",
+        "section_diarization": "Розділення дикторів",
         "label_model_hint": "← швидко / точно → (turbo: якість large-v3, ~6-8× швидше на GPU)",
         "label_ui_lang": "Мова інтерфейсу користувача:",
         "btn_add": "+ Додати",
@@ -3423,6 +3623,14 @@ UI_STRINGS = {
         "label_voice": "Tiếng nói:",
         "label_tts_rate": "Tốc độ TTS:",
         "label_options": "Tùy chọn:",
+        "panel_input": "Đầu vào",
+        "panel_translation": "Dịch thuật",
+        "panel_profile": "Hồ sơ làm việc",
+        "panel_start": "Bắt đầu",
+        "section_audio": "Âm thanh",
+        "section_voice_cloning": "Nhân bản giọng nói",
+        "section_lip_sync": "Đồng bộ môi",
+        "section_diarization": "Phân tách người nói",
         "label_model_hint": "← nhanh / chính xác → (turbo: chất lượng large-v3, ~6-8× nhanh hơn trên GPU)",
         "label_ui_lang": "Ngôn ngữ giao diện người dùng:",
         "btn_add": "+ Thêm",
@@ -6205,12 +6413,17 @@ class App(tk.Tk):
         return inner
 
     def _section_title(self, parent, text):
-        """Small upper-case section label in muted colour."""
+        """Small upper-case section label in muted colour.
+
+        Returns ``(frame, label)``: the caller keeps ``label`` to retext it
+        on a UI language change (``_apply_lang``).
+        """
         bg = parent.cget("bg") if "bg" in parent.keys() else SURFACE
         f = tk.Frame(parent, bg=bg)
-        tk.Label(f, text=text.upper(), bg=bg, fg=FG2,
-                 font="VT.SmallBold").pack(side="left")
-        return f
+        lbl = tk.Label(f, text=text.upper(), bg=bg, fg=FG2,
+                       font="VT.SmallBold")
+        lbl.pack(side="left")
+        return f, lbl
 
     # -- Movable panels of the settings column ---------------------------
 
@@ -6220,19 +6433,24 @@ class App(tk.Tk):
         Builds a `_card`, registers its outer frame under ``panel_id`` and
         adds a header row: the section title (when given) on the left and
         a drag handle on the right. Dragging the header moves the card;
-        the order is saved as ``ui_panel_order``. Returns the inner frame.
+        the order is saved as ``ui_panel_order`` and depends only on
+        ``panel_id``, never on the (translated) title text. Returns
+        ``(inner_frame, title_label_or_None)``: the caller keeps the label
+        to retext it on a UI language change.
         """
         inner = self._card(parent, **pack)
         self._panels[panel_id] = (inner.master, dict(pack))
         hdr = tk.Frame(inner, bg=SURFACE, cursor="fleur")
         hdr.pack(fill="x", pady=(0, 8) if title else (0, 2))
+        title_lbl = None
         if title:
-            self._section_title(hdr, title).pack(side="left")
+            title_frame, title_lbl = self._section_title(hdr, title)
+            title_frame.pack(side="left")
         grip = tk.Label(hdr, text="≡", bg=SURFACE, fg=FG2,
                         font="VT.Base", cursor="fleur")
         grip.pack(side="right")
         self._bind_panel_drag(hdr, panel_id)
-        return inner
+        return inner, title_lbl
 
     def _bind_panel_drag(self, widget, panel_id):
         """Bind the drag handlers on ``widget`` and every descendant, so the
@@ -6314,7 +6532,9 @@ class App(tk.Tk):
             outer.pack(fill="x", **opts)
 
     def _make_accordion_section(self, parent, title_text):
-        """Return (outer_frame, body_frame, arrow_label). Starts collapsed.
+        """Return (outer_frame, body_frame, arrow_label, title_label). Starts
+        collapsed. The caller keeps ``title_label`` to retext it on a UI
+        language change (``_apply_lang``).
 
         A separator is drawn above every section but the first one; the
         card's drag header does not count as a section."""
@@ -6329,8 +6549,8 @@ class App(tk.Tk):
         hdr.pack(fill="x")
         arrow_lbl = tk.Label(hdr, text="▸", bg=SURFACE, fg=FG2, font="VT.Base", width=2)
         arrow_lbl.pack(side="left")
-        tk.Label(hdr, text=title_text, bg=SURFACE, fg=FG, font="VT.Base").pack(
-            side="left", padx=(2, 0), pady=6)
+        title_lbl = tk.Label(hdr, text=title_text, bg=SURFACE, fg=FG, font="VT.Base")
+        title_lbl.pack(side="left", padx=(2, 0), pady=6)
         body = tk.Frame(outer, bg=SURFACE, padx=24, pady=6)
 
         def toggle(e=None):
@@ -6344,7 +6564,7 @@ class App(tk.Tk):
         hdr.bind("<Button-1>", toggle)
         for w in hdr.winfo_children():
             w.bind("<Button-1>", toggle)
-        return outer, body, arrow_lbl
+        return outer, body, arrow_lbl, title_lbl
 
     def _apply_profile(self, name):
         """Apply a quality preset by setting existing Tk vars."""
@@ -6477,7 +6697,8 @@ class App(tk.Tk):
 
     def _build_input_section(self, parent):
         """Right-column INPUT card: batch list, output path, URL download."""
-        inner = self._panel(parent, "input", "Input", pady=(0, 10))
+        inner, self._lbl_panel_input = self._panel(
+            parent, "input", self._s("panel_input"), pady=(0, 10))
 
         # Hidden label refs required by _apply_lang (configure(text=...))
         self._lbl_video  = tk.Label(inner, text="", bg=CARD)
@@ -6562,7 +6783,7 @@ class App(tk.Tk):
     def _build_advanced_panel(self, parent):
         """Right-pane card, below Start: collapsible accordion sections for
         all advanced options."""
-        adv = self._panel(parent, "settings", None, pady=(4, 0))
+        adv, _ = self._panel(parent, "settings", None, pady=(4, 0))
         self._advanced_card = adv
 
         def cb(par, text_key, var, cmd=None):
@@ -6576,7 +6797,7 @@ class App(tk.Tk):
             return w
 
         # ── 1. WHISPER MODEL ──────────────────────────────────────────────
-        sect, body, _ = self._make_accordion_section(
+        sect, body, _, _ = self._make_accordion_section(
             adv, self._s("label_model"))
         sect.pack(fill="x")
         mf = tk.Frame(body, bg=SURFACE)
@@ -6601,7 +6822,7 @@ class App(tk.Tk):
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
         # body2 uses grid layout so _ollama_row/_deepl_row work with
         # grid_remove()/grid() as called by _on_engine_change().
-        sect2, body2, _ = self._make_accordion_section(
+        sect2, body2, _, _ = self._make_accordion_section(
             adv, self._s("label_engine"))
         sect2.pack(fill="x")
         body2.columnconfigure(0, weight=1)
@@ -6730,26 +6951,30 @@ class App(tk.Tk):
         self._deepl_row.grid_remove()
 
         # ── 3. AUDIO ──────────────────────────────────────────────────────
-        sect3, body3, _ = self._make_accordion_section(adv, "Audio")
+        sect3, body3, _, self._lbl_section_audio = self._make_accordion_section(
+            adv, self._s("section_audio"))
         sect3.pack(fill="x")
         self._chk_no_demucs = cb(body3, "opt_no_demucs", self._no_demucs)
         self._chk_no_demucs.pack(anchor="w", pady=4)
 
         # ── 4. VOICE CLONING ──────────────────────────────────────────────
-        sect4, body4, _ = self._make_accordion_section(adv, "Voice Cloning")
+        sect4, body4, _, self._lbl_section_voice_cloning = self._make_accordion_section(
+            adv, self._s("section_voice_cloning"))
         sect4.pack(fill="x")
         self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts)
         self._chk_xtts.pack(anchor="w", pady=4)
 
         # ── 5. LIP SYNC ───────────────────────────────────────────────────
-        sect5, body5, _ = self._make_accordion_section(adv, "Lip Sync")
+        sect5, body5, _, self._lbl_section_lip_sync = self._make_accordion_section(
+            adv, self._s("section_lip_sync"))
         sect5.pack(fill="x")
         self._chk_lipsync = cb(body5, "opt_lipsync", self._use_lipsync)
         self._chk_lipsync.pack(anchor="w", pady=4)
 
         # ── 6. DIARIZATION ────────────────────────────────────────────────
         # body6 uses grid layout so _hf_row works with grid_remove()/grid().
-        sect6, body6, _ = self._make_accordion_section(adv, "Diarization")
+        sect6, body6, _, self._lbl_section_diarization = self._make_accordion_section(
+            adv, self._s("section_diarization"))
         sect6.pack(fill="x")
         body6.columnconfigure(0, weight=1)
 
@@ -6788,7 +7013,7 @@ class App(tk.Tk):
         self._hf_row.grid_remove()
 
         # ── 7. SUBTITLES ──────────────────────────────────────────────────
-        sect7, body7, _ = self._make_accordion_section(
+        sect7, body7, _, _ = self._make_accordion_section(
             adv, self._s("label_options"))
         sect7.pack(fill="x")
         # Hidden ref for _apply_lang
@@ -6804,7 +7029,7 @@ class App(tk.Tk):
         self._chk_edit_subs.pack(anchor="w", pady=(4, 4))
 
         # ── 8. HOTWORDS ───────────────────────────────────────────────────
-        sect8, body8, _ = self._make_accordion_section(
+        sect8, body8, _, _ = self._make_accordion_section(
             adv, self._s("label_hotwords"))
         sect8.pack(fill="x")
         self._hotwords_row = tk.Frame(body8, bg=SURFACE)
@@ -6827,7 +7052,8 @@ class App(tk.Tk):
 
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
-        inner = self._panel(parent, "translation", "Traduzione", padx=4, pady=(0, 10))
+        inner, self._lbl_panel_translation = self._panel(
+            parent, "translation", self._s("panel_translation"), padx=4, pady=(0, 10))
 
         # Source language
         from_row = tk.Frame(inner, bg=CARD)
@@ -6897,7 +7123,8 @@ class App(tk.Tk):
 
     def _build_profile_section(self, parent):
         """Right-pane card: Fast / Balanced / Studio / Cinematic presets."""
-        inner = self._panel(parent, "profile", "Workflow profile", padx=4, pady=(0, 10))
+        inner, self._lbl_panel_profile = self._panel(
+            parent, "profile", self._s("panel_profile"), padx=4, pady=(0, 10))
 
         btn_row = tk.Frame(inner, bg=CARD)
         btn_row.pack(fill="x")
@@ -6934,7 +7161,8 @@ class App(tk.Tk):
 
     def _build_start_section(self, parent):
         """Right-pane card: summary line + big Start button + status row."""
-        inner = self._panel(parent, "start", "Start", padx=4, pady=(0, 10))
+        inner, self._lbl_panel_start = self._panel(
+            parent, "start", self._s("panel_start"), padx=4, pady=(0, 10))
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = tk.Label(
@@ -7418,6 +7646,10 @@ class App(tk.Tk):
 
     def _apply_lang(self):
         self._relabel_settings()
+        self._lbl_panel_input.configure(text=self._s("panel_input").upper())
+        self._lbl_panel_translation.configure(text=self._s("panel_translation").upper())
+        self._lbl_panel_profile.configure(text=self._s("panel_profile").upper())
+        self._lbl_panel_start.configure(text=self._s("panel_start").upper())
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
         self._lbl_model.configure(text=self._s("label_model"))
@@ -7442,9 +7674,12 @@ class App(tk.Tk):
             self._btn.configure(text=self._s("btn_start"))
         self._chk_subs_only.configure(text=self._s("opt_subs_only"))
         self._chk_no_subs.configure(text=self._s("opt_no_subs"))
+        self._lbl_section_audio.configure(text=self._s("section_audio"))
         self._chk_no_demucs.configure(text=self._s("opt_no_demucs"))
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
+        self._lbl_section_voice_cloning.configure(text=self._s("section_voice_cloning"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
+        self._lbl_section_lip_sync.configure(text=self._s("section_lip_sync"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_engine.configure(text=self._s("label_engine"))
         self._rb_eng_google.configure(text=self._s("engine_google"))
@@ -7456,6 +7691,7 @@ class App(tk.Tk):
         self._chk_ollama_thinking.configure(text=self._s("opt_ollama_thinking"))
         self._lbl_ollama_thinking_hint.configure(text=self._s("hint_ollama_thinking"))
         self._lbl_deepl_key.configure(text=self._s("label_deepl_key"))
+        self._lbl_section_diarization.configure(text=self._s("section_diarization"))
         self._chk_diar.configure(text=self._s("opt_diarization"))
         self._lbl_hf_token.configure(text=self._s("label_hf_token"))
         self._lbl_hf_hint.configure(text=self._s("hint_hf_token"))

@@ -1,8 +1,10 @@
+import ast
 import re
 import unittest
 from pathlib import Path
 
 import video_translator_gui as legacy
+from test_ui_theme_tk import HAS_DISPLAY, built_app
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "video_translator_gui.py"
@@ -190,6 +192,106 @@ class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
         missing = [(lang, key) for key in keys for lang in sorted(UI_STRINGS)
                    if key not in UI_STRINGS[lang]]
         self.assertEqual(missing, [], f"cb() keys missing: {missing}")
+
+
+class PanelAndAccordionTitleSourceTests(unittest.TestCase):
+    """Task 7: every card/accordion title argument must come from
+    UI_STRINGS through self._s(...), never a literal string, so a future
+    title cannot silently drop out of i18n."""
+
+    @staticmethod
+    def _title_calls():
+        tree = ast.parse(SOURCE_PATH.read_text(encoding="utf-8"), filename=str(SOURCE_PATH))
+        calls = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr == "_panel" and len(node.args) >= 3:
+                calls.append(("_panel", node.args[2], node.lineno))
+            elif node.func.attr == "_make_accordion_section" and len(node.args) >= 2:
+                calls.append(("_make_accordion_section", node.args[1], node.lineno))
+        return calls
+
+    def test_title_arguments_are_translated_or_none(self):
+        calls = self._title_calls()
+        self.assertGreaterEqual(
+            len(calls), 12,
+            "too few _panel()/_make_accordion_section() calls found: "
+            "the AST scan is probably broken",
+        )
+        bad = []
+        for name, arg, lineno in calls:
+            if isinstance(arg, ast.Constant) and arg.value is None:
+                continue  # _panel(..., None, ...): a card with no title
+            is_translated = (
+                isinstance(arg, ast.Call)
+                and isinstance(arg.func, ast.Attribute)
+                and arg.func.attr == "_s"
+            )
+            if not is_translated:
+                bad.append((name, lineno))
+        if bad:
+            details = "\n".join(
+                f"  - line {lineno}: {name}(...) title is not self._s(...) or None"
+                for name, lineno in bad
+            )
+            self.fail(f"{len(bad)} card/accordion titles are not translated:\n{details}")
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class PanelAndAccordionTitleI18nTests(unittest.TestCase):
+    """Task 7: card and accordion section titles follow the UI language,
+    and the drag order (`ui_panel_order`, keyed by panel id) never depends
+    on the title text."""
+
+    _PANEL_TITLE_KEYS = {
+        "input": "panel_input",
+        "translation": "panel_translation",
+        "profile": "panel_profile",
+        "start": "panel_start",
+    }
+    _SECTION_TITLE_ATTRS = {
+        "_lbl_section_audio": "section_audio",
+        "_lbl_section_voice_cloning": "section_voice_cloning",
+        "_lbl_section_lip_sync": "section_lip_sync",
+        "_lbl_section_diarization": "section_diarization",
+    }
+
+    def test_panel_titles_follow_ui_language_and_ids_stay_stable(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            for panel_id, key in self._PANEL_TITLE_KEYS.items():
+                with self.subTest(panel=panel_id):
+                    label = getattr(app, f"_lbl_panel_{panel_id}")
+                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["it"][key].upper())
+            panel_ids_before = sorted(app._panels.keys())
+            order_before = list(app._panel_order)
+
+            app._ui_lang.set("fr")
+            app._apply_lang()
+
+            for panel_id, key in self._PANEL_TITLE_KEYS.items():
+                with self.subTest(panel=panel_id):
+                    label = getattr(app, f"_lbl_panel_{panel_id}")
+                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["fr"][key].upper())
+            # The language switch retexts the labels only: panel identity
+            # and the saved drag order are keyed by id, never by title text.
+            self.assertEqual(sorted(app._panels.keys()), panel_ids_before)
+            self.assertEqual(list(app._panel_order), order_before)
+
+    def test_accordion_section_titles_follow_ui_language(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, _):
+            for attr, key in self._SECTION_TITLE_ATTRS.items():
+                with self.subTest(section=attr):
+                    label = getattr(app, attr)
+                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["it"][key])
+
+            app._ui_lang.set("fr")
+            app._apply_lang()
+
+            for attr, key in self._SECTION_TITLE_ATTRS.items():
+                with self.subTest(section=attr):
+                    label = getattr(app, attr)
+                    self.assertEqual(label.cget("text"), gui.UI_STRINGS["fr"][key])
 
 
 if __name__ == "__main__":
