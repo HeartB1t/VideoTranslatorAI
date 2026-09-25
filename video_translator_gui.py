@@ -4577,6 +4577,14 @@ def _error_key_for(exc: BaseException) -> str | None:
     return None
 
 
+def _shared_error_key(error_keys: list[str | None]) -> str | None:
+    """Error dialog key for a run of several files, given the
+    ``_error_key_for`` result of each failed file: the specific key only
+    when every failure had that same key, else None (generic message)."""
+    distinct = set(error_keys)
+    return distinct.pop() if len(distinct) == 1 else None
+
+
 def translate_segments(
     segments: list[dict], source: str, target: str,
     engine: str = "google", deepl_key: str = "",
@@ -7812,7 +7820,7 @@ class App(tk.Tk):
         def run():
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             all_ok = True
-            error_key = None
+            error_keys = []
             fallback_count = 0
             handed_off_to_editor = False
             try:
@@ -7856,7 +7864,7 @@ class App(tk.Tk):
                         self.after(0, self._log_write,
                                    f"[x] {type(e).__name__}: {e}\n{traceback.format_exc()}\n")
                         all_ok = False
-                        error_key = error_key or _error_key_for(e)
+                        error_keys.append(_error_key_for(e))
                     finally:
                         if stable and os.path.exists(stable):
                             try:
@@ -7866,7 +7874,8 @@ class App(tk.Tk):
             finally:
                 _thread_local.redirect = None
             if not handed_off_to_editor:
-                self.after(0, self._on_done, all_ok, error_key, fallback_count)
+                self.after(0, self._on_done, all_ok,
+                           _shared_error_key(error_keys), fallback_count)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -8156,7 +8165,7 @@ class App(tk.Tk):
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             total  = len(files)
             all_ok = True
-            error_key = None
+            error_keys = []
             fallback_count = 0
             try:
                 for i, f in enumerate(files):
@@ -8174,10 +8183,11 @@ class App(tk.Tk):
                         self.after(0, self._log_write,
                                    f"[x] {e}\n{traceback.format_exc()}\n")
                         all_ok = False
-                        error_key = error_key or _error_key_for(e)
+                        error_keys.append(_error_key_for(e))
             finally:
                 _thread_local.redirect = None
-            self.after(0, self._on_done, all_ok, error_key, fallback_count)
+            self.after(0, self._on_done, all_ok,
+                       _shared_error_key(error_keys), fallback_count)
 
         threading.Thread(target=run_all, daemon=True).start()
 
