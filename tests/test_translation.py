@@ -478,6 +478,15 @@ class OllamaEverySegmentFailedTests(unittest.TestCase):
         self.assertEqual(self.google_calls.call_count, 0)
         self.assertNotIn("falling back to Google", self.log)
 
+    def test_identical_translations_without_failure_keep_the_ollama_result(self):
+        # Brand names, "OK", numbers: Ollama succeeds with the source text.
+        result = self._run(self._segs("OK", "Netflix"), lambda text: text)
+        self.assertEqual([s["text_tgt"] for s in result], ["OK", "Netflix"])
+        for seg in result:
+            self.assertNotIn("_quality_flags", seg)
+        self.assertEqual(self.google_calls.call_count, 0)
+        self.assertNotIn("falling back to Google", self.log)
+
     def test_only_empty_segments_keep_the_ollama_result(self):
         result = self._run(self._segs("", "  "), _ollama_timeout)
         self.assertEqual([s["text_tgt"] for s in result], ["", ""])
