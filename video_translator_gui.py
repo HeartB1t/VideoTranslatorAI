@@ -3680,7 +3680,7 @@ UI_STRINGS = {
         "section_voice_cloning": "Nhân bản giọng nói",
         "section_lip_sync": "Đồng bộ môi",
         "section_diarization": "Phân tách người nói",
-        "section_model": "Người mẫu",
+        "section_model": "Mô hình",
         "section_engine": "Công cụ dịch",
         "section_subtitles": "Phụ đề",
         "section_hotwords": "Từ khóa",
