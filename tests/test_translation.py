@@ -227,5 +227,100 @@ class GoogleRateLimitTests(unittest.TestCase):
         self.assertEqual(len(paced), 2)
 
 
+class _FakeDeepLResponse:
+    def __init__(self, status_code, texts=()):
+        self.status_code = status_code
+        self.headers = {}
+        self.text = ""
+        self._texts = texts
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"translations": [{"text": t.upper()} for t in self._texts]}
+
+
+class DeepLFailedBatchTests(unittest.TestCase):
+    """A batch that still fails after the retries must not go by silently."""
+
+    def _run(self, answer_failing_batch, n_segments=51, failing_text="s50"):
+        # 51 segments = two DeepL batches (50 + 1). The batch that carries
+        # failing_text gets answer_failing_batch, every other one succeeds.
+        segs = [
+            {"start": float(i), "end": float(i) + 1.0, "text": f"s{i}"}
+            for i in range(n_segments)
+        ]
+        modules = _fake_google_modules(mock.Mock())
+        google = modules["deep_translator"].GoogleTranslator
+        google.return_value.translate.side_effect = lambda text: f"google:{text}"
+        requests_stub = modules["requests"]
+        self.posts = 0
+
+        def fake_post(endpoint, headers=None, data=None, timeout=None):
+            self.posts += 1
+            texts = [value for key, value in data if key == "text"]
+            if failing_text in texts:
+                return answer_failing_batch(requests_stub)
+            return _FakeDeepLResponse(200, texts)
+
+        requests_stub.post = fake_post
+        self.clock = _FakeClock()
+        with mock.patch.dict(sys.modules, modules), \
+                mock.patch.object(translation, "time", self.clock), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            try:
+                return translate_segments(
+                    segs, "en", "it", engine="deepl", deepl_key="key:fx",
+                )
+            finally:
+                self.log = out.getvalue()
+
+    @staticmethod
+    def _network_error(requests_stub):
+        raise requests_stub.RequestException("connection reset")
+
+    @staticmethod
+    def _rate_limited(requests_stub):
+        return _FakeDeepLResponse(429)
+
+    def _assert_only_last_batch_flagged(self, result):
+        self.assertEqual(result[0]["text_tgt"], "S0")
+        self.assertEqual(result[49]["text_tgt"], "S49")
+        for seg in result[:50]:
+            self.assertNotIn("_quality_flags", seg)
+        self.assertEqual(result[50]["text_tgt"], "s50")
+        self.assertIn(FLAG_TRANSLATION_FALLBACK, result[50]["_quality_flags"])
+        self.assertIn("1/51", self.log)
+
+    def test_network_error_batch_is_flagged_and_counted(self):
+        result = self._run(self._network_error)
+        self._assert_only_last_batch_flagged(result)
+        self.assertEqual(self.posts, 1 + 5)
+
+    def test_rate_limited_batch_is_flagged_and_counted(self):
+        result = self._run(self._rate_limited)
+        self._assert_only_last_batch_flagged(result)
+        self.assertEqual(self.posts, 1 + 5)
+
+    def test_all_batches_failing_falls_back_to_google(self):
+        for answer in (self._network_error, self._rate_limited):
+            with self.subTest(answer=answer.__name__):
+                result = self._run(answer, n_segments=3, failing_text="s0")
+                self.assertEqual(
+                    [s["text_tgt"] for s in result],
+                    ["google:s0", "google:s1", "google:s2"],
+                )
+                self.assertIn("falling back to Google Translate", self.log)
+
+    def test_success_has_no_flags_nor_warning(self):
+        result = self._run(self._network_error, failing_text=None)
+        self.assertEqual(result[50]["text_tgt"], "S50")
+        for seg in result:
+            self.assertNotIn("_quality_flags", seg)
+        self.assertNotIn("failed", self.log)
+        self.assertEqual(self.posts, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

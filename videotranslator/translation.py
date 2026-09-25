@@ -168,7 +168,7 @@ def translate_segments(
     if engine == "deepl" and deepl_key.strip():
         key = deepl_key.strip()
         endpoint = "https://api-free.deepl.com/v2/translate" if key.endswith(":fx") else "https://api.deepl.com/v2/translate"
-        import requests, time as _time
+        import requests
         texts = [(seg.get("text") or "").strip() for seg in segments]
         results: list[str] = [""] * len(texts)
         idx_nonempty = [i for i, t in enumerate(texts) if t]
@@ -179,6 +179,7 @@ def translate_segments(
         if deepl_target == "EN":
             deepl_target = "EN-US"
         deepl_source = None if src == "auto" else src.upper()
+        failed_idx: set[int] = set()
         try:
             for i in range(0, len(idx_nonempty), BATCH):
                 chunk_idx = idx_nonempty[i:i + BATCH]
@@ -194,13 +195,18 @@ def translate_segments(
                 ))
                 for j in chunk_idx:
                     payload.append(("text", texts[j]))
+                batch_translated = False
+                last_error = ""
                 for attempt in range(MAX_RETRIES):
                     try:
                         r = requests.post(endpoint, headers=headers, data=payload, timeout=60)
                         if r.status_code == 429 or r.status_code >= 500:
+                            last_error = f"HTTP {r.status_code}"
+                            if attempt == MAX_RETRIES - 1:
+                                break
                             wait = float(r.headers.get("Retry-After", 2 ** attempt))
                             print(f"     ! DeepL {r.status_code}, retry in {wait:.1f}s...", flush=True)
-                            _time.sleep(wait)
+                            time.sleep(wait)
                             continue
                         if r.status_code == 403:
                             raise RuntimeError(f"DeepL 403 Forbidden - verifica la API key ({r.text[:200]})")
@@ -208,17 +214,22 @@ def translate_segments(
                         data = r.json()
                         for j, item in zip(chunk_idx, data.get("translations", [])):
                             results[j] = item.get("text", "") or texts[j]
+                        batch_translated = True
                         break
                     except requests.RequestException as e:
-                        if attempt == MAX_RETRIES - 1:
-                            print(f"     ! DeepL batch {i}-{i+len(chunk_idx)} failed: {e}", flush=True)
-                            for j in chunk_idx:
-                                results[j] = texts[j]
-                        else:
-                            _time.sleep(2 ** attempt)
+                        last_error = str(e)
+                        if attempt < MAX_RETRIES - 1:
+                            time.sleep(2 ** attempt)
+                if not batch_translated:
+                    print(f"     ! DeepL batch {i}-{i+len(chunk_idx)} failed: {last_error}", flush=True)
+                    failed_idx.update(chunk_idx)
                 print(f"     {min(i + BATCH, len(idx_nonempty))}/{len(idx_nonempty)}...", end="\r", flush=True)
+            if idx_nonempty and len(failed_idx) == len(idx_nonempty):
+                raise TranslationUnavailableError(
+                    "DeepL could not translate any segment"
+                )
             translated = []
-            for seg, tr in zip(segments, results):
+            for k, (seg, tr) in enumerate(zip(segments, results)):
                 text = (seg.get("text") or "").strip()
                 entry = {
                     "start": seg["start"], "end": seg["end"],
@@ -227,12 +238,20 @@ def translate_segments(
                 if "speaker" in seg:
                     entry["speaker"] = seg["speaker"]
                 # TASK 5C: propagate upstream quality flags (whisper_suspicious)
-                # through the DeepL path. DeepL itself doesn't add new flags
-                # in this version - failed batches just keep the source text.
+                # through the DeepL path. Segments of a failed batch keep the
+                # source text and get the translation_fallback flag.
                 _flags_in = compute_segment_quality_flags(seg)
                 if _flags_in:
                     entry["_quality_flags"] = _flags_in
+                if k in failed_idx:
+                    add_quality_flag(entry, FLAG_TRANSLATION_FALLBACK)
                 translated.append(entry)
+            if failed_idx:
+                print(
+                    f"     ⚠ DeepL failed on {len(failed_idx)}/{len(idx_nonempty)} segments: "
+                    f"they keep the source text and are flagged in the subtitle editor.",
+                    flush=True,
+                )
             print("     → Translation done (DeepL)          ", flush=True)
             return translated
         except Exception as e:
