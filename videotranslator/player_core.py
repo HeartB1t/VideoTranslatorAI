@@ -25,6 +25,22 @@ from .player_settings import (
 )
 
 
+# Stable controller/backend message codes mapped to translated UI keys.  Keeping
+# the indirection here prevents playback threads from ever touching UI strings.
+STATUS_KEYS: dict[str, str] = {
+    "idle": "player_idle_hint",
+    "initializing": "player_initializing",
+    "now-playing": "player_now_playing",
+    "nothing-loaded": "player_nothing_loaded",
+    "snapshot-saved": "player_snapshot_saved",
+    "snapshot-failed": "player_snapshot_failed",
+    "load-error": "player_err_load",
+    "video-output-error": "player_err_video_output",
+    "vo-fallback": "player_vo_fallback_used",
+    "busy": "player_busy",
+}
+
+
 @dataclass(frozen=True)
 class MediaItem:
     path: str

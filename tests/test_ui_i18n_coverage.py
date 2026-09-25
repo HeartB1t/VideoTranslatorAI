@@ -5,6 +5,7 @@ from pathlib import Path
 
 import video_translator_gui as legacy
 from videotranslator import libmpv_runtime, ui_strings_player
+from videotranslator import player_core
 from test_ui_theme_tk import HAS_DISPLAY, built_app
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -365,6 +366,28 @@ class PlayerStringsModuleTests(unittest.TestCase):
         for lang, bucket in ui_strings_player.PLAYER_UI_STRINGS.items():
             with self.subTest(lang=lang):
                 self.assertEqual(set(bucket), keys)
+
+    def test_p2_file_player_key_set_is_complete(self):
+        required = {
+            "player_idle_hint", "player_initializing", "player_now_playing",
+            "player_nothing_loaded", "player_btn_playlist", "player_playlist_empty",
+            "player_playlist_sources", "player_playlist_results", "player_tip_previous",
+            "player_tip_rewind", "player_tip_stop", "player_tip_play", "player_tip_pause",
+            "player_tip_forward", "player_tip_next", "player_tip_snapshot",
+            "player_tip_open_folder", "player_tip_mute", "player_tip_unmute",
+            "player_tip_volume", "player_tip_fullscreen", "player_tip_exit_fullscreen",
+            "player_snapshot_saved", "player_snapshot_failed", "player_err_load",
+            "player_err_video_output", "player_vo_fallback_used", "player_busy",
+            "player_badge", "player_tip_results_busy",
+        }
+        self.assertTrue(required.issubset(ui_strings_player.PLAYER_KEYS))
+
+    def test_player_status_keys_exist_in_every_language(self):
+        missing = [(code, key, lang)
+                   for code, key in sorted(player_core.STATUS_KEYS.items())
+                   for lang in sorted(UI_STRINGS)
+                   if key not in UI_STRINGS[lang]]
+        self.assertEqual(missing, [])
 
     def test_merged_values_are_the_module_values(self):
         for lang, bucket in ui_strings_player.PLAYER_UI_STRINGS.items():
