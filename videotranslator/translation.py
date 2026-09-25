@@ -2,7 +2,29 @@
 
 from __future__ import annotations
 
-from videotranslator.quality_flags import compute_segment_quality_flags
+import time
+
+from videotranslator.quality_flags import (
+    FLAG_TRANSLATION_FALLBACK,
+    add_quality_flag,
+    compute_segment_quality_flags,
+)
+
+# Google Translate (unofficial endpoint via deep-translator) throttles bursts
+# with HTTP 429. Pace the requests and retry transient errors with backoff.
+# When a few segments in a row still fail, Google is blocking this IP: wait
+# a cooldown, send one probe request and abort the job if it fails too,
+# rather than dubbing the rest of the video in the source language. Only one
+# recovery per job: a second block aborts right away.
+_GOOGLE_MIN_INTERVAL = 0.25     # seconds between requests (Google: 5 req/s)
+_GOOGLE_MAX_ATTEMPTS = 3        # per segment, backoff 2 s then 4 s
+_GOOGLE_BACKOFF_BASE = 2.0
+_GOOGLE_MAX_CONSECUTIVE_FAILURES = 3
+_GOOGLE_COOLDOWN = 30.0         # seconds before the probe request
+
+
+class TranslationUnavailableError(RuntimeError):
+    """The translation service failed for every non-empty segment."""
 
 
 def _marian_normalize_lang(code: str) -> str:
@@ -118,8 +140,9 @@ def translate_segments(
                         _entry["speaker"] = seg["speaker"]
                     # TASK 5C: forward whisper_suspicious flag through the
                     # MarianMT path so the editor still highlights segments
-                    # the upstream sanity check tagged. Other flags
-                    # (length_unfit, translation_fallback) are Ollama-only.
+                    # the upstream sanity check tagged. length_unfit is
+                    # Ollama-only; translation_fallback comes from Ollama
+                    # and from the Google path below.
                     _flags_in = compute_segment_quality_flags(seg)
                     if _flags_in:
                         _entry["_quality_flags"] = _flags_in
@@ -218,20 +241,82 @@ def translate_segments(
 
     # ── Google Translate fallback ──────────────────────────────────────────
     from deep_translator import GoogleTranslator
+    from deep_translator.exceptions import RequestError, TooManyRequests
+    import requests
     if engine == "deepl":
         print("     ! DeepL key missing, falling back to Google Translate.", flush=True)
+    transient_errors = (TooManyRequests, RequestError, requests.RequestException)
     translator = GoogleTranslator(source=src, target=target)
+    last_request = None
+    consecutive_failures = 0
+    recovered = False
+    n_nonempty = 0
+    n_failed = 0
     translated = []
     for i, seg in enumerate(segments):
         text = (seg.get("text") or "").strip()
+        failed = False
         if not text:
             text_tgt = ""
         else:
-            try:
-                text_tgt = translator.translate(text) or text
-            except Exception as e:
-                print(f"     ! Error segment {i}: {e}", flush=True)
+            probing = consecutive_failures >= _GOOGLE_MAX_CONSECUTIVE_FAILURES
+            if probing and recovered:
+                raise TranslationUnavailableError(
+                    f"Google Translate blocked the requests again at segment "
+                    f"{i + 1}/{len(segments)} (rate limited). Retry later or "
+                    f"pick MarianMT, DeepL or Ollama as the translation engine."
+                )
+            if probing:
+                print(
+                    f"     ! Google Translate failed on {consecutive_failures} "
+                    f"segments in a row (rate limited?): waiting "
+                    f"{_GOOGLE_COOLDOWN:.0f}s before a probe request...",
+                    flush=True,
+                )
+                time.sleep(_GOOGLE_COOLDOWN)
+            attempts = 1 if probing else _GOOGLE_MAX_ATTEMPTS
+            text_tgt = None
+            rate_limited = False
+            for attempt in range(attempts):
+                if last_request is not None:
+                    wait = _GOOGLE_MIN_INTERVAL - (time.monotonic() - last_request)
+                    if wait > 0:
+                        time.sleep(wait)
+                last_request = time.monotonic()
+                try:
+                    text_tgt = translator.translate(text) or text
+                    break
+                except transient_errors as e:
+                    if attempt == attempts - 1:
+                        print(f"     ! Error segment {i}: {e}", flush=True)
+                        rate_limited = True
+                    else:
+                        time.sleep(_GOOGLE_BACKOFF_BASE * (2 ** attempt))
+                except Exception as e:
+                    # Not a throttling error (e.g. text too long): retrying
+                    # won't help and it says nothing about a block.
+                    print(f"     ! Error segment {i}: {e}", flush=True)
+                    break
+            if text_tgt is None:
+                if probing:
+                    # Any probe failure (429, or a captcha page that surfaces
+                    # as TranslationNotFound) means Google is still blocking.
+                    raise TranslationUnavailableError(
+                        f"Google Translate is still blocking the requests at "
+                        f"segment {i + 1}/{len(segments)} (rate limited). Retry "
+                        f"later or pick MarianMT, DeepL or Ollama as the "
+                        f"translation engine."
+                    )
                 text_tgt = text
+                failed = True
+                if rate_limited:
+                    consecutive_failures += 1
+            else:
+                if probing:
+                    recovered = True
+                consecutive_failures = 0
+        if text:
+            n_nonempty += 1
         entry = {
             "start": seg["start"],
             "end": seg["end"],
@@ -247,10 +332,23 @@ def translate_segments(
         _flags_in = compute_segment_quality_flags(seg)
         if _flags_in:
             entry["_quality_flags"] = _flags_in
+        if failed:
+            n_failed += 1
+            add_quality_flag(entry, FLAG_TRANSLATION_FALLBACK)
         translated.append(entry)
         if i % 10 == 0:
             print(f"     {i+1}/{len(segments)}...", end="\r", flush=True)
+    if n_nonempty and n_failed == n_nonempty:
+        raise TranslationUnavailableError(
+            "Google Translate could not translate any segment (rate limited, "
+            "blocked or unreachable). Retry later or pick MarianMT, DeepL or "
+            "Ollama as the translation engine."
+        )
+    if n_failed:
+        print(
+            f"     ⚠ Google Translate failed on {n_failed}/{n_nonempty} segments: "
+            f"they keep the source text and are flagged in the subtitle editor.",
+            flush=True,
+        )
     print("     → Translation done          ", flush=True)
     return translated
-
-

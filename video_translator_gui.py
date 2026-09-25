@@ -414,6 +414,8 @@ UI_STRINGS = {
         "msg_no_video":       "Aggiungi almeno un video.",
         "msg_completed":      "Traduzione completata!",
         "msg_error":          "Qualcosa è andato storto. Controlla il log.",
+        "msg_translation_unavailable": "Traduzione non riuscita: Google Translate, usato come motore o come ripiego, ha bloccato le richieste (limite raggiunto). Riprova più tardi oppure usa MarianMT, DeepL o Ollama, verificando che siano configurati correttamente.",
+        "msg_translation_partial": "Segmenti non tradotti dal motore scelto: {n}. Sono rimasti nella lingua originale o hanno una traduzione di ripiego. Controlla il log o rivedili nell'editor sottotitoli.",
         "msg_confirm_stop":   "Elaborazione in corso. Interrompere?",
         "msg_confirm":        "Conferma",
         "msg_completed_t":    "Completato",
@@ -537,6 +539,8 @@ UI_STRINGS = {
         "msg_no_video":       "Add at least one video.",
         "msg_completed":      "Translation completed!",
         "msg_error":          "Something went wrong. Check the log.",
+        "msg_translation_unavailable": "Translation failed: Google Translate, used as the engine or as a fallback, blocked the requests (rate limit reached). Try again later or use MarianMT, DeepL or Ollama, making sure they are configured correctly.",
+        "msg_translation_partial": "Segments not translated by the chosen engine: {n}. They stayed in the original language or have a fallback translation. Check the log or review them in the subtitle editor.",
         "msg_confirm_stop":   "Processing in progress. Stop?",
         "msg_confirm":        "Confirm",
         "msg_completed_t":    "Completed",
@@ -642,6 +646,8 @@ UI_STRINGS = {
         "msg_no_video": "أضف مقطع فيديو واحدًا على الأقل.",
         "msg_completed": "اكتملت الترجمة!",
         "msg_error": "حدث خطأ ما. تحقق من السجل.",
+        "msg_translation_unavailable": "فشلت الترجمة: حظر Google Translate، المستخدم كمحرك أو كبديل احتياطي، الطلبات (تم بلوغ الحد الأقصى). أعد المحاولة لاحقًا أو استخدم MarianMT أو DeepL أو Ollama مع التأكد من إعدادها بشكل صحيح.",
+        "msg_translation_partial": "المقاطع التي لم يترجمها المحرك المختار: {n}. بقيت باللغة الأصلية أو لها ترجمة احتياطية. تحقق من السجل أو راجعها في محرر الترجمة.",
         "msg_confirm_stop": "المعالجة قيد التقدم. قف؟",
         "msg_confirm": "يتأكد",
         "msg_completed_t": "مكتمل",
@@ -762,6 +768,8 @@ UI_STRINGS = {
         "msg_no_video": "添加至少一个视频。",
         "msg_completed": "翻译完成！",
         "msg_error": "出了点问题。检查日志。",
+        "msg_translation_unavailable": "翻译失败：作为翻译引擎或备用引擎的 Google Translate 拒绝了请求（已达到频率限制）。请稍后重试，或改用 MarianMT、DeepL 或 Ollama，并确认其配置正确。",
+        "msg_translation_partial": "所选引擎未翻译的片段数：{n}。这些片段仍为原始语言或使用了备用翻译。请查看日志或在字幕编辑器中检查。",
         "msg_confirm_stop": "处理中。停止？",
         "msg_confirm": "确认",
         "msg_completed_t": "完全的",
@@ -882,6 +890,8 @@ UI_STRINGS = {
         "msg_no_video": "Přidejte alespoň jedno video.",
         "msg_completed": "Překlad dokončen!",
         "msg_error": "Něco se pokazilo. Zkontrolujte protokol.",
+        "msg_translation_unavailable": "Překlad se nezdařil: Google Translate, použitý jako překladač nebo jako záložní řešení, zablokoval požadavky (dosažen limit). Zkuste to později nebo použijte MarianMT, DeepL či Ollama a ověřte, že jsou správně nastavené.",
+        "msg_translation_partial": "Počet segmentů, které zvolený překladač nepřeložil: {n}. Zůstaly v původním jazyce nebo mají záložní překlad. Zkontrolujte log nebo je projděte v editoru titulků.",
         "msg_confirm_stop": "Probíhá zpracování. Zastávka?",
         "msg_confirm": "Potvrdit",
         "msg_completed_t": "Dokončeno",
@@ -1002,6 +1012,8 @@ UI_STRINGS = {
         "msg_no_video": "Tilføj mindst én video.",
         "msg_completed": "Oversættelse afsluttet!",
         "msg_error": "Noget gik galt. Tjek loggen.",
+        "msg_translation_unavailable": "Oversættelsen mislykkedes: Google Translate, brugt som motor eller som reserve, blokerede forespørgslerne (grænsen er nået). Prøv igen senere, eller brug MarianMT, DeepL eller Ollama, og kontrollér, at de er konfigureret korrekt.",
+        "msg_translation_partial": "Segmenter, der ikke blev oversat af den valgte motor: {n}. De er forblevet på originalsproget eller har en reserveoversættelse. Tjek loggen, eller gennemgå dem i undertekst-editoren.",
         "msg_confirm_stop": "Behandling i gang. Stop?",
         "msg_confirm": "Bekræfte",
         "msg_completed_t": "Afsluttet",
@@ -1122,6 +1134,8 @@ UI_STRINGS = {
         "msg_no_video": "Voeg ten minste één video toe.",
         "msg_completed": "Vertaling voltooid!",
         "msg_error": "Er is iets misgegaan. Controleer het logboek.",
+        "msg_translation_unavailable": "Vertaling mislukt: Google Translate, gebruikt als engine of als terugvaloptie, heeft de verzoeken geblokkeerd (limiet bereikt). Probeer het later opnieuw of gebruik MarianMT, DeepL of Ollama en controleer of ze correct zijn ingesteld.",
+        "msg_translation_partial": "Segmenten die de gekozen engine niet heeft vertaald: {n}. Ze staan nog in de oorspronkelijke taal of hebben een terugvalvertaling. Controleer het logboek of bekijk ze in de ondertiteleditor.",
         "msg_confirm_stop": "Bezig met verwerken. Stop?",
         "msg_confirm": "Bevestigen",
         "msg_completed_t": "Voltooid",
@@ -1242,6 +1256,8 @@ UI_STRINGS = {
         "msg_no_video": "Lisää vähintään yksi video.",
         "msg_completed": "Käännös valmis!",
         "msg_error": "Jotain meni pieleen. Tarkista loki.",
+        "msg_translation_unavailable": "Käännös epäonnistui: Google Translate, jota käytettiin moottorina tai varamoottorina, esti pyynnöt (raja täynnä). Yritä myöhemmin uudelleen tai käytä MarianMT:tä, DeepL:ää tai Ollamaa ja varmista, että ne on määritetty oikein.",
+        "msg_translation_partial": "Segmenttejä, joita valittu moottori ei kääntänyt: {n}. Ne jäivät alkuperäiselle kielelle tai niillä on varakäännös. Tarkista loki tai käy ne läpi tekstityseditorissa.",
         "msg_confirm_stop": "Käsittely käynnissä. Stop?",
         "msg_confirm": "Vahvistaa",
         "msg_completed_t": "Valmis",
@@ -1362,6 +1378,8 @@ UI_STRINGS = {
         "msg_no_video": "Ajoutez au moins une vidéo.",
         "msg_completed": "Traduction terminée !",
         "msg_error": "Quelque chose s'est mal passé. Vérifiez le journal.",
+        "msg_translation_unavailable": "Échec de la traduction : Google Translate, utilisé comme moteur ou comme solution de secours, a bloqué les requêtes (limite atteinte). Réessayez plus tard ou utilisez MarianMT, DeepL ou Ollama en vérifiant qu'ils sont correctement configurés.",
+        "msg_translation_partial": "Segments non traduits par le moteur choisi : {n}. Ils sont restés dans la langue d'origine ou ont une traduction de secours. Consultez le journal ou vérifiez-les dans l'éditeur de sous-titres.",
         "msg_confirm_stop": "Traitement en cours. Arrêt?",
         "msg_confirm": "Confirmer",
         "msg_completed_t": "Complété",
@@ -1482,6 +1500,8 @@ UI_STRINGS = {
         "msg_no_video": "Fügen Sie mindestens ein Video hinzu.",
         "msg_completed": "Übersetzung abgeschlossen!",
         "msg_error": "Etwas ist schief gelaufen. Überprüfen Sie das Protokoll.",
+        "msg_translation_unavailable": "Übersetzung fehlgeschlagen: Google Translate, als Engine oder als Ausweichlösung verwendet, hat die Anfragen blockiert (Limit erreicht). Versuchen Sie es später erneut oder verwenden Sie MarianMT, DeepL oder Ollama und prüfen Sie deren Konfiguration.",
+        "msg_translation_partial": "Von der gewählten Engine nicht übersetzte Segmente: {n}. Sie sind in der Originalsprache geblieben oder haben eine Ausweichübersetzung. Prüfen Sie das Protokoll oder kontrollieren Sie sie im Untertitel-Editor.",
         "msg_confirm_stop": "Bearbeitung läuft. Stoppen?",
         "msg_confirm": "Bestätigen",
         "msg_completed_t": "Vollendet",
@@ -1602,6 +1622,8 @@ UI_STRINGS = {
         "msg_no_video": "Προσθέστε τουλάχιστον ένα βίντεο.",
         "msg_completed": "Η μετάφραση ολοκληρώθηκε!",
         "msg_error": "Κάτι πήγε στραβά. Ελέγξτε το ημερολόγιο.",
+        "msg_translation_unavailable": "Η μετάφραση απέτυχε: το Google Translate, που χρησιμοποιήθηκε ως μηχανή ή ως εφεδρική λύση, μπλόκαρε τα αιτήματα (συμπληρώθηκε το όριο). Δοκιμάστε ξανά αργότερα ή χρησιμοποιήστε MarianMT, DeepL ή Ollama, αφού βεβαιωθείτε ότι έχουν ρυθμιστεί σωστά.",
+        "msg_translation_partial": "Τμήματα που δεν μεταφράστηκαν από την επιλεγμένη μηχανή: {n}. Έμειναν στην αρχική γλώσσα ή έχουν εφεδρική μετάφραση. Ελέγξτε το αρχείο καταγραφής ή εξετάστε τα στον επεξεργαστή υποτίτλων.",
         "msg_confirm_stop": "Επεξεργασία σε εξέλιξη. Στάση;",
         "msg_confirm": "Επιβεβαιώνω",
         "msg_completed_t": "Ολοκληρώθηκε το",
@@ -1722,6 +1744,8 @@ UI_STRINGS = {
         "msg_no_video": "कम से कम एक वीडियो जोड़ें.",
         "msg_completed": "अनुवाद पूरा हुआ!",
         "msg_error": "कुछ गलत हो गया। लॉग की जाँच करें.",
+        "msg_translation_unavailable": "अनुवाद विफल: इंजन या बैकअप के रूप में उपयोग किए गए Google Translate ने अनुरोध रोक दिए (सीमा पूरी हो गई)। बाद में फिर से प्रयास करें या MarianMT, DeepL या Ollama का उपयोग करें और सुनिश्चित करें कि वे सही ढंग से कॉन्फ़िगर हैं।",
+        "msg_translation_partial": "चुने गए इंजन द्वारा अनूदित न किए गए खंड: {n}। वे मूल भाषा में रह गए हैं या उनका बैकअप अनुवाद है। लॉग देखें या उपशीर्षक संपादक में उनकी समीक्षा करें।",
         "msg_confirm_stop": "प्रसंस्करण प्रगति पर है. रुकना?",
         "msg_confirm": "पुष्टि करना",
         "msg_completed_t": "पुरा होना।",
@@ -1842,6 +1866,8 @@ UI_STRINGS = {
         "msg_no_video": "Adjon hozzá legalább egy videót.",
         "msg_completed": "A fordítás elkészült!",
         "msg_error": "Valami elromlott. Ellenőrizze a naplót.",
+        "msg_translation_unavailable": "A fordítás sikertelen: a motorként vagy tartalékként használt Google Translate letiltotta a kéréseket (elérte a korlátot). Próbálja újra később, vagy használja a MarianMT, DeepL vagy Ollama motort, és ellenőrizze, hogy helyesen vannak-e beállítva.",
+        "msg_translation_partial": "A választott motor által le nem fordított szegmensek: {n}. Az eredeti nyelven maradtak, vagy tartalékfordítást kaptak. Nézze meg a naplót, vagy ellenőrizze őket a feliratszerkesztőben.",
         "msg_confirm_stop": "Feldolgozás folyamatban. Stop?",
         "msg_confirm": "Erősítse meg",
         "msg_completed_t": "Befejezve",
@@ -1962,6 +1988,8 @@ UI_STRINGS = {
         "msg_no_video": "Tambahkan setidaknya satu video.",
         "msg_completed": "Terjemahan selesai!",
         "msg_error": "Ada yang tidak beres. Periksa lognya.",
+        "msg_translation_unavailable": "Terjemahan gagal: Google Translate, yang dipakai sebagai mesin atau cadangan, memblokir permintaan (batas tercapai). Coba lagi nanti atau gunakan MarianMT, DeepL, atau Ollama dan pastikan sudah dikonfigurasi dengan benar.",
+        "msg_translation_partial": "Segmen yang tidak diterjemahkan oleh mesin yang dipilih: {n}. Segmen tersebut tetap dalam bahasa asli atau memakai terjemahan cadangan. Periksa log atau tinjau di editor subtitle.",
         "msg_confirm_stop": "Pemrosesan sedang berlangsung. Berhenti?",
         "msg_confirm": "Mengonfirmasi",
         "msg_completed_t": "Selesai",
@@ -2082,6 +2110,8 @@ UI_STRINGS = {
         "msg_no_video": "少なくとも 1 つのビデオを追加します。",
         "msg_completed": "翻訳が完了しました！",
         "msg_error": "何か問題が発生しました。ログを確認してください。",
+        "msg_translation_unavailable": "翻訳に失敗しました: 翻訳エンジンまたは代替エンジンとして使われた Google Translate がリクエストをブロックしました (制限に達しました)。後でもう一度試すか、設定が正しいことを確認したうえで MarianMT、DeepL、Ollama のいずれかを使用してください。",
+        "msg_translation_partial": "選択したエンジンで翻訳されなかったセグメント: {n}。元の言語のままか、代替の翻訳になっています。ログを確認するか、字幕エディターで確認してください。",
         "msg_confirm_stop": "処理中です。停止？",
         "msg_confirm": "確認する",
         "msg_completed_t": "完了しました",
@@ -2202,6 +2232,8 @@ UI_STRINGS = {
         "msg_no_video": "동영상을 하나 이상 추가하세요.",
         "msg_completed": "번역 완료!",
         "msg_error": "문제가 발생했습니다. 로그를 확인하세요.",
+        "msg_translation_unavailable": "번역 실패: 번역 엔진 또는 대체 엔진으로 사용된 Google Translate가 요청을 차단했습니다(한도 도달). 나중에 다시 시도하거나 MarianMT, DeepL 또는 Ollama를 사용하고 올바르게 설정되어 있는지 확인하세요.",
+        "msg_translation_partial": "선택한 엔진이 번역하지 못한 세그먼트: {n}. 원래 언어로 남아 있거나 대체 번역이 사용되었습니다. 로그를 확인하거나 자막 편집기에서 검토하세요.",
         "msg_confirm_stop": "처리가 진행 중입니다. 멈추다?",
         "msg_confirm": "확인하다",
         "msg_completed_t": "완전한",
@@ -2322,6 +2354,8 @@ UI_STRINGS = {
         "msg_no_video": "Legg til minst én video.",
         "msg_completed": "Oversettelsen fullført!",
         "msg_error": "Noe gikk galt. Sjekk loggen.",
+        "msg_translation_unavailable": "Oversettelsen mislyktes: Google Translate, brukt som motor eller som reserve, blokkerte forespørslene (grensen er nådd). Prøv igjen senere, eller bruk MarianMT, DeepL eller Ollama, og kontroller at de er riktig konfigurert.",
+        "msg_translation_partial": "Segmenter som ikke ble oversatt av den valgte motoren: {n}. De er fortsatt på originalspråket eller har en reserveoversettelse. Sjekk loggen, eller gå gjennom dem i undertekstredigereren.",
         "msg_confirm_stop": "Behandling pågår. Stoppe?",
         "msg_confirm": "Bekrefte",
         "msg_completed_t": "Fullført",
@@ -2442,6 +2476,8 @@ UI_STRINGS = {
         "msg_no_video": "Dodaj co najmniej jeden film.",
         "msg_completed": "Tłumaczenie zakończone!",
         "msg_error": "Coś poszło nie tak. Sprawdź dziennik.",
+        "msg_translation_unavailable": "Tłumaczenie nie powiodło się: Google Translate, użyty jako silnik lub rozwiązanie zapasowe, zablokował żądania (osiągnięto limit). Spróbuj ponownie później lub użyj MarianMT, DeepL albo Ollama i sprawdź, czy są poprawnie skonfigurowane.",
+        "msg_translation_partial": "Liczba segmentów nieprzetłumaczonych przez wybrany silnik: {n}. Pozostały w języku oryginalnym lub mają tłumaczenie zapasowe. Sprawdź dziennik lub przejrzyj je w edytorze napisów.",
         "msg_confirm_stop": "Przetwarzanie w toku. Zatrzymywać się?",
         "msg_confirm": "Potwierdzać",
         "msg_completed_t": "Zakończony",
@@ -2562,6 +2598,8 @@ UI_STRINGS = {
         "msg_no_video": "Adicione pelo menos um vídeo.",
         "msg_completed": "Tradução concluída!",
         "msg_error": "Algo deu errado. Verifique o registro.",
+        "msg_translation_unavailable": "Falha na tradução: o Google Translate, usado como mecanismo ou como alternativa, bloqueou as solicitações (limite atingido). Tente novamente mais tarde ou use MarianMT, DeepL ou Ollama, verificando se estão configurados corretamente.",
+        "msg_translation_partial": "Segmentos não traduzidos pelo mecanismo escolhido: {n}. Ficaram no idioma original ou têm uma tradução alternativa. Verifique o registro ou revise-os no editor de legendas.",
         "msg_confirm_stop": "Processamento em andamento. Parar?",
         "msg_confirm": "Confirmar",
         "msg_completed_t": "Concluído",
@@ -2682,6 +2720,8 @@ UI_STRINGS = {
         "msg_no_video": "Adăugați cel puțin un videoclip.",
         "msg_completed": "Traducerea finalizată!",
         "msg_error": "Ceva a mers prost. Verificați jurnalul.",
+        "msg_translation_unavailable": "Traducerea a eșuat: Google Translate, folosit ca motor sau ca rezervă, a blocat cererile (limită atinsă). Încercați din nou mai târziu sau folosiți MarianMT, DeepL sau Ollama, verificând că sunt configurate corect.",
+        "msg_translation_partial": "Segmente netraduse de motorul ales: {n}. Au rămas în limba originală sau au o traducere de rezervă. Verificați jurnalul sau revizuiți-le în editorul de subtitrări.",
         "msg_confirm_stop": "Procesare în curs. Stop?",
         "msg_confirm": "Confirma",
         "msg_completed_t": "Terminat",
@@ -2802,6 +2842,8 @@ UI_STRINGS = {
         "msg_no_video": "Добавьте хотя бы одно видео.",
         "msg_completed": "Перевод завершен!",
         "msg_error": "Что-то пошло не так. Проверьте журнал.",
+        "msg_translation_unavailable": "Перевод не выполнен: Google Translate, использованный как движок или как резервный вариант, заблокировал запросы (достигнут лимит). Повторите попытку позже или используйте MarianMT, DeepL или Ollama, убедившись, что они правильно настроены.",
+        "msg_translation_partial": "Сегменты, не переведённые выбранным движком: {n}. Они остались на исходном языке или получили резервный перевод. Проверьте журнал или просмотрите их в редакторе субтитров.",
         "msg_confirm_stop": "Идет обработка. Останавливаться?",
         "msg_confirm": "Подтверждать",
         "msg_completed_t": "Завершенный",
@@ -2922,6 +2964,8 @@ UI_STRINGS = {
         "msg_no_video": "Añade al menos un vídeo.",
         "msg_completed": "¡Traducción completada!",
         "msg_error": "Algo salió mal. Consulta el registro.",
+        "msg_translation_unavailable": "La traducción ha fallado: Google Translate, usado como motor o como alternativa, ha bloqueado las solicitudes (límite alcanzado). Vuelve a intentarlo más tarde o usa MarianMT, DeepL u Ollama, comprobando que estén bien configurados.",
+        "msg_translation_partial": "Segmentos no traducidos por el motor elegido: {n}. Se han quedado en el idioma original o tienen una traducción alternativa. Consulta el registro o revísalos en el editor de subtítulos.",
         "msg_confirm_stop": "Procesamiento en curso. ¿Detener?",
         "msg_confirm": "Confirmar",
         "msg_completed_t": "Terminado",
@@ -3042,6 +3086,8 @@ UI_STRINGS = {
         "msg_no_video": "Lägg till minst en video.",
         "msg_completed": "Översättningen klar!",
         "msg_error": "Något gick fel. Kontrollera loggen.",
+        "msg_translation_unavailable": "Översättningen misslyckades: Google Translate, som användes som motor eller som reserv, blockerade förfrågningarna (gränsen nådd). Försök igen senare eller använd MarianMT, DeepL eller Ollama och kontrollera att de är rätt konfigurerade.",
+        "msg_translation_partial": "Segment som den valda motorn inte översatte: {n}. De är kvar på originalspråket eller har en reservöversättning. Kontrollera loggen eller granska dem i undertextredigeraren.",
         "msg_confirm_stop": "Bearbetning pågår. Stopp?",
         "msg_confirm": "Bekräfta",
         "msg_completed_t": "Avslutad",
@@ -3162,6 +3208,8 @@ UI_STRINGS = {
         "msg_no_video": "En az bir video ekleyin.",
         "msg_completed": "Çeviri tamamlandı!",
         "msg_error": "Bir şeyler ters gitti. Günlüğü kontrol edin.",
+        "msg_translation_unavailable": "Çeviri başarısız: motor veya yedek olarak kullanılan Google Translate istekleri engelledi (sınıra ulaşıldı). Daha sonra tekrar deneyin veya doğru yapılandırıldıklarından emin olarak MarianMT, DeepL ya da Ollama'yı kullanın.",
+        "msg_translation_partial": "Seçilen motorun çeviremediği segmentler: {n}. Orijinal dilde kaldılar veya yedek bir çeviriye sahipler. Günlüğü kontrol edin veya altyazı düzenleyicisinde gözden geçirin.",
         "msg_confirm_stop": "İşleme devam ediyor. Durmak?",
         "msg_confirm": "Onaylamak",
         "msg_completed_t": "Tamamlanmış",
@@ -3282,6 +3330,8 @@ UI_STRINGS = {
         "msg_no_video": "Додайте хоча б одне відео.",
         "msg_completed": "Переклад завершено!",
         "msg_error": "Щось пішло не так. Перевірте журнал.",
+        "msg_translation_unavailable": "Переклад не вдався: Google Translate, використаний як рушій або як резервний варіант, заблокував запити (досягнуто ліміту). Спробуйте пізніше або скористайтеся MarianMT, DeepL чи Ollama, перевіривши, що їх правильно налаштовано.",
+        "msg_translation_partial": "Сегменти, не перекладені вибраним рушієм: {n}. Вони залишилися мовою оригіналу або мають резервний переклад. Перевірте журнал або перегляньте їх у редакторі субтитрів.",
         "msg_confirm_stop": "Триває обробка. СТІЙ?",
         "msg_confirm": "Підтвердити",
         "msg_completed_t": "Виконано",
@@ -3402,6 +3452,8 @@ UI_STRINGS = {
         "msg_no_video": "Thêm ít nhất một video.",
         "msg_completed": "Bản dịch đã hoàn tất!",
         "msg_error": "Đã xảy ra lỗi. Kiểm tra nhật ký.",
+        "msg_translation_unavailable": "Dịch thất bại: Google Translate, được dùng làm công cụ chính hoặc dự phòng, đã chặn các yêu cầu (đạt giới hạn). Hãy thử lại sau hoặc dùng MarianMT, DeepL hoặc Ollama và kiểm tra rằng chúng được cấu hình đúng.",
+        "msg_translation_partial": "Số đoạn không được công cụ đã chọn dịch: {n}. Các đoạn này vẫn ở ngôn ngữ gốc hoặc dùng bản dịch dự phòng. Hãy kiểm tra nhật ký hoặc xem lại chúng trong trình chỉnh sửa phụ đề.",
         "msg_confirm_stop": "Đang xử lý. Dừng lại?",
         "msg_confirm": "Xác nhận",
         "msg_completed_t": "Hoàn thành",
@@ -4501,9 +4553,28 @@ def translate_with_ollama(
 
 
 from videotranslator.translation import (  # noqa: E402
+    TranslationUnavailableError,
     _marian_normalize_lang,
     translate_segments as _translate_segments_impl,
 )
+
+
+def _count_fallback_segments(result) -> int:
+    """Count segments of a ``translate_video`` result whose translation
+    failed (source text kept or fallback engine used)."""
+    if not isinstance(result, dict):
+        return 0
+    return sum(
+        1 for seg in result.get("segments") or []
+        if _FLAG_TRANSLATION_FALLBACK in _compute_segment_quality_flags(seg)
+    )
+
+
+def _error_key_for(exc: BaseException) -> str | None:
+    """UI_STRINGS key of a specific error dialog for ``exc``, if any."""
+    if isinstance(exc, TranslationUnavailableError):
+        return "msg_translation_unavailable"
+    return None
 
 
 def translate_segments(
@@ -7741,6 +7812,8 @@ class App(tk.Tk):
         def run():
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             all_ok = True
+            error_key = None
+            fallback_count = 0
             handed_off_to_editor = False
             try:
                 for url in urls:
@@ -7777,11 +7850,13 @@ class App(tk.Tk):
                             video_in=stable,
                             output=p.output if len(urls) == 1 else None,
                         )
-                        translate_video(**cfg.to_translate_video_kwargs())
+                        result = translate_video(**cfg.to_translate_video_kwargs())
+                        fallback_count += _count_fallback_segments(result)
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {type(e).__name__}: {e}\n{traceback.format_exc()}\n")
                         all_ok = False
+                        error_key = error_key or _error_key_for(e)
                     finally:
                         if stable and os.path.exists(stable):
                             try:
@@ -7791,7 +7866,7 @@ class App(tk.Tk):
             finally:
                 _thread_local.redirect = None
             if not handed_off_to_editor:
-                self.after(0, self._on_done, all_ok)
+                self.after(0, self._on_done, all_ok, error_key, fallback_count)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -7968,12 +8043,13 @@ class App(tk.Tk):
                 cfg = dataclasses.replace(p, video_in=video_path, subs_only=True)
                 result = translate_video(**cfg.to_translate_video_kwargs())
                 self.after(0, self._open_editor, video_path,
-                           result["segments"], cleanup_path)
+                           result["segments"], cleanup_path,
+                           _count_fallback_segments(result))
             except Exception as e:
                 self.after(0, self._log_write, f"[x] Error: {e}\n{traceback.format_exc()}\n")
                 # Clean up the downloaded temp file even on phase-1 error
                 self._cleanup_editor_tempfile(cleanup_path)
-                self.after(0, self._on_done, False)
+                self.after(0, self._on_done, False, _error_key_for(e))
             finally:
                 _thread_local.redirect = None
 
@@ -7991,7 +8067,8 @@ class App(tk.Tk):
             pass
 
     def _open_editor(self, video_path: str, segments: list[dict],
-                     cleanup_path: str | None = None):
+                     cleanup_path: str | None = None,
+                     fallback_count: int = 0):
         self._progress.stop()
         self._running = False
         self._btn.configure(state="normal", text=self._s("btn_start"))
@@ -8001,6 +8078,11 @@ class App(tk.Tk):
             messagebox.showwarning(self._s("warn_editor"), self._s("msg_no_segments"))
             self._cleanup_editor_tempfile(cleanup_path)
             return
+        if fallback_count:
+            messagebox.showwarning(
+                self._s("warn_editor"),
+                self._s("msg_translation_partial").format(n=fallback_count),
+            )
 
         # Shared state between the _confirm callback and the window close
         # handler: prevents duplicate cleanup when the user confirms
@@ -8074,6 +8156,8 @@ class App(tk.Tk):
             _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
             total  = len(files)
             all_ok = True
+            error_key = None
+            fallback_count = 0
             try:
                 for i, f in enumerate(files):
                     self.after(0, self._log_write,
@@ -8084,14 +8168,16 @@ class App(tk.Tk):
                             video_in=f,
                             output=p.output if len(files) == 1 else None,
                         )
-                        translate_video(**cfg.to_translate_video_kwargs())
+                        result = translate_video(**cfg.to_translate_video_kwargs())
+                        fallback_count += _count_fallback_segments(result)
                     except Exception as e:
                         self.after(0, self._log_write,
                                    f"[x] {e}\n{traceback.format_exc()}\n")
                         all_ok = False
+                        error_key = error_key or _error_key_for(e)
             finally:
                 _thread_local.redirect = None
-            self.after(0, self._on_done, all_ok)
+            self.after(0, self._on_done, all_ok, error_key, fallback_count)
 
         threading.Thread(target=run_all, daemon=True).start()
 
@@ -8226,7 +8312,8 @@ class App(tk.Tk):
 
     # ── Done / Close ─────────────────────────────────────────────────────────
 
-    def _on_done(self, success: bool):
+    def _on_done(self, success: bool, error_key: str | None = None,
+                 fallback_count: int = 0):
         if self._destroying:
             return
         self._running = False
@@ -8235,9 +8322,15 @@ class App(tk.Tk):
         self._btn_download.configure(state="normal", text=self._s("btn_download"))
         if success:
             self._log_write("\n✓ Done!\n")
-            messagebox.showinfo(self._s("msg_completed_t"), self._s("msg_completed"))
+            if fallback_count:
+                messagebox.showwarning(
+                    self._s("msg_completed_t"),
+                    self._s("msg_translation_partial").format(n=fallback_count),
+                )
+            else:
+                messagebox.showinfo(self._s("msg_completed_t"), self._s("msg_completed"))
         else:
-            messagebox.showerror(self._s("msg_error_t"), self._s("msg_error"))
+            messagebox.showerror(self._s("msg_error_t"), self._s(error_key or "msg_error"))
 
     def _on_close(self):
         if self._running:

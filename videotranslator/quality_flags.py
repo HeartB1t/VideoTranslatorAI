@@ -12,10 +12,10 @@ Pipeline stages set string tags on each segment dict (under the
   flagged short non-words (``ay``, ``em``) or immediate repetitions
   (``the the``) in the source transcript. The translation propagates
   the noise downstream - manual edit recommended.
-- :data:`FLAG_TRANSLATION_FALLBACK` - the primary translation engine
-  (Ollama / DeepL / MarianMT) failed for the segment and the pipeline
-  fell through to the secondary engine, or - worst case - kept the
-  source text as-is. The translation is likely lower quality.
+- :data:`FLAG_TRANSLATION_FALLBACK` - the translation engine failed for
+  the segment: Ollama fell through to its fallback or kept the source
+  text, or Google Translate (rate limited) kept the source text. The
+  translation is missing or likely lower quality.
 
 The module is **pure**: no I/O, no side effects, no Tk imports. The
 GUI module reads the flags via :func:`compute_segment_quality_flags`

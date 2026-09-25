@@ -142,6 +142,7 @@ def _cli(argv: Sequence[str] | None = None) -> None:
     import video_translator_gui as legacy
     from videotranslator.jobs import TranslationJobConfig
     from videotranslator.pipeline import run_translation_job
+    from videotranslator.translation import TranslationUnavailableError
 
     parser = _build_parser(legacy)
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -251,7 +252,11 @@ def _cli(argv: Sequence[str] | None = None) -> None:
             hotwords=hotwords_cli,
             ollama_use_cove=not args.no_cove,
         )
-        run_translation_job(job, runner=legacy.translate_video)
+        try:
+            run_translation_job(job, runner=legacy.translate_video)
+        except TranslationUnavailableError as exc:
+            print(f"[!] {exc}", flush=True)
+            sys.exit(1)
 
 
 def main(argv: Sequence[str] | None = None) -> int | None:
