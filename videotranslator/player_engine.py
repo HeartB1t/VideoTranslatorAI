@@ -8,6 +8,8 @@ without a display or native libraries.
 from __future__ import annotations
 
 import math
+import ctypes
+import sys
 import threading
 import time
 from collections import deque
@@ -15,7 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .libmpv_runtime import VO_PROFILE_OPTIONS
+from .libmpv_runtime import VO_PROFILE_OPTIONS, parse_mpv_version
 
 
 @dataclass(frozen=True)
@@ -355,6 +357,382 @@ def duck_channel_for(mpv_version: tuple[int, int] | None) -> str:
 def af_duck_command(gain: float) -> list[str]:
     safe_gain = min(1.0, max(0.0, float(gain)))
     return ["af-command", "vtduck", "volume", f"{safe_gain:.3f}", "volume"]
+
+
+class X11ErrorGuard:
+    """Capture and restore Tk's process-global Xlib error handler."""
+
+    def __init__(self, *, load_libx11: Callable[[], object]) -> None:
+        self._load_libx11 = load_libx11
+        self._libx11: object | None = None
+        self._tk_handler: object | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def captured(self) -> bool:
+        with self._lock:
+            return self._tk_handler not in (None, 0)
+
+    def capture(self) -> None:
+        with self._lock:
+            if self._tk_handler not in (None, 0):
+                return
+            try:
+                library = self._load_libx11()
+                setter = library.XSetErrorHandler
+                try:
+                    setter.argtypes = [ctypes.c_void_p]
+                    setter.restype = ctypes.c_void_p
+                except (AttributeError, TypeError):
+                    pass
+                previous = setter(None)
+                setter(previous)
+            except Exception:
+                return
+            if previous in (None, 0):
+                return
+            self._libx11 = library
+            self._tk_handler = previous
+
+    def restore(self) -> None:
+        with self._lock:
+            if self._libx11 is None or self._tk_handler in (None, 0):
+                return
+            try:
+                self._libx11.XSetErrorHandler(self._tk_handler)
+            except Exception:
+                return
+
+
+class _MpvRealtimeOps:
+    """Small direct-call surface reserved for the live scheduler thread."""
+
+    def __init__(self, backend: "MpvBackend") -> None:
+        self._backend = backend
+
+    def set_overlay(self, ass_events: str | None) -> None:
+        player = self._backend._live_player()
+        if player is None:
+            return
+        try:
+            if ass_events is None:
+                player.command("osd-overlay", 1, "none", "")
+            else:
+                player.command("osd-overlay", 1, "ass-events", ass_events)
+        except Exception as exc:
+            self._backend._callback_error("overlay", exc)
+
+    def set_speed(self, value: float) -> None:
+        self._backend._direct_set("speed", float(value))
+
+    def set_pause(self, paused: bool) -> None:
+        self._backend._direct_set("pause", "yes" if paused else "no")
+
+    def set_duck(self, gain: float) -> None:
+        self._backend.mixer.set_duck_gain(gain)
+        state = self._backend.mixer.snapshot()
+        self._backend._direct_set("volume", state.video_volume)
+
+
+class MpvBackend:
+    """Non-blocking video adapter owning one python-mpv instance."""
+
+    _MOUSE_BINDINGS = ("MBTN_LEFT", "MBTN_LEFT_DBL", "WHEEL_UP", "WHEEL_DOWN")
+
+    def __init__(self, *, mpv_module, options: Mapping[str, object],
+                 bridge: EventBridge, mixer: VolumeMixer,
+                 log: Callable[..., None] | object | None = None) -> None:
+        self.bridge = bridge
+        self.mixer = mixer
+        self.mpv_version: tuple[int, int] | None = None
+        self._mpv_module = mpv_module
+        self._log = log
+        self._queue = CommandQueue(maxsize=64)
+        self._stopping = threading.Event()
+        self._state_lock = threading.Lock()
+        self._terminated = False
+        self._terminate_done = threading.Event()
+        self._terminate_helper: threading.Thread | None = None
+        self._terminate_error: BaseException | None = None
+        self._session_defaults: dict[str, object] = {}
+        self._session_keys: set[str] = set()
+        constructor_options = dict(options)
+        constructor_options["log_handler"] = self._on_log
+        self._player = mpv_module.MPV(**constructor_options)
+        try:
+            self.mpv_version = parse_mpv_version(str(self._player.mpv_version))
+        except Exception:
+            self.mpv_version = None
+        self.rt = _MpvRealtimeOps(self)
+        self._register_callbacks()
+        self._command_thread = threading.Thread(
+            target=self._command_loop, name="mpv-cmd", daemon=True,
+        )
+        self._command_thread.start()
+
+    def _live_player(self):
+        with self._state_lock:
+            return None if self._terminated or self._stopping.is_set() else self._player
+
+    def _callback_error(self, where: str, exc: BaseException) -> None:
+        try:
+            self.bridge.post("adapter-error", {"where": where, "detail": str(exc)})
+        except Exception:
+            pass
+
+    def _on_log(self, level, component, message) -> None:
+        try:
+            text = str(message).rstrip()
+            self.bridge.post("log", text)
+            if callable(self._log):
+                self._log(level, component, text)
+            elif self._log is not None:
+                method = getattr(self._log, "warning", None)
+                if method is not None:
+                    method("mpv %s: %s", component, text)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _event_value(event) -> int | None:
+        try:
+            value = event.event_id
+            return int(getattr(value, "value", value))
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    def _event_id(self, name: str) -> int | None:
+        try:
+            value = getattr(self._mpv_module.MpvEventID, name)
+            return int(getattr(value, "value", value))
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _end_reason(event) -> str | None:
+        reasons = {0: "eof", 1: "restart", 2: "stop", 3: "quit", 4: "error", 5: "redirect"}
+        try:
+            return reasons.get(int(event.data.reason), str(event.data.reason))
+        except (AttributeError, TypeError, ValueError):
+            try:
+                payload = event.as_dict()
+                raw = payload.get("event", payload).get("reason")
+                return reasons.get(int(raw), str(raw))
+            except Exception:
+                return None
+
+    def _on_event(self, event) -> None:
+        try:
+            event_id = self._event_value(event)
+            if event_id is None:
+                return
+            if event_id == self._event_id("FILE_LOADED"):
+                self.bridge.post("file-loaded")
+            elif event_id == self._event_id("END_FILE"):
+                self.bridge.post("end-file", {"reason": self._end_reason(event)})
+            elif event_id == self._event_id("PLAYBACK_RESTART"):
+                self.bridge.post("playback-restart")
+        except Exception:
+            pass
+
+    def _observe(self, expected_name: str):
+        def callback(_name, value) -> None:
+            try:
+                self.bridge.set_latest(expected_name, value, time.monotonic())
+            except Exception:
+                pass
+        return callback
+
+    def _mouse_callback(self, binding: str):
+        def callback(*args) -> None:
+            try:
+                state = args[0] if args else ""
+                self.bridge.post("mouse", (binding, state))
+            except Exception:
+                pass
+        return callback
+
+    def _register_callbacks(self) -> None:
+        for name in EventBridge.LATEST:
+            self._player.observe_property(name, self._observe(name))
+        self._player.register_event_callback(self._on_event)
+        for binding in self._MOUSE_BINDINGS:
+            self._player.register_key_binding(binding, self._mouse_callback(binding), "force")
+
+    def _command_loop(self) -> None:
+        while not self._stopping.is_set():
+            command = self._queue.get(0.1)
+            if command is None:
+                continue
+            try:
+                command()
+            except Exception as exc:
+                self._callback_error("command", exc)
+
+    def _enqueue(self, fn: Callable[[], None], *, key: str | None = None) -> bool:
+        if self._stopping.is_set():
+            return False
+        accepted = self._queue.put(fn, key=key)
+        if not accepted:
+            self.bridge.post("busy")
+        return accepted
+
+    @staticmethod
+    def _option_name(name: str) -> str:
+        return str(name).replace("_", "-")
+
+    def load(self, uri: str, *, paused: bool, start: float | None = None,
+             options: Mapping[str, str] | None = None) -> None:
+        requested = {self._option_name(key): value for key, value in (options or {}).items()}
+        requested["pause"] = "yes" if paused else "no"
+        if start is not None:
+            requested["start"] = float(start)
+
+        def run() -> None:
+            player = self._live_player()
+            if player is None:
+                return
+            for key in self._session_keys:
+                player[key] = self._session_defaults[key]
+            for key, value in requested.items():
+                if key not in self._session_defaults:
+                    self._session_defaults[key] = player[key]
+                player[key] = value
+            self._session_keys = set(requested)
+            player.command("loadfile", str(uri), "replace")
+
+        self._enqueue(run, key="load")
+
+    def stop(self) -> None:
+        self._enqueue(lambda: self._player.command("stop"), key="transport")
+
+    def set_pause(self, paused: bool) -> None:
+        value = "yes" if paused else "no"
+        self._enqueue(lambda: self._player.command("set", "pause", value), key="pause")
+
+    def seek(self, seconds: float, mode: str = "exact") -> None:
+        modes = {
+            "exact": "absolute+exact",
+            "keyframes": "absolute+keyframes",
+            "relative": "relative+exact",
+        }
+        if mode not in modes:
+            raise ValueError(f"unsupported seek mode: {mode!r}")
+        self._enqueue(
+            lambda: self._player.command("seek", float(seconds), modes[mode]), key="seek",
+        )
+
+    def apply_mix(self) -> None:
+        state = self.mixer.snapshot()
+        if state.owner != "cmd":
+            return
+
+        def run() -> None:
+            self._player.command("set", "volume", state.video_volume)
+            self._player.command("set", "mute", "yes" if state.muted else "no")
+        self._enqueue(run, key="mix")
+
+    def add_external_audio(self, path: str, title: str) -> None:
+        self._enqueue(lambda: self._player.command("audio-add", path, "auto", title))
+
+    def select_audio(self, track_id: int | None) -> None:
+        value = "no" if track_id is None else int(track_id)
+        self._enqueue(lambda: self._player.command("set", "aid", value), key="audio")
+
+    def add_subtitles(self, path: str, title: str) -> None:
+        self._enqueue(lambda: self._player.command("sub-add", path, "select", title))
+
+    def reload_subtitles(self) -> None:
+        self._enqueue(lambda: self._player.command("sub-reload"))
+
+    def set_subtitles_visible(self, visible: bool) -> None:
+        value = "yes" if visible else "no"
+        self._enqueue(lambda: self._player.command("set", "sub-visibility", value), key="subs")
+
+    def screenshot(self, path: str) -> None:
+        def reply(error, _result) -> None:
+            try:
+                if error:
+                    self.bridge.post("snapshot-failed", {"path": path, "detail": str(error)})
+                else:
+                    self.bridge.post("snapshot-saved", {"path": path})
+            except Exception:
+                pass
+
+        def run() -> None:
+            self._player.command_async(
+                "screenshot-to-file", path, "video", callback=reply,
+            )
+        self._enqueue(run)
+
+    def set_af(self, value: str) -> bool:
+        return self._enqueue(lambda: self._player.command("set", "af", value), key="af")
+
+    def register_stream_protocol(self, name: str, open_adapter: Callable) -> None:
+        self._enqueue(lambda: self._player.register_stream_protocol(name, open_adapter))
+
+    def _direct_set(self, name: str, value: object) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", name, value)
+        except Exception as exc:
+            self._callback_error(f"direct-{name}", exc)
+
+    def terminate(self, timeout_s: float) -> bool:
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        with self._state_lock:
+            player = self._player
+            if self._terminated or player is None:
+                return False
+        if threading.current_thread() is getattr(player, "_event_thread", None):
+            self.bridge.post("terminate-refused")
+            return False
+        if threading.current_thread() is self._command_thread:
+            self.bridge.post("terminate-refused")
+            return False
+        self._stopping.set()
+        self._queue.close()
+        self._command_thread.join(max(0.0, deadline - time.monotonic()))
+        if self._command_thread.is_alive():
+            return False
+
+        def stop_player() -> None:
+            try:
+                player.terminate()
+            except Exception as exc:
+                self._terminate_error = exc
+                self._callback_error("terminate", exc)
+            finally:
+                self._terminate_done.set()
+
+        with self._state_lock:
+            if self._terminate_helper is None:
+                self._terminate_helper = threading.Thread(
+                    target=stop_player, name="mpv-stop", daemon=True,
+                )
+                self._terminate_helper.start()
+            helper = self._terminate_helper
+        helper.join(max(0.0, deadline - time.monotonic()))
+        if not self._terminate_done.is_set():
+            return False
+        with self._state_lock:
+            self._terminated = True
+            self._player = None
+        return self._terminate_error is None
+
+
+def create_video_backend(*, wid: int, bridge: EventBridge, mixer: VolumeMixer,
+                         vo_profile: str, mpv_module,
+                         sys_platform: str = sys.platform, log=None) -> MpvBackend:
+    """Construct the single video mpv instance for a Tk-owned window id."""
+    options = build_mpv_options(
+        "video", sys_platform=sys_platform, wid=wid, vo_profile=vo_profile,
+    )
+    return MpvBackend(
+        mpv_module=mpv_module, options=options, bridge=bridge, mixer=mixer, log=log,
+    )
 
 
 class _InMemoryRealtimeOps:

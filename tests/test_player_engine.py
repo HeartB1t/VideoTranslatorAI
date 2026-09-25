@@ -1,7 +1,9 @@
 """Pure player engine primitives (spec 2.2, 3.1 and 4.13)."""
 
 import threading
+import time
 import unittest
+from types import SimpleNamespace
 
 from videotranslator import player_engine as pe
 
@@ -280,6 +282,214 @@ class InMemoryBackendTests(unittest.TestCase):
         self.assertTrue(backend.terminate(1.0))
         self.assertFalse(backend.terminate(1.0))
         self.assertEqual(backend.calls[-1][0], "terminate")
+
+
+class _FakeX11Function:
+    def __init__(self, initial):
+        self.current = initial
+        self.calls = []
+
+    def __call__(self, handler):
+        previous = self.current
+        self.current = handler
+        self.calls.append(handler)
+        return previous
+
+
+class X11ErrorGuardTests(unittest.TestCase):
+    def test_capture_reads_and_restores_tk_handler_then_restore_sets_it(self):
+        setter = _FakeX11Function(1234)
+        guard = pe.X11ErrorGuard(load_libx11=lambda: SimpleNamespace(XSetErrorHandler=setter))
+        guard.capture()
+        self.assertTrue(guard.captured)
+        self.assertEqual(setter.calls, [None, 1234])
+        setter.current = None
+        guard.restore()
+        self.assertEqual(setter.current, 1234)
+
+    def test_missing_library_or_null_handler_is_a_safe_noop(self):
+        missing = pe.X11ErrorGuard(load_libx11=lambda: (_ for _ in ()).throw(OSError()))
+        missing.capture()
+        missing.restore()
+        self.assertFalse(missing.captured)
+        setter = _FakeX11Function(None)
+        null = pe.X11ErrorGuard(load_libx11=lambda: SimpleNamespace(XSetErrorHandler=setter))
+        null.capture()
+        null.restore()
+        self.assertFalse(null.captured)
+
+
+class _FakeMpv:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.actions = []
+        self.options = {}
+        self.observers = {}
+        self.event_callback = None
+        self.bindings = {}
+        self.command_events = []
+        self.terminated = False
+        self.terminate_gate = None
+        self.mpv_version = "mpv 0.41.0"
+        self._event_thread = object()
+
+    def __getitem__(self, name):
+        return self.options.get(name, f"default-{name}")
+
+    def __setitem__(self, name, value):
+        self.options[name] = value
+        self.actions.append(("set", name, value))
+
+    def command(self, *args):
+        self.actions.append(("command", *args))
+        event = threading.Event()
+        event.set()
+        self.command_events.append(event)
+
+    def command_async(self, *args, callback=None):
+        self.actions.append(("command_async", *args))
+        if callback is not None:
+            callback(None, None)
+
+    def observe_property(self, name, callback):
+        self.observers[name] = callback
+
+    def register_event_callback(self, callback):
+        self.event_callback = callback
+
+    def register_key_binding(self, name, callback, mode="force"):
+        self.bindings[name] = callback
+
+    def terminate(self):
+        if self.terminate_gate is not None:
+            self.terminate_gate.wait()
+        self.terminated = True
+
+
+class _FakeMpvModule:
+    class MpvEventID:
+        FILE_LOADED = 8
+        END_FILE = 7
+        PLAYBACK_RESTART = 21
+
+    def __init__(self):
+        self.instances = []
+
+    def MPV(self, **kwargs):
+        instance = _FakeMpv(**kwargs)
+        self.instances.append(instance)
+        return instance
+
+
+def _wait_for(predicate, timeout=1.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.005)
+    raise AssertionError("timed out waiting for fake mpv command")
+
+
+class MpvBackendTests(unittest.TestCase):
+    def make_backend(self):
+        module = _FakeMpvModule()
+        bridge = pe.EventBridge()
+        mixer = pe.VolumeMixer(user_volume=72)
+        backend = pe.create_video_backend(
+            wid=55, bridge=bridge, mixer=mixer, vo_profile="x11sw",
+            mpv_module=module, sys_platform="linux", log=lambda *_args: None,
+        )
+        return backend, module.instances[0], bridge
+
+    def test_factory_builds_player_and_registers_observers_events_and_mouse(self):
+        backend, player, _bridge = self.make_backend()
+        self.assertEqual(player.kwargs["wid"], "55")
+        self.assertEqual(player.kwargs["vo"], "x11")
+        self.assertEqual(backend.mpv_version, (0, 41))
+        self.assertEqual(set(player.observers), set(pe.EventBridge.LATEST))
+        self.assertIsNotNone(player.event_callback)
+        self.assertEqual(set(player.bindings), {
+            "MBTN_LEFT", "MBTN_LEFT_DBL", "WHEEL_UP", "WHEEL_DOWN",
+        })
+        self.assertTrue(backend.terminate(1.0))
+
+    def test_load_writes_properties_before_raw_loadfile_and_restores_next_time(self):
+        backend, player, _bridge = self.make_backend()
+        backend.load("/one.mp4", paused=True, start=3.5,
+                     options={"cache": "yes", "force_seekable": "yes"})
+        _wait_for(lambda: ("command", "loadfile", "/one.mp4", "replace") in player.actions)
+        load_index = player.actions.index(("command", "loadfile", "/one.mp4", "replace"))
+        self.assertIn(("set", "pause", "yes"), player.actions[:load_index])
+        self.assertIn(("set", "start", 3.5), player.actions[:load_index])
+        self.assertIn(("set", "cache", "yes"), player.actions[:load_index])
+        self.assertFalse(any(action[1] == "loadfile" and len(action) > 4
+                             for action in player.actions if action[0] == "command"))
+
+        backend.load("/two.mp4", paused=False)
+        _wait_for(lambda: ("command", "loadfile", "/two.mp4", "replace") in player.actions)
+        second = player.actions.index(("command", "loadfile", "/two.mp4", "replace"))
+        between = player.actions[load_index + 1:second]
+        self.assertIn(("set", "cache", "default-cache"), between)
+        self.assertIn(("set", "force-seekable", "default-force-seekable"), between)
+        self.assertIn(("set", "start", "default-start"), between)
+        self.assertTrue(backend.terminate(1.0))
+
+    def test_commands_mix_snapshot_callbacks_and_bridge_callbacks_do_not_raise(self):
+        backend, player, bridge = self.make_backend()
+        backend.set_pause(False)
+        backend.seek(4, "relative")
+        backend.apply_mix()
+        backend.add_external_audio("/original.wav", "Original")
+        backend.select_audio(3)
+        backend.add_subtitles("/translated.srt", "Translated")
+        backend.reload_subtitles()
+        backend.set_subtitles_visible(False)
+        backend.screenshot("/shot.png")
+        _wait_for(lambda: ("command_async", "screenshot-to-file", "/shot.png", "video")
+                  in player.actions)
+
+        marker = object()
+        player.observers["time-pos"]("time-pos", 9.25)
+        player.observers["time-pos"](None, marker)
+        player.bindings["MBTN_LEFT"]("um-", None, None, None, None)
+        player.event_callback(SimpleNamespace(
+            event_id=SimpleNamespace(value=_FakeMpvModule.MpvEventID.FILE_LOADED),
+        ))
+        player.event_callback(SimpleNamespace(
+            event_id=SimpleNamespace(value=_FakeMpvModule.MpvEventID.END_FILE),
+            data=SimpleNamespace(reason=4),
+        ))
+        player.event_callback(SimpleNamespace(
+            event_id=SimpleNamespace(value=_FakeMpvModule.MpvEventID.PLAYBACK_RESTART),
+        ))
+        player.event_callback(SimpleNamespace(event_id=SimpleNamespace(value=999)))
+        snapshot = bridge.drain()
+        self.assertIs(snapshot.changed["time-pos"][0], marker)
+        self.assertIn(("mouse", ("MBTN_LEFT", "um-")),
+                      [(event.kind, event.payload) for event in snapshot.events])
+        self.assertIn("snapshot-saved", [event.kind for event in snapshot.events])
+        self.assertIn(("end-file", {"reason": "error"}),
+                      [(event.kind, event.payload) for event in snapshot.events])
+        self.assertTrue(backend.terminate(1.0))
+
+    def test_terminate_is_refused_on_mpv_event_thread_and_is_idempotent(self):
+        backend, player, bridge = self.make_backend()
+        player._event_thread = threading.current_thread()
+        self.assertFalse(backend.terminate(0.1))
+        self.assertIn("terminate-refused", [event.kind for event in bridge.drain().events])
+        player._event_thread = object()
+        self.assertTrue(backend.terminate(1.0))
+        self.assertTrue(player.terminated)
+        self.assertFalse(backend.terminate(1.0))
+
+    def test_terminate_timeout_is_a_single_total_deadline_and_can_be_rejoined(self):
+        backend, player, _bridge = self.make_backend()
+        player.terminate_gate = threading.Event()
+        started = time.monotonic()
+        self.assertFalse(backend.terminate(0.03))
+        self.assertLess(time.monotonic() - started, 0.08)
+        player.terminate_gate.set()
+        self.assertTrue(backend.terminate(1.0))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from videotranslator.platforms import (
     default_videos_dir,
     linux_xdg_videos_dir,
     platform_info,
+    reveal_in_file_manager,
     resolve_app_paths,
     resolve_wav2lip_paths,
     runtime_app_paths,
@@ -170,6 +171,33 @@ class PlatformTests(unittest.TestCase):
 
     def test_windows_known_videos_dir_non_windows_returns_none(self):
         self.assertIsNone(windows_known_videos_dir("linux"))
+
+    def test_reveal_uses_platform_native_file_manager_commands(self):
+        calls = []
+        reveal_in_file_manager(
+            Path("/tmp/a b/video.mp4"), sys_platform="linux",
+            popen=lambda command: calls.append(command),
+        )
+        self.assertEqual(calls, [["xdg-open", "/tmp/a b"]])
+
+        calls.clear()
+        reveal_in_file_manager(
+            PureWindowsPath(r"C:\a b\video.mp4"), sys_platform="win32",
+            popen=lambda command: calls.append(command),
+        )
+        self.assertEqual(calls, [r'explorer /select,"C:\a b\video.mp4"'])
+
+    def test_reveal_windows_falls_back_to_startfile_when_explorer_fails(self):
+        opened = []
+
+        def failed_popen(_command):
+            raise OSError("explorer unavailable")
+
+        self.assertTrue(reveal_in_file_manager(
+            PureWindowsPath(r"C:\media\video.mp4"), sys_platform="win32",
+            popen=failed_popen, startfile=lambda path: opened.append(path),
+        ))
+        self.assertEqual(opened, [r"C:\media\video.mp4"])
 
 
 def _seed_wav2lip_assets(directory: Path) -> None:

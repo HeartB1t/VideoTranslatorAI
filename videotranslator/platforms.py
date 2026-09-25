@@ -286,6 +286,47 @@ def default_videos_dir(
     return home / "Videos"
 
 
+def reveal_in_file_manager(
+    path: PurePath,
+    *,
+    sys_platform: str | None = None,
+    popen: Callable[..., Any] = subprocess.Popen,
+    startfile: Callable[[str], Any] | None = None,
+) -> bool:
+    """Reveal a media file with the native file manager.
+
+    Windows Explorer accepts its ``/select`` invocation as one command line;
+    Linux opens the containing directory because xdg-open has no portable
+    select-file operation.  The injected runners keep both branches testable
+    on either host.
+    """
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if sys_platform.startswith("win"):
+        windows_path = str(PureWindowsPath(path))
+        command = f'explorer /select,"{windows_path}"'
+        try:
+            popen(command)
+            return True
+        except OSError:
+            fallback = startfile if startfile is not None else getattr(os, "startfile", None)
+            if fallback is None:
+                return False
+            try:
+                fallback(windows_path)
+                return True
+            except OSError:
+                return False
+    if sys_platform.startswith("linux"):
+        folder = str(PurePosixPath(path).parent)
+        try:
+            popen(["xdg-open", folder])
+            return True
+        except OSError:
+            return False
+    return False
+
+
 def _wav2lip_asset_candidates(
     sys_platform: str,
     env: dict[str, str],
