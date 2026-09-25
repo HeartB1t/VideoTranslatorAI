@@ -20,9 +20,11 @@ shows translated keys (REASON_KEYS).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ctypes
 import ctypes.util
 import dataclasses
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -34,8 +36,11 @@ import subprocess
 import sys
 import threading
 import traceback
-from collections.abc import Callable, Mapping, MutableMapping
+import urllib.request
+import zipfile
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -716,16 +721,498 @@ def load_mpv(*, importer: Callable[[str], ModuleType] = importlib.import_module,
         return module
 
 
+# -- Windows installer (spec 8.3; setup_windows.bat and the GUI per-user install) --
+
+USER_AGENT = "VideoTranslatorAI-Setup"   # SourceForge serves HTML to browser-like agents
+DOWNLOAD_TIMEOUT_S = 60.0
+BUILD_FILE = "BUILD.txt"
+STAGING_DIR_NAME = "_staging"
+LICENCE_URL = "https://raw.githubusercontent.com/mpv-player/mpv/{ref}/LICENSE.{flavour}"
+
+
+@dataclass(frozen=True)
+class AssetSource:
+    kind: str                            # "github-latest" | "pinned"
+    name: str
+    licence: str
+    urls: tuple[str, ...] = ()           # pinned: mirrors in order
+    sha256: str | None = None            # pinned: the archive
+    member: str = "libmpv-2.dll"
+    member_sha256: str | None = None     # pinned: the extracted file
+    repo: str | None = None              # github-latest: "owner/name"
+    asset_pattern: str | None = None     # github-latest: full-match regex on asset names
+    max_releases: int = 3                # github-latest: newest N tried in order
+    max_bytes: int = 64 << 20
+
+
+# Operator decision Q1: the zhongfly LGPL build first (newest 3 daily
+# releases, each verified by its GitHub digest), the pinned shinchiro GPL
+# snapshot as the reproducible fallback. A licence choice changes this data,
+# not the code. Both are mpv master snapshots: BUILD.txt records the commit.
+WINDOWS_LIBMPV_SOURCES: tuple[AssetSource, ...] = (
+    AssetSource(kind="github-latest", name="zhongfly-lgpl", licence="LGPL",
+                repo="zhongfly/mpv-winbuild",
+                asset_pattern=r"mpv-dev-lgpl-x86_64-\d{8}-git-[0-9a-f]+\.7z",
+                max_releases=3),
+    AssetSource(kind="pinned", name="shinchiro-gpl-20260920", licence="GPL",
+                urls=("https://downloads.sourceforge.net/project/mpv-player-windows/libmpv/"
+                      "mpv-dev-x86_64-20260920-git-e76a35ec95.7z",
+                      "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/"
+                      "20260920/mpv-dev-x86_64-20260920-git-e76a35ec95.7z"),
+                sha256="60f9102db46aea8cef9bfb4345ee6a106f34fdbd1df9587e38f0660688039341",
+                member_sha256="63e1fbb4ee890d153a9f5086410157174ee18582846bf35f6cc4e5d08d4bb662"),
+)
+# py7zr cannot decode the BCJ2 filter of both archives ([06] 2): 7zr.exe does.
+SEVENZR = AssetSource(kind="pinned", name="7zr-26.03", licence="LGPL",
+                      urls=("https://github.com/ip7z/7zip/releases/download/26.03/7zr.exe",),
+                      sha256="ad4c82fadcbdf93c03b4fc440f300509c7d60c5c2f4d183e35d9d70d6957037d",
+                      member="7zr.exe", max_bytes=4 << 20)
+# Q2: fetched only when the load check reports a missing vulkan-1.dll.
+VULKAN_RUNTIME = AssetSource(
+    kind="pinned", name="vulkan-runtime-1.4.357.0", licence="MIT and Apache-2.0",
+    urls=("https://sdk.lunarg.com/sdk/download/1.4.357.0/windows/vulkan-runtime-components.zip",),
+    sha256="a14672efed15aafc7f5a16572d35cd3a3416eadf670aeee3cdf50ee32d5fbf83",
+    member="VulkanRT-X64-1.4.357.0-Components/x64/vulkan-1.dll",
+    member_sha256="cd862090370454630b31b174e3d4eb474fda38ea034998d1fe1767b0c99a8696")
+
+_SUMS_LINE_RE = re.compile(r"^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$")
+_COMMIT_RE = re.compile(r"-git-([0-9a-f]{7,40})\.7z$")
+
+
+@dataclass(frozen=True)
+class DownloadCandidate:
+    source: AssetSource
+    url: str
+    sha256: str
+    release: str
+    asset: str
+
+
+class DownloadError(Exception):
+    """A download, a checksum or an extraction failed; the next candidate is tried."""
+
+
+class HttpClient:
+    """urllib with the installer's user agent, a timeout and chunked, hashed reads."""
+
+    def __init__(self, *, opener: Callable[..., Any] = urllib.request.urlopen,
+                 timeout: float = DOWNLOAD_TIMEOUT_S, chunk: int = 1 << 16) -> None:
+        self._opener = opener
+        self._timeout = timeout
+        self._chunk = chunk
+
+    def _open(self, url: str) -> Any:
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+        return self._opener(request, timeout=self._timeout)
+
+    def get_json(self, url: str) -> Any:
+        with self._open(url) as response:
+            return json.loads(response.read(4 << 20).decode("utf-8"))
+
+    def get_text(self, url: str) -> str:
+        with self._open(url) as response:
+            return response.read(1 << 20).decode("utf-8", "replace")
+
+    def resolve(self, url: str) -> str:
+        """The final URL after redirects (GitHub /releases/latest -> /releases/tag/<tag>)."""
+        with self._open(url) as response:
+            return response.geturl()
+
+    def fetch(self, url: str, dest: Path, *, max_bytes: int) -> str:
+        """Stream ``url`` into ``dest``; return its SHA256 hex digest."""
+        digest = hashlib.sha256()
+        size = 0
+        with self._open(url) as response:
+            headers = getattr(response, "headers", None) or {}
+            if str(headers.get("Content-Type", "")).lower().startswith("text/html"):
+                raise DownloadError(f"{url} returned an HTML page instead of a file")
+            with open(dest, "wb") as out:
+                while True:
+                    block = response.read(self._chunk)
+                    if not block:
+                        break
+                    size += len(block)
+                    if size > max_bytes:
+                        raise DownloadError(f"{url} is larger than {max_bytes} bytes")
+                    digest.update(block)
+                    out.write(block)
+        return digest.hexdigest()
+
+
+def pinned_candidates(source: AssetSource) -> list[DownloadCandidate]:
+    if not source.sha256:
+        return []   # never install an unverified pinned file
+    return [DownloadCandidate(source, url, source.sha256.lower(), source.name,
+                              url.rstrip("/").rsplit("/", 1)[-1]) for url in source.urls]
+
+
+def _release_sums(http: Any, repo: str, tag: str) -> dict[str, str]:
+    text = http.get_text(f"https://github.com/{repo}/releases/download/{tag}/sha256.txt")
+    sums: dict[str, str] = {}
+    for line in text.splitlines():
+        match = _SUMS_LINE_RE.match(line.strip())
+        if match:
+            sums[match.group(2)] = match.group(1).lower()
+    return sums
+
+
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _valid_sha256(value: Any) -> str | None:
+    """A lower-case 64-hex SHA256, or None (a bad digest would waste a download)."""
+    text = str(value or "").strip().lower()
+    return text if _SHA256_RE.fullmatch(text) else None
+
+
+def github_candidates(source: AssetSource, http: Any,
+                      log: Callable[[str], None]) -> list[DownloadCandidate]:
+    """Newest-first candidates of a github-latest source, each with a SHA256 to verify.
+
+    Primary: the releases API and each asset's `digest`. When the API fails
+    (60 requests per hour per IP): the /releases/latest redirect and that
+    release's sha256.txt. An asset without a checksum is skipped. The digest
+    comes from the same origin as the file: it guards against transport
+    errors, not against a compromised upstream (spec 8.3, C46).
+    """
+    pattern = re.compile(source.asset_pattern or r"(?!)")
+    base = f"https://github.com/{source.repo}/releases/download"
+    try:
+        releases = http.get_json(
+            f"https://api.github.com/repos/{source.repo}/releases?per_page={source.max_releases}")
+    except (OSError, ValueError) as exc:
+        log(f"[!] GitHub API unavailable for {source.repo} ({exc}): using the latest release page")
+        releases = None
+    candidates: list[DownloadCandidate] = []
+    if isinstance(releases, list):
+        for release in releases[: source.max_releases]:
+            if not isinstance(release, dict):
+                continue  # malformed API entry: never crash before the fallback source
+            tag = str(release.get("tag_name", ""))
+            assets = release.get("assets")
+            for asset in assets if isinstance(assets, list) else []:
+                if not isinstance(asset, dict):
+                    continue
+                name = str(asset.get("name", ""))
+                if not pattern.fullmatch(name):
+                    continue
+                digest = str(asset.get("digest") or "")
+                sha = _valid_sha256(digest.split(":", 1)[1]) if digest.startswith("sha256:") else None
+                if sha is None:
+                    try:
+                        sha = _valid_sha256(_release_sums(http, source.repo, tag).get(name))
+                    except (OSError, ValueError, AttributeError):
+                        sha = None
+                if not sha:
+                    log(f"[!] {name}: no published checksum, skipped")
+                    continue
+                url = str(asset.get("browser_download_url") or f"{base}/{tag}/{name}")
+                candidates.append(DownloadCandidate(source, url, sha, tag, name))
+        return candidates
+    try:
+        tag = http.resolve(f"https://github.com/{source.repo}/releases/latest").rstrip("/").rsplit("/", 1)[-1]
+        sums = _release_sums(http, source.repo, tag)
+    except (OSError, ValueError) as exc:
+        log(f"[!] Cannot resolve the latest {source.repo} release: {exc}")
+        return []
+    for name, sha in sorted(sums.items()):
+        if pattern.fullmatch(name):
+            candidates.append(DownloadCandidate(source, f"{base}/{tag}/{name}", sha, tag, name))
+    return candidates
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def run_hidden(cmd: Sequence[str], *, timeout_s: float = 300.0,
+               run: Callable[..., Any] = subprocess.run, sys_platform: str = sys.platform) -> int:
+    """Run a console tool (7zr.exe) with no window and no stdin; its exit code, -1 on failure."""
+    try:
+        proc = run([str(part) for part in cmd], capture_output=True, stdin=subprocess.DEVNULL,
+                   timeout=timeout_s, check=False, **no_window_kwargs(sys_platform))
+    except (OSError, subprocess.SubprocessError):
+        return -1
+    return int(proc.returncode)
+
+
+def _fetch_verified(http: Any, url: str, target: Path, sha256: str, max_bytes: int) -> None:
+    """Download to ``target.part``, check the hash, then rename; never leaves a .part behind."""
+    part = target.with_name(target.name + ".part")
+    try:
+        got = http.fetch(url, part, max_bytes=max_bytes)
+        if got.lower() != sha256.lower():
+            raise DownloadError(f"SHA256 mismatch for {url}")
+        os.replace(part, target)
+    finally:
+        with contextlib.suppress(OSError):
+            part.unlink()
+
+
+def _fetch_pinned(source: AssetSource, target: Path, http: Any, log: Callable[[str], None]) -> Path:
+    errors = []
+    for url in source.urls:
+        try:
+            _fetch_verified(http, url, target, source.sha256 or "", source.max_bytes)
+            return target
+        except (OSError, ValueError, DownloadError) as exc:
+            log(f"[!] {source.name}: {url} failed: {exc}")
+            errors.append(str(exc))
+    raise DownloadError(f"{source.name}: " + "; ".join(errors or ["no URL"]))
+
+
+def _extract_member(tool: Path, archive: Path, member: str, work: Path,
+                    runner: Callable[[Sequence[str]], int]) -> Path:
+    code = runner([str(tool), "e", "-y", f"-o{work}", str(archive), member])
+    out = work / Path(member).name
+    if code != 0 or not out.is_file() or out.stat().st_size == 0:
+        with contextlib.suppress(OSError):
+            out.unlink()   # a failed extraction can leave a 0-byte file ([06] 2)
+        raise DownloadError(f"7zr could not extract {member} (exit code {code})")
+    return out
+
+
+def _fetch_vulkan(vulkan: AssetSource, target_dir: Path, work: Path, http: Any,
+                  log: Callable[[str], None]) -> None:
+    archive = _fetch_pinned(vulkan, work / "vulkan-runtime.zip", http, log)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    part = target_dir / (VULKAN_DLL + ".part")
+    try:
+        with zipfile.ZipFile(archive) as bundle, bundle.open(vulkan.member) as src, \
+                open(part, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        if vulkan.member_sha256 and sha256_file(part) != vulkan.member_sha256:
+            raise DownloadError("vulkan-1.dll SHA256 mismatch")
+        os.replace(part, target_dir / VULKAN_DLL)
+    except (KeyError, zipfile.BadZipFile) as exc:
+        raise DownloadError(f"Vulkan runtime archive: {exc}") from exc
+    finally:
+        with contextlib.suppress(OSError):
+            part.unlink()
+        with contextlib.suppress(OSError):
+            archive.unlink()
+
+
+def _seed_vulkan(dest: Path, work: Path, vulkan: AssetSource) -> None:
+    """Reuse a verified vulkan-1.dll of a previous install instead of downloading it again."""
+    existing = dest / VULKAN_DIR_NAME / VULKAN_DLL
+    if not existing.is_file():
+        return
+    if vulkan.member_sha256 and sha256_file(existing) != vulkan.member_sha256:
+        return
+    (work / VULKAN_DIR_NAME).mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(existing, work / VULKAN_DIR_NAME / VULKAN_DLL)
+
+
+def _clean_work(work: Path, keep: set[str]) -> None:
+    for entry in work.iterdir():
+        if entry.name in keep:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            with contextlib.suppress(OSError):
+                entry.unlink()
+
+
+def _try_candidate(cand: DownloadCandidate, work: Path, tool: Path, http: Any,
+                   runner: Callable[[Sequence[str]], int], check: Callable[[Path], LibmpvStatus],
+                   vulkan: AssetSource, dest: Path, log: Callable[[str], None]) -> LibmpvStatus:
+    archive = work / cand.asset
+    _fetch_verified(http, cand.url, archive, cand.sha256, cand.source.max_bytes)
+    try:
+        dll = _extract_member(tool, archive, cand.source.member, work, runner)
+    finally:
+        with contextlib.suppress(OSError):
+            archive.unlink()
+    with open(dll, "rb") as handle:
+        if handle.read(2) != b"MZ":
+            raise DownloadError(f"{cand.source.member} is not a Windows DLL")
+    if cand.source.member_sha256 and sha256_file(dll) != cand.source.member_sha256:
+        raise DownloadError(f"{cand.source.member} SHA256 mismatch")
+    os.replace(dll, work / WINDOWS_DLL_TARGET)
+    _seed_vulkan(dest, work, vulkan)
+    # The load check runs in a child process: a crashing DLL cannot kill the installer.
+    status = check(work)
+    if status.reason == "vulkan-loader-missing" and not (work / VULKAN_DIR_NAME / VULKAN_DLL).is_file():
+        log("[*] vulkan-1.dll is missing on this system: downloading the Vulkan runtime ...")
+        _fetch_vulkan(vulkan, work / VULKAN_DIR_NAME, work, http, log)
+        status = check(work)
+    return status
+
+
+def _promote(work: Path, dest: Path) -> bool:
+    """Move the checked files from the staging folder (same volume) into ``dest``."""
+    vulkan_src = work / VULKAN_DIR_NAME / VULKAN_DLL
+    if vulkan_src.is_file():
+        (dest / VULKAN_DIR_NAME).mkdir(parents=True, exist_ok=True)
+        os.replace(vulkan_src, dest / VULKAN_DIR_NAME / VULKAN_DLL)
+    os.replace(work / WINDOWS_DLL_TARGET, dest / WINDOWS_DLL_TARGET)
+    return (dest / VULKAN_DIR_NAME / VULKAN_DLL).is_file()
+
+
+def write_build_txt(dest: Path, cand: DownloadCandidate, status: LibmpvStatus, *,
+                    vulkan_fallback: bool, now: datetime) -> None:
+    """Record what this user received (source, flavour, mpv commit, hashes) next to the DLL."""
+    match = _COMMIT_RE.search(cand.asset)
+    lines = [
+        "# Written by: python -m videotranslator.libmpv_runtime install",
+        f"source={cand.source.name}",
+        f"licence={cand.source.licence}",
+        f"url={cand.url}",
+        f"release={cand.release}",
+        f"archive={cand.asset}",
+        f"archive_sha256={cand.sha256}",
+        f"dll_sha256={sha256_file(dest / WINDOWS_DLL_TARGET)}",
+        f"mpv_commit={match.group(1) if match else 'unknown'}",
+        f"mpv_version={format_version(status)}",
+        f"vulkan_fallback={'yes' if vulkan_fallback else 'no'}",
+        f"installed={now.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+    ]
+    part = dest / (BUILD_FILE + ".part")
+    part.write_text("\n".join(lines) + "\n", encoding="ascii", errors="replace")
+    os.replace(part, dest / BUILD_FILE)
+
+
+def _fetch_licence(dest: Path, cand: DownloadCandidate, http: Any, log: Callable[[str], None]) -> None:
+    flavour = "LGPL" if cand.source.licence.upper().startswith("LGPL") else "GPL"
+    match = _COMMIT_RE.search(cand.asset)
+    for ref in ([match.group(1)] if match else []) + ["master"]:
+        try:
+            text = http.get_text(LICENCE_URL.format(ref=ref, flavour=flavour))
+        except (OSError, ValueError):
+            continue
+        if text.strip():
+            (dest / f"LICENSE.{flavour}").write_text(text, encoding="utf-8")
+            return
+    log(f"[!] Could not fetch LICENSE.{flavour}; see "
+        "https://github.com/mpv-player/mpv/blob/master/Copyright")
+
+
+def installed_build_is_current(dest: Path, sources: Sequence[AssetSource]) -> bool:
+    """True when BUILD.txt names a listed source and the DLL hash matches (Repair skips the download)."""
+    build = read_build_txt(dest)
+    dll = Path(dest) / WINDOWS_DLL_TARGET
+    if not build or not dll.is_file():
+        return False
+    if build.get("source") not in {source.name for source in sources}:
+        return False
+    return sha256_file(dll) == build.get("dll_sha256", "").lower()
+
+
+def _repair_vulkan(dest: Path, vulkan: AssetSource, http: Any,
+                   check: Callable[[Path], LibmpvStatus],
+                   log: Callable[[str], None]) -> LibmpvStatus:
+    """Load-check a current install; fetch the Vulkan fallback if the loader went missing.
+
+    A machine can lose System32\\vulkan-1.dll after the install (driver change,
+    moved to a VM without 3D): Repair must then restore the fallback instead of
+    reporting vulkan-loader-missing forever (spec 6.1 row 5).
+    """
+    existing = dest / VULKAN_DIR_NAME / VULKAN_DLL
+    if (existing.is_file() and vulkan.member_sha256
+            and sha256_file(existing) != vulkan.member_sha256):
+        log("[!] The Vulkan fallback in the runtime folder is damaged: replacing it.")
+        with contextlib.suppress(OSError):
+            existing.unlink()
+    status = check(dest)
+    if status.reason != "vulkan-loader-missing" or existing.is_file():
+        return status
+    log("[*] vulkan-1.dll is missing on this system: downloading the Vulkan runtime ...")
+    work = dest / STAGING_DIR_NAME
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    try:
+        _fetch_vulkan(vulkan, dest / VULKAN_DIR_NAME, work, http, log)
+    except (OSError, ValueError, DownloadError) as exc:
+        log(f"[!] Vulkan runtime: {exc}")
+        return status
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return check(dest)
+
+
+def install_windows(dest: Path, *, sources: Sequence[AssetSource] = WINDOWS_LIBMPV_SOURCES,
+                    sevenzr: AssetSource = SEVENZR, vulkan: AssetSource = VULKAN_RUNTIME,
+                    downloader: Any = None, runner: Callable[[Sequence[str]], int] | None = None,
+                    probe: Callable[[Path], LibmpvStatus] | None = None,
+                    log: Callable[[str], None] = print,
+                    now: Callable[[], datetime] | None = None) -> LibmpvStatus:
+    """Download, verify, extract, load-check and install libmpv into ``dest`` (spec 8.3).
+
+    Every candidate is load-checked in a child process inside a staging
+    folder before it replaces anything in ``dest``. Idempotent: a current
+    BUILD.txt skips every download. Returns the status of ``dest``.
+    """
+    http = downloader or HttpClient()
+    runner = runner or run_hidden
+    check = probe or (lambda directory: probe_in_subprocess(runtime_dir=directory))
+    clock = now or (lambda: datetime.now(timezone.utc))
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    if installed_build_is_current(dest, sources):
+        log(f"[+] libmpv already installed ({read_build_txt(dest).get('source')}), "
+            "skipping the download.")
+        return _repair_vulkan(dest, vulkan, http, check, log)
+    work = dest / STAGING_DIR_NAME
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    failures: list[str] = []
+    try:
+        try:
+            log("[*] Downloading 7zr.exe (7-Zip extractor, used only during the install) ...")
+            tool = _fetch_pinned(sevenzr, work / "7zr.exe", http, log)
+        except DownloadError as exc:
+            return _status("libmpv-missing", detail=f"7zr.exe could not be downloaded: {exc}")
+        for source in sources:
+            candidates = (github_candidates(source, http, log) if source.kind == "github-latest"
+                          else pinned_candidates(source))
+            for cand in candidates:
+                log(f"[*] Downloading libmpv ({source.name}, {source.licence} build): {cand.asset} ...")
+                try:
+                    status = _try_candidate(cand, work, tool, http, runner, check, vulkan, dest, log)
+                except (OSError, ValueError, DownloadError) as exc:
+                    failures.append(f"{cand.asset}: {exc}")
+                    log(f"[!] {cand.asset}: {exc}")
+                    _clean_work(work, keep={"7zr.exe", VULKAN_DIR_NAME})
+                    continue
+                if not library_loaded(status):
+                    failures.append(f"{cand.asset}: {status.reason} ({status.detail})")
+                    log(f"[!] {cand.asset} failed the load check: {status.reason}")
+                    _clean_work(work, keep={"7zr.exe", VULKAN_DIR_NAME})
+                    continue
+                try:
+                    vulkan_used = _promote(work, dest)
+                except OSError as exc:
+                    return _status("libmpv-load-failed", detail=(
+                        f"could not replace {WINDOWS_DLL_TARGET} ({exc}): close VideoTranslatorAI "
+                        "and run the installer again"))
+                write_build_txt(dest, cand, status, vulkan_fallback=vulkan_used, now=clock())
+                _fetch_licence(dest, cand, http, log)
+                log(f"[+] libmpv installed in {dest}")
+                return check(dest)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return _status("libmpv-missing", detail=_shorten(
+        "no libmpv build could be installed: " + "; ".join(failures or ["no candidate"]), 500))
+
+
 # -- command line ----------------------------------------------------------
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m videotranslator.libmpv_runtime",
-        description="Probe libmpv for the integrated video player.")
+        description="Probe libmpv for the integrated video player, or install it on Windows.")
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="load libmpv in this process and report its status")
     check.add_argument("--dir", help="probe the library in this folder only")
     check.add_argument("--json", action="store_true", help="print the status as one JSON line")
+    install = sub.add_parser("install", help="Windows: download, verify and install libmpv")
+    install.add_argument("--dest", required=True, help="target folder (the mpv-runtime directory)")
     return parser
 
 
@@ -745,6 +1232,18 @@ def _cmd_check(args: argparse.Namespace, *, sys_platform: str) -> int:
     return 0 if status.ok else 2
 
 
+def _cmd_install(args: argparse.Namespace, *, sys_platform: str) -> int:
+    if sys_platform != "win32":
+        print("[!] install is for Windows only: on Linux install libmpv with the package manager.")
+        return 2
+    status = install_windows(Path(args.dest))
+    if library_loaded(status):
+        print(f"[+] libmpv ready: {status.path} ({status.detail})")
+        return 0
+    print(f"[!] libmpv not installed: {status.reason} ({status.detail})")
+    return 2
+
+
 def main(argv: list[str] | None = None, *, sys_platform: str = sys.platform) -> int:
     """Exit codes: 0 ok, 2 unavailable, 3 unexpected error; never 1."""
     parser = _build_parser()
@@ -753,6 +1252,8 @@ def main(argv: list[str] | None = None, *, sys_platform: str = sys.platform) -> 
     except SystemExit as exc:
         return 0 if exc.code in (0, None) else 3
     try:
+        if args.command == "install":
+            return _cmd_install(args, sys_platform=sys_platform)
         return _cmd_check(args, sys_platform=sys_platform)
     except Exception:
         traceback.print_exc()
