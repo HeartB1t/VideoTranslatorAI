@@ -2,8 +2,8 @@
 import unittest
 
 from videotranslator.ui_layout import (
-    PANEL_IDS, RIGHT_COLUMN_MIN_WIDTH, drop_index, move_panel,
-    normalize_panel_order, right_column_width,
+    PANEL_IDS, RIGHT_COLUMN_MIN_WIDTH, WheelAccumulator, drop_index,
+    move_panel, normalize_panel_order, right_column_width,
 )
 
 DEFAULT = list(PANEL_IDS)
@@ -99,6 +99,47 @@ class RightColumnWidthTests(unittest.TestCase):
     def test_widens_when_the_cards_ask_for_more(self):
         self.assertEqual(right_column_width(461), 461)
         self.assertEqual(right_column_width(530), 530)
+
+
+class WheelAccumulatorTests(unittest.TestCase):
+    """Scroll units per wheel event: positive down, negative up."""
+
+    def test_x11_buttons_are_one_notch_each(self):
+        # Tk 8.6 on X11: button 4 is the wheel turned up, button 5 down.
+        wheel = WheelAccumulator()
+        self.assertEqual(wheel.feed(4, 0), -1)
+        self.assertEqual(wheel.feed(5, 0), 1)
+        self.assertEqual(wheel.feed(5, 0), 1)
+
+    def test_whole_notches_on_windows(self):
+        # Windows and Tk 8.7+ on X11: +120 per notch up, -120 per notch down.
+        for delta, units in ((120, -1), (-120, 1), (240, -2), (-360, 3)):
+            with self.subTest(delta=delta):
+                self.assertEqual(WheelAccumulator().feed("??", delta), units)
+
+    def test_small_touchpad_deltas_add_up_to_one_notch(self):
+        # Windows precision touchpads send many small deltas per gesture:
+        # one unit per 120 accumulated, never one unit per event.
+        wheel = WheelAccumulator()
+        self.assertEqual([wheel.feed("??", -40) for _ in range(6)],
+                         [0, 0, 1, 0, 0, 1])
+        self.assertEqual(wheel.feed("??", -100), 0)
+        self.assertEqual(wheel.feed("??", -30), 1)  # 130 accumulated
+
+    def test_turning_back_drops_the_other_direction(self):
+        wheel = WheelAccumulator()
+        self.assertEqual(wheel.feed("??", -100), 0)
+        # The residue of the downward gesture must not delay the upward one.
+        self.assertEqual(wheel.feed("??", 120), -1)
+        self.assertEqual(wheel.feed("??", 60), 0)
+        self.assertEqual(wheel.feed(5, 0), 1)  # a button resets the residue
+        self.assertEqual(wheel.feed("??", 60), 0)
+
+    def test_no_wheel_no_scroll(self):
+        wheel = WheelAccumulator()
+        for num, delta in ((1, 0), ("??", 0), (None, None), ("??", "x")):
+            with self.subTest(num=num, delta=delta):
+                self.assertEqual(wheel.feed(num, delta), 0)
 
 
 if __name__ == "__main__":

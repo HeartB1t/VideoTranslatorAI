@@ -318,5 +318,65 @@ class P0LayoutTests(unittest.TestCase):
             self.assertEqual(_geom(app._player_area), before)
 
 
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class WheelStepTests(unittest.TestCase):
+    """One notch scrolls the card column by one unit, in the wheel's direction."""
+
+    def _after_scrolling(self, app, start, units):
+        """View top after scrolling ``units`` from ``start``, then back to ``start``."""
+        canvas = app._right_canvas
+        canvas.yview_moveto(start)
+        app.update()
+        canvas.yview_scroll(units, "units")
+        app.update()
+        expected = canvas.yview()[0]
+        canvas.yview_moveto(start)
+        app.update()
+        return expected
+
+    def test_one_notch_one_unit_in_the_wheel_direction(self):
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, 900, 600)
+            canvas = app._right_canvas
+            for sequence, units in (("<Button-5>", 1), ("<Button-4>", -1)):
+                with self.subTest(sequence=sequence):
+                    expected = self._after_scrolling(app, 0.3, units)
+                    app._lbl_panel_input.event_generate(sequence)
+                    app.update()
+                    self.assertEqual(canvas.yview()[0], expected)
+            # <MouseWheel> (Windows, Tk 8.7+): delta -120 is one notch down.
+            for delta, units in ((-120, 1), (120, -1)):
+                with self.subTest(delta=delta):
+                    expected = self._after_scrolling(app, 0.3, units)
+                    app._on_mousewheel(types.SimpleNamespace(num="??", delta=delta))
+                    app.update()
+                    self.assertEqual(canvas.yview()[0], expected)
+
+    def test_touchpad_deltas_scroll_once_per_notch(self):
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, 900, 600)
+            canvas = app._right_canvas
+            expected = self._after_scrolling(app, 0.3, 1)
+            canvas.yview_moveto(0.3)
+            app.update()
+            for _ in range(3):  # 3 x -40 = one notch down
+                app._on_mousewheel(types.SimpleNamespace(num="??", delta=-40))
+            app.update()
+            self.assertEqual(canvas.yview()[0], expected)
+
+    def test_rebinding_the_voice_chips_does_not_stack_handlers(self):
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, 900, 600)
+            targets = list(gui.LANGUAGES.keys())
+            for code in ("en", "de"):
+                app._tgt_combo.current(targets.index(code))
+                app._on_lang_tgt_change()
+            app.update()
+            expected = self._after_scrolling(app, 0.3, 1)
+            app._voice_frame.event_generate("<Button-5>")
+            app.update()
+            self.assertEqual(app._right_canvas.yview()[0], expected)
+
+
 if __name__ == "__main__":
     unittest.main()

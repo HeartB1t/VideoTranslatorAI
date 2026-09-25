@@ -315,6 +315,7 @@ from videotranslator.ui_layout import move_panel as _move_panel  # noqa: E402
 from videotranslator.ui_layout import drop_index as _drop_index  # noqa: E402
 from videotranslator.ui_layout import RIGHT_COLUMN_MIN_WIDTH as _RIGHT_COLUMN_MIN_WIDTH  # noqa: E402
 from videotranslator.ui_layout import right_column_width as _right_column_width  # noqa: E402
+from videotranslator.ui_layout import WheelAccumulator as _WheelAccumulator  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator.ui_theme import (  # noqa: E402
@@ -7462,40 +7463,41 @@ class App(tk.Tk):
     def _on_mousewheel(self, event):
         """Scroll the card column in response to a wheel event over it.
 
-        Cross-platform delta normalisation:
-          * Linux delivers Button-4 (up) / Button-5 (down) without `delta`.
-          * Windows / macOS deliver MouseWheel with `delta` in multiples
-            of 120 (positive = up).
+        ``WheelAccumulator`` turns the event into scroll units on every
+        platform (X11 buttons 4/5, ``<MouseWheel>`` deltas on Windows and
+        Tk 8.7+, small touchpad deltas summed to whole notches).
         """
-        # Defensive: the canvas may have been destroyed mid-shutdown.
-        if not hasattr(self, "_right_canvas"):
+        canvas = getattr(self, "_right_canvas", None)
+        if canvas is None:
             return
+        wheel = getattr(self, "_wheel", None)
+        if wheel is None:
+            wheel = self._wheel = _WheelAccumulator()
         try:
-            if self._canvas_content_fits(self._right_canvas):
+            if self._canvas_content_fits(canvas):
                 return
+            units = wheel.feed(getattr(event, "num", None),
+                               getattr(event, "delta", 0))
+            if units:
+                canvas.yview_scroll(units, "units")
         except tk.TclError:
-            return
-        if sys.platform.startswith("linux"):
-            delta = -1 if getattr(event, "num", 0) == 5 else 1
-        else:
-            delta = int(-1 * (event.delta / 120))
-        try:
-            self._right_canvas.yview_scroll(delta, "units")
-        except tk.TclError:
-            # Window being destroyed
-            pass
+            pass  # the window is being destroyed
 
     def _bind_mousewheel(self, widget):
-        """Recursively bind wheel events on `widget` and all its descendants.
+        """Bind wheel scrolling on ``widget`` and all its descendants.
 
-        Tk does not auto-propagate MouseWheel events to child widgets, so
-        the canvas would otherwise stop scrolling as soon as the cursor
-        hovers over any inner control (entry, combobox, button, ...).
+        Tk does not pass wheel events on to parent widgets, so the canvas
+        would otherwise stop scrolling as soon as the cursor hovers over an
+        inner control (entry, combobox, button, ...). The bindings REPLACE
+        any earlier widget-level wheel binding: re-binding a subtree (the
+        voice chips after a target change) must not stack a second handler,
+        or one notch would scroll twice. No other code binds wheel events at
+        widget level; class bindings (Listbox, Text, Combobox) are separate.
         """
         try:
-            widget.bind("<MouseWheel>", self._on_mousewheel, add="+")  # Win/Mac
-            widget.bind("<Button-4>",   self._on_mousewheel, add="+")  # Linux up
-            widget.bind("<Button-5>",   self._on_mousewheel, add="+")  # Linux down
+            widget.bind("<MouseWheel>", self._on_mousewheel)  # Windows, Tk 8.7+
+            widget.bind("<Button-4>", self._on_mousewheel)    # X11 up
+            widget.bind("<Button-5>", self._on_mousewheel)    # X11 down
         except tk.TclError:
             pass
         for child in widget.winfo_children():
