@@ -378,6 +378,7 @@ UI_STRINGS = {
     "it": {
         "label_video":        "Video:",
         "label_output":       "Output:",
+        "label_output_dir": "Cartella output:",
         "label_from":         "Da:",
         "label_to":           "A:",
         "label_voice":        "Voce:",
@@ -513,6 +514,7 @@ UI_STRINGS = {
     "en": {
         "label_video":        "Video:",
         "label_output":       "Output:",
+        "label_output_dir": "Output folder:",
         "label_from":         "From:",
         "label_to":           "To:",
         "label_voice":        "Voice:",
@@ -648,6 +650,7 @@ UI_STRINGS = {
     "ar": {
         "label_video": "فيديو:",
         "label_output": "الإخراج:",
+        "label_output_dir": "مجلد الإخراج:",
         "label_from": "من:",
         "label_to": "ل:",
         "label_voice": "صوت:",
@@ -780,6 +783,7 @@ UI_STRINGS = {
     "zh": {
         "label_video": "视频：",
         "label_output": "输出：",
+        "label_output_dir": "输出文件夹：",
         "label_from": "从：",
         "label_to": "到：",
         "label_voice": "嗓音：",
@@ -912,6 +916,7 @@ UI_STRINGS = {
     "cs": {
         "label_video": "Video:",
         "label_output": "výstup:",
+        "label_output_dir": "Výstupní složka:",
         "label_from": "Z:",
         "label_to": "Na:",
         "label_voice": "Hlas:",
@@ -1044,6 +1049,7 @@ UI_STRINGS = {
     "da": {
         "label_video": "Video:",
         "label_output": "Produktion:",
+        "label_output_dir": "Outputmappe:",
         "label_from": "Fra:",
         "label_to": "Til:",
         "label_voice": "Stemme:",
@@ -1176,6 +1182,7 @@ UI_STRINGS = {
     "nl": {
         "label_video": "Video:",
         "label_output": "Uitgang:",
+        "label_output_dir": "Uitvoermap:",
         "label_from": "Van:",
         "label_to": "Naar:",
         "label_voice": "Stem:",
@@ -1308,6 +1315,7 @@ UI_STRINGS = {
     "fi": {
         "label_video": "Video:",
         "label_output": "Lähtö:",
+        "label_output_dir": "Tuloskansio:",
         "label_from": "Lähettäjä:",
         "label_to": "Vastaanottaja:",
         "label_voice": "Ääni:",
@@ -1440,6 +1448,7 @@ UI_STRINGS = {
     "fr": {
         "label_video": "Vidéo:",
         "label_output": "Sortir:",
+        "label_output_dir": "Dossier de sortie:",
         "label_from": "Depuis:",
         "label_to": "À:",
         "label_voice": "Voix:",
@@ -1572,6 +1581,7 @@ UI_STRINGS = {
     "de": {
         "label_video": "Video:",
         "label_output": "Ausgabe:",
+        "label_output_dir": "Ausgabeordner:",
         "label_from": "Aus:",
         "label_to": "Zu:",
         "label_voice": "Stimme:",
@@ -1704,6 +1714,7 @@ UI_STRINGS = {
     "el": {
         "label_video": "Βίντεο:",
         "label_output": "Παραγωγή:",
+        "label_output_dir": "Φάκελος εξόδου:",
         "label_from": "Από:",
         "label_to": "Να:",
         "label_voice": "Φωνή:",
@@ -1836,6 +1847,7 @@ UI_STRINGS = {
     "hi": {
         "label_video": "वीडियो:",
         "label_output": "आउटपुट:",
+        "label_output_dir": "आउटपुट फ़ोल्डर:",
         "label_from": "से:",
         "label_to": "को:",
         "label_voice": "आवाज़:",
@@ -1968,6 +1980,7 @@ UI_STRINGS = {
     "hu": {
         "label_video": "Videó:",
         "label_output": "Kimenet:",
+        "label_output_dir": "Kimeneti mappa:",
         "label_from": "Tól:",
         "label_to": "Címzett:",
         "label_voice": "Hang:",
@@ -2100,6 +2113,7 @@ UI_STRINGS = {
     "id": {
         "label_video": "Video:",
         "label_output": "Keluaran:",
+        "label_output_dir": "Folder keluaran:",
         "label_from": "Dari:",
         "label_to": "Ke:",
         "label_voice": "Suara:",
@@ -2232,6 +2246,7 @@ UI_STRINGS = {
     "ja": {
         "label_video": "ビデオ：",
         "label_output": "出力：",
+        "label_output_dir": "出力フォルダー：",
         "label_from": "から：",
         "label_to": "に：",
         "label_voice": "声：",
@@ -2364,6 +2379,7 @@ UI_STRINGS = {
     "ko": {
         "label_video": "동영상:",
         "label_output": "산출:",
+        "label_output_dir": "출력 폴더:",
         "label_from": "에서:",
         "label_to": "에게:",
         "label_voice": "목소리:",
@@ -2496,6 +2512,7 @@ UI_STRINGS = {
     "no": {
         "label_video": "Video:",
         "label_output": "Produksjon:",
+        "label_output_dir": "Utdatamappe:",
         "label_from": "Fra:",
         "label_to": "Til:",
         "label_voice": "Stemme:",
@@ -2628,6 +2645,7 @@ UI_STRINGS = {
     "pl": {
         "label_video": "Wideo:",
         "label_output": "Wyjście:",
+        "label_output_dir": "Folder wyjściowy:",
         "label_from": "Z:",
         "label_to": "Do:",
         "label_voice": "Głos:",
@@ -2760,6 +2778,7 @@ UI_STRINGS = {
     "pt": {
         "label_video": "Vídeo:",
         "label_output": "Saída:",
+        "label_output_dir": "Pasta de saída:",
         "label_from": "De:",
         "label_to": "Para:",
         "label_voice": "Voz:",
@@ -2892,6 +2911,7 @@ UI_STRINGS = {
     "ro": {
         "label_video": "Video:",
         "label_output": "Ieșire:",
+        "label_output_dir": "Folder de ieșire:",
         "label_from": "Din:",
         "label_to": "La:",
         "label_voice": "Voce:",
@@ -3024,6 +3044,7 @@ UI_STRINGS = {
     "ru": {
         "label_video": "Видео:",
         "label_output": "Выход:",
+        "label_output_dir": "Папка вывода:",
         "label_from": "От:",
         "label_to": "К:",
         "label_voice": "Голос:",
@@ -3156,6 +3177,7 @@ UI_STRINGS = {
     "es": {
         "label_video": "Video:",
         "label_output": "Producción:",
+        "label_output_dir": "Carpeta de salida:",
         "label_from": "De:",
         "label_to": "A:",
         "label_voice": "Voz:",
@@ -3288,6 +3310,7 @@ UI_STRINGS = {
     "sv": {
         "label_video": "Video:",
         "label_output": "Produktion:",
+        "label_output_dir": "Utdatamapp:",
         "label_from": "Från:",
         "label_to": "Till:",
         "label_voice": "Röst:",
@@ -3420,6 +3443,7 @@ UI_STRINGS = {
     "tr": {
         "label_video": "Video:",
         "label_output": "Çıkış:",
+        "label_output_dir": "Çıktı klasörü:",
         "label_from": "İtibaren:",
         "label_to": "İle:",
         "label_voice": "Ses:",
@@ -3552,6 +3576,7 @@ UI_STRINGS = {
     "uk": {
         "label_video": "Відео:",
         "label_output": "Вихід:",
+        "label_output_dir": "Тека виводу:",
         "label_from": "Від:",
         "label_to": "до:",
         "label_voice": "Голос:",
@@ -3684,6 +3709,7 @@ UI_STRINGS = {
     "vi": {
         "label_video": "Băng hình:",
         "label_output": "Đầu ra:",
+        "label_output_dir": "Thư mục đầu ra:",
         "label_from": "Từ:",
         "label_to": "ĐẾN:",
         "label_voice": "Tiếng nói:",
@@ -6945,6 +6971,25 @@ class App(tk.Tk):
             padx=8, pady=2)
         _w.pack(side="left")
 
+        # ── Output folder (one place for every translated file) ──────────────
+        dir_row = tk.Frame(inner, bg=CARD)
+        dir_row.pack(fill="x", pady=(0, 6))
+        self._lbl_output_dir = tk.Label(dir_row, text=self._s("label_output_dir"),
+                                        bg=CARD, fg=FG2, font="VT.Small")
+        self._lbl_output_dir.pack(side="left", padx=(0, 6))
+        self._output_dir_var = tk.StringVar(value=load_config().get("output_dir", ""))
+        _dir_entry = tk.Entry(dir_row, textvariable=self._output_dir_var,
+                              bg=FIELD, fg=FG, **_field_colors(), relief="flat",
+                              highlightthickness=1, highlightbackground=BORDER,
+                              highlightcolor=ACC, font="VT.Base")
+        _dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        # Persist manual edits when the field loses focus.
+        _dir_entry.bind("<FocusOut>", lambda _e: self._persist_output_dir())
+        _wdir, self._btn_output_dir = self._flat_btn(
+            dir_row, text=self._s("btn_browse"), command=self._browse_output_dir,
+            padx=8, pady=2)
+        _wdir.pack(side="left")
+
         # ── URL download ───────────────────────────────────────────────────
         tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
         tk.Label(inner, text=self._s("label_url"),
@@ -7943,6 +7988,7 @@ class App(tk.Tk):
         self._lbl_panel_start.configure(text=self._title_upper(self._s("panel_start"), lang))
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
+        self._lbl_output_dir.configure(text=self._s("label_output_dir"))
         self._lbl_section_model.configure(text=self._s("section_model"))
         self._lbl_model_hint.configure(text=self._s("label_model_hint"))
         self._lbl_from.configure(text=self._s("label_from"))
@@ -7960,6 +8006,7 @@ class App(tk.Tk):
         self._btn_remove.configure(text=self._s("btn_remove"))
         self._btn_clear.configure(text=self._s("btn_clear"))
         self._btn_browse.configure(text=self._s("btn_browse"))
+        self._btn_output_dir.configure(text=self._s("btn_browse"))
         if not self._running:
             self._btn.configure(text=self._s("btn_start"))
         self._lbl_section_subtitles.configure(text=self._s("section_subtitles"))
@@ -9098,6 +9145,20 @@ class App(tk.Tk):
         )
         if p:
             self._output_var.set(p)
+
+    def _browse_output_dir(self):
+        """Pick the single folder where translated files are written."""
+        initial = self._output_dir_var.get().strip() or str(
+            _platforms.default_output_dir())
+        chosen = filedialog.askdirectory(title=self._s("label_output_dir"),
+                                         initialdir=initial, mustexist=False)
+        if chosen:
+            self._output_dir_var.set(chosen)
+            self._persist_output_dir()
+
+    def _persist_output_dir(self):
+        """Save the configured output folder (empty string means the default)."""
+        save_config({"output_dir": self._output_dir_var.get().strip()})
 
     # ── Translation start ─────────────────────────────────────────────────────
 
