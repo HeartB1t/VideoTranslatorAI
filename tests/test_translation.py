@@ -103,8 +103,13 @@ class GoogleRateLimitTests(unittest.TestCase):
         clock = _FakeClock()
         fake_cls = mock.Mock()
         fake_cls.return_value.translate.side_effect = side_effect
+        # These tests exercise the Google path in isolation: pretend the offline
+        # MarianMT fallback is unavailable so a full block still raises. The
+        # fallback itself is covered by GoogleBlockedMarianFallbackTests.
         with mock.patch.dict(sys.modules, _fake_google_modules(fake_cls)), \
                 mock.patch.object(translation, "time", clock), \
+                mock.patch.object(translation, "_translate_with_marian",
+                                  return_value=None), \
                 contextlib.redirect_stdout(io.StringIO()) as out:
             try:
                 result = translate_segments(segments, "en", "it", engine="google")
@@ -492,6 +497,53 @@ class OllamaEverySegmentFailedTests(unittest.TestCase):
         self.assertEqual([s["text_tgt"] for s in result], ["", ""])
         self.assertEqual(self.google_calls.call_count, 0)
         self.assertNotIn("falling back to Google", self.log)
+
+
+class GoogleBlockedMarianFallbackTests(unittest.TestCase):
+    """When Google is blocked, the pipeline falls back to offline MarianMT."""
+
+    @staticmethod
+    def _segs(*texts):
+        return [{"start": float(i), "end": float(i) + 1.0, "text": t}
+                for i, t in enumerate(texts)]
+
+    def test_google_block_falls_back_to_marian(self):
+        clock = _FakeClock()
+        fake_cls = mock.Mock()
+        fake_cls.return_value.translate.side_effect = TooManyRequests()
+        marian_out = [{"start": 0.0, "end": 1.0, "text_src": "hello", "text_tgt": "ciao"}]
+        captured = {}
+
+        def fake_marian(segments, src, target):
+            captured["src"] = src
+            captured["target"] = target
+            return marian_out
+
+        with mock.patch.dict(sys.modules, _fake_google_modules(fake_cls)), \
+                mock.patch.object(translation, "time", clock), \
+                mock.patch.object(translation, "_translate_with_marian",
+                                  side_effect=fake_marian), \
+                contextlib.redirect_stdout(io.StringIO()):
+            result = translate_segments(self._segs("hello"), "en", "it",
+                                        engine="google")
+        self.assertEqual(result, marian_out)
+        self.assertEqual(captured, {"src": "en", "target": "it"})
+
+    def test_google_block_still_raises_when_marian_unavailable(self):
+        clock = _FakeClock()
+        fake_cls = mock.Mock()
+        fake_cls.return_value.translate.side_effect = TooManyRequests()
+        with mock.patch.dict(sys.modules, _fake_google_modules(fake_cls)), \
+                mock.patch.object(translation, "time", clock), \
+                mock.patch.object(translation, "_translate_with_marian",
+                                  return_value=None), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(TranslationUnavailableError):
+                translate_segments(self._segs("hello"), "en", "it", engine="google")
+
+    def test_marian_helper_returns_none_on_auto_source(self):
+        # No model load happens: the "auto" guard returns immediately.
+        self.assertIsNone(translation._translate_with_marian([], "auto", "it"))
 
 
 if __name__ == "__main__":
