@@ -294,6 +294,17 @@ class _PipelineEnd:
 class _PipelineSilence:
     gen: int
     end: float
+    start: float = 0.0           # where this silence began
+    leading: bool = False        # it began where decoding started (no speech yet)
+
+
+# A leading silence releases the startup hold only when it is this long (an
+# intro without speech): a short pause before the first sentence must wait for
+# that sentence, or the picture starts and the first line arrives late.
+_STARTUP_SILENCE_S = 6.0
+# Once 2 s of silence are seen, the decoder reports it again every second while
+# it lasts, so a long leading silence can reach _STARTUP_SILENCE_S.
+_SILENCE_REPORT_S = 1.0
 
 from .live_scheduler import (
     ClearSubtitle, ClipSpeed, Drop, DubScheduler, Duck, DuckEnvelope, FadeRamp,
@@ -1070,7 +1081,9 @@ class LiveSession:
                     decoder = self._factories.decoder(
                         self._cfg.source, start_at=start_at, time_domain="rebased")
                     silent_since: float | None = None
-                    silence_sent = False
+                    silence_sent_at: float | None = None
+                    heard_speech = False
+                    origin: float | None = None
                     for block_start, samples in decoder.blocks(cancel):
                         if self._stop.is_set() or cancel.is_set():
                             break
@@ -1078,16 +1091,26 @@ class LiveSession:
                         for utt in self._segmenter.push(block_start, samples, probs):
                             self._put_utt(utt)
                         block_end = block_start + len(samples) / 16000.0
+                        if origin is None:
+                            origin = block_start
                         if (probs and not self._segmenter.speech_active
                                 and all(prob < 0.35 for prob in probs)):
                             if silent_since is None:
                                 silent_since = block_start
-                            if not silence_sent and block_end - silent_since >= 2.0:
-                                self._put_utt(_PipelineSilence(gen, block_end))
-                                silence_sent = True
+                            if (block_end - silent_since >= 2.0
+                                    and (silence_sent_at is None
+                                         or block_end - silence_sent_at
+                                         >= _SILENCE_REPORT_S)):
+                                self._put_utt(_PipelineSilence(
+                                    gen, block_end, silent_since,
+                                    leading=not heard_speech
+                                    and silent_since <= origin + 0.05))
+                                silence_sent_at = block_end
                         else:
+                            if probs:
+                                heard_speech = True
                             silent_since = None
-                            silence_sent = False
+                            silence_sent_at = None
                     if not cancel.is_set():
                         for utt in self._segmenter.flush():
                             self._put_utt(utt)
@@ -1153,7 +1176,8 @@ class LiveSession:
                     self._put_sentence(utt)
                     continue
                 if isinstance(utt, _PipelineSilence):
-                    self._startup_silence_ready.set()
+                    if utt.leading and utt.end - utt.start >= _STARTUP_SILENCE_S:
+                        self._startup_silence_ready.set()
                     media_edge = max(media_edge, utt.end)
                     continue
                 segs, lang, prob = whisper.transcribe(utt, language=self._langlock.locked)

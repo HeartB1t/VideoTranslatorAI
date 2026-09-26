@@ -326,6 +326,85 @@ def _pipeline_factories():
         tts=lambda *a, **k: None, clock=time.monotonic)
 
 
+class StartupSilenceTests(unittest.TestCase):
+    """A leading silence releases the startup hold only when it is long."""
+
+    def _silences(self, pattern):
+        """Run the decode loop over ``pattern`` [(seconds, speech), ...]."""
+        from dataclasses import replace
+        from videotranslator.live_session import _PipelineEnd, _PipelineSilence
+
+        class Decoder(_FakeDecoder):
+            def blocks(self, cancel):
+                t = 0.0
+                for seconds, speech in pattern:
+                    for _ in range(int(round(seconds / 0.25))):
+                        yield (t, np.full(4000, 1.0 if speech else 0.0, dtype=np.float32))
+                        t += 0.25
+
+        events = []
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess._factories = replace(_pipeline_factories(), decoder=lambda source, **k:
+                                      Decoder())
+
+            def put(utt):
+                events.append(utt)
+                if isinstance(utt, _PipelineEnd):
+                    sess._stop.set()
+            sess._put_utt = put
+            sess._decode_loop()
+        return sess, [e for e in events if isinstance(e, _PipelineSilence)]
+
+    def _ready(self, sess, silences):
+        for event in silences:
+            if event.leading and event.end - event.start >= 6.0:
+                return True
+        return False
+
+    def test_short_leading_silence_does_not_release_the_start(self):
+        sess, silences = self._silences([(3.0, False), (2.0, True), (1.0, False)])
+        self.assertTrue(silences)                   # still reported for sentence flush
+        self.assertTrue(all(e.end - e.start < 6.0 for e in silences if e.leading))
+        self.assertFalse(self._ready(sess, silences))
+
+    def test_long_leading_silence_releases_the_start(self):
+        sess, silences = self._silences([(8.0, False), (1.0, True)])
+        self.assertTrue(self._ready(sess, silences))
+        leading = [e for e in silences if e.leading]
+        self.assertGreaterEqual(max(e.end for e in leading), 7.0)   # reported repeatedly
+
+    def test_silence_after_speech_is_not_leading(self):
+        sess, silences = self._silences([(1.0, True), (9.0, False)])
+        self.assertTrue(silences)
+        self.assertFalse(any(e.leading for e in silences))
+
+    def test_asr_loop_marks_ready_only_for_a_long_leading_silence(self):
+        from videotranslator.live_session import _PipelineSilence
+        for event, expected in ((_PipelineSilence(0, 3.0, 0.0, leading=True), False),
+                                (_PipelineSilence(0, 7.0, 0.0, leading=True), True),
+                                (_PipelineSilence(0, 20.0, 5.0, leading=False), False)):
+            with tempfile.TemporaryDirectory() as tmp:
+                sess, _, _ = _session(tmp)
+                sess._utt_q.put(event)
+
+                class _StopAfterFirst(_FakeWhisper):
+                    pass
+                from dataclasses import replace
+                sess._factories = replace(_pipeline_factories(),
+                                          whisper=lambda **k: _StopAfterFirst())
+                import threading as _t
+                worker = _t.Thread(target=sess._asr_loop, daemon=True)
+                worker.start()
+                deadline = time.monotonic() + 2
+                while not sess._utt_q.empty() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                time.sleep(0.05)
+                sess._stop.set()
+                worker.join(2)
+                self.assertEqual(sess._startup_silence_ready.is_set(), expected, event)
+
+
 class LiveSessionPipelineTests(unittest.TestCase):
     def test_asr_loop_passes_the_chosen_live_model(self):
         from dataclasses import replace
