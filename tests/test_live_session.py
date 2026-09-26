@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 from videotranslator.live_session import (
     LiveConfig,
     LiveStatus,
@@ -200,23 +202,121 @@ class LiveSessionTickTests(unittest.TestCase):
             self.assertNotEqual(sess.status().state, "mutated")
 
 
+class _FakeDecoder:
+    def __init__(self, *a, **k):
+        self.first_pts = 0.0
+
+    def blocks(self, cancel):
+        yield (0.0, np.ones(4000, dtype=np.float32))    # speech
+        yield (0.25, np.zeros(4000, dtype=np.float32))  # silence
+        yield (0.5, np.zeros(4000, dtype=np.float32))   # ends the utterance
+
+    def close(self):
+        pass
+
+
+class _FakeVad:
+    def probs(self, samples):
+        p = 0.9 if float(np.asarray(samples).mean()) > 0.5 else 0.0
+        return [p] * (len(samples) // 512)
+
+
+class _FakeWhisper:
+    def __init__(self, **k):
+        pass
+
+    def transcribe(self, utt, *, language):
+        return ([{"start": 0.0, "end": 0.3, "text": "hello.", "no_speech_prob": 0.1,
+                  "avg_logprob": -0.2, "compression_ratio": 1.5}], "en", 0.95)
+
+    def close(self):
+        pass
+
+
+class _FakeTranslator:
+    name = "marian"
+    online = False
+
+    def __init__(self, engine="marian"):
+        pass
+
+    def prepare(self, src, tgt):
+        pass
+
+    def translate(self, text, *, context=(), timeout_s=5.0):
+        from videotranslator.live_translate import Outcome
+        return Outcome("ciao.", True, 0.01)
+
+    def close(self):
+        pass
+
+
+def _pipeline_factories():
+    return LiveFactories(
+        decoder=lambda source, **k: _FakeDecoder(),
+        vad=lambda: _FakeVad(),
+        whisper=lambda **k: _FakeWhisper(),
+        translator=lambda engine: _FakeTranslator(engine),
+        tts=lambda *a, **k: None, clock=time.monotonic)
+
+
+class LiveSessionPipelineTests(unittest.TestCase):
+    def test_end_to_end_fake_pipeline_produces_a_caption(self):
+        settings = normalize_live_settings(
+            {"live_dub_enabled": False, "live_subs_enabled": True,
+             "live_sync_mode": "delayed"})
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = build_live_config(
+                {"source": "/v.mp4", "source_kind": "file", "lang_source": "en",
+                 "lang_target": "it"}, settings=settings, cache_dir=Path(tmp), now=1.0)
+            video = SimpleNamespace(rt=_FakeRt())
+            sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(0.1),
+                               factories=_pipeline_factories())
+            sess.start()
+            deadline = time.monotonic() + 6.0
+            while time.monotonic() < deadline and not any(
+                    a and "ciao" in a for a in video.rt.overlays):
+                time.sleep(0.02)
+            sess.request_stop()
+            sess.join(4.0)
+            self.assertTrue(any(a and "ciao" in a for a in video.rt.overlays),
+                            "no translated caption reached the player")
+            self.assertEqual(sess.status().state, "stopped")
+            live = [t for t in threading.enumerate() if t.name.startswith("live-")]
+            self.assertEqual([t.name for t in live if t.is_alive()], [])
+
+
 class LiveSessionLifecycleTests(unittest.TestCase):
     def test_start_run_stop_is_clean(self):
+        # start() spawns the file producer threads, so this drives the real
+        # (fake-backed) decode -> asr -> mt -> sched pipeline and checks the
+        # running/stopped states, a clean join and the session lock file. The
+        # try/finally stops the session even if an assertion fails, so a failure
+        # here never leaks the daemon threads into the next test.
+        settings = normalize_live_settings(
+            {"live_dub_enabled": False, "live_subs_enabled": True,
+             "live_sync_mode": "delayed"})
         with tempfile.TemporaryDirectory() as tmp:
-            sess, video, cfg = _session(tmp, media=1.5)
+            cfg = build_live_config(
+                {"source": "/v.mp4", "source_kind": "file", "lang_source": "en",
+                 "lang_target": "it"}, settings=settings, cache_dir=Path(tmp), now=1.0)
+            video = SimpleNamespace(rt=_FakeRt())
+            sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(0.1),
+                               factories=_pipeline_factories())
             sess.start()
-            self.assertEqual(sess.status().state, "running")
-            sess.submit_segment(_seg("ciao"))
-            deadline = time.monotonic() + 3.0
-            while time.monotonic() < deadline and not video.rt.overlays:
-                time.sleep(0.02)
-            self.assertTrue(any("ciao" in (a or "") for a in video.rt.overlays))
-            sess.request_stop()
-            self.assertTrue(sess.join(3.0))
+            try:
+                self.assertEqual(sess.status().state, "running")
+                deadline = time.monotonic() + 3.0
+                while time.monotonic() < deadline and not any(
+                        a and "ciao" in a for a in video.rt.overlays):
+                    time.sleep(0.02)
+                self.assertTrue(any(a and "ciao" in a for a in video.rt.overlays))
+                self.assertTrue((cfg.session_dir / "session.lock").exists())
+            finally:
+                sess.request_stop()
+                joined = sess.join(3.0)
+            self.assertTrue(joined)
             self.assertEqual(sess.status().state, "stopped")
-            self.assertFalse(any(t.name == "live-sched" and t.is_alive()
-                                 for t in threading.enumerate()))
-            self.assertTrue((cfg.session_dir / "session.lock").exists())
 
 
 if __name__ == "__main__":

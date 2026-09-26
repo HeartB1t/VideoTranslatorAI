@@ -198,6 +198,7 @@ import threading
 
 from .live_scheduler import ClearSubtitle, DubScheduler, LiveSegment, ShowSubtitle
 from .live_sync import FilePacer, derive_live_timing
+from .live_translate import TIMEOUTS_S, LiveTranslateError
 
 
 class LiveSession:
@@ -228,8 +229,21 @@ class LiveSession:
         self._pacer = FilePacer(mode=s.sync_mode, min_ahead_s=self._timing.min_ahead_s,
                                 resume_ahead_s=self._timing.resume_ahead_s)
 
+        from .live_asr import HallucinationFilter, LanguageLock
+        from .live_segment import SentenceAssembler, UtteranceSegmenter
+        self._segmenter = UtteranceSegmenter(max_len_s=self._timing.umax_s)
+        self._segmenter.reset(0)
+        self._assembler = SentenceAssembler(hold_s=self._timing.hold_s)
+        self._langlock = LanguageLock(cfg.lang_source)
+        self._hallucination = HallucinationFilter()
+        self._device = device
+
+        self._utt_q: queue.Queue = queue.Queue(maxsize=8)
+        self._mt_q: queue.Queue = queue.Queue(maxsize=64)
         self._sched_in: queue.Queue = queue.Queue(maxsize=256)
         self._control: queue.Queue = queue.Queue()
+        self._decode_cancel = threading.Event()
+        self._seg_id = 0
         self._stop = threading.Event()
         self._threads: list[Any] = []
         self._gen = 0
@@ -253,12 +267,20 @@ class LiveSession:
         write_session_lock(self._cfg.session_dir / _LOCK_NAME, pid=pid,
                            start_token=process_start_token(pid))
         self._set_state("running")
-        thread = self._thread_factory(target=self._sched_loop, name="live-sched", daemon=True)
-        self._threads.append(thread)
-        thread.start()
+        targets = [("live-sched", self._sched_loop)]
+        if self._cfg.source_kind == "file":
+            targets = [("live-decode", self._decode_loop),
+                       ("live-asr", self._asr_loop),
+                       ("live-mt", self._mt_loop),
+                       ("live-sched", self._sched_loop)]
+        for name, fn in targets:
+            thread = self._thread_factory(target=fn, name=name, daemon=True)
+            self._threads.append(thread)
+            thread.start()
 
     def request_stop(self) -> None:
         self._set_state("stopping")
+        self._decode_cancel.set()
         self._stop.set()
 
     def join(self, timeout_s: float) -> bool:
@@ -269,7 +291,9 @@ class LiveSession:
             thread.join(remaining)
             if thread.is_alive():
                 ok = False
-        self._set_state("stopped")
+        with self._status_lock:
+            if self._status.state != "failed":
+                self._status.state = "stopped"
         return ok
 
     def set_sync_mode(self, mode: str) -> None:
@@ -409,3 +433,145 @@ class LiveSession:
             self._status.voiced = int(metrics.get("voiced", 0))
             self._status.dropped = int(metrics.get("dropped", 0))
             self._status.target_delay_s = self._timing_delay()
+
+    # -- producer threads (design 4.7-4.9): decode -> asr -> mt -> sched_in ----
+
+    def _next_seg_id(self) -> int:
+        self._seg_id += 1
+        return self._seg_id
+
+    def _put_utt(self, utt) -> None:
+        while not self._stop.is_set():
+            try:
+                self._utt_q.put(utt, timeout=0.2)
+                return
+            except queue.Full:
+                continue
+
+    def _emit_segment(self, start, end, src, tgt, *, italic, gen=None, seg_id=None) -> None:
+        seg = LiveSegment(
+            seg_id if seg_id is not None else self._next_seg_id(),
+            gen if gen is not None else self._gen, start, end, src,
+            text_tgt=tgt, italic=italic,
+            dub_ok=(tgt is not None and self._cfg.settings.dub_enabled))
+        self.submit_segment(seg)
+
+    def _fail(self, error_key: str, detail: str) -> None:
+        with self._status_lock:
+            self._status.error_key = error_key
+            self._status.error_params = {"detail": detail} if detail else {}
+            self._status.state = "failed"
+        self._decode_cancel.set()
+        self._stop.set()
+
+    def _decode_loop(self) -> None:
+        decoder = None
+        try:
+            decoder = self._factories.decoder(
+                self._cfg.source, start_at=self._cfg.start_at, time_domain="rebased")
+            vad = self._factories.vad()
+            for block_start, samples in decoder.blocks(self._decode_cancel):
+                if self._stop.is_set():
+                    break
+                probs = vad.probs(samples)
+                for utt in self._segmenter.push(block_start, samples, probs):
+                    self._put_utt(utt)
+            for utt in self._segmenter.flush():
+                self._put_utt(utt)
+        except Exception as exc:            # noqa: BLE001 - surfaced as a live error
+            self._fail("asr", str(exc))
+        finally:
+            self._source_done = True
+            try:
+                self._utt_q.put(None, timeout=0.5)   # sentinel to wake the ASR thread
+            except queue.Full:
+                pass
+            if decoder is not None:
+                try:
+                    decoder.close()
+                except Exception:
+                    pass
+
+    def _asr_loop(self) -> None:
+        whisper = None
+        media_edge = 0.0
+        try:
+            whisper = self._factories.whisper(
+                device_policy=self._cfg.device_policy, hotwords=self._cfg.hotwords)
+            while not self._stop.is_set():
+                try:
+                    utt = self._utt_q.get(timeout=0.2)
+                except queue.Empty:
+                    for sentence in self._assembler.edge(media_edge):
+                        self._mt_q.put(sentence)
+                    if self._source_done and self._utt_q.empty():
+                        break
+                    continue
+                if utt is None:
+                    for sentence in self._assembler.edge(1e12):
+                        self._mt_q.put(sentence)
+                    break
+                segs, lang, prob = whisper.transcribe(utt, language=self._langlock.locked)
+                media_edge = max(media_edge, float(utt.end))
+                state = self._langlock.observe(lang, prob, max(0.0, utt.end - utt.start))
+                segs = self._hallucination.filter(segs)
+                if state == "failed":
+                    self._fail("need_source_lang", "")
+                    break
+                if self._langlock.locked is None:
+                    for seg in segs:            # pre-lock: source text, italic, no dub
+                        self._emit_segment(seg["start"], seg["end"], seg["text"], None,
+                                           italic=True)
+                    continue
+                pieces = [{"start": s["start"], "end": s["end"], "text": s["text"],
+                           "flags": ()} for s in segs]
+                for sentence in self._assembler.push(pieces, self._gen):
+                    self._mt_q.put(sentence)
+        except Exception as exc:            # noqa: BLE001
+            self._fail("asr", str(exc))
+        finally:
+            try:
+                self._mt_q.put(None, timeout=0.5)
+            except queue.Full:
+                pass
+            if whisper is not None:
+                try:
+                    whisper.close()
+                except Exception:
+                    pass
+
+    def _mt_loop(self) -> None:
+        translator = None
+        prepared = False
+        key = "marian" if self._cfg.engine == "marian" else self._cfg.engine
+        timeout = TIMEOUTS_S.get(key, 5.0)
+        try:
+            translator = self._factories.translator(self._cfg.engine)
+            while not self._stop.is_set():
+                try:
+                    sentence = self._mt_q.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                if sentence is None:
+                    break
+                if getattr(sentence, "gen", 0) < self._gen:
+                    continue
+                if not prepared:
+                    src = self._langlock.locked or self._cfg.lang_source
+                    translator.prepare(src, self._cfg.lang_target)
+                    prepared = True
+                outcome = translator.translate(sentence.text, context=(), timeout_s=timeout)
+                self._emit_segment(
+                    sentence.start, sentence.end, sentence.text,
+                    outcome.text if outcome.ok else None, italic=not outcome.ok,
+                    gen=sentence.gen, seg_id=sentence.seg_id)
+        except LiveTranslateError as exc:
+            self._fail(exc.key, "")
+        except Exception as exc:            # noqa: BLE001
+            self._fail("internal", str(exc))
+        finally:
+            if translator is not None:
+                try:
+                    translator.close()
+                except Exception:
+                    pass
