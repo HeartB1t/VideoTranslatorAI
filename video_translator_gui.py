@@ -8923,8 +8923,11 @@ class App(tk.Tk):
         self._player_controller.detach_backend()
         self._player_backend = None
         self._player_init_running = True
-        if self._player_guard is not None:
-            self._player_guard.restore()
+        # The X11 guard must be restored only AFTER the mpv backend is terminated:
+        # while mpv is alive its process-global Xlib handler is installed, and
+        # restoring Tk's handler now would let an X error on mpv's display reach
+        # Tk's default handler (exit(1), no traceback). Every subpath below
+        # restores after terminate (_terminate_failed_player, work()).
         if next_profile is None or self._player_vo_retries >= 2:
             self._terminate_failed_player(
                 backend, lambda: self._finish_player_vo_failure("video-output-error"))
