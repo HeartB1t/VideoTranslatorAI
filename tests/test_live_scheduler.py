@@ -1,6 +1,10 @@
 import unittest
 
 from videotranslator.live_scheduler import (
+    ClearSubtitle,
+    DubScheduler,
+    LiveSegment,
+    ShowSubtitle,
     ass_escape,
     caption_ass,
     paginate_caption,
@@ -8,6 +12,10 @@ from videotranslator.live_scheduler import (
 )
 
 WJ = "⁠"
+
+
+def _seg(seg_id, start, end, *, tgt=None, italic=False, src="hello"):
+    return LiveSegment(seg_id, 0, start, end, src, text_tgt=tgt, italic=italic)
 
 
 class WrapCaptionTests(unittest.TestCase):
@@ -74,6 +82,71 @@ class CaptionAssTests(unittest.TestCase):
     def test_content_is_escaped(self):
         out = caption_ass(["a{b}"], font_px=40, italic=False)
         self.assertIn("a\\{b}", out)
+
+
+class DubSchedulerCaptionTests(unittest.TestCase):
+    def test_shows_then_clears_a_translated_caption(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="ciao"))
+        self.assertEqual(sch.tick(0.5), [])
+        acts = sch.tick(1.0)
+        self.assertEqual(len(acts), 1)
+        self.assertIsInstance(acts[0], ShowSubtitle)
+        self.assertEqual(acts[0].seg_id, 0)
+        self.assertIn("ciao", acts[0].ass)
+        self.assertEqual(sch.tick(2.0), [])                 # unchanged
+        acts = sch.tick(3.4)                                 # past clear time
+        self.assertEqual([type(a).__name__ for a in acts], ["ClearSubtitle"])
+
+    def test_next_caption_takes_over(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="uno"))
+        sch.upsert(_seg(1, 3.0, 5.0, tgt="due"))
+        sch.tick(1.0)
+        acts = sch.tick(3.0)
+        self.assertEqual(len(acts), 1)
+        self.assertIsInstance(acts[0], ShowSubtitle)
+        self.assertEqual(acts[0].seg_id, 1)
+
+    def test_captions_off_clears_and_suppresses(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="ciao"))
+        sch.tick(1.0)
+        self.assertEqual([type(a).__name__ for a in sch.set_subs(False)], ["ClearSubtitle"])
+        self.assertEqual(sch.tick(2.0), [])
+
+    def test_fallback_line_is_italic_source_text(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, italic=True, src="untranslated"))
+        acts = sch.tick(1.0)
+        self.assertIn("untranslated", acts[0].ass)
+        self.assertIn("{\\i1}", acts[0].ass)
+
+    def test_untranslated_segment_is_not_shown(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0))          # no tgt, not italic
+        self.assertEqual(sch.tick(1.0), [])
+
+    def test_invalid_clock_clears(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="ciao"))
+        sch.tick(1.0)
+        self.assertEqual([type(a).__name__ for a in sch.tick(None)], ["ClearSubtitle"])
+
+    def test_ready_until_contiguous_coverage(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="a"))
+        sch.upsert(_seg(1, 3.0, 5.0, tgt="b"))
+        sch.upsert(_seg(2, 8.0, 10.0, tgt="c"))   # gap
+        self.assertEqual(sch.ready_until(1.0), 5.0)
+
+    def test_on_seek_clears_and_reshows(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="ciao"))
+        sch.tick(1.0)
+        self.assertEqual([type(a).__name__ for a in sch.on_seek(0.0, 1)], ["ClearSubtitle"])
+        acts = sch.tick(1.0)                        # shows again after the seek
+        self.assertEqual([type(a).__name__ for a in acts], ["ShowSubtitle"])
 
 
 if __name__ == "__main__":

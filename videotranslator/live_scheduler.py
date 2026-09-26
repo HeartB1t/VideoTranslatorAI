@@ -9,6 +9,7 @@ duck actions) lands with the live session.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 # U+2060 WORD JOINER, inserted after every backslash so a literal "\n"/"\N" in
 # speech stays literal (design 4.12, [CT] finding 12).
@@ -80,3 +81,203 @@ def caption_ass(lines: Sequence[str], *, font_px: int, italic: bool) -> str:
     if italic:
         style += "{\\i1}"
     return style + "\\N".join(ass_escape(line) for line in lines)
+
+
+# --- Live scheduler: caption path (design 4.11) -----------------------------
+# The dub/clip/duck actions and their scheduling are P5; this carries the
+# caption state machine only (dub=False), which is pure and fake-clock testable.
+
+@dataclass
+class LiveSegment:
+    seg_id: int
+    gen: int
+    start: float
+    end: float
+    text_src: str
+    text_tgt: str | None = None
+    italic: bool = False
+    dub_ok: bool = False
+    clip: object | None = None
+    state: str = "transcribed"
+
+
+@dataclass(frozen=True)
+class ShowSubtitle:
+    seg_id: int
+    ass: str
+
+
+@dataclass(frozen=True)
+class ClearSubtitle:
+    pass
+
+
+@dataclass(frozen=True)
+class Drop:
+    seg_id: int
+    reason: str
+
+
+_GRACE = {"delayed": 1.5, "live": 6.0}
+_SUB_MIN_DISPLAY_S = 1.5
+_CAPTION_CLEAR_TAIL_S = 0.3
+
+
+class DubScheduler:
+    """Media-time caption scheduler (design 4.11, caption path).
+
+    ``upsert`` registers translated segments; ``tick(now, ...)`` returns the
+    caption actions for the current media time. Captions are shown at
+    ``max(start, arrival)`` while ``now`` is inside the grace window, paginated
+    into two-line pages, and cleared at ``max(end + 0.3, shown + 1.5)`` or when a
+    newer caption takes over. Voice, clips and ducking are added with P5.
+    """
+
+    def __init__(self, *, mode: str = "delayed", overhang_s: float = 0.6,
+                 merge_gap_s: float = 0.6, caption_font_px: int = 40,
+                 dub: bool = False, subs: bool = True) -> None:
+        self._mode = mode
+        self._overhang = overhang_s
+        self._merge_gap = merge_gap_s
+        self._font_px = caption_font_px
+        self._dub = dub
+        self._subs = subs
+        self._segments: dict[int, LiveSegment] = {}
+        self._arrival: dict[int, float] = {}
+        self._dropped: set[int] = set()
+        self._shown: tuple[int, int] | None = None  # (seg_id, page index)
+        self._shown_at: float | None = None
+        self._last_epoch = 0
+        self._metrics = {"voiced": 0.0, "dropped": 0.0, "late": 0.0, "margin_p90": 0.0}
+
+    def set_mode(self, mode: str) -> None:
+        self._mode = mode
+
+    def set_subs(self, on: bool) -> list[object]:
+        self._subs = on
+        if not on and self._shown is not None:
+            self._shown = None
+            return [ClearSubtitle()]
+        return []
+
+    def upsert(self, seg: LiveSegment) -> None:
+        self._segments[seg.seg_id] = seg
+
+    def _caption_ready(self, seg: LiveSegment) -> bool:
+        return seg.seg_id not in self._dropped and (
+            seg.text_tgt is not None or seg.italic)
+
+    def _caption_text(self, seg: LiveSegment) -> str:
+        if seg.italic or seg.text_tgt is None:
+            return seg.text_src
+        return seg.text_tgt
+
+    def _grace(self) -> float:
+        return _GRACE.get(self._mode, 1.5)
+
+    def _show_time(self, seg: LiveSegment) -> float:
+        return max(seg.start, self._arrival.get(seg.seg_id, seg.start))
+
+    def _clear_time(self, seg: LiveSegment) -> float:
+        return max(seg.end + _CAPTION_CLEAR_TAIL_S,
+                   self._show_time(seg) + _SUB_MIN_DISPLAY_S)
+
+    def _visible(self, now: float):
+        best = None
+        for seg in self._segments.values():
+            if not self._caption_ready(seg):
+                continue
+            show = self._show_time(seg)
+            if show > now:
+                continue
+            if now >= self._clear_time(seg):
+                continue
+            if show >= seg.end + self._grace():
+                continue  # arrived too late to be worth showing
+            if best is None or show > self._show_time(best):
+                best = seg
+        if best is None:
+            return None
+        pages = paginate_caption(self._caption_text(best), best.start, best.end)
+        if not pages:
+            return None
+        page_idx = 0
+        for i, (ps, pe) in enumerate((p[0], p[1]) for p in pages):
+            if now >= ps:
+                page_idx = i
+            if ps <= now < pe:
+                page_idx = i
+                break
+        return best, page_idx, pages[page_idx][2]
+
+    def tick(self, now: float | None, mono: float = 0.0, *, main_running: bool = True,
+             main_speed: float = 1.0, voice_state: str = "idle",
+             clock_epoch: int = 0) -> list[object]:
+        actions: list[object] = []
+        if clock_epoch != self._last_epoch:
+            self._last_epoch = clock_epoch
+            if self._shown is not None:
+                self._shown = None
+                actions.append(ClearSubtitle())
+        if now is None or not self._subs:  # invalid clock or captions off
+            if now is None and self._shown is not None:
+                self._shown = None
+                actions.append(ClearSubtitle())
+            return actions
+        for seg in self._segments.values():
+            if seg.seg_id not in self._arrival and self._caption_ready(seg):
+                self._arrival[seg.seg_id] = now
+        visible = self._visible(now)
+        if visible is None:
+            if self._shown is not None:
+                self._shown = None
+                actions.append(ClearSubtitle())
+            return actions
+        seg, page_idx, lines = visible
+        key = (seg.seg_id, page_idx)
+        if key != self._shown:
+            self._shown = key
+            self._shown_at = now
+            actions.append(ShowSubtitle(
+                seg.seg_id, caption_ass(lines, font_px=self._font_px, italic=seg.italic)))
+        return actions
+
+    def ready_until(self, now: float) -> float:
+        ready = sorted((s for s in self._segments.values() if self._caption_ready(s)),
+                       key=lambda s: s.start)
+        coverage = now
+        for seg in ready:
+            if seg.end <= now:
+                continue
+            if seg.start <= coverage + self._merge_gap:
+                coverage = max(coverage, seg.end)
+            else:
+                break
+        return coverage
+
+    def on_seek(self, now: float, gen: int) -> list[object]:
+        # Clear the caption and let segments after the new position show again.
+        for seg in self._segments.values():
+            if seg.end > now:
+                self._arrival.pop(seg.seg_id, None)
+                self._dropped.discard(seg.seg_id)
+        actions: list[object] = []
+        if self._shown is not None:
+            self._shown = None
+            actions.append(ClearSubtitle())
+        return actions
+
+    def on_discontinuity(self, now: float) -> list[object]:
+        # Drop the slots already passed; keep the ASR (caller's concern).
+        actions: list[object] = []
+        for seg in self._segments.values():
+            if seg.end < now and seg.seg_id not in self._dropped:
+                self._dropped.add(seg.seg_id)
+                actions.append(Drop(seg.seg_id, "late"))
+        if self._shown is not None and self._shown[0] in self._dropped:
+            self._shown = None
+            actions.append(ClearSubtitle())
+        return actions
+
+    def metrics(self) -> dict[str, float]:
+        return dict(self._metrics, dropped=float(len(self._dropped)))
