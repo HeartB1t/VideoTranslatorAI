@@ -187,18 +187,22 @@ def _translate_with_marian(segments: list[dict], src: str, target: str) -> list[
 
 
 def _marian_fallback_or_raise(segments: list[dict], src: str, target: str,
-                              message: str) -> list[dict]:
+                              message: str, *, try_marian: bool = True) -> list[dict]:
     """Last resort when an online engine is blocked: try offline MarianMT.
 
     Returns the MarianMT translation when it succeeds; otherwise raises
     :class:`TranslationUnavailableError` with ``message`` (the original reason).
+    ``try_marian=False`` skips the attempt when MarianMT already failed or is
+    ineligible (auto source), so an offline box does not eat the Hugging Face
+    download timeout a second time (review S6a).
     """
     print(f"     ! {message}", flush=True)
-    result = _translate_with_marian(segments, src, target)
-    if result is not None:
-        print("     → Fell back to MarianMT (offline) after the online engine "
-              "was blocked.", flush=True)
-        return result
+    if try_marian:
+        result = _translate_with_marian(segments, src, target)
+        if result is not None:
+            print("     → Fell back to MarianMT (offline) after the online engine "
+                  "was blocked.", flush=True)
+            return result
     raise TranslationUnavailableError(message)
 
 
@@ -216,6 +220,10 @@ def translate_segments(
 ) -> list[dict]:
     src = "auto" if source == "auto" else source
     print(f"[4/6] Translating {src.upper()}→{target.upper()} ({len(segments)} segments, engine={engine})...", flush=True)
+    # MarianMT cannot run without an explicit source; once it has failed (or is
+    # ineligible), the Google fallback below must not retry it, or an offline box
+    # eats the Hugging Face download timeout a second time (review S6a).
+    marian_failed = src == "auto"
 
     # ── Ollama LLM translation (v2.0) ──────────────────────────────────────
     # Structural lever against atempo artifacts: the LLM understands the
@@ -279,6 +287,7 @@ def translate_segments(
             result = _translate_with_marian(segments, src, target)
             if result is not None:
                 return result
+            marian_failed = True   # do not retry it in the Google fallback (S6a)
             print("     ! MarianMT unavailable, falling back to Google.", flush=True)
         # fall through to Google if MarianMT failed
         engine = "google"
@@ -407,7 +416,8 @@ def translate_segments(
                     segments, src, target,
                     f"Google Translate blocked the requests again at segment "
                     f"{i + 1}/{len(segments)} (rate limited). Retry later or "
-                    f"pick MarianMT, DeepL or Ollama as the translation engine.")
+                    f"pick MarianMT, DeepL or Ollama as the translation engine.",
+                    try_marian=not marian_failed)
             if probing:
                 print(
                     f"     ! Google Translate failed on {consecutive_failures} "
@@ -452,7 +462,7 @@ def translate_segments(
                         f"Google Translate is still blocking the requests at "
                         f"segment {i + 1}/{len(segments)} (rate limited). Retry "
                         f"later or pick MarianMT, DeepL or Ollama as the "
-                        f"translation engine.")
+                        f"translation engine.", try_marian=not marian_failed)
                 text_tgt = text
                 failed = True
                 if rate_limited:
@@ -489,7 +499,7 @@ def translate_segments(
             segments, src, target,
             "Google Translate could not translate any segment (rate limited, "
             "blocked or unreachable). Retry later or pick MarianMT, DeepL or "
-            "Ollama as the translation engine.")
+            "Ollama as the translation engine.", try_marian=not marian_failed)
     if n_failed:
         print(
             f"     ⚠ Google Translate failed on {n_failed}/{n_nonempty} segments: "

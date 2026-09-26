@@ -545,6 +545,27 @@ class GoogleBlockedMarianFallbackTests(unittest.TestCase):
         # No model load happens: the "auto" guard returns immediately.
         self.assertIsNone(translation._translate_with_marian([], "auto", "it"))
 
+    def test_marian_not_retried_after_it_already_failed(self):
+        # engine=marian fails, falls to Google, Google is blocked: MarianMT must
+        # not be tried a second time (review S6a), so it raises without retrying.
+        clock = _FakeClock()
+        fake_cls = mock.Mock()
+        fake_cls.return_value.translate.side_effect = TooManyRequests()
+        calls = []
+
+        def fake_marian(segments, src, target):
+            calls.append((src, target))
+            return None                     # model unavailable both times
+
+        with mock.patch.dict(sys.modules, _fake_google_modules(fake_cls)), \
+                mock.patch.object(translation, "time", clock), \
+                mock.patch.object(translation, "_translate_with_marian",
+                                  side_effect=fake_marian), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(TranslationUnavailableError):
+                translate_segments(self._segs("hello"), "en", "it", engine="marian")
+        self.assertEqual(len(calls), 1)     # tried once (the marian branch), not again
+
 
 if __name__ == "__main__":
     unittest.main()
