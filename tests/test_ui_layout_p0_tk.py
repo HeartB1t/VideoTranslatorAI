@@ -353,6 +353,27 @@ class WheelStepTests(unittest.TestCase):
                     app.update()
                     self.assertEqual(canvas.yview()[0], expected)
 
+    def test_wheel_over_a_combobox_scrolls_without_changing_it(self):
+        from tkinter import ttk
+
+        def combos(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Combobox):
+                    yield child
+                yield from combos(child)
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, 900, 600)
+            combo = next(c for c in combos(app._right_pane) if c.winfo_ismapped())
+            before = combo.get()
+            app._right_canvas.yview_moveto(0.3)
+            app.update()
+            start = app._right_canvas.yview()[0]
+            for sequence in ("<Button-5>", "<Button-5>", "<Button-4>", "<Button-5>"):
+                combo.event_generate(sequence)
+                app.update()
+            self.assertEqual(combo.get(), before)
+            self.assertNotEqual(app._right_canvas.yview()[0], start)
+
     def test_touchpad_deltas_scroll_once_per_notch(self):
         with built_app(CFG) as (gui, app, _):
             _show_at(self, app, 900, 600)

@@ -7839,21 +7839,30 @@ class App(tk.Tk):
         platform (X11 buttons 4/5, ``<MouseWheel>`` deltas on Windows and
         Tk 8.7+, small touchpad deltas summed to whole notches).
         """
+        # Over a combobox the wheel must scroll the column only: its class
+        # binding would otherwise also change the selected value while the
+        # user is just scrolling the settings.
+        try:
+            on_combobox = event.widget.winfo_class() == "TCombobox"
+        except (AttributeError, tk.TclError):
+            on_combobox = False
+        stop = "break" if on_combobox else None
         canvas = getattr(self, "_right_canvas", None)
         if canvas is None:
-            return
+            return stop
         wheel = getattr(self, "_wheel", None)
         if wheel is None:
             wheel = self._wheel = _WheelAccumulator()
         try:
             if self._canvas_content_fits(canvas):
-                return
+                return stop
             units = wheel.feed(getattr(event, "num", None),
                                getattr(event, "delta", 0))
             if units:
                 canvas.yview_scroll(units, "units")
         except tk.TclError:
             pass  # the window is being destroyed
+        return stop
 
     def _bind_mousewheel(self, widget):
         """Bind wheel scrolling on ``widget`` and all its descendants.
