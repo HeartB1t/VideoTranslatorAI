@@ -8,6 +8,8 @@ on:
       - "tests/**"
       - "video_translator_gui.py"
       - "requirements*.txt"
+      - "README.md"
+      - "docs/i18n/**"
       - ".github/workflows/tests.yml"
   pull_request:
     branches: [main]

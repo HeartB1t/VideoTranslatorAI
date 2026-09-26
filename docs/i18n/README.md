@@ -1,7 +1,17 @@
 # Video Translator AI - README translations
 
-Choose a language. Each page contains a localized project overview and quick
-start; the [English README](README.md) remains the full technical reference.
+Choose a language. Every page contains the complete README, with the same
+section order, tables, examples and technical links as the
+[English source](../../README.md). Translations live in this directory to keep
+the repository root tidy.
+
+When editing the English source, update the corresponding sections in all 25
+translations. The offline checks in `tests/test_readme_translations.py` verify
+structural parity, commands and links; they do not replace linguistic review.
+
+Translations were prepared with machine-translation assistance and editorial
+corrections. Native-language improvements are welcome; keep the technical
+meaning, executable commands and corresponding section positions unchanged.
 
 | Language | README |
 |---|---|
@@ -10,7 +20,7 @@ start; the [English README](README.md) remains the full technical reference.
 | Čeština | [Čeština](README.cs.md) |
 | Dansk | [Dansk](README.da.md) |
 | Nederlands | [Nederlands](README.nl.md) |
-| English | [English](README.md) |
+| English | [English](../../README.md) |
 | Suomi | [Suomi](README.fi.md) |
 | Français | [Français](README.fr.md) |
 | Deutsch | [Deutsch](README.de.md) |

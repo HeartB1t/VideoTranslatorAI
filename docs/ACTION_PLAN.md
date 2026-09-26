@@ -1,12 +1,64 @@
 # Action Plan
 
+## README localization handoff to Claude Code (2026-09-26)
+
+### Why this changed
+
+The operator asked for complete translations of the main README, with every
+section in its corresponding position, not shortened overviews. They also
+requested a dedicated directory because 25 translated files cluttered the
+GitHub repository root. This is a documentation change, not a player or
+translation-runtime change.
+
+### Delivered structure
+
+- `README.md` remains the complete English source at the repository root.
+- `docs/i18n/README.md` is the language index; `docs/i18n/README.<lang>.md`
+  contains each of the 25 complete translations (26 languages including English).
+- The previous root-level translated READMEs and `README_LANGUAGES.md` have
+  been replaced by this structure. Their historical versions remain in Git.
+- Each page keeps the original section order, tables, lists, installation and
+  uninstall instructions, executable examples, CLI options and license notes.
+  Language navigation and relative technical-document links are rebased for
+  the new directory. Native language names remain visible in the selector.
+- `tests/test_readme_translations.py` checks all 25 files, ordered structure,
+  table dimensions, commands, per-section inline code, link destinations and
+  long accidentally untranslated English passages. CI also runs on changes to
+  `README.md` and `docs/i18n/**`.
+
+### Maintenance instructions
+
+Update the corresponding sections in **all 25 translations** whenever the
+English README changes. Keep command syntax, paths, model identifiers and
+URLs unchanged except for relative-link rebasing. Do not recreate short
+language summaries or move these files back into the repository root.
+Run `python -m unittest discover -s tests -p test_readme_translations.py -v`
+before committing documentation changes.
+
+Translations used machine-translation assistance followed by editorial and
+technical corrections. Structural tests do not certify native-level fluency
+or semantic equivalence; further native-language proofreading is welcome.
+This delivery does not complete the pending live-audio acceptance, overlap/fade,
+hardware-aware model selection or ElevenLabs work described below.
+
+### Verification
+
+All six README checks passed across 25 translations. A separate Markdown-render
+audit matched the English page: 30 headings, 9 tables, 8 fenced examples,
+42 rendered links and 103 inline-code spans per page. Compilation and
+`git diff --check` passed. The complete unittest suite ran 1,381 tests:
+Xvfb OK (15 skipped), no display OK (118 skipped). An initial run on the physical
+desktop failed in Tk theme/teardown tests; isolated reruns passed without runtime
+changes. Remote CI status is recorded in the GitHub check for this delivery.
+
 ## Live P5 handoff to Claude Code (2026-09-26)
 
 ### Latest published checkpoint
 
 - `696e6a1`: startup hold, pre-lock speech retention, pacer clip recovery, and
-  linked README pages covering 26 languages. The translated pages are localized
-  quick starts; English remains the complete technical reference.
+  linked README pages covering 26 languages. Those pages were initially quick
+  starts; the subsequent README localization delivery above replaces them with
+  complete translations in `docs/i18n/`.
 - Verification: 1,360 pytest tests passed, 15 skipped, 864 subtests passed;
   the existing backup directory was excluded from collection. Translation links
   and `git diff --check` passed. [GitHub CI](https://github.com/HeartB1t/VideoTranslatorAI/actions/runs/36268476286)
