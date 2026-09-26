@@ -51,6 +51,54 @@ class LiveTransportRoutingTests(unittest.TestCase):
         self.controller.stop.assert_called_once_with()
 
 
+class LiveChoicesPersistenceTests(unittest.TestCase):
+    """The live bar remembers mode/engine/dub/subs/delay across launches."""
+
+    def _bar(self, kind="file"):
+        return SimpleNamespace(source_kind=kind, current_settings=lambda: {
+            "mode": "live", "delay": 12.5, "engine": "ollama",
+            "dub": False, "subs": True})
+
+    def test_choice_changes_schedule_a_save_even_without_a_session(self):
+        for intent in ("mode", "delay", "engine", "dub", "subs"):
+            app = SimpleNamespace(_live_session=None, _schedule_live_save=Mock())
+            gui.App._on_live_command(app, intent, {})
+            app._schedule_live_save.assert_called_once_with()
+
+    def test_original_mute_is_not_persisted(self):
+        app = SimpleNamespace(_live_session=Mock(), _schedule_live_save=Mock())
+        gui.App._on_live_command(app, "original_mute", {"muted": True})
+        app._schedule_live_save.assert_not_called()
+
+    def test_save_writes_config_keys_with_delay_by_slider_range(self):
+        for kind, key in (("file", "live_file_ahead_s"), ("url", "live_delay_s")):
+            app = SimpleNamespace(_live_bar=self._bar(kind), _live_save_after=None)
+            with mock.patch.object(gui, "save_config") as save:
+                gui.App._save_live_choices(app)
+            save.assert_called_once_with({
+                "live_sync_mode": "live", "live_engine": "ollama",
+                "live_dub_enabled": False, "live_subs_enabled": True,
+                key: 12.5})
+
+    def test_saved_choices_round_trip_through_normalize(self):
+        app = SimpleNamespace(_live_bar=self._bar("file"), _live_save_after=None)
+        with mock.patch.object(gui, "save_config") as save:
+            gui.App._save_live_choices(app)
+        settings = gui._player_settings_module.normalize_live_settings(
+            save.call_args.args[0])
+        self.assertEqual((settings.sync_mode, settings.engine, settings.dub_enabled,
+                          settings.subs_enabled, settings.file_ahead_s),
+                         ("live", "ollama", False, True, 12.5))
+
+    def test_schedule_debounces_slider_drags(self):
+        app = SimpleNamespace(_live_save_after="old", after=Mock(return_value="new"),
+                              after_cancel=Mock(), _save_live_choices=Mock())
+        gui.App._schedule_live_save(app)
+        app.after_cancel.assert_called_once_with("old")
+        self.assertEqual(app._live_save_after, "new")
+        app._save_live_choices.assert_not_called()
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))

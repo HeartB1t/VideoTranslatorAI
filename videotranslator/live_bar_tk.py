@@ -121,6 +121,7 @@ class LiveBar(tk.Frame):
         self._delay_label.pack(side="left", padx=(8, 4))
         from tkinter import ttk
         lo, hi, default = _DELAY_RANGE[self._source_kind]
+        self._last_delay = round(float(default), 1)
         self._delay_scale = ttk.Scale(row, from_=lo, to=hi, orient="horizontal",
                                       length=110, command=self._on_delay)
         self._delay_scale.set(default)
@@ -223,7 +224,12 @@ class LiveBar(tk.Frame):
 
     def _on_delay(self, _value: str = "") -> None:
         self._render_delay_label()
-        self._emit("delay", seconds=round(float(self._delay_scale.get()), 1))
+        # ttk.Scale also calls back when the value is set from code (creation,
+        # restore of the saved choice): emit only a real change of the value.
+        seconds = round(float(self._delay_scale.get()), 1)
+        if seconds != getattr(self, "_last_delay", None):
+            self._last_delay = seconds
+            self._emit("delay", seconds=seconds)
 
     def _on_engine(self, _event: Any = None) -> None:
         code = LIVE_ENGINES[self._engine_combo.current()]
@@ -243,6 +249,11 @@ class LiveBar(tk.Frame):
         self._emit("banner_close")
 
     # -- public API ---------------------------------------------------------
+
+    @property
+    def source_kind(self) -> str:
+        """"file" or "url": the range the delay slider currently uses."""
+        return self._source_kind
 
     def set_source_kind(self, kind: str) -> None:
         """"file" or "url": re-ranges the delay slider (design 5.9)."""
@@ -277,6 +288,7 @@ class LiveBar(tk.Frame):
         ahead = getattr(settings, "file_ahead_s", None) if self._source_kind == "file" \
             else getattr(settings, "delay_s", None)
         if ahead is not None:
+            self._last_delay = round(float(ahead), 1)
             self._delay_scale.set(float(ahead))
         self._render_delay_label()
 

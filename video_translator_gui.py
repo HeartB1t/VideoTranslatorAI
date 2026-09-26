@@ -7566,11 +7566,17 @@ class App(tk.Tk):
         # inside the player area, below the panel; mpv renders into a deeper child
         # (video_host), so the strip never overlaps the video, and the left pane
         # still holds exactly the player area (P0 layout invariant preserved).
+        self._live_save_after = None     # pending debounced save of the bar choices
         self._live_bar = _LiveBar(
             self._player_area, ui_s=self._s, make_button=self._flat_btn,
             on_command=self._on_live_command, theme=self._theme,
             keyboard_operable=self._keyboard_operable, log=self._player_log)
         self._live_bar.pack(side="bottom", fill="x")
+        # Restore the choices of the previous launch (mode, engine, voice,
+        # subtitles, delay), saved by _save_live_choices.
+        with contextlib.suppress(Exception):
+            self._live_bar.set_config_values(
+                _player_settings_module.normalize_live_settings(load_config()))
         self._player_panel.pack(side="top", fill="both", expand=True)
         self._refresh_live_bar_enabled()
 
@@ -8541,6 +8547,10 @@ class App(tk.Tk):
             if session is not None:
                 session.set_engine("marian")
             return
+        if intent in ("mode", "delay", "engine", "dub", "subs"):
+            # Remember the choice for the next launch (the original mute is
+            # deliberately not persisted: it resets with every session).
+            self._schedule_live_save()
         if session is None:
             return  # settings changed while idle are read at start()
         if intent == "mode":
@@ -8563,6 +8573,32 @@ class App(tk.Tk):
             session.set_subs_enabled(bool(params.get("enabled", True)))
         elif intent == "original_mute":
             session.set_original_muted(bool(params.get("muted", False)))
+
+    def _schedule_live_save(self) -> None:
+        """Save the live bar choices shortly after the last change.
+
+        Debounced so dragging the delay slider writes the config once, not at
+        every step of the drag.
+        """
+        if self._live_save_after is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(self._live_save_after)
+        self._live_save_after = self.after(400, self._save_live_choices)
+
+    def _save_live_choices(self) -> None:
+        """Write the live bar choices to the config (read back at startup)."""
+        self._live_save_after = None
+        try:
+            raw = self._live_bar.current_settings()
+            delay_key = ("live_file_ahead_s" if self._live_bar.source_kind == "file"
+                         else "live_delay_s")
+            save_config({
+                "live_sync_mode": raw["mode"], "live_engine": raw["engine"],
+                "live_dub_enabled": raw["dub"], "live_subs_enabled": raw["subs"],
+                delay_key: raw["delay"],
+            })
+        except Exception as exc:                     # noqa: BLE001
+            print(f"     ! Could not save live settings: {exc}", flush=True)
 
     def _start_live_session(self) -> None:
         if self._live_session is not None or self._live_resolving:
@@ -10305,6 +10341,12 @@ class App(tk.Tk):
         """Stop native player resources before destroying their Tk host window."""
         self._destroying = True
         self._theme.close()
+        # A live bar change made just before closing is still waiting for its
+        # debounced save: write it now instead of losing it.
+        if getattr(self, "_live_save_after", None) is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(self._live_save_after)
+            self._save_live_choices()
         # Signal a live session to stop now (fast, non-blocking); the actual join
         # happens on the close worker below, before the backend is terminated, so
         # the Tk thread never blocks (up to 4 s) on a network read in PyAV.

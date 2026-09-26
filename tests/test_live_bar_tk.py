@@ -50,6 +50,18 @@ class LiveBarTests(unittest.TestCase):
         self.bar._start_button.invoke()
         self.assertIn(("start", {"source": "file"}), self.commands)
 
+    def test_saved_choices_are_restored_without_emitting_commands(self):
+        from videotranslator.player_settings import normalize_live_settings
+        self.assertEqual(self.bar.source_kind, "file")
+        self.bar.set_config_values(normalize_live_settings({
+            "live_sync_mode": "live", "live_engine": "google",
+            "live_dub_enabled": False, "live_subs_enabled": False,
+            "live_file_ahead_s": 15.0}))
+        self.assertEqual(self.bar.current_settings(), {
+            "mode": "live", "delay": 15.0, "engine": "google",
+            "dub": False, "subs": False, "original_mute": False})
+        self.assertEqual(self.commands, [])
+
     def test_voice_counter_shows_lines_said_and_lost_while_dubbing(self):
         self.bar.show_running()
         self.bar.render(SimpleNamespace(state="running", lag_s=None, warning_key=None,
