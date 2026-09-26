@@ -146,6 +146,37 @@ open tasks in the acceptance section below.
    and does not change the separate live-mode lag policy. Real audio acceptance is
    still pending.
 
+### Review of the live delivery (Claude Code, 2026-09-26)
+
+A full review of `65e91fd..cea32f8` (code, tests, docs, mechanical checks) found
+the delivery sound: 31 behavioral regression tests, honest README status, clean
+checks. Each finding below was confirmed by running the real scheduler/session
+code, not inferred from reading alone. Priority of the open items is to be
+decided with the operator.
+
+- [x] **D, both sync modes** (fixed in `e24f88b`): a seek outside the translated
+  coverage restarts decoding and the producers emit the rest of the file again
+  with new ids, while the old segments stayed. The same sentence was requested
+  from TTS twice and could be voiced twice. `on_seek(restart=True)` now drops the
+  superseded segments; identical sentences reuse their cached clip.
+- [ ] **R3, delayed mode only**: the pacer-held recovery also starts clips that
+  are not late. While the pacer holds the picture at 1.0 s, a ready clip that
+  starts at 5.0 s is preloaded and started at once, so the voice runs up to the
+  freshness bound (4 s) ahead of the picture. Cause: `recover_late` uses
+  `now - seg.start <= max_live_lag`, which is also true for future clips
+  (negative difference); recovery must require the clip to be actually late.
+- [ ] **Delayed-mode coverage gap, pre-existing** (present at `65e91fd`, before
+  this delivery): `ready_until` stops at any silence longer than `merge_gap`
+  (0.6 s) between sentences, so `FilePacer` pauses and resumes only at
+  `source_done`, even when all later sentences are translated. The delayed mode
+  therefore stalls at the first long pause in speech. Live mode never pauses and
+  is unaffected; the operator's successful manual test used live mode.
+- Not reproduced end to end, delayed mode only: a pacer-held deadlock when a
+  paused clip occupies the voice device while a recovery clip waits, and a
+  recovery that can end only on the clip EOF (no time-based fallback while the
+  picture is held). Scheduler-level states reproduce, but a realistic session
+  timeline did not reach them; recheck after fixing R3.
+
 ### Remaining implementation work, in order
 
 Only unfinished implementation work is listed here. Do not reimplement the
