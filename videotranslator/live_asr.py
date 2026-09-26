@@ -252,3 +252,90 @@ class AudioDecoder:
             self._container.close()
         except Exception:
             pass
+
+
+class PersistentWhisper:
+    """faster-Whisper loaded once per live session (design 4.8).
+
+    CUDA: large-v3-turbo float16, beam 5. Otherwise: small int8, beam 1. On a
+    CUDA runtime error it reloads small int8 on the CPU once and retries. Segment
+    times are shifted by ``utt.start`` into session time.
+    """
+
+    _GPU = ("large-v3-turbo", "cuda", "float16", 5)
+    _CPU = ("small", "cpu", "int8", 1)
+
+    def __init__(self, *, device_policy: str = "auto", hotwords: str | None = None,
+                 whisper_model_cls=None, torch_module=None,
+                 log: Callable[[str], None] = lambda _m: None) -> None:
+        self._hotwords = hotwords
+        self._log = log
+        if whisper_model_cls is None:
+            from faster_whisper import WhisperModel
+            whisper_model_cls = WhisperModel
+        self._cls = whisper_model_cls
+        if torch_module is None:
+            import torch as torch_module
+        self._torch = torch_module
+        use_gpu = device_policy != "cpu" and bool(self._torch.cuda.is_available())
+        self.model_name, self.device, self._compute, self._beam = (
+            self._GPU if use_gpu else self._CPU)
+        self.fell_back = False
+        self._model = self._cls(self.model_name, device=self.device,
+                                compute_type=self._compute)
+
+    def _kwargs(self, language: str | None) -> dict:
+        from .transcription import build_transcribe_kwargs
+        kwargs = build_transcribe_kwargs(language or "auto", None)
+        kwargs.update(vad_filter=False, condition_on_previous_text=False,
+                      temperature=0, beam_size=self._beam,
+                      language=None if not language or language == "auto" else language)
+        from .hotwords import to_whisper_param
+        param = to_whisper_param(self._hotwords) if self._hotwords else None
+        if param:
+            kwargs["hotwords"] = param
+        return kwargs
+
+    def transcribe(self, utt, *, language: str | None):
+        try:
+            return self._run(utt, language)
+        except RuntimeError as exc:
+            from .transcription import is_cuda_runtime_error
+            if is_cuda_runtime_error(exc) and not self.fell_back:
+                self._log("[live-asr] CUDA error, falling back to CPU")
+                self._fallback_to_cpu()
+                return self._run(utt, language)
+            raise
+
+    def _run(self, utt, language: str | None):
+        segments, info = self._model.transcribe(
+            np.asarray(utt.samples, dtype=np.float32), **self._kwargs(language))
+        out = []
+        for seg in segments:
+            text = (getattr(seg, "text", "") or "").strip()
+            if not text:
+                continue
+            out.append({
+                "start": float(getattr(seg, "start", 0.0)) + utt.start,
+                "end": float(getattr(seg, "end", 0.0)) + utt.start,
+                "text": text,
+                "no_speech_prob": float(getattr(seg, "no_speech_prob", 0.0)),
+                "avg_logprob": float(getattr(seg, "avg_logprob", 0.0)),
+                "compression_ratio": float(getattr(seg, "compression_ratio", 0.0)),
+            })
+        return out, getattr(info, "language", None), float(
+            getattr(info, "language_probability", 0.0))
+
+    def _fallback_to_cpu(self) -> None:
+        self.close()
+        self.model_name, self.device, self._compute, self._beam = self._CPU
+        self.fell_back = True
+        self._model = self._cls(self.model_name, device=self.device,
+                                compute_type=self._compute)
+
+    def close(self) -> None:
+        self._model = None
+        try:
+            self._torch.cuda.empty_cache()
+        except Exception:
+            pass

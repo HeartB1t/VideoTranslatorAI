@@ -40,6 +40,75 @@ class StreamingVadFramingTests(unittest.TestCase):
         self.assertEqual(len(more), 1)
 
 
+class _FakeSeg:
+    def __init__(self, start, end, text):
+        self.start, self.end, self.text = start, end, text
+        self.no_speech_prob, self.avg_logprob, self.compression_ratio = 0.1, -0.2, 1.5
+
+
+class _FakeInfo:
+    language = "en"
+    language_probability = 0.92
+
+
+class _FakeCuda:
+    def __init__(self, available):
+        self._available = available
+
+    def is_available(self):
+        return self._available
+
+    def empty_cache(self):
+        pass
+
+
+class PersistentWhisperUnitTests(unittest.TestCase):
+    def _utt(self, start=10.0):
+        from types import SimpleNamespace
+        return SimpleNamespace(samples=np.zeros(512, dtype=np.float32), start=start)
+
+    def test_cpu_path_shifts_times_and_reports_language(self):
+        from types import SimpleNamespace
+        from videotranslator.live_asr import PersistentWhisper
+        constructed = []
+
+        class Model:
+            def __init__(self, name, device, compute_type):
+                constructed.append((name, device, compute_type))
+
+            def transcribe(self, audio, **kw):
+                return iter([_FakeSeg(0.0, 1.0, "hello")]), _FakeInfo()
+
+        pw = PersistentWhisper(device_policy="auto", whisper_model_cls=Model,
+                               torch_module=SimpleNamespace(cuda=_FakeCuda(False)))
+        self.assertEqual(pw.device, "cpu")
+        segs, lang, prob = pw.transcribe(self._utt(10.0), language="en")
+        self.assertEqual(segs[0]["start"], 10.0)
+        self.assertEqual(lang, "en")
+        self.assertAlmostEqual(prob, 0.92, places=3)
+
+    def test_cuda_error_falls_back_to_cpu(self):
+        from types import SimpleNamespace
+        from videotranslator.live_asr import PersistentWhisper
+
+        class Model:
+            def __init__(self, name, device, compute_type):
+                self.device = device
+
+            def transcribe(self, audio, **kw):
+                if self.device == "cuda":
+                    raise RuntimeError("CUDA failure: libcublas")
+                return iter([_FakeSeg(0.0, 1.0, "ok")]), _FakeInfo()
+
+        pw = PersistentWhisper(device_policy="auto", whisper_model_cls=Model,
+                               torch_module=SimpleNamespace(cuda=_FakeCuda(True)))
+        self.assertEqual(pw.device, "cuda")
+        segs, lang, _ = pw.transcribe(self._utt(0.0), language="en")
+        self.assertTrue(pw.fell_back)
+        self.assertEqual(pw.device, "cpu")
+        self.assertEqual(segs[0]["text"], "ok")
+
+
 @unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
 class LiveAsrHeavySmokeTests(unittest.TestCase):
     def _wav(self, path):
@@ -64,6 +133,32 @@ class LiveAsrHeavySmokeTests(unittest.TestCase):
             times = [t for (t, _b) in blocks]
             self.assertAlmostEqual(times[0], 0.0, places=2)
             self.assertAlmostEqual(times[1] - times[0], 0.25, places=3)
+
+    def test_persistent_whisper_transcribes_real_speech(self):
+        import asyncio
+        import threading
+        from types import SimpleNamespace
+        import edge_tts
+        from videotranslator.live_asr import PersistentWhisper
+        with tempfile.TemporaryDirectory() as tmp:
+            mp3 = os.path.join(tmp, "speech.mp3")
+
+            async def synth():
+                await edge_tts.Communicate(
+                    "This is a test of speech recognition.", "en-US-AriaNeural").save(mp3)
+
+            asyncio.run(synth())
+            dec = AudioDecoder(mp3, time_domain="rebased")
+            samples = np.concatenate([b for (_t, b) in dec.blocks(threading.Event())])
+            dec.close()
+            utt = SimpleNamespace(samples=samples, start=0.0)
+            pw = PersistentWhisper(device_policy="cpu")   # small int8, no big download
+            segs, lang, prob = pw.transcribe(utt, language="en")
+            pw.close()
+            text = " ".join(s["text"] for s in segs).lower()
+            self.assertEqual(lang, "en")
+            self.assertTrue(any(w in text for w in ("test", "speech", "recognition")),
+                            f"unexpected transcript: {text!r}")
 
     def test_streaming_vad_matches_silero(self):
         from faster_whisper.vad import get_vad_model
