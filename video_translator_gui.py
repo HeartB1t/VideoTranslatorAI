@@ -325,10 +325,12 @@ from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noq
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
+from videotranslator import live_session as _live_session_module  # noqa: E402
 from videotranslator import player_core as _player_core  # noqa: E402
 from videotranslator import player_engine as _player_engine  # noqa: E402
 from videotranslator import player_settings as _player_settings_module  # noqa: E402
 from videotranslator import system_packages as _system_packages  # noqa: E402
+from videotranslator.live_bar_tk import LiveBar as _LiveBar  # noqa: E402
 from videotranslator.player_panel_tk import HoverTip as _HoverTip  # noqa: E402
 from videotranslator.player_panel_tk import PlayerPanel as _PlayerPanel  # noqa: E402
 from videotranslator.ui_theme import (  # noqa: E402
@@ -6074,6 +6076,11 @@ class App(tk.Tk):
         self._player_fallback_notice_pending = False
         self._player_release_pending = False
         self._player_fullscreen = False
+        # Live real-time translation (spec 4, 5.9): one session at a time, driven
+        # by the LiveBar and rendered onto the player's overlay via video.rt.
+        self._live_session = None
+        self._live_poll_after = None
+        self._live_stopping = False
         self._close_started_at = None
         self._close_done = None
 
@@ -7463,7 +7470,17 @@ class App(tk.Tk):
             logo_path=Path(__file__).resolve().parent / "assets" / "icon_256.png",
             theme=self._theme, keyboard_operable=self._keyboard_operable,
             log=self._player_log)
-        self._player_panel.pack(fill="both", expand=True)
+        # Live-translation strip under the player transport (spec 5.9). It sits
+        # inside the player area, below the panel; mpv renders into a deeper child
+        # (video_host), so the strip never overlaps the video, and the left pane
+        # still holds exactly the player area (P0 layout invariant preserved).
+        self._live_bar = _LiveBar(
+            self._player_area, ui_s=self._s, make_button=self._flat_btn,
+            on_command=self._on_live_command, theme=self._theme,
+            keyboard_operable=self._keyboard_operable, log=self._player_log)
+        self._live_bar.pack(side="bottom", fill="x")
+        self._player_panel.pack(side="top", fill="both", expand=True)
+        self._refresh_live_bar_enabled()
 
         # Right column: input, translation, profile, start, then the settings
         # accordion, in a canvas that scrolls only this column. The canvas
@@ -7910,6 +7927,9 @@ class App(tk.Tk):
         player_panel = getattr(self, "_player_panel", None)
         if player_panel is not None:
             player_panel.apply_theme()
+        live_bar = getattr(self, "_live_bar", None)
+        if live_bar is not None:
+            live_bar.apply_theme()
         # Another text size changes the cards' width, and a large shrink can
         # leave the view below the content without any <Configure>.
         self.after_idle(self._sync_right_column)
@@ -7981,6 +8001,7 @@ class App(tk.Tk):
         self._relabel_settings()
         self._player_badge_label.configure(text=self._s("player_badge"))
         self._player_panel.relabel()
+        self._live_bar.relabel()
         lang = self._ui_lang.get()
         self._lbl_panel_input.configure(text=self._title_upper(self._s("panel_input"), lang))
         self._lbl_panel_translation.configure(text=self._title_upper(self._s("panel_translation"), lang))
@@ -8346,8 +8367,158 @@ class App(tk.Tk):
         panel = getattr(self, "_player_panel", None)
         if panel is not None:
             panel.render(state, position=state.position)
+        self._refresh_live_bar_enabled()
         if state.item is not None and self._player_backend is not None:
             self._start_player_poll()
+
+    # -- live real-time translation (spec 4, 5.9) ---------------------------
+
+    def _live_media_path(self) -> str | None:
+        """The loadable local file currently in the player, or None."""
+        if self._player_backend is None:
+            return None
+        item = self._player_controller.state.item
+        if item is None or getattr(item, "kind", None) == "live":
+            return None
+        return item.path
+
+    def _refresh_live_bar_enabled(self) -> None:
+        """Start is available only with a local media loaded and no batch job."""
+        bar = getattr(self, "_live_bar", None)
+        if bar is None:
+            return
+        if self._live_session is not None:
+            return  # a session is running; the bar shows its Stop row
+        ready = self._live_media_path() is not None and not self._running
+        bar.set_start_enabled(ready)
+
+    def _block_if_live_active(self) -> bool:
+        """True (and warns) when a live session forbids starting a batch job."""
+        if self._live_session is not None:
+            messagebox.showwarning(self._s("msg_error_t"), self._s("live_err_busy_job"))
+            return True
+        return False
+
+    def _on_live_command(self, intent: str, params: dict) -> None:
+        """Route LiveBar intents on the Tk thread (mirrors _on_player_command)."""
+        if intent == "start":
+            self._start_live_session()
+            return
+        if intent == "stop":
+            self._stop_live_session()
+            return
+        if intent == "banner_close":
+            self._live_bar.clear_banner()
+            return
+        session = self._live_session
+        if intent == "switch_marian":
+            if session is not None:
+                session.set_engine("marian")
+            return
+        if session is None:
+            return  # settings changed while idle are read at start()
+        if intent == "mode":
+            session.set_sync_mode(params.get("mode", "delayed"))
+        elif intent == "delay":
+            session.set_delay(float(params.get("seconds", 0.0)))
+        elif intent == "engine":
+            session.set_engine(params.get("engine", "marian"))
+        elif intent == "dub":
+            session.set_dub_enabled(bool(params.get("enabled", True)))
+        elif intent == "subs":
+            session.set_subs_enabled(bool(params.get("enabled", True)))
+
+    def _start_live_session(self) -> None:
+        if self._live_session is not None:
+            return
+        if self._running:
+            self._live_bar.show_banner("live_err_busy_job", is_error=True)
+            return
+        if self._editor_open:
+            self._live_bar.show_banner("live_err_editor_open", is_error=True)
+            return
+        source = self._live_media_path()
+        if source is None or self._player_backend is None:
+            return
+        raw = self._live_bar.current_settings()
+        values = {
+            "source": source, "source_kind": "file",
+            "lang_source": self._lang_src.get(),
+            "lang_target": self._lang_tgt.get(),
+            "voice": "",
+            "engine": raw["engine"],
+            "deepl_key": self._deepl_key_var.get().strip(),
+        }
+        settings = _player_settings_module.normalize_live_settings({
+            "live_sync_mode": raw["mode"], "live_delay_s": raw["delay"],
+            "live_engine": raw["engine"], "live_dub_enabled": raw["dub"],
+            "live_subs_enabled": raw["subs"],
+        })
+        cache_dir = Path(tempfile.gettempdir()) / "VideoTranslatorAI" / "live"
+        try:
+            cfg = _live_session_module.build_live_config(
+                values, settings=settings, cache_dir=cache_dir, now=time.time())
+            factories = _live_session_module.build_live_factories(
+                cfg, log=self._player_log)
+            self._live_session = _live_session_module.LiveSession(
+                cfg, video=self._player_backend, clock_view=self._player_clock,
+                factories=factories, log=self._player_log,
+                thread_factory=self._redirecting_thread_factory)
+            self._live_session.start()
+        except Exception as exc:                     # noqa: BLE001
+            self._player_log(f"[live] start failed: {exc}")
+            self._live_session = None
+            self._live_bar.show_banner("live_err_internal",
+                                       {"detail": str(exc)}, is_error=True)
+            return
+        self._live_bar.clear_banner()
+        self._live_bar.set_active(True)
+        self._live_bar.set_start_enabled(False)
+        self._schedule_live_poll()
+
+    def _schedule_live_poll(self) -> None:
+        if self._destroying or self._live_session is None:
+            return
+        self._live_poll_after = self.after(250, self._poll_live_status)
+
+    def _poll_live_status(self) -> None:
+        self._live_poll_after = None
+        session = self._live_session
+        if session is None or self._destroying:
+            return
+        status = session.status()
+        self._live_bar.render(status)
+        if status.state in ("stopped", "failed", "ended"):
+            self._finish_live_session()
+            return
+        self._schedule_live_poll()
+
+    def _stop_live_session(self) -> None:
+        session = self._live_session
+        if session is None or self._live_stopping:
+            return
+        self._live_stopping = True
+        session.request_stop()
+
+        def work():
+            session.join(5.0)
+
+        self._redirecting_thread_factory(work, name="live-stop").start()
+
+    def _finish_live_session(self) -> None:
+        session = self._live_session
+        self._live_session = None
+        self._live_stopping = False
+        if self._live_poll_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._live_poll_after)
+            self._live_poll_after = None
+        if session is not None:
+            def work():
+                session.join(5.0)
+            self._redirecting_thread_factory(work, name="live-stop").start()
+        self._live_bar.set_active(False)
+        self._refresh_live_bar_enabled()
 
     def _source_media_items(self) -> list[_player_core.MediaItem]:
         return [
@@ -8985,6 +9156,8 @@ class App(tk.Tk):
     def _start_download(self):
         if self._running or self._ollama_setup_in_flight or self._player_release_pending:
             return
+        if self._block_if_live_active():
+            return
         urls = self._get_urls()
         if not urls:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_url"))
@@ -9164,6 +9337,8 @@ class App(tk.Tk):
 
     def _start(self):
         if self._running or self._ollama_setup_in_flight or self._player_release_pending:
+            return
+        if self._block_if_live_active():
             return
         if not self._batch_files:
             messagebox.showerror(self._s("msg_error_t"), self._s("msg_no_video"))
@@ -9690,6 +9865,18 @@ class App(tk.Tk):
         """Stop native player resources before destroying their Tk host window."""
         self._destroying = True
         self._theme.close()
+        # Stop a live session first: its sched thread writes to backend.rt, so it
+        # must be gone before the backend is terminated below.
+        live = self._live_session
+        if live is not None:
+            self._live_session = None
+            live.request_stop()
+            with contextlib.suppress(Exception):
+                live.join(4.0)
+        if self._live_poll_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._live_poll_after)
+            self._live_poll_after = None
         if self._player_poll_after is not None:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._player_poll_after)

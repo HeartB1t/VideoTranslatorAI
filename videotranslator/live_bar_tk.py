@@ -268,6 +268,21 @@ class LiveBar(tk.Frame):
         if tooltip_key and not enabled:
             self._log(self._s(tooltip_key))
 
+    def current_settings(self) -> dict:
+        """The idle-row choices with plain keys (mode/delay/engine/dub/subs).
+
+        Plain keys, not the ``live_*`` config keys, so the i18n literal-key
+        scanner does not mistake them for UI strings; the App maps them onto the
+        config dict for ``normalize_live_settings``.
+        """
+        return {
+            "mode": self._mode_var.get(),
+            "delay": round(float(self._delay_scale.get()), 1),
+            "engine": LIVE_ENGINES[self._engine_combo.current()],
+            "dub": bool(self._dub_var.get()),
+            "subs": bool(self._subs_var.get()),
+        }
+
     def render(self, status: Any) -> None:
         """Update the running row and banner from a LiveStatus-like object."""
         state = getattr(status, "state", "stopped")
