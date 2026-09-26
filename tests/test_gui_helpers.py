@@ -344,6 +344,56 @@ class OnPlayerStateLiveTests(unittest.TestCase):
         self.assertEqual(fake.stopped, [])
 
 
+SEI_1 = ("h264: Late SEI is not implemented. Update your FFmpeg version to the newest "
+         "one from Git. If the problem still occurs, it means that your file has a "
+         "feature which has not been implemented.")
+SEI_2 = ("h264: If you want to help, upload a sample of this file to "
+         "https://streams.videolan.org/upload/ and contact the ffmpeg-devel mailing "
+         "list. (ffmpeg-devel@ffmpeg.org)")
+MP3 = "mp3: Estimating duration from bitrate, this may be inaccurate"
+
+
+class HarmlessMpvLogTests(unittest.TestCase):
+    def test_classifies_the_repetitive_harmless_notices(self):
+        self.assertEqual(gui._harmless_mpv_log_kind(SEI_1), "h264_late_sei")
+        self.assertEqual(gui._harmless_mpv_log_kind(SEI_2), "h264_late_sei")
+        self.assertEqual(gui._harmless_mpv_log_kind(MP3), "mp3_duration")
+        for line in ("Using hardware decoding (nvdec).", "VO: [gpu] 1280x720",
+                     "X11 error: BadWindow (invalid Window parameter)",
+                     "h264: some other decoder error", ""):
+            self.assertIsNone(gui._harmless_mpv_log_kind(line), line)
+
+    def _fake(self):
+        written = []
+        fake = SimpleNamespace(_mpv_x11_noise=0, _mpv_x11_noise_at=0.0,
+                               _mpv_quiet_seen=set(), _player_log_lines=[],
+                               _log_write=written.append, written=written)
+        return fake
+
+    def test_each_harmless_notice_is_shown_once_then_hidden(self):
+        fake = self._fake()
+        for line in [SEI_1, SEI_2, MP3, SEI_1, SEI_2, MP3, MP3, "VO: [gpu] 1280x720"]:
+            gui.App._log_mpv_line(fake, line)
+        text = "".join(fake.written)
+        self.assertEqual(text.count("Late SEI"), 1)
+        self.assertEqual(text.count("upload a sample"), 0)   # the companion line
+        self.assertEqual(text.count("Estimating duration"), 1)
+        self.assertEqual(text.count("repeats of this message are hidden"), 2)
+        self.assertIn("[mpv] VO: [gpu] 1280x720\n", fake.written)
+        self.assertEqual(fake._player_log_lines, ["VO: [gpu] 1280x720"])
+
+    def test_x11_summary_behaviour_is_unchanged(self):
+        fake = self._fake()
+        block = ["X11 error: BadWindow (invalid Window parameter)",
+                 "Type: 0, display: 0x1, resourceid: 2, serial: 3",
+                 "Error code: 3, request code: f, minor code: 0"]
+        for line in block * 2:
+            gui.App._log_mpv_line(fake, line)
+        self.assertEqual(fake.written[:3], [f"[mpv] {line}\n" for line in block])
+        self.assertIn("harmless X11 window errors", fake.written[3])
+        self.assertEqual(len(fake.written), 4)
+
+
 class NoisyX11LogTests(unittest.TestCase):
     def test_matches_the_x11_badwindow_block(self):
         for line in (

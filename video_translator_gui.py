@@ -5982,6 +5982,27 @@ def _is_noisy_x11_log(line: str) -> bool:
     return False
 
 
+# Repetitive mpv/ffmpeg notices that do not affect playback, keyed by kind: each is
+# shown once, then hidden, so the log stays readable (the X11 block is separate).
+_HARMLESS_MPV_NOTICES = (
+    # ffmpeg's h264 decoder does not handle "late SEI" metadata in some streams
+    # and repeats this pair for every occurrence; the picture decodes fine.
+    ("h264_late_sei", ("late sei is not implemented",
+                       "if you want to help, upload a sample of this file")),
+    # The voice clips are constant-bitrate mp3, where this estimate is exact.
+    ("mp3_duration", ("estimating duration from bitrate",)),
+)
+
+
+def _harmless_mpv_log_kind(line: str) -> str | None:
+    """The kind of a known harmless, repetitive mpv notice, or None."""
+    low = line.lower()
+    for kind, markers in _HARMLESS_MPV_NOTICES:
+        if any(marker in low for marker in markers):
+            return kind
+    return None
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -6110,6 +6131,7 @@ class App(tk.Tk):
         self._player_log_lines: list[str] = []
         self._mpv_x11_noise = 0        # count of suppressed harmless X11 errors
         self._mpv_x11_noise_at = 0.0   # last time a summary was logged
+        self._mpv_quiet_seen: set[str] = set()  # harmless notice kinds already shown
         self._player_fallback_notice_pending = False
         self._player_release_pending = False
         self._player_fullscreen = False
@@ -9014,28 +9036,7 @@ class App(tk.Tk):
             elif event.kind == "adapter-error":
                 self._player_log(f"[!] mpv adapter: {event.payload}")
             elif event.kind == "log":
-                line = str(event.payload)
-                if _is_noisy_x11_log(line):
-                    # mpv floods the log with harmless X11 BadWindow errors while
-                    # embedded on X11 (its process-global Xlib handler reports
-                    # expected X errors from Tk or the GL stack); the video
-                    # renders fine. Log the first full block verbatim (resourceid
-                    # + request code for diagnosis), then collapse the rest into a
-                    # periodic summary instead of a line each.
-                    self._mpv_x11_noise += 1
-                    stamp = time.monotonic()
-                    if self._mpv_x11_noise <= 3:
-                        self._log_write(f"[mpv] {line}\n")
-                    elif (self._mpv_x11_noise == 4
-                            or stamp - self._mpv_x11_noise_at >= 5.0):
-                        self._mpv_x11_noise_at = stamp
-                        self._log_write(
-                            f"[mpv] harmless X11 window errors during playback "
-                            f"({self._mpv_x11_noise} so far, repeats suppressed)\n")
-                else:
-                    self._player_log_lines.append(line)
-                    del self._player_log_lines[:-100]
-                    self._log_write(f"[mpv] {line}\n")
+                self._log_mpv_line(str(event.payload))
         video_params = snapshot.changed.get("video-params")
         if video_params is not None and video_params[0]:
             self._player_video_params_seen = True
@@ -9065,6 +9066,40 @@ class App(tk.Tk):
             return
         if self._player_controller.state.item is not None:
             self._start_player_poll()
+
+    def _log_mpv_line(self, line: str) -> None:
+        """Write one mpv log line to the log panel, collapsing harmless noise."""
+        if _is_noisy_x11_log(line):
+            # mpv floods the log with harmless X11 BadWindow errors while
+            # embedded on X11 (its process-global Xlib handler reports
+            # expected X errors from Tk or the GL stack); the video
+            # renders fine. Log the first full block verbatim (resourceid
+            # + request code for diagnosis), then collapse the rest into a
+            # periodic summary instead of a line each.
+            self._mpv_x11_noise += 1
+            stamp = time.monotonic()
+            if self._mpv_x11_noise <= 3:
+                self._log_write(f"[mpv] {line}\n")
+            elif (self._mpv_x11_noise == 4
+                    or stamp - self._mpv_x11_noise_at >= 5.0):
+                self._mpv_x11_noise_at = stamp
+                self._log_write(
+                    f"[mpv] harmless X11 window errors during playback "
+                    f"({self._mpv_x11_noise} so far, repeats suppressed)\n")
+            return
+        kind = _harmless_mpv_log_kind(line)
+        if kind is not None:
+            # A known notice that does not affect playback: show it once so it
+            # stays visible for diagnosis, then keep it out of the log.
+            if kind not in self._mpv_quiet_seen:
+                self._mpv_quiet_seen.add(kind)
+                self._log_write(f"[mpv] {line}\n")
+                self._log_write("[mpv] (harmless: further repeats of this message "
+                                "are hidden)\n")
+            return
+        self._player_log_lines.append(line)
+        del self._player_log_lines[:-100]
+        self._log_write(f"[mpv] {line}\n")
 
     def _player_vo_failed(self, now: float) -> bool:
         if self._player_init_running:
