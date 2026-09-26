@@ -120,9 +120,13 @@ The idle-row control was also checked visually in a complete app under Xvfb.
 These are local checks, not listening tests or Windows acceptance; remote CI is
 recorded separately after publication.
 
-### Remaining implementation work, in order
+### Completed startup and clip-recovery fixes
 
-1. [Implemented, unit-tested] Live startup gate and initial speech preservation.
+These fixes are implemented and covered by automated regression tests. They are
+not pending implementation; real audio and platform acceptance remain separate
+open tasks in the acceptance section below.
+
+- [x] Live startup gate and initial speech preservation.
    URL playback now loads paused, and file playback is paused at its current media
    position before the session starts. The gate releases after an initial translated
    output (and synthesized clip when dubbing is enabled), two seconds of confirmed
@@ -134,33 +138,39 @@ recorded separately after publication.
    Silence can release playback before the first speech; the pacer and
    late-clip recovery then keep the playhead coordinated. Real audio acceptance is
    still pending.
-2. [Implemented, unit-tested] Late clip handling coordinated with the pacer. The
+- [x] Late clip handling coordinated with the pacer. The
    session now distinguishes a pacer-owned pause from a user pause. In delayed
    mode, a ready clip that is late only because the pacer held the media clock can
    be played as a recovery clip, while the picture remains held; clips older than
    the configured media-time freshness bound still drop. Recovery remains ordered
    and does not change the separate live-mode lag policy. Real audio acceptance is
    still pending.
-3. Finding 10 overlap policy, spec 4.11: wait up to 0.6 s, speed the current clip
+
+### Remaining implementation work, in order
+
+Only unfinished implementation work is listed here. Do not reimplement the
+completed fixes above merely because their audio acceptance is still pending.
+
+1. Finding 10 overlap policy, spec 4.11: wait up to 0.6 s, speed the current clip
    when needed, fade for 0.18 s if the remaining wait would exceed 1 s. Wire
    `ClipSpeed` and `FadeRamp` into actual execution; `StopClip.fade_s` is still
    ignored. Test two adjacent clips, EOF during fade, pause during overlap,
    mute during fade, and stop/seek cancelling the fade.
-4. Voice backend creation on a worker, with completion on Tk. Capture the player
+2. Voice backend creation on a worker, with completion on Tk. Capture the player
    backend/bridge identity before starting; reject and terminate stale results
    after Stop, close, media change or VO fallback. Cover enabling dub after a
    session started with dub disabled (the voice backend may not exist yet).
-5. VO fallback: stop/join the session and terminate the old voice backend before
+3. VO fallback: stop/join the session and terminate the old voice backend before
    closing/replacing its bridge. Never reuse a voice backend bound to the old
    bridge. Test all fallback branches and closing during replacement.
-6. Bound active scheduler segments to the design's 2,000 entries and avoid
+4. Bound active scheduler segments to the design's 2,000 entries and avoid
    repeatedly scanning an unbounded history at 50 Hz. Preserve file clip cache
    replay, in-flight results and caption coverage. Add a long-video test.
-7. Audit dub-toggle state and dropped metrics, plus remaining dormant paths:
+5. Audit dub-toggle state and dropped metrics, plus remaining dormant paths:
    `duck_af`, `LeadCalibrator`, voice-time-pos observer. Wire required behavior or
    explicitly retire unused paths. Do not mark all P2 12-21 closed from this list;
    reconcile each item against the original Fable review.
-8. Persistent `falling_behind` delay adjustment remains open. Verify actual engine
+6. Persistent `falling_behind` delay adjustment remains open. Verify actual engine
    and delay changes during a running session (control/status updates alone are
    not evidence of a producer configuration change).
 
@@ -187,9 +197,12 @@ remains open. TLS/reconnect diagnosis is deferred separately below.
 
 - [x] Prevent playback from advancing before live models and the initial dubbed
   audio are ready; retain and process early speech while automatic language
-  detection locks. See remaining item 1. Unit tests pass; listen-test pending.
+  detection locks. See the startup gate under
+  [completed fixes](#completed-startup-and-clip-recovery-fixes).
+  Unit tests pass; listen-test pending.
 - [x] Recover late dubbed clips when the player is waiting on the pacer, without
-  speaking them out of order or letting voice delay grow without bound. See item 2.
+  speaking them out of order or letting voice delay grow without bound. See late
+  clip handling under [completed fixes](#completed-startup-and-clip-recovery-fixes).
   Unit tests pass; listen-test pending.
 
 Deferred diagnosis, outside the current fix scope: mpv reported TLS connection
