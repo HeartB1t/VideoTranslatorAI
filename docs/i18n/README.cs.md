@@ -28,7 +28,7 @@ Nástroj pro dabování videí pomocí umělé inteligence, který automaticky p
 - 🌐 **UI ve 26 jazycích** - samotné rozhraní se přizpůsobí vašemu jazyku
 - 🎬 **Podpora YouTube a URL** - vložte jakýkoli odkaz na YouTube a překládejte přímo (využívá yt-dlp)
 - ▶️ **Integrovaný přehrávač videa** (libmpv/mpv) - barevně odlišené ovládání přehrávání, seznam skladeb, porovnání původního a dabovaného zvuku A/B, přepínání titulků, snímek obrazovky, celá obrazovka a otevření složky
-- ⏱️ **Překlad v reálném čase** - sledujte místní soubor nebo video na vyžádání z vyřešeného odkazu s přeloženými titulky a posuvníkem zpoždění ve stylu YouTube; překladače MarianMT / Google / DeepL / Ollama. Experimentální dabing využívá Edge-TTS a druhou instanci mpv. Zpracování překrývajících se hlasů a ověření se skutečným zvukem a ve Windows stále probíhají; průběžně přibývající živé vysílání zatím není podporováno.
+- ⏱️ **Překlad v reálném čase** - sledujte místní soubor nebo odkaz na video na vyžádání s přeloženými titulky a posuvníkem zpoždění; enginy MarianMT / Google / DeepL / Ollama. Dabing používá Edge-TTS nebo volitelně hlasy ElevenLabs přes druhou instanci mpv; překrývající se věty počkají, zrychlí nebo se ztlumí. Probíhající živá vysílání zatím podporována nejsou.
 - 🎵 Oddělení hlasu a hudby pomocí Demucs (zachovává hudbu na pozadí)
 - 🔇 **Vypnout původní zvuk**, které je k dispozici před a během živého překladu, ztiší zvukovou stopu videa a zároveň zachová přeložený hlas slyšitelný. Vypnutím obnovíte původní zvuk; po skončení živé relace se resetuje.
 - 🧠 **MarianMT** - plně místní, offline neurální překlad (Helsinki-NLP, žádné limity počtu požadavků, žádný klíč API)
@@ -43,6 +43,9 @@ Nástroj pro dabování videí pomocí umělé inteligence, který automaticky p
 - 📄 Volitelný export titulků `.srt`
 - 🔁 **DeepL Free** překladatelský modul (volitelný - 500 000 znaků/měsíc, vyžaduje bezplatný klíč API)
 - 🔧 **Automatická instalace** - chybějící balíčky Pythonu a ffmpeg se nainstalují automaticky při prvním spuštění
+- 🧮 **Modely pro tento počítač** - zjistí procesor, RAM, GPU, VRAM a volné místo na disku, doporučí modely rozpoznávání řeči, překladu a hlasu podle rychlosti, vyváženosti nebo kvality, stáhne a ověří modely Whisper a změří je na vašem vlastním videu
+- 🗣️ **Hlasy ElevenLabs** *(volitelné, online, placené)* - přirozené vícejazyčné hlasy pro živý dabing s vaším vlastním klíčem API; když selže klíč nebo kvóta, převezme to Edge-TTS
+- 🧬 **Klonování hlasu přes Voicebox** *(volitelné)* - klonuje hlas mluvčího přes samostatný místní server [Voicebox](https://github.com/jamiepine/voicebox); když neběží, video použije Edge-TTS
 
 ## Podporované jazyky
 
@@ -95,6 +98,25 @@ Když je tato možnost povolena, aplikace použije Wav2Lip GAN k synchronizaci p
 - Běží na CUDA (doporučeno) nebo CPU
 - Výrazně prodlužuje dobu zpracování
 - Funguje nejlépe u videí s jedním, jasně viditelným obličejem
+
+## Modely pro tento počítač
+
+Pokročilá nastavení > Model > **Modely pro tento počítač** otevře okno, které přečte hardware (procesor, RAM, GPU a použitelnou VRAM, volné místo na disku), nic nemění a pro každou fázi doporučí jeden model: rozpoznávání řeči pro soubory a živě, překlad a hlas.
+
+- Zvolte **Rychlost**, **Vyvážené** nebo **Kvalita**: každé doporučení uvádí své důvody.
+- Všechny ostatní možnosti zůstávají volitelné a jsou pro tento počítač ohodnocené: vejde se, na hraně, příliš velký, málo místa na disku nebo online služba.
+- **Stáhnout** získá chybějící model Whisper s průběhem a tlačítkem Zrušit a ověří každý soubor kontrolními součty Hugging Face; před stisknutím se nic nestahuje.
+- **Test výkonu** změří zvolený model na načteném videu (načtení, první věta, rychlost); zvuk nikdy neopustí počítač.
+- **Použít** nastaví modely; **Obnovit předchozí** vrátí dřívější volbu. Grafiky NVIDIA se používají přes CUDA; grafiky AMD (ROCm) a Apple se zobrazí, ale řečové modely tam běží na procesoru.
+
+## Voicebox (klonování hlasu místním serverem)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) je samostatný program, který klonuje hlasy. Nainstalujte ho a spusťte sami; tato aplikace volá jen jeho místní API a nikdy ho neinstaluje.
+
+- Pokročilá nastavení > Hlasové klonování > **Voicebox**: nastavte adresu (výchozí `http://127.0.0.1:17493`), engine (výchozí `chatterbox`) a stiskněte **Ověřit**.
+- Pro každé video se z čisté ukázky mluvčího naklonuje dočasný hlas (jeden na mluvčího při rozlišení mluvčích) a potom se smaže.
+- Přijata je jen adresa na tomto počítači, protože API Voiceboxu nemá ověřování.
+- Když Voicebox neodpovídá nebo nepodporuje cílový jazyk, video se nadabuje přes Edge-TTS.
 
 ## Požadavky
 
@@ -289,10 +311,12 @@ Sledujte místní soubor nebo vyřešený odkaz na video na vyžádání s přel
 **Z načteného souboru:** načtěte video do přehrávače (Vstup -> Přidat, poté jej vyberte), ponechte pole URL prázdné, zvolte stejná nastavení živého vysílání a klikněte na **Přeložit v reálném čase**. Adresa URL má prioritu, pokud pole není prázdné.
 
 - **Engine:** MarianMT (offline, výchozí), Google, DeepL nebo Ollama. Rozpoznávání řeči (Whisper) běží lokálně. Offline modely vyžadují první stažení.
+- **Zpoždění:** u souboru ve zpožděném režimu, kolik sekund překladu se nashromáždí, než obraz po pauze pokračuje (aspoň 8 s s hlasem, 4 s jen s titulky). Když se obraz stále zastavuje, zásoba roste o 4 s až na 30 s a lišta na to upozorní.
 - **Dabování hlasu:** experimentální přehrávání řeči Edge-TTS prostřednictvím druhé instance mpv. Vyžaduje přístup k internetu a je oddělený od dávkového klonování hlasu.
+- **Hlas ElevenLabs:** volitelný, v Pokročilá nastavení > Hlasové klonování > **Živý hlas ElevenLabs**. Zadejte klíč API, ověřte ho, vyberte model, který mluví cílovým jazykem, a hlas. Přeložený text se odesílá do ElevenLabs (placeno po znacích); klíč zůstává v systémové klíčence. Když selže klíč nebo kvóta, pokračuje Edge-TTS.
 - **Vypnout původní zvuk:** k dispozici před zahájením i během překladu. Ztiší celý původní soundtrack včetně hudby a efektů, ale přeložený hlas ponechá slyšitelný. Neizoluje osobu, která mluví v původním zvuku. Vypnutím obnovíte zvukovou stopu; po skončení živé relace se resetuje. Tlačítko reproduktoru přehrávače je obecné ztlumení, nikoli toto nezávislé ovládání.
 - **Pozastavit a vyhledat:** ovládací prvky přehrávače videa jsou připojeny k živé relaci; end-to-end audio synchronizace stále vyžaduje testy akceptace specifické pro platformu.
-- **Aktuální limity:** Zpracování překrývání/zatmívání klipů, kalibrace časování zvuku a akceptace Windows zůstávají otevřené. Rostoucí živé vysílání zatím není podporováno; označení živého režimu neznamená podporu pro přijímání vysílání, jak roste.
+- **Současná omezení:** kalibrace časování zvuku a převzetí na Windows zůstávají otevřené. Stále probíhající živá vysílání podporována nejsou; označení živého režimu neznamená průběžné načítání probíhajícího vysílání.
 
 Pro uložené dabované video použijte místo náhledu v reálném čase **Stáhnout a přeložit** / **Zahájit překlad**.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Cesta k výstupnímu souboru | auto |
 | `--output-dir` | Složka pro přeložené soubory (jedno místo, Windows a Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Zpracujte více souborů | - |
+| `--voicebox` | Klonuje hlas přes spuštěný server Voicebox | - |
+| `--voicebox-url` | Adresa Voiceboxu | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Engine Voiceboxu (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### integrační testy s reálnými modely
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modely se stahují automaticky při prvním použití.
 
+> Nevíte, který model se hodí k vašemu počítači? Otevřete **Modely pro tento počítač** v nastavení modelu: doporučí jeden podle hardwaru a umí ho změřit.
+
 ## Samostatný modul CLI
 
 Modulární balíček odhaluje čtyři uživatelské nástroje, které lze vyvolat přímo bez spouštění celého kanálu:
@@ -425,3 +454,5 @@ Kód úložiště je MIT. Instalační programy stahují komponenty níže ze sv
 - **Zavaděč Vulkan** (Khronos, MIT a Apache-2.0), stažen do systému Windows pouze v případě, že chybí `vulkan-1.dll`.
 - **edge-tts** (LGPLv3), používaný kanálem dabingu.
 - **Modely MarianMT** (Helsinki-NLP), stažené z Hugging Face Hub při prvním použití pod vlastními licencemi (Apache-2.0 pro modely `opus-mt`, CC-BY-4.0 pro `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), volitelný, uživatel ho instaluje zvlášť; jeho enginy mají vlastní licence (Chatterbox MIT se zvukovým vodoznakem, váhy TADA pod licencí Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), volitelná online služba používaná s vlastním účtem a klíčem API uživatele podle jejích vlastních podmínek.

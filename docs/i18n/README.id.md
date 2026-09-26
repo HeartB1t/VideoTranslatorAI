@@ -28,7 +28,7 @@ Alat sulih suara video bertenaga AI yang secara otomatis mentranskripsikan, mene
 - 🌐 **UI dalam 26 bahasa** - antarmukanya sendiri menyesuaikan dengan bahasa Anda
 - 🎬 **Dukungan YouTube & URL** - tempel tautan YouTube apa pun dan terjemahkan secara langsung (didukung oleh yt-dlp)
 - ▶️ **Pemutar video terintegrasi** (libmpv/mpv) - kontrol transportasi berkode warna, daftar putar, audio asli A/B vs audio yang di-dubbing, pengalihan subtitle, snapshot, layar penuh, folder terbuka
-- ⏱️ **Terjemahan waktu nyata** - tonton file lokal atau tautan video sesuai permintaan yang telah diselesaikan dengan subtitle terjemahan dan penggeser penundaan gaya YouTube; mesin MarianMT / Google / DeepL / Ollama. Sulih suara suara eksperimental menggunakan Edge-TTS dan instance mpv kedua. Penanganan suara yang tumpang tindih dan penerimaan audio/Windows sebenarnya masih dalam proses; siaran langsung yang berkembang belum didukung.
+- ⏱️ **Terjemahan waktu nyata** - tonton file lokal atau tautan video sesuai permintaan dengan subtitle terjemahan dan penggeser jeda; mesin MarianMT / Google / DeepL / Ollama. Sulih suara memakai Edge-TTS atau, secara opsional, suara ElevenLabs lewat instans mpv kedua; kalimat yang bertumpuk akan menunggu, dipercepat, atau memudar. Siaran langsung yang sedang berjalan belum didukung.
 - 🎵 Pemisahan suara/musik melalui Demucs (menyimpan musik latar)
 - 🔇 **Mute audio asli**, tersedia sebelum dan selama terjemahan langsung, mengheningkan soundtrack video sekaligus menjaga suara terjemahan tetap terdengar. Matikan untuk mengembalikan audio asli; itu diatur ulang ketika sesi langsung berakhir.
 - 🧠 **MarianMT** - terjemahan neural offline yang sepenuhnya lokal (Helsinki-NLP, tanpa batas kecepatan permintaan, tanpa kunci API)
@@ -43,6 +43,9 @@ Alat sulih suara video bertenaga AI yang secara otomatis mentranskripsikan, mene
 - 📄 Ekspor subtitle `.srt` opsional
 - 🔁 **DeepL Free** mesin terjemahan (opsional - 500 ribu karakter/bulan, memerlukan kunci API gratis)
 - 🔧 **Instal otomatis** - paket Python dan ffmpeg yang hilang diinstal secara otomatis pada peluncuran pertama
+- 🧮 **Model untuk PC ini** - mendeteksi CPU, RAM, GPU, VRAM, dan ruang disk kosong, menyarankan model pengenalan suara, terjemahan, dan suara untuk kecepatan, keseimbangan, atau kualitas, mengunduh dan memeriksa model Whisper, lalu mengukurnya dengan video Anda sendiri
+- 🗣️ **Suara ElevenLabs** *(opsional, daring, berbayar)* - suara multibahasa yang alami untuk sulih suara langsung dengan kunci API Anda sendiri; jika kunci atau kuota gagal, Edge-TTS mengambil alih
+- 🧬 **Kloning suara dengan Voicebox** *(opsional)* - mengkloning suara pembicara lewat server lokal [Voicebox](https://github.com/jamiepine/voicebox) yang terpisah; jika tidak berjalan, video memakai Edge-TTS
 
 ## Bahasa yang didukung
 
@@ -95,6 +98,25 @@ Saat diaktifkan, aplikasi menerapkan Wav2Lip GAN untuk menyinkronkan gerakan mul
 - Berjalan pada CUDA (disarankan) atau CPU
 - Meningkatkan waktu pemrosesan secara signifikan
 - Berfungsi paling baik pada video dengan satu wajah yang terlihat jelas
+
+## Model untuk PC ini
+
+Pengaturan lanjutan > Model > **Model untuk PC ini** membuka jendela yang membaca perangkat keras (CPU, RAM, GPU dan VRAM yang bisa dipakai, ruang disk kosong) tanpa mengubah apa pun dan menyarankan satu model untuk setiap tahap: pengenalan suara untuk file dan siaran langsung, terjemahan, dan suara.
+
+- Pilih **Kecepatan**, **Seimbang**, atau **Kualitas**: setiap saran menyebutkan alasannya.
+- Semua opsi lain tetap bisa dipilih dan dinilai untuk PC ini: muat, pas-pasan, terlalu besar, disk tidak cukup, atau layanan daring.
+- **Unduh** mengambil model Whisper yang belum ada, dengan kemajuan dan Batal, lalu memeriksa setiap file dengan checksum Hugging Face; tidak ada yang diunduh sebelum Anda menekannya.
+- **Benchmark** mengukur model pilihan pada video yang dimuat (pemuatan, kalimat pertama, kecepatan); audio tidak pernah keluar dari PC.
+- **Terapkan** menetapkan model; **Pulihkan sebelumnya** mengembalikan pilihan sebelumnya. GPU NVIDIA dipakai melalui CUDA; GPU AMD (ROCm) dan Apple ditampilkan, tetapi di sana model suara berjalan di CPU.
+
+## Voicebox (kloning suara lewat server lokal)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) adalah program terpisah yang mengkloning suara. Pasang dan jalankan sendiri; aplikasi ini hanya memanggil API lokalnya dan tidak pernah memasangnya.
+
+- Pengaturan lanjutan > Kloning Suara > **Voicebox**: atur alamat (bawaan `http://127.0.0.1:17493`), mesin (bawaan `chatterbox`), lalu tekan **Periksa**.
+- Untuk setiap video, suara sementara dikloning dari sampel bersih pembicara (satu per pembicara dengan pemisahan pembicara) lalu dihapus.
+- Hanya alamat di PC ini yang diterima, karena API Voicebox tidak memakai autentikasi.
+- Jika Voicebox tidak merespons atau tidak mendukung bahasa tujuan, video disulihsuarakan dengan Edge-TTS.
 
 ## Persyaratan
 
@@ -289,10 +311,12 @@ Tonton file lokal atau tautan video sesuai permintaan yang telah diselesaikan de
 **Dari file yang dimuat:** memuat video ke pemutar (Input -> Tambah, lalu pilih), biarkan kolom URL kosong, pilih pengaturan langsung yang sama, dan klik **Terjemahkan secara real time**. URL mendapat prioritas jika kolomnya tidak kosong.
 
 - **Mesin:** MarianMT (offline, default), Google, DeepL, atau Ollama. Pengenalan ucapan (Whisper) berjalan secara lokal. Model offline memerlukan pengunduhan awal.
+- **Jeda:** pada file dalam mode tertunda, berapa detik terjemahan yang dikumpulkan sebelum gambar berlanjut setelah jeda (minimal 8 dtk dengan suara, 4 dtk hanya dengan subtitle). Jika gambar terus berhenti, cadangan bertambah 4 dtk sampai 30 dtk dan bilah memberi tahu.
 - **Dubbing suara:** pemutaran ucapan Edge-TTS eksperimental melalui instance mpv kedua. Ini memerlukan akses internet dan terpisah dari kloning suara batch.
+- **Suara ElevenLabs:** opsional, di Pengaturan lanjutan > Kloning Suara > **Suara langsung ElevenLabs**. Masukkan kunci API, periksa, pilih model yang berbicara dalam bahasa tujuan dan sebuah suara. Teks terjemahan dikirim ke ElevenLabs (berbayar per karakter); kunci tetap di keyring sistem. Jika kunci atau kuota gagal, Edge-TTS melanjutkan.
 - **Bungkam audio asli:** tersedia sebelum memulai dan selama penerjemahan. Ini membungkam seluruh soundtrack asli, termasuk musik dan efek, namun membiarkan suara terjemahan tetap terdengar. Itu tidak mengisolasi orang yang berbicara dalam audio asli. Matikan untuk memulihkan soundtrack; itu diatur ulang ketika sesi langsung berakhir. Tombol speaker pemutar adalah tombol mute umum, bukan kontrol independen ini.
 - **Jeda dan cari:** kontrol pemutar video terhubung ke sesi langsung; sinkronisasi audio ujung ke ujung masih memerlukan uji penerimaan khusus platform.
-- **Batas saat ini:** penanganan klip yang tumpang tindih/pudar, kalibrasi pengaturan waktu audio, dan penerimaan Windows tetap terbuka. Siaran langsung yang terus berkembang belum didukung; label mode langsung tidak menyiratkan dukungan untuk menyerap siaran seiring pertumbuhannya.
+- **Batasan saat ini:** kalibrasi waktu audio dan uji penerimaan di Windows masih terbuka. Siaran langsung yang masih berlangsung tidak didukung; label mode langsung tidak berarti siaran yang sedang berjalan dapat diterima terus-menerus.
 
 Untuk video sulih suara yang disimpan, gunakan **Unduh & Terjemahkan** / **Mulai Terjemahan** alih-alih pratinjau waktu nyata.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Jalur file keluaran | auto |
 | `--output-dir` | Folder untuk file yang diterjemahkan (satu tempat, Windows dan Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Memproses banyak file | - |
+| `--voicebox` | Mengkloning suara lewat server Voicebox yang berjalan | - |
+| `--voicebox-url` | Alamat Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Mesin Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### tes integrasi dengan model nyata
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Model diunduh secara otomatis saat pertama kali digunakan.
 
+> Tidak yakin model mana yang cocok untuk PC Anda? Buka **Model untuk PC ini** di pengaturan model: jendela itu menyarankan satu model sesuai perangkat keras Anda dan bisa mengukurnya.
+
 ## CLI modul mandiri
 
 Paket modular memperlihatkan empat alat yang dapat diakses oleh pengguna yang dapat dipanggil secara langsung tanpa meluncurkan pipeline penuh:
@@ -425,3 +454,5 @@ Kode repositori adalah MIT. Pemasang mengunduh komponen di bawah ini dari sumber
 - **Vulkan loader** (Khronos, MIT, dan Apache-2.0), diunduh di Windows hanya jika `vulkan-1.dll` tidak ada.
 - **edge-tts** (LGPLv3), digunakan oleh pipeline sulih suara suara.
 - **Model MarianMT** (Helsinki-NLP), diunduh dari Hugging Face Hub saat pertama kali digunakan di bawah lisensi mereka sendiri (Apache-2.0 untuk model `opus-mt`, CC-BY-4.0 untuk `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opsional, dipasang terpisah oleh pengguna; mesinnya punya lisensi sendiri (Chatterbox MIT dengan tanda air audio, bobot TADA di bawah Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), layanan daring opsional yang dipakai dengan akun dan kunci API milik pengguna sendiri, sesuai ketentuannya sendiri.

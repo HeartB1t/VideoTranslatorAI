@@ -28,7 +28,7 @@ Công cụ lồng tiếng video được hỗ trợ bởi AI tự động phiên
 - 🌐 **Giao diện người dùng bằng 26 ngôn ngữ** - giao diện tự điều chỉnh theo ngôn ngữ của bạn
 - 🎬 **Hỗ trợ YouTube và URL** - dán bất kỳ liên kết YouTube nào và dịch trực tiếp (được cung cấp bởi yt-dlp)
 - ►️ **Trình phát video tích hợp** (libmpv/mpv) - điều khiển truyền tải được mã hóa màu, danh sách phát, âm thanh gốc A/B và âm thanh lồng tiếng, chuyển đổi phụ đề, ảnh chụp nhanh, toàn màn hình, mở thư mục
-- ⏱️ **Dịch thời gian thực** - xem tệp cục bộ hoặc liên kết video theo yêu cầu đã được giải quyết với phụ đề đã dịch và thanh trượt độ trễ kiểu YouTube; động cơ MarianMT / Google / DeepL / Ollama. Lồng tiếng thử nghiệm sử dụng Edge-TTS và phiên bản mpv thứ hai. Việc xử lý chồng chéo giọng nói và chấp nhận âm thanh thực/Windows vẫn đang được tiến hành; chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ.
+- ⏱️ **Dịch thời gian thực** - xem tệp cục bộ hoặc liên kết video theo yêu cầu với phụ đề đã dịch và thanh trượt độ trễ; bộ máy MarianMT / Google / DeepL / Ollama. Lồng tiếng dùng Edge-TTS hoặc, tùy chọn, giọng ElevenLabs qua một phiên mpv thứ hai; các câu chồng lên nhau sẽ chờ, tăng tốc hoặc nhỏ dần. Chưa hỗ trợ các buổi phát trực tiếp đang diễn ra.
 - 🎵 Tách giọng/nhạc qua Demucs (giữ nhạc nền)
 - 🔇 **Tắt tiếng âm thanh gốc**, khả dụng trước và trong khi dịch trực tiếp, tắt tiếng nhạc nền của video trong khi vẫn nghe được giọng đã dịch. Tắt nó đi để khôi phục âm thanh gốc; nó đặt lại khi phiên trực tiếp kết thúc.
 - 🧠 **MarianMT** - bản dịch thần kinh ngoại tuyến, cục bộ hoàn toàn (Helsinki-NLP, không giới hạn tốc độ yêu cầu, không có khóa API)
@@ -43,6 +43,9 @@ Công cụ lồng tiếng video được hỗ trợ bởi AI tự động phiên
 - 📄 Xuất phụ đề `.srt` tùy chọn
 - 🔁 **DeepL Free** công cụ dịch thuật (tùy chọn - 500k ký tự/tháng, yêu cầu khóa API miễn phí)
 - 🔧 **Tự động cài đặt** - các gói Python và ffmpeg bị thiếu sẽ được cài đặt tự động trong lần khởi chạy đầu tiên
+- 🧮 **Mô hình cho máy này** - nhận diện CPU, RAM, GPU, VRAM và dung lượng đĩa trống, gợi ý mô hình nhận dạng giọng nói, dịch và giọng theo tốc độ, cân bằng hoặc chất lượng, tải và kiểm tra các mô hình Whisper rồi đo chúng trên chính video của bạn
+- 🗣️ **Giọng ElevenLabs** *(tùy chọn, trực tuyến, trả phí)* - giọng đa ngôn ngữ tự nhiên cho lồng tiếng trực tiếp bằng khóa API của riêng bạn; nếu khóa hoặc hạn mức gặp lỗi, Edge-TTS sẽ tiếp quản
+- 🧬 **Nhân bản giọng với Voicebox** *(tùy chọn)* - nhân bản giọng người nói qua một máy chủ [Voicebox](https://github.com/jamiepine/voicebox) cục bộ riêng; nếu nó không chạy, video dùng Edge-TTS
 
 ## Ngôn ngữ được hỗ trợ
 
@@ -95,6 +98,25 @@ Khi được bật, ứng dụng sẽ áp dụng Wav2Lip GAN để đồng bộ 
 - Chạy trên CUDA (được khuyến nghị) hoặc CPU
 - Tăng đáng kể thời gian xử lý
 - Hoạt động hiệu quả nhất trên những video có một khuôn mặt duy nhất, rõ ràng
+
+## Mô hình cho máy này
+
+Cài đặt nâng cao > Mô hình > **Mô hình cho máy này** mở một cửa sổ đọc phần cứng (CPU, RAM, GPU và VRAM dùng được, dung lượng đĩa trống) mà không thay đổi gì và gợi ý một mô hình cho mỗi bước: nhận dạng giọng nói cho tệp và trực tiếp, dịch và giọng.
+
+- Chọn **Tốc độ**, **Cân bằng** hoặc **Chất lượng**: mỗi gợi ý đều nêu lý do.
+- Mọi tùy chọn khác vẫn chọn được và được đánh giá cho máy này: vừa, sát giới hạn, quá lớn, thiếu dung lượng hoặc dịch vụ trực tuyến.
+- **Tải xuống** lấy mô hình Whisper còn thiếu, có tiến trình và nút Hủy, rồi kiểm tra từng tệp bằng mã kiểm tra của Hugging Face; không có gì được tải trước khi bạn nhấn.
+- **Đo hiệu năng** đo mô hình đã chọn trên video đang mở (tải, câu đầu, tốc độ); âm thanh không bao giờ rời khỏi máy.
+- **Áp dụng** đặt các mô hình; **Khôi phục lựa chọn trước** đưa lựa chọn trước đó trở lại. GPU NVIDIA được dùng qua CUDA; GPU AMD (ROCm) và Apple được hiển thị nhưng ở đó các mô hình giọng nói chạy trên CPU.
+
+## Voicebox (nhân bản giọng qua máy chủ cục bộ)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) là một chương trình riêng để nhân bản giọng. Hãy tự cài và khởi động nó; ứng dụng này chỉ gọi API cục bộ của nó và không bao giờ cài đặt nó.
+
+- Cài đặt nâng cao > Nhân bản giọng nói > **Voicebox**: đặt địa chỉ (mặc định `http://127.0.0.1:17493`), bộ máy (mặc định `chatterbox`) rồi nhấn **Kiểm tra**.
+- Với mỗi video, một giọng tạm thời được nhân bản từ mẫu sạch của người nói (mỗi người nói một giọng khi phân biệt người nói) và bị xóa sau đó.
+- Chỉ chấp nhận địa chỉ trên máy này, vì API của Voicebox không có xác thực.
+- Nếu Voicebox không phản hồi hoặc không hỗ trợ ngôn ngữ đích, video được lồng tiếng bằng Edge-TTS.
 
 ## Yêu cầu
 
@@ -289,10 +311,12 @@ Xem tệp cục bộ hoặc liên kết video theo yêu cầu đã được gi�
 **Từ tệp đã tải:** tải video trong trình phát (Đầu vào -> Thêm, sau đó chọn video đó), để trống trường URL, chọn cài đặt trực tiếp tương tự và nhấp vào **Dịch trong thời gian thực**. URL được ưu tiên khi trường không trống.
 
 - **Công cụ:** MarianMT (ngoại tuyến, mặc định), Google, DeepL hoặc Ollama. Nhận dạng giọng nói (Whisper) chạy cục bộ. Các mô hình ngoại tuyến cần tải xuống lần đầu.
+- **Độ trễ:** với tệp ở chế độ trễ, số giây bản dịch được tích lại trước khi hình ảnh chạy tiếp sau khi dừng (ít nhất 8 giây khi có giọng, 4 giây khi chỉ có phụ đề). Nếu hình ảnh cứ dừng lại, phần đệm tăng thêm 4 giây cho tới 30 giây và thanh sẽ thông báo.
 - **Lồng tiếng:** thử nghiệm phát lại giọng nói Edge-TTS thông qua phiên bản mpv thứ hai. Nó yêu cầu truy cập internet và tách biệt với việc nhân bản giọng nói hàng loạt.
+- **Giọng ElevenLabs:** tùy chọn, trong Cài đặt nâng cao > Nhân bản giọng nói > **Giọng trực tiếp ElevenLabs**. Nhập khóa API, kiểm tra, chọn một mô hình nói được ngôn ngữ đích và một giọng. Văn bản đã dịch được gửi tới ElevenLabs (tính phí theo ký tự); khóa được giữ trong chùm khóa của hệ thống. Nếu khóa hoặc hạn mức gặp lỗi, Edge-TTS sẽ tiếp tục.
 - **Tắt âm thanh gốc:** khả dụng cả trước khi bắt đầu và trong khi dịch. Nó làm im lặng toàn bộ nhạc nền gốc, bao gồm cả nhạc và hiệu ứng, nhưng vẫn để lại giọng nói được dịch. Nó không cô lập người nói trong âm thanh gốc. Tắt nó đi để khôi phục nhạc nền; nó đặt lại khi phiên trực tiếp kết thúc. Nút loa của máy nghe nhạc là nút tắt tiếng chung chứ không phải nút điều khiển độc lập này.
 - **Tạm dừng và tìm kiếm:** các nút điều khiển trình phát video được kết nối với phiên trực tiếp; Đồng bộ hóa âm thanh từ đầu đến cuối vẫn cần các thử nghiệm chấp nhận dành riêng cho nền tảng.
-- **Giới hạn hiện tại:** xử lý chồng chéo/làm mờ clip, hiệu chỉnh thời gian âm thanh và chấp nhận Windows vẫn mở. Các chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ; nhãn chế độ trực tiếp không ngụ ý hỗ trợ việc nhập chương trình phát sóng khi nó phát triển.
+- **Giới hạn hiện tại:** việc hiệu chỉnh thời gian âm thanh và kiểm thử chấp nhận trên Windows vẫn còn dang dở. Chưa hỗ trợ các buổi phát trực tiếp vẫn đang diễn ra; tên chế độ trực tiếp không có nghĩa là có thể nhận liên tục một buổi phát đang diễn ra.
 
 Đối với video lồng tiếng đã lưu, hãy sử dụng **Tải xuống & Dịch** / **Bắt đầu dịch** thay vì xem trước trong thời gian thực.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Đường dẫn tập tin đầu ra | auto |
 | `--output-dir` | Thư mục chứa các tệp đã dịch (một nơi, Windows và Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Xử lý nhiều tập tin | - |
+| `--voicebox` | Nhân bản giọng qua máy chủ Voicebox đang chạy | - |
+| `--voicebox-url` | Địa chỉ Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Bộ máy Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### kiểm thử tích hợp với mô hình thực
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Các mô hình được tải xuống tự động trong lần sử dụng đầu tiên.
 
+> Chưa biết mô hình nào hợp với máy của bạn? Mở **Mô hình cho máy này** trong phần cài đặt mô hình: nó gợi ý một mô hình theo phần cứng và có thể đo mô hình đó.
+
 ## CLI mô-đun độc lập
 
 Gói mô-đun hiển thị bốn công cụ hướng tới người dùng có thể được gọi trực tiếp mà không cần khởi chạy toàn bộ quy trình:
@@ -425,3 +454,5 @@ Mã kho lưu trữ là MIT. Trình cài đặt tải xuống các thành phần 
 - **Trình tải Vulkan** (Khronos, MIT và Apache-2.0), chỉ được tải xuống trên Windows khi thiếu `vulkan-1.dll`.
 - **edge-tts** (LGPLv3), được sử dụng bởi quy trình lồng tiếng.
 - **Mẫu MarianMT** (Helsinki-NLP), được tải xuống từ Hugging Face Hub trong lần sử dụng đầu tiên theo giấy phép của riêng họ (Apache-2.0 dành cho mẫu `opus-mt`, CC-BY-4.0 dành cho `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), tùy chọn, do người dùng cài riêng; các bộ máy của nó có giấy phép riêng (Chatterbox MIT có dấu nước âm thanh, trọng số TADA theo Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), dịch vụ trực tuyến tùy chọn, dùng với tài khoản và khóa API của chính người dùng theo điều khoản riêng của dịch vụ.

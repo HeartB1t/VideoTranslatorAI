@@ -28,7 +28,7 @@ Yerel işleme seçenekleriyle ve varsayılan olarak hiçbir API anahtarı gerekt
 - 🌐 **26 dilde kullanıcı arayüzü** - arayüzün kendisi dilinize uyum sağlar
 - 🎬 **YouTube ve URL desteği** - herhangi bir YouTube bağlantısını yapıştırın ve doğrudan çevirin (yt-dlp tarafından desteklenmektedir)
 - ▶️ **Entegre video oynatıcı** (libmpv/mpv) - renk kodlu aktarım kontrolleri, çalma listesi, A/B orijinal ve dublajlı ses, altyazı geçişi, anlık görüntü, tam ekran, klasörü açma
-- ⏱️ **Gerçek zamanlı çeviri** - yerel bir dosyayı veya çevrilmiş altyazılı ve YouTube tarzı gecikme kaydırıcılı çözümlenmiş isteğe bağlı video bağlantısını izleyin; motorlar MarianMT / Google / DeepL / Ollama. Deneysel ses dublajı Edge-TTS'yi ve ikinci bir mpv örneğini kullanır. Ses çakışması yönetimi ve gerçek ses/Windows kabulü devam ediyor; Büyüyen canlı yayınlar henüz desteklenmiyor.
+- ⏱️ **Gerçek zamanlı çeviri** - yerel bir dosyayı veya isteğe bağlı bir video bağlantısını çevrilmiş altyazılar ve bir gecikme kaydırıcısıyla izleyin; motorlar MarianMT / Google / DeepL / Ollama. Dublaj Edge-TTS'i ya da isteğe bağlı olarak ikinci bir mpv örneği üzerinden ElevenLabs seslerini kullanır; üst üste binen cümleler bekler, hızlanır veya kısılarak biter. Süren canlı yayınlar henüz desteklenmiyor.
 - 🎵Demucs ile ses/müzik ayrımı (arka plan müziğini korur)
 - 🔇 Canlı çeviri öncesinde ve sırasında kullanılabilen **Orijinal sesi kapat**, çevrilen sesin duyulabilir kalmasını sağlarken videonun müziğini susturur. Orijinal sesi geri yüklemek için bunu kapatın; canlı oturum sona erdiğinde sıfırlanır.
 - 🧠 **MarianMT** - tamamen yerel, çevrimdışı sinirsel çeviri (Helsinki-NLP, istek hızı sınırı yok, API anahtarı yok)
@@ -43,6 +43,9 @@ Yerel işleme seçenekleriyle ve varsayılan olarak hiçbir API anahtarı gerekt
 - 📄 İsteğe bağlı `.srt` altyazı dışa aktarımı
 - 🔁 **DeepL Free** çeviri motoru (isteğe bağlı - 500 bin karakter/ay, ücretsiz API anahtarı gerektirir)
 - 🔧 **Otomatik kurulum** - eksik Python paketleri ve ffmpeg, ilk başlatmada otomatik olarak yüklenir
+- 🧮 **Bu bilgisayar için modeller** - işlemciyi, RAM'i, GPU'yu, VRAM'i ve boş diski algılar, hız, denge veya kalite için konuşma tanıma, çeviri ve ses modelleri önerir, Whisper modellerini indirip doğrular ve kendi videonuzda ölçer
+- 🗣️ **ElevenLabs sesleri** *(isteğe bağlı, çevrimiçi, ücretli)* - kendi API anahtarınızla canlı dublaj için doğal çok dilli sesler; anahtar veya kota yetmezse Edge-TTS devam eder
+- 🧬 **Voicebox ile ses klonlama** *(isteğe bağlı)* - konuşanın sesini ayrı bir yerel [Voicebox](https://github.com/jamiepine/voicebox) sunucusuyla klonlar; çalışmıyorsa video Edge-TTS kullanır
 
 ## Desteklenen diller
 
@@ -95,6 +98,25 @@ Etkinleştirildiğinde uygulama, deneğin ağız hareketlerini dublajlı sesle s
 - CUDA (önerilen) veya CPU üzerinde çalışır
 - İşlem süresini önemli ölçüde artırır
 - Tek ve açıkça görülebilen bir yüze sahip videolarda en iyi sonucu verir
+
+## Bu bilgisayar için modeller
+
+Gelişmiş ayarlar > Model > **Bu bilgisayar için modeller**, hiçbir şeyi değiştirmeden donanımı (işlemci, RAM, GPU ve kullanılabilir VRAM, boş disk) okuyan ve her aşama için bir model öneren bir pencere açar: dosyalar ve canlı için konuşma tanıma, çeviri ve ses.
+
+- **Hız**, **Dengeli** veya **Kalite** seçin: her öneri gerekçelerini listeler.
+- Diğer tüm seçenekler seçilebilir kalır ve bu bilgisayar için değerlendirilir: sığar, sınırda, çok büyük, disk yetersiz veya çevrimiçi hizmet.
+- **İndir** eksik bir Whisper modelini ilerleme ve İptal ile getirir ve her dosyayı Hugging Face sağlama toplamlarıyla doğrular; düğmeye basmadan hiçbir şey indirilmez.
+- **Performans testi** seçilen modeli yüklü videoda ölçer (yükleme, ilk cümle, hız); ses bilgisayardan asla çıkmaz.
+- **Uygula** modelleri ayarlar; **Öncekini geri yükle** önceki seçimi geri getirir. NVIDIA GPU'lar CUDA ile kullanılır; AMD (ROCm) ve Apple GPU'lar gösterilir, ancak orada konuşma modelleri işlemcide çalışır.
+
+## Voicebox (yerel sunucuyla ses klonlama)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT), sesleri klonlayan ayrı bir programdır. Onu kendiniz kurun ve başlatın; bu uygulama yalnızca yerel API'sini çağırır ve onu asla kurmaz.
+
+- Gelişmiş ayarlar > Ses Klonlama > **Voicebox**: adresi (varsayılan `http://127.0.0.1:17493`), motoru (varsayılan `chatterbox`) ayarlayın ve **Doğrula** düğmesine basın.
+- Her video için konuşanın temiz bir örneğinden geçici bir ses klonlanır (konuşmacı ayrımıyla her konuşmacı için bir tane) ve ardından silinir.
+- Voicebox API'sinde kimlik doğrulama olmadığı için yalnızca bu bilgisayardaki bir adres kabul edilir.
+- Voicebox yanıt vermezse veya hedef dili desteklemezse video Edge-TTS ile dublajlanır.
 
 ## Gereksinimler
 
@@ -289,10 +311,12 @@ Yerel bir dosyayı veya çevrilmiş altyazılar ve isteğe bağlı sözlü çevi
 **Yüklenen bir dosyadan:** oynatıcıya bir video yükleyin (Giriş -> Ekle, ardından seçin), URL alanını boş bırakın, aynı canlı ayarları seçin ve **Gerçek zamanlı olarak çevir**'i tıklayın. Alan boş olmadığında URL önceliklidir.
 
 - **Motor:** MarianMT (çevrimdışı, varsayılan), Google, DeepL veya Ollama. Konuşma tanıma (Whisper) yerel olarak çalışır. Çevrimdışı modellerin ilk indirilmesi gerekir.
+- **Gecikme:** gecikmeli modda bir dosyada, görüntü bir duraklamadan sonra devam etmeden önce kaç saniyelik çevirinin biriktirildiği (sesle en az 8 sn, yalnızca altyazıyla 4 sn). Görüntü durmaya devam ederse tampon 4 sn artarak 30 sn'ye kadar büyür ve çubuk bunu bildirir.
 - **Ses dublajı:** ikinci bir mpv örneği aracılığıyla deneysel Edge-TTS konuşma oynatma. İnternet erişimi gerektirir ve toplu ses klonlamadan farklıdır.
+- **ElevenLabs sesi:** isteğe bağlı, Gelişmiş ayarlar > Ses Klonlama > **ElevenLabs canlı ses** altında. API anahtarınızı girin, doğrulayın, hedef dili konuşan bir model ve bir ses seçin. Çevrilen metin ElevenLabs'e gönderilir (karakter başına ücretli); anahtar sistem anahtarlığında kalır. Anahtar veya kota yetmezse Edge-TTS devam eder.
 - **Orijinal sesi kapat:** hem başlamadan önce hem de çeviri sırasında kullanılabilir. Müzik ve efektler de dahil olmak üzere orijinal film müziğinin tamamını susturur ancak çevrilen sesi duyulabilir halde bırakır. Orijinal seste konuşan kişiyi izole etmez. Film müziğini geri yüklemek için onu kapatın; canlı oturum sona erdiğinde sıfırlanır. Müzikçaların hoparlör düğmesi, bu bağımsız kontrol değil, genel sessizdir.
 - **Duraklat ve ara:** video oynatıcı kontrolleri canlı oturuma bağlıdır; uçtan uca ses senkronizasyonu hâlâ platforma özel kabul testlerine ihtiyaç duyuyor.
-- **Mevcut sınırlar:** klip örtüşme/solma işlemleri, ses zamanlaması kalibrasyonu ve Windows kabulü açık kalır. Büyüyen canlı yayınlar henüz desteklenmiyor; canlı mod etiketi, bir yayın büyüdükçe alınmasının desteklendiği anlamına gelmez.
+- **Mevcut sınırlar:** ses zamanlamasının kalibrasyonu ve Windows üzerindeki kabul testi hâlâ açık. Hâlâ süren canlı yayınlar desteklenmiyor; canlı mod etiketi, devam eden bir yayının sürekli alınması anlamına gelmez.
 
 Kaydedilmiş dublajlı bir video için gerçek zamanlı önizleme yerine **İndir ve Çevir** / **Çeviriyi Başlat** seçeneğini kullanın.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Çıkış dosyası yolu | auto |
 | `--output-dir` | Çevrilen dosyalar için klasör (tek yer, Windows ve Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Birden fazla dosyayı işle | - |
+| `--voicebox` | Sesi çalışan bir Voicebox sunucusuyla klonlar | - |
+| `--voicebox-url` | Voicebox adresi | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox motoru (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### gerçek modellerle entegrasyon testleri
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modeller ilk kullanımda otomatik olarak indirilir.
 
+> Bilgisayarınıza hangi modelin uyduğunu bilmiyor musunuz? Model ayarlarında **Bu bilgisayar için modeller** penceresini açın: donanımınıza göre bir model önerir ve onu ölçebilir.
+
 ## Bağımsız modül CLI'leri
 
 Modüler paket, tüm işlem hattını başlatmadan doğrudan çağrılabilen, kullanıcıya yönelik dört aracı kullanıma sunar:
@@ -425,3 +454,5 @@ Depo kodu MIT'dir. Kurulumcular aşağıdaki bileşenleri kurulum sırasında ke
 - **Vulkan yükleyici** (Khronos, MIT ve Apache-2.0), yalnızca `vulkan-1.dll` eksik olduğunda Windows'a indirilir.
 - **edge-tts** (LGPLv3), ses dublaj hattı tarafından kullanılır.
 - **MarianMT modelleri** (Helsinki-NLP), ilk kullanımda kendi lisansları altında Hugging Face Hub'dan indirilmiştir (`opus-mt` modelleri için Apache-2.0, `opus-mt-tc-big` için CC-BY-4.0).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), isteğe bağlı, kullanıcı tarafından ayrıca kurulur; motorlarının kendi lisansları vardır (ses filigranlı Chatterbox MIT, Llama 3.2 Community License kapsamındaki TADA ağırlıkları).
+- **ElevenLabs** (https://elevenlabs.io), kullanıcının kendi hesabı ve API anahtarıyla, hizmetin kendi koşullarına göre kullanılan isteğe bağlı çevrimiçi hizmet.

@@ -28,7 +28,7 @@ Instrument de dublare a vocii video bazat pe inteligență artificială, care tr
 - 🌐 **UI în 26 de limbi** - interfața în sine se adaptează limbii dvs
 - 🎬 **Suport YouTube și URL** - inserați orice link YouTube și traduceți direct (produs de yt-dlp)
 - ▶️ **Player video integrat** (libmpv/mpv) - comenzi de transport cu coduri de culoare, playlist, audio original A/B vs dublat, comutare subtitrări, instantaneu, ecran complet, dosar deschis
-- ⏱️ **Traducere în timp real** - urmăriți un fișier local sau un link video la cerere rezolvat cu subtitrări traduse și un glisor de întârziere în stil YouTube; motoare MarianMT / Google / DeepL / Ollama. Dublarea vocală experimentală utilizează Edge-TTS și oa doua instanță mpv. Gestionarea suprapunerii vocale și acceptarea audio reală/Windows rămân în desfășurare; transmisiunile live în creștere nu sunt încă acceptate.
+- ⏱️ **Traducere în timp real** - urmăriți un fișier local sau un link video la cerere cu subtitrări traduse și un cursor pentru întârziere; motoare MarianMT / Google / DeepL / Ollama. Dublajul folosește Edge-TTS sau, opțional, voci ElevenLabs printr-o a doua instanță mpv; frazele suprapuse așteaptă, accelerează sau se estompează. Transmisiunile live în desfășurare nu sunt încă acceptate.
 - 🎵 Separare voce/muzică prin Demucs (păstrează muzica de fundal)
 - 🔇 **Dezactivați sunetul original**, disponibil înainte și în timpul traducerii live, reduce la tăcere coloana sonoră a videoclipului, păstrând vocea tradusă audibilă. Dezactivați-l pentru a restabili sunetul original; se resetează când se termină sesiunea live.
 - 🧠 **MarianMT** - traducere neuronală complet locală, offline (Helsinki-NLP, fără limite de rată de solicitare, fără cheie API)
@@ -43,6 +43,9 @@ Instrument de dublare a vocii video bazat pe inteligență artificială, care tr
 - 📄 Export opțional pentru subtitrare `.srt`
 - 🔁 **DeepL Free** motor de traducere (opțional - 500.000 de caractere/lună, necesită cheia API gratuită)
 - 🔧 **Auto-instalare** - pachetele Python și ffmpeg lipsă sunt instalate automat la prima lansare
+- 🧮 **Modele pentru acest PC** - detectează procesorul, RAM-ul, placa video, VRAM-ul și spațiul liber, recomandă modele de recunoaștere vocală, traducere și voce pentru viteză, echilibru sau calitate, descarcă și verifică modelele Whisper și le măsoară pe propriul videoclip
+- 🗣️ **Voci ElevenLabs** *(opțional, online, cu plată)* - voci multilingve naturale pentru dublajul live cu propria cheie API; dacă cheia sau cota eșuează, preia Edge-TTS
+- 🧬 **Clonarea vocii cu Voicebox** *(opțional)* - clonează vocea vorbitorului printr-un server local [Voicebox](https://github.com/jamiepine/voicebox) separat; dacă nu rulează, videoclipul folosește Edge-TTS
 
 ## Limbi acceptate
 
@@ -95,6 +98,25 @@ Când este activată, aplicația aplică Wav2Lip GAN pentru a sincroniza mișcă
 - Rulează pe CUDA (recomandat) sau CPU
 - Mărește semnificativ timpul de procesare
 - Funcționează cel mai bine pe videoclipuri cu o singură față, clar vizibilă
+
+## Modele pentru acest PC
+
+Setări avansate > Model > **Modele pentru acest PC** deschide o fereastră care citește componentele (procesor, RAM, placă video și VRAM utilizabil, spațiu liber) fără să schimbe nimic și recomandă câte un model pentru fiecare etapă: recunoaștere vocală pentru fișiere și live, traducere și voce.
+
+- Alegeți **Viteză**, **Echilibrat** sau **Calitate**: fiecare recomandare își arată motivele.
+- Toate celelalte opțiuni rămân selectabile și primesc o evaluare pentru acest PC: încape, la limită, prea mare, spațiu insuficient sau serviciu online.
+- **Descarcă** aduce un model Whisper lipsă, cu progres și Anulează, și verifică fiecare fișier cu sumele de control de pe Hugging Face; nimic nu se descarcă înainte de apăsare.
+- **Test de performanță** măsoară modelul ales pe videoclipul încărcat (încărcare, prima frază, viteză); sunetul nu părăsește niciodată PC-ul.
+- **Aplică** setează modelele; **Restabilește anterioarele** readuce alegerea de dinainte. Plăcile NVIDIA sunt folosite prin CUDA; plăcile AMD (ROCm) și Apple sunt afișate, dar acolo modelele vocale rulează pe procesor.
+
+## Voicebox (clonarea vocii printr-un server local)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) este un program separat care clonează voci. Instalați-l și porniți-l separat; această aplicație doar îi apelează API-ul local și nu îl instalează niciodată.
+
+- Setări avansate > Clonarea vocii > **Voicebox**: setați adresa (implicit `http://127.0.0.1:17493`), motorul (implicit `chatterbox`) și apăsați **Verifică**.
+- Pentru fiecare videoclip se clonează o voce temporară dintr-o mostră curată a vorbitorului (câte una pentru fiecare vorbitor cu identificarea vorbitorilor), apoi este ștearsă.
+- Este acceptată doar o adresă de pe acest PC, deoarece API-ul Voicebox nu are autentificare.
+- Dacă Voicebox nu răspunde sau nu acceptă limba țintă, videoclipul este dublat cu Edge-TTS.
 
 ## Cerințe
 
@@ -289,10 +311,12 @@ Vizionați un fișier local sau un link video la cerere rezolvat cu subtitrări 
 **Din un fișier încărcat:** încărcați un videoclip în player (Intrare -> Adăugați, apoi selectați-l), lăsați câmpul URL gol, alegeți aceleași setări live și faceți clic pe **Traduceți în timp real**. O adresă URL are prioritate atunci când câmpul nu este gol.
 
 - **Motor:** MarianMT (offline, implicit), Google, DeepL sau Ollama. Recunoașterea vorbirii (Whisper) rulează local. Modelele offline au nevoie de o descărcare inițială.
+- **Întârziere:** pentru un fișier în modul întârziat, câte secunde de traducere se adună înainte ca imaginea să continue după o pauză (cel puțin 8 s cu voce, 4 s doar cu subtitrări). Dacă imaginea se tot oprește, rezerva crește cu 4 s până la 30 s, iar bara o semnalează.
 - **Dublare vocală:** redare experimentală a vorbirii Edge-TTS printr-o a doua instanță mpv. Necesită acces la internet și este separat de clonarea vocală în lot.
+- **Voce ElevenLabs:** opțională, în Setări avansate > Clonarea vocii > **Voce live ElevenLabs**. Introduceți cheia API, verificați-o, alegeți un model care vorbește limba țintă și o voce. Textul tradus este trimis la ElevenLabs (taxat pe caracter); cheia rămâne în portcheiul sistemului. Dacă cheia sau cota eșuează, continuă Edge-TTS.
 - **Dezactivați sunetul original:** disponibil atât înainte de începere, cât și în timpul traducerii. Opreste la tăcere întreaga coloană sonoră originală, inclusiv muzica și efectele, dar lasă vocea tradusă audibilă. Nu izolează persoana care vorbește în audio original. Dezactivați-l pentru a restabili coloana sonoră; se resetează când se termină sesiunea live. Butonul difuzorului jucătorului este sunetul general, nu acest control independent.
 - **Pauză și caută:** comenzile playerului video sunt conectate la sesiunea live; sincronizarea audio end-to-end necesită încă teste de acceptare specifice platformei.
-- **Limite curente:** gestionarea suprapunerii/decolorării clipurilor, calibrarea temporizării audio și acceptarea Windows rămân deschise. Transmisiunile live în creștere nu sunt încă acceptate; eticheta mod live nu implică suport pentru ingerarea unei emisiuni pe măsură ce crește.
+- **Limite actuale:** calibrarea sincronizării audio și validarea pe Windows sunt încă deschise. Transmisiunile live care încă sunt în desfășurare nu sunt acceptate; eticheta modului live nu înseamnă preluarea continuă a unei transmisiuni în curs.
 
 Pentru un videoclip dublat salvat, utilizați **Descărcați și traduceți** / **Începeți traducerea** în loc de previzualizarea în timp real.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Calea fișierului de ieșire | auto |
 | `--output-dir` | Dosar pentru fișierele traduse (un singur loc, Windows și Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Procesați mai multe fișiere | - |
+| `--voicebox` | Clonează vocea printr-un server Voicebox pornit | - |
+| `--voicebox-url` | Adresa Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Motorul Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### teste de integrare cu modele reale
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modelele sunt descărcate automat la prima utilizare.
 
+> Nu știți ce model se potrivește PC-ului dvs.? Deschideți **Modele pentru acest PC** în setările modelului: recomandă unul după componente și îl poate măsura.
+
 ## CLI pentru modul autonom
 
 Pachetul modular expune patru instrumente orientate spre utilizator care pot fi invocate direct fără a lansa întreaga conductă:
@@ -425,3 +454,5 @@ Codul depozitului este MIT. Instalatorii descarcă componentele de mai jos din p
 - **Încărcător Vulkan** (Khronos, MIT și Apache-2.0), descărcat pe Windows numai când `vulkan-1.dll` lipsește.
 - **edge-tts** (LGPLv3), utilizat de canalul de dublare vocală.
 - **Modele MarianMT** (Helsinki-NLP), descărcate de la Hugging Face Hub la prima utilizare sub propriile licențe (Apache-2.0 pentru modelele `opus-mt`, CC-BY-4.0 pentru `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opțional, instalat separat de utilizator; motoarele lui au licențe proprii (Chatterbox MIT cu filigran audio, ponderile TADA sub Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), serviciu online opțional folosit cu contul și cheia API proprii ale utilizatorului, în condițiile sale.

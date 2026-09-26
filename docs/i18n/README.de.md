@@ -28,7 +28,7 @@ KI-gestütztes Video-Sprachsynchronisierungstool, das Videos automatisch in 26 S
 - 🌐 **Benutzeroberfläche in 26 Sprachen** - die Benutzeroberfläche selbst passt sich Ihrer Sprache an
 - 🎬 **YouTube- und URL-Unterstützung** - Fügen Sie einen beliebigen YouTube-Link ein und übersetzen Sie ihn direkt (unterstützt von yt-dlp)
 - ▶️ **Integrierter Videoplayer** (libmpv/mpv) - farbcodierte Transportsteuerung, Wiedergabeliste, A/B-Original vs. synchronisiertes Audio, Untertitel umschalten, Schnappschuss, Vollbild, Ordner öffnen
-- ⏱️ **Übersetzung in Echtzeit** - Sehen Sie sich eine lokale Datei oder einen aufgelösten On-Demand-Videolink mit übersetzten Untertiteln und einem Verzögerungsregler im YouTube-Stil an; Motoren MarianMT / Google / DeepL / Ollama. Bei der experimentellen Sprachsynchronisierung werden Edge-TTS und eine zweite MPV-Instanz verwendet. Die Behandlung von Sprachüberlappungen und die Akzeptanz von echtem Audio/Windows sind noch in Arbeit. wachsende Live-Übertragungen werden noch nicht unterstützt.
+- ⏱️ **Echtzeitübersetzung** - eine lokale Datei oder einen On-Demand-Videolink mit übersetzten Untertiteln und einem Verzögerungsregler ansehen; Engines MarianMT / Google / DeepL / Ollama. Die Synchronisation nutzt Edge-TTS oder optional ElevenLabs-Stimmen über eine zweite mpv-Instanz; überlappende Sätze warten, werden schneller oder blenden aus. Laufende Livesendungen werden noch nicht unterstützt.
 - 🎵 Sprach-/Musiktrennung über Demucs (Hintergrundmusik bleibt erhalten)
 - 🔇 **Originalton stumm schalten**, verfügbar vor und während der Live-Übersetzung, schaltet den Ton des Videos stumm, während die übersetzte Stimme hörbar bleibt. Schalten Sie es aus, um den Originalton wiederherzustellen. Es wird zurückgesetzt, wenn die Live-Sitzung endet.
 - 🧠 **MarianMT** - vollständig lokale, offline neuronale Übersetzung (Helsinki-NLP, keine Begrenzung der Anfragerate, kein API-Schlüssel)
@@ -43,6 +43,9 @@ KI-gestütztes Video-Sprachsynchronisierungstool, das Videos automatisch in 26 S
 - 📄 Optionaler `.srt`-Untertitelexport
 - 🔁 **DeepL Free** Übersetzungs-Engine (optional - 500.000 Zeichen/Monat, erfordert kostenlosen API-Schlüssel)
 - 🔧 **Automatische Installation** - fehlende Python-Pakete und ffmpeg werden beim ersten Start automatisch installiert
+- 🧮 **Modelle für diesen PC** - erkennt CPU, RAM, GPU, VRAM und freien Speicher, empfiehlt Modelle für Spracherkennung, Übersetzung und Stimme nach Geschwindigkeit, Ausgewogenheit oder Qualität, lädt Whisper-Modelle herunter, prüft sie und misst sie mit Ihrem eigenen Video
+- 🗣️ **ElevenLabs-Stimmen** *(optional, online, kostenpflichtig)* - natürliche mehrsprachige Stimmen für die Live-Synchronisation mit Ihrem eigenen API-Schlüssel; schlagen Schlüssel oder Kontingent fehl, übernimmt Edge-TTS
+- 🧬 **Stimmklonen mit Voicebox** *(optional)* - klont die Stimme der sprechenden Person über einen separaten lokalen [Voicebox](https://github.com/jamiepine/voicebox)-Server; läuft er nicht, nutzt das Video Edge-TTS
 
 ## Unterstützte Sprachen
 
@@ -95,6 +98,25 @@ Wenn diese Option aktiviert ist, wendet die App Wav2Lip GAN an, um die Mundbeweg
 - Läuft auf CUDA (empfohlen) oder CPU
 - Erhöht die Bearbeitungszeit erheblich
 - Funktioniert am besten bei Videos mit einem einzelnen, deutlich sichtbaren Gesicht
+
+## Modelle für diesen PC
+
+Erweiterte Einstellungen > Modell > **Modelle für diesen PC** öffnet ein Fenster, das die Hardware liest (CPU, RAM, GPU und nutzbarer VRAM, freier Speicher), ohne etwas zu ändern, und für jede Stufe ein Modell empfiehlt: Spracherkennung für Dateien und für Live, Übersetzung und Stimme.
+
+- Wählen Sie **Geschwindigkeit**, **Ausgewogen** oder **Qualität**: jede Empfehlung nennt ihre Gründe.
+- Alle anderen Optionen bleiben wählbar und werden für diesen PC bewertet: passt, knapp, zu groß, zu wenig Speicher oder Onlinedienst.
+- **Herunterladen** holt ein fehlendes Whisper-Modell mit Fortschritt und Abbrechen und prüft jede Datei anhand der Hugging-Face-Prüfsummen; vor dem Klick wird nichts heruntergeladen.
+- **Benchmark** misst das gewählte Modell mit dem geladenen Video (Laden, erster Satz, Geschwindigkeit); das Audio verlässt den PC nie.
+- **Übernehmen** setzt die Modelle; **Vorherige wiederherstellen** holt die frühere Wahl zurück. NVIDIA-GPUs werden über CUDA genutzt; AMD- (ROCm) und Apple-GPUs werden angezeigt, doch dort laufen die Sprachmodelle auf der CPU.
+
+## Voicebox (Stimmklonen über einen lokalen Server)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) ist ein eigenes Programm, das Stimmen klont. Installieren und starten Sie es separat; diese App ruft nur seine lokale API auf und installiert es nie.
+
+- Erweiterte Einstellungen > Stimmklonen > **Voicebox**: Adresse (Standard `http://127.0.0.1:17493`) und Engine (Standard `chatterbox`) festlegen und **Prüfen** drücken.
+- Für jedes Video wird aus einer sauberen Probe der sprechenden Person eine vorübergehende Stimme geklont (eine pro Sprecher mit Sprechertrennung) und danach gelöscht.
+- Nur eine Adresse auf diesem PC wird akzeptiert, weil die Voicebox-API keine Authentifizierung hat.
+- Antwortet Voicebox nicht oder unterstützt die Zielsprache nicht, wird das Video mit Edge-TTS synchronisiert.
 
 ## Anforderungen
 
@@ -289,10 +311,12 @@ Sehen Sie sich eine lokale Datei oder einen aufgelösten On-Demand-Videolink mit
 **Aus einer geladenen Datei:** Laden Sie ein Video in den Player (Eingabe -> Hinzufügen, dann auswählen), lassen Sie das URL-Feld leer, wählen Sie dieselben Live-Einstellungen und klicken Sie auf **In Echtzeit übersetzen**. Eine URL hat Priorität, wenn das Feld nicht leer ist.
 
 - **Engine:** MarianMT (offline, Standard), Google, DeepL oder Ollama. Die Spracherkennung (Whisper) wird lokal ausgeführt. Offline-Modelle benötigen einen ersten Download.
+- **Verzögerung:** bei einer Datei im verzögerten Modus, wie viele Sekunden Übersetzung gepuffert werden, bevor das Bild nach einer Pause weiterläuft (mindestens 8 s mit Stimme, 4 s nur mit Untertiteln). Hält das Bild immer wieder an, wächst der Puffer um 4 s bis 30 s und die Leiste zeigt es an.
 - **Sprachsynchronisierung:** experimentelle Edge-TTS-Sprachwiedergabe über eine zweite MPV-Instanz. Es erfordert einen Internetzugang und ist vom Batch-Voice-Klonen getrennt.
+- **ElevenLabs-Stimme:** optional, unter Erweiterte Einstellungen > Stimmklonen > **ElevenLabs-Livestimme**. Geben Sie Ihren API-Schlüssel ein, prüfen Sie ihn, wählen Sie ein Modell, das die Zielsprache spricht, und eine Stimme. Der übersetzte Text wird an ElevenLabs gesendet (Abrechnung pro Zeichen); der Schlüssel bleibt im Schlüsselbund des Systems. Schlagen Schlüssel oder Kontingent fehl, macht Edge-TTS weiter.
 - **Originalton stummschalten:** verfügbar sowohl vor Beginn als auch während der Übersetzung. Dadurch wird der gesamte Originalsoundtrack einschließlich Musik und Effekten stummgeschaltet, die übersetzte Stimme bleibt jedoch hörbar. Die Person, die im Originalton spricht, wird dadurch nicht isoliert. Schalten Sie es aus, um den Soundtrack wiederherzustellen. Es wird zurückgesetzt, wenn die Live-Sitzung endet. Die Lautsprechertaste des Players dient der allgemeinen Stummschaltung, nicht dieser unabhängigen Steuerung.
 - **Pause und Suche:** Die Steuerelemente des Videoplayers sind mit der Live-Sitzung verbunden. Für die End-to-End-Audiosynchronisierung sind noch plattformspezifische Abnahmetests erforderlich.
-- **Aktuelle Grenzen:** Clip-Überlappungs-/Fade-Handhabung, Audio-Timing-Kalibrierung und Windows-Akzeptanz bleiben offen. Zunehmende Live-Übertragungen werden noch nicht unterstützt; Die Bezeichnung „Live-Modus“ impliziert keine Unterstützung für die Aufnahme einer Übertragung, wenn sie wächst.
+- **Aktuelle Grenzen:** die Kalibrierung des Audio-Timings und die Abnahme unter Windows stehen noch aus. Noch wachsende Livesendungen werden nicht unterstützt; die Bezeichnung des Live-Modus bedeutet nicht, dass eine laufende Sendung fortlaufend eingelesen wird.
 
 Für ein gespeichertes synchronisiertes Video verwenden Sie **Herunterladen & Übersetzen** / **Übersetzung starten** anstelle der Echtzeitvorschau.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Pfad der Ausgabedatei | auto |
 | `--output-dir` | Ordner für übersetzte Dateien (ein Ort, Windows und Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Mehrere Dateien verarbeiten | - |
+| `--voicebox` | Stimme über einen laufenden Voicebox-Server klonen | - |
+| `--voicebox-url` | Voicebox-Adresse | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox-Engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### Integrationstests mit realen Modellen
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modelle werden bei der ersten Verwendung automatisch heruntergeladen.
 
+> Unsicher, welches Modell zu Ihrem PC passt? Öffnen Sie **Modelle für diesen PC** in den Modelleinstellungen: es empfiehlt eines anhand Ihrer Hardware und kann es messen.
+
 ## Eigenständige Modul-CLIs
 
 Das modulare Paket stellt vier benutzerorientierte Tools bereit, die direkt aufgerufen werden können, ohne die gesamte Pipeline zu starten:
@@ -425,3 +454,5 @@ Der Repository-Code ist MIT. Die Installationsprogramme laden die folgenden Komp
 - **Vulkan-Loader** (Khronos, MIT und Apache-2.0), nur unter Windows heruntergeladen, wenn `vulkan-1.dll` fehlt.
 - **edge-tts** (LGPLv3), wird von der Sprachsynchronisierungspipeline verwendet.
 - **MarianMT-Modelle** (Helsinki-NLP), heruntergeladen vom Hugging Face Hub bei der ersten Verwendung unter ihren eigenen Lizenzen (Apache-2.0 für die `opus-mt`-Modelle, CC-BY-4.0 für `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optional, vom Benutzer separat installiert; seine Engines haben eigene Lizenzen (Chatterbox MIT mit Audio-Wasserzeichen, TADA-Gewichte unter der Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), optionaler Onlinedienst, genutzt mit dem eigenen Konto und API-Schlüssel des Benutzers, zu dessen eigenen Bedingungen.

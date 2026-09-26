@@ -28,7 +28,7 @@ Narzędzie do kopiowania głosu wideo oparte na sztucznej inteligencji, które a
 - 🌐 **UI w 26 językach** - sam interfejs dostosowuje się do Twojego języka
 - 🎬 **Obsługa YouTube i adresów URL** - wklej dowolny link do YouTube i tłumacz bezpośrednio (obsługiwane przez yt-dlp)
 - ▶️ **Zintegrowany odtwarzacz wideo** (libmpv/mpv) - oznaczone kolorami elementy sterujące transportem, lista odtwarzania, dźwięk oryginalny A/B a dźwięk z dubbingiem, przełączanie napisów, migawka, pełny ekran, otwarty folder
-- ⏱️ **Tłumaczenie w czasie rzeczywistym** - obejrzyj plik lokalny lub rozwiązany link do wideo na żądanie z przetłumaczonymi napisami i suwakiem opóźnienia w stylu YouTube; silniki MarianMT/Google/DeepL/Ollama. Eksperymentalne kopiowanie głosu wykorzystuje Edge-TTS i drugą instancję mpv. Obsługa nakładania się głosu i akceptacja prawdziwego dźwięku/Windows są w toku; rosnące transmisje na żywo nie są jeszcze obsługiwane.
+- ⏱️ **Tłumaczenie w czasie rzeczywistym** - oglądaj plik lokalny lub link do wideo na żądanie z przetłumaczonymi napisami i suwakiem opóźnienia; silniki MarianMT / Google / DeepL / Ollama. Dubbing używa Edge-TTS lub opcjonalnie głosów ElevenLabs przez drugą instancję mpv; nakładające się zdania czekają, przyspieszają lub cichną. Trwające transmisje na żywo nie są jeszcze obsługiwane.
 - 🎵 Separacja głosu/muzyki za pomocą Demucs (zachowuje muzykę w tle)
 - 🔇 **Wycisz oryginalny dźwięk**, dostępny przed i w trakcie tłumaczenia na żywo, wycisza ścieżkę dźwiękową filmu, jednocześnie utrzymując słyszalność przetłumaczonego głosu. Wyłącz tę opcję, aby przywrócić oryginalny dźwięk; resetuje się po zakończeniu sesji na żywo.
 - 🧠 **MarianMT** - w pełni lokalne tłumaczenie neuronowe offline (Helsinki-NLP, brak limitów liczby żądań, brak klucza API)
@@ -43,6 +43,9 @@ Narzędzie do kopiowania głosu wideo oparte na sztucznej inteligencji, które a
 - 📄 Opcjonalny eksport napisów `.srt`
 - 🔁 **DeepL Free** silnik tłumaczący (opcjonalnie - 500 tys. znaków/miesiąc, wymaga darmowego klucza API)
 - 🔧 **Automatyczna instalacja** - brakujące pakiety Pythona i ffmpeg są instalowane automatycznie przy pierwszym uruchomieniu
+- 🧮 **Modele dla tego komputera** - wykrywa procesor, RAM, GPU, VRAM i wolne miejsce na dysku, poleca modele rozpoznawania mowy, tłumaczenia i głosu pod kątem szybkości, równowagi lub jakości, pobiera i sprawdza modele Whisper oraz mierzy je na twoim własnym wideo
+- 🗣️ **Głosy ElevenLabs** *(opcjonalne, online, płatne)* - naturalne wielojęzyczne głosy do dubbingu na żywo z twoim własnym kluczem API; gdy klucz lub limit zawiedzie, przejmuje Edge-TTS
+- 🧬 **Klonowanie głosu z Voicebox** *(opcjonalne)* - klonuje głos mówiącego przez osobny lokalny serwer [Voicebox](https://github.com/jamiepine/voicebox); gdy nie działa, wideo używa Edge-TTS
 
 ## Obsługiwane języki
 
@@ -95,6 +98,25 @@ Po włączeniu aplikacja wykorzystuje technologię Wav2Lip GAN do synchronizacji
 - Działa na CUDA (zalecane) lub CPU
 - Znacząco wydłuża czas przetwarzania
 - Działa najlepiej w przypadku filmów z pojedynczą, wyraźnie widoczną twarzą
+
+## Modele dla tego komputera
+
+Ustawienia zaawansowane > Model > **Modele dla tego komputera** otwiera okno, które odczytuje sprzęt (procesor, RAM, GPU i dostępną VRAM, wolne miejsce na dysku) bez żadnych zmian i poleca jeden model na każdy etap: rozpoznawanie mowy dla plików i na żywo, tłumaczenie i głos.
+
+- Wybierz **Szybkość**, **Zrównoważony** lub **Jakość**: każde zalecenie podaje swoje powody.
+- Pozostałe opcje nadal można wybrać, a każda ma ocenę dla tego komputera: mieści się, na granicy, za duży, za mało miejsca lub usługa online.
+- **Pobierz** pobiera brakujący model Whisper z paskiem postępu i przyciskiem Anuluj oraz sprawdza każdy plik sumami kontrolnymi Hugging Face; nic nie jest pobierane przed kliknięciem.
+- **Test wydajności** mierzy wybrany model na wczytanym wideo (wczytanie, pierwsze zdanie, szybkość); dźwięk nigdy nie opuszcza komputera.
+- **Zastosuj** ustawia modele; **Przywróć poprzednie** przywraca wcześniejszy wybór. Karty NVIDIA są używane przez CUDA; karty AMD (ROCm) i Apple są pokazywane, ale tam modele mowy działają na procesorze.
+
+## Voicebox (klonowanie głosu przez lokalny serwer)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) to osobny program klonujący głosy. Zainstaluj go i uruchom samodzielnie; ta aplikacja tylko wywołuje jego lokalne API i nigdy go nie instaluje.
+
+- Ustawienia zaawansowane > Klonowanie głosu > **Voicebox**: ustaw adres (domyślnie `http://127.0.0.1:17493`), silnik (domyślnie `chatterbox`) i naciśnij **Sprawdź**.
+- Dla każdego wideo klonowany jest tymczasowy głos z czystej próbki mówiącego (jeden na mówcę przy rozpoznawaniu mówców), a potem usuwany.
+- Akceptowany jest tylko adres na tym komputerze, bo API Voicebox nie ma uwierzytelniania.
+- Jeśli Voicebox nie odpowiada lub nie obsługuje języka docelowego, wideo jest dubbingowane przez Edge-TTS.
 
 ## Wymagania
 
@@ -289,10 +311,12 @@ Obejrzyj plik lokalny lub gotowe łącze wideo na żądanie z przetłumaczonymi 
 **Z wczytanego pliku:** załaduj wideo do odtwarzacza (Wejście -> Dodaj, następnie zaznacz), pozostaw pole URL puste, wybierz te same ustawienia na żywo i kliknij **Tłumacz w czasie rzeczywistym**. Adres URL ma priorytet, jeśli pole nie jest puste.
 
 - **Silnik:** MarianMT (offline, domyślny), Google, DeepL lub Ollama. Rozpoznawanie mowy (Whisper) działa lokalnie. Modele offline wymagają wstępnego pobrania.
+- **Opóźnienie:** dla pliku w trybie opóźnionym, ile sekund tłumaczenia jest buforowanych, zanim obraz ruszy po pauzie (co najmniej 8 s z głosem, 4 s z samymi napisami). Gdy obraz wciąż się zatrzymuje, bufor rośnie o 4 s aż do 30 s, a pasek o tym informuje.
 - **Dubbing głosu:** eksperymentalne odtwarzanie mowy Edge-TTS przez drugą instancję mpv. Wymaga dostępu do Internetu i jest oddzielny od wsadowego klonowania głosu.
+- **Głos ElevenLabs:** opcjonalny, w Ustawienia zaawansowane > Klonowanie głosu > **Głos na żywo ElevenLabs**. Wpisz klucz API, sprawdź go, wybierz model mówiący w języku docelowym i głos. Przetłumaczony tekst trafia do ElevenLabs (płatne za znak); klucz zostaje w systemowym pęku kluczy. Gdy klucz lub limit zawiedzie, dalej działa Edge-TTS.
 - **Wycisz oryginalny dźwięk:** dostępne zarówno przed rozpoczęciem, jak i podczas tłumaczenia. Wycisza całą oryginalną ścieżkę dźwiękową, w tym muzykę i efekty, ale pozostawia przetłumaczony głos słyszalny. Nie izolowało to osoby mówiącej w oryginalnym dźwięku. Wyłącz tę opcję, aby przywrócić ścieżkę dźwiękową; resetuje się po zakończeniu sesji na żywo. Przycisk głośnika odtwarzacza służy do ogólnego wyciszenia, a nie do niezależnej kontroli.
 - **Wstrzymaj i wyszukaj:** elementy sterujące odtwarzacza wideo są połączone z sesją na żywo; kompleksowa synchronizacja dźwięku nadal wymaga testów akceptacyjnych dla konkretnej platformy.
-- **Aktualne ograniczenia:** obsługa nakładania się/zanikania klipów, kalibracja taktowania dźwięku i akceptacja systemu Windows pozostają otwarte. Rosnąca liczba transmisji na żywo nie jest jeszcze obsługiwana; etykieta trybu na żywo nie oznacza obsługi przetwarzania transmisji w miarę jej rozwoju.
+- **Obecne ograniczenia:** kalibracja synchronizacji dźwięku i odbiór na Windows są jeszcze otwarte. Transmisje na żywo, które wciąż trwają, nie są obsługiwane; nazwa trybu na żywo nie oznacza bieżącego wczytywania trwającej transmisji.
 
 W przypadku zapisanego filmu z dubbingiem użyj opcji **Pobierz i przetłumacz** / **Rozpocznij tłumaczenie** zamiast podglądu w czasie rzeczywistym.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Ścieżka pliku wyjściowego | auto |
 | `--output-dir` | Folder na przetłumaczone pliki (jedno miejsce, Windows i Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Przetwarzaj wiele plików | - |
+| `--voicebox` | Klonuje głos przez działający serwer Voicebox | - |
+| `--voicebox-url` | Adres Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Silnik Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### testy integracyjne z modelami rzeczywistymi
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modele są pobierane automatycznie przy pierwszym użyciu.
 
+> Nie wiesz, który model pasuje do twojego komputera? Otwórz **Modele dla tego komputera** w ustawieniach modelu: poleci jeden na podstawie sprzętu i może go zmierzyć.
+
 ## Samodzielne interfejsy CLI modułu
 
 Pakiet modułowy udostępnia cztery narzędzia dostępne dla użytkownika, które można wywołać bezpośrednio, bez uruchamiania całego potoku:
@@ -425,3 +454,5 @@ Kod repozytorium to MIT. Instalatorzy pobierają poniższe komponenty z własnyc
 - **Vulkan Loader** (Khronos, MIT i Apache-2.0), pobrany na Windows tylko w przypadku braku `vulkan-1.dll`.
 - **edge-tts** (LGPLv3), używany przez potok dubbingu głosowego.
 - **Modele MarianMT** (Helsinki-NLP), pobrane z Hugging Face Hub przy pierwszym użyciu na podstawie własnych licencji (Apache-2.0 dla modeli `opus-mt`, CC-BY-4.0 dla `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opcjonalny, instalowany osobno przez użytkownika; jego silniki mają własne licencje (Chatterbox MIT ze znakiem wodnym w dźwięku, wagi TADA na licencji Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), opcjonalna usługa online używana z własnym kontem i kluczem API użytkownika, na jej własnych warunkach.

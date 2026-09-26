@@ -28,7 +28,7 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
 - ▶️ **Integrated video player** (libmpv/mpv) - colour-coded transport controls, playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
-- ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama. Experimental voice dubbing uses Edge-TTS and a second mpv instance. Voice overlap handling and real audio/Windows acceptance remain in progress; growing live broadcasts are not supported yet.
+- ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a delay slider; engines MarianMT / Google / DeepL / Ollama. Dubbing uses Edge-TTS or, optionally, ElevenLabs voices through a second mpv instance; overlapping lines wait, speed up or fade. Growing live broadcasts are not supported yet.
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - 🔇 **Mute original audio**, available before and during live translation, silences the video's soundtrack while keeping the translated voice audible. Toggle it off to restore the original audio; it resets when the live session ends.
 - 🧠 **MarianMT** - fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
@@ -43,6 +43,9 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 📄 Optional `.srt` subtitle export
 - 🔁 **DeepL Free** translation engine (optional - 500k chars/month, requires free API key)
 - 🔧 **Auto-install** - missing Python packages and ffmpeg are installed automatically on first launch
+- 🧮 **Models for this PC** - detects CPU, RAM, GPU, VRAM and free disk, recommends speech, translation and voice models for speed, balance or quality, downloads and verifies Whisper models, and benchmarks them on your own video
+- 🗣️ **ElevenLabs voices** *(optional, online, paid)* - natural multilingual voices for the live dub with your own API key; Edge-TTS takes over if the key or the quota fails
+- 🧬 **Voicebox voice cloning** *(optional)* - clones the speaker's voice through a separate local [Voicebox](https://github.com/jamiepine/voicebox) server; the video falls back to Edge-TTS when it is not running
 
 ## Supported languages
 
@@ -102,6 +105,25 @@ When enabled, the app applies Wav2Lip GAN to synchronize the subject's mouth mov
 - Runs on CUDA (recommended) or CPU
 - Increases processing time significantly
 - Works best on videos with a single, clearly visible face
+
+## Models for this PC
+
+Advanced settings > Model > **Models for this PC** opens a window that reads the hardware (CPU, RAM, GPU and usable VRAM, free disk) without changing anything and recommends one model for each stage: speech recognition for files and for live, translation and voice.
+
+- Choose **Speed**, **Balanced** or **Quality**: each recommendation lists the reasons behind it.
+- Every other option stays selectable and is rated for this PC: fits, tight, too big, not enough disk or online service.
+- **Download** fetches a missing Whisper model, with progress and Cancel, and verifies every file against the Hugging Face checksums; nothing is downloaded before you press it.
+- **Benchmark** times the chosen model on the loaded video (load, first line, speed); the audio never leaves the PC.
+- **Apply** sets the models; **Restore previous** brings back the earlier choice. NVIDIA GPUs are used through CUDA; AMD (ROCm) and Apple GPUs are shown but the speech models run on the CPU there.
+
+## Voicebox (voice cloning by a local server)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) is a separate program that clones voices. Install and start it on its own; this app only calls its local API and never installs it.
+
+- Advanced settings > Voice cloning > **Voicebox**: set the address (default `http://127.0.0.1:17493`), the engine (`chatterbox` by default) and press **Check**.
+- For each video a temporary voice is cloned from a clean sample of the speaker (one per speaker with diarization) and removed afterwards.
+- Only an address on this PC is accepted, because the Voicebox API has no authentication.
+- If Voicebox does not answer or does not support the target language, the video is dubbed with Edge-TTS.
 
 ## Requirements
 
@@ -317,8 +339,10 @@ it), leave the URL field empty, choose the same live settings, and click
 
 - **Engine:** MarianMT (offline, default), Google, DeepL, or Ollama. Speech
   recognition (Whisper) runs locally. Offline models need an initial download.
+- **Delay:** on a file in delayed mode, how many seconds of translation are buffered before the picture resumes after a pause (at least 8 s with the voice, 4 s with subtitles only). When the picture keeps stopping, the buffer grows by 4 s up to 30 s and the bar says so.
 - **Voice dubbing:** experimental Edge-TTS speech playback through a second mpv
   instance. It requires internet access and is separate from batch voice cloning.
+- **ElevenLabs voice:** optional, in Advanced settings > Voice cloning > **ElevenLabs live voice**. Enter your API key, check it, pick a model that speaks the target language and a voice. The translated text is sent to ElevenLabs (paid per character); the key stays in the system keyring. If the key or the quota fails, Edge-TTS continues.
 - **Mute original audio:** available both before starting and during translation.
   It silences the entire original soundtrack, including music and effects, but
   leaves the translated voice audible. It does not isolate the original speaker.
@@ -326,9 +350,7 @@ it), leave the URL field empty, choose the same live settings, and click
   The player's speaker button is the general mute, not this independent control.
 - **Pause and seek:** player controls are connected to the live session;
   end-to-end audio synchronization still needs platform-specific acceptance tests.
-- **Current limits:** clip overlap/fade handling, audio timing calibration and
-  Windows acceptance remain open. Growing live broadcasts are not supported yet;
-  the live mode label does not imply support for ingesting a broadcast as it grows.
+- **Current limits:** audio timing calibration and Windows acceptance remain open. Growing live broadcasts are not supported yet; the live mode label does not imply support for ingesting a broadcast as it grows.
 
 For a saved dubbed video, use **Download & Translate** / **Start Translation**
 instead of the real-time preview.
@@ -384,6 +406,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Output file path | auto |
 | `--output-dir` | Folder for translated files (one place, Windows and Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Process multiple files | - |
+| `--voicebox` | Clone the voice through a running Voicebox server | - |
+| `--voicebox-url` | Voicebox address | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### Heavy Smoke Tests
 
@@ -430,6 +455,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Models are downloaded automatically on first use.
 
+> Not sure which model fits your PC? Open **Models for this PC** in the model settings: it recommends one from your hardware and can benchmark it.
+
 ## Standalone module CLIs
 
 The modular package exposes four user-facing tools that can be invoked directly without launching the full pipeline:
@@ -468,3 +495,5 @@ The repository code is MIT. The installers download the components below from th
 - **Vulkan loader** (Khronos, MIT and Apache-2.0), downloaded on Windows only when `vulkan-1.dll` is missing.
 - **edge-tts** (LGPLv3), used by the dubbing pipeline.
 - **MarianMT models** (Helsinki-NLP), downloaded from the Hugging Face Hub at first use under their own licences (Apache-2.0 for the `opus-mt` models, CC-BY-4.0 for `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optional, installed separately by the user; its engines have their own licences (Chatterbox MIT with an audio watermark, TADA weights under the Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), optional online service used with the user's own account and API key, under its own terms.

@@ -28,7 +28,7 @@ Tekoälyllä toimiva videoäänen jälkiäänitystyökalu, joka litteroi, kään
 - 🌐 **Käyttöliittymä 26 kielellä** - käyttöliittymä itse mukautuu kielellesi
 - 🎬 **YouTube- ja URL-tuki** - liitä mikä tahansa YouTube-linkki ja käännä suoraan (yt-dlp:n avulla)
 - ▶️ **Integroitu videosoitin** (libmpv/mpv) - värikoodatut siirtosäätimet, soittolista, alkuperäinen A/B vs. jälkiäänitetty ääni, tekstityksen vaihto, tilannekuva, koko näyttö, avoin kansio
-- ⏱️ **Reaaliaikainen käännös** - katso paikallinen tiedosto tai ratkaistu on-demand -videolinkki käännetyillä tekstityksillä ja YouTube-tyylisellä viive-liukusäätimellä; moottorit MarianMT / Google / DeepL / Ollama. Kokeellinen äänikopiointi käyttää Edge-TTS:ää ja toista mpv-instanssia. Äänen päällekkäisyyden käsittely ja todellinen äänen/Windowsin hyväksyntä jatkuvat; kasvavia suoria lähetyksiä ei vielä tueta.
+- ⏱️ **Reaaliaikainen käännös** - katso paikallista tiedostoa tai tilausvideon linkkiä käännetyillä tekstityksillä ja viiveen liukusäätimellä; moottorit MarianMT / Google / DeepL / Ollama. Jälkiäänitys käyttää Edge-TTS:ää tai valinnaisesti ElevenLabsin ääniä toisen mpv-instanssin kautta; päällekkäiset lauseet odottavat, nopeutuvat tai häivytetään. Käynnissä olevia suoria lähetyksiä ei vielä tueta.
 - 🎵 Äänen/musiikin erotus Demucsilla (säilyttää taustamusiikin)
 - 🔇 **Mykistä alkuperäinen ääni**, joka on käytettävissä ennen suoraa käännöstä ja sen aikana, hiljentää videon ääniraidan ja pitää käännetyn äänen kuultavana. Kytke se pois päältä palauttaaksesi alkuperäisen äänen; se nollautuu, kun live-istunto päättyy.
 - 🧠 **MarianMT** - täysin paikallinen, offline-hermokäännös (Helsinki-NLP, ei pyyntöjen määrärajoja, ei API-avainta)
@@ -43,6 +43,9 @@ Tekoälyllä toimiva videoäänen jälkiäänitystyökalu, joka litteroi, kään
 - 📄 Valinnainen `.srt` tekstityksen vienti
 - 🔁 **DeepL Free** käännösmoottori (valinnainen - 500 000 merkkiä kuukaudessa, vaatii ilmaisen API-avaimen)
 - 🔧 **Automaattinen asennus** - puuttuvat Python-paketit ja ffmpeg asennetaan automaattisesti ensimmäisen käynnistyksen yhteydessä
+- 🧮 **Mallit tälle tietokoneelle** - tunnistaa suorittimen, RAM-muistin, näytönohjaimen, VRAM-muistin ja vapaan levytilan, suosittelee puheentunnistuksen, käännöksen ja äänen malleja nopeuden, tasapainon tai laadun mukaan, lataa ja tarkistaa Whisper-mallit ja mittaa ne omalla videollasi
+- 🗣️ **ElevenLabsin äänet** *(valinnainen, verkossa, maksullinen)* - luonnollisia monikielisiä ääniä live-jälkiäänitykseen omalla API-avaimellasi; jos avain tai kiintiö pettää, Edge-TTS jatkaa
+- 🧬 **Äänen kloonaus Voiceboxilla** *(valinnainen)* - kloonaa puhujan äänen erillisen paikallisen [Voicebox](https://github.com/jamiepine/voicebox)-palvelimen kautta; jos se ei ole käynnissä, video käyttää Edge-TTS:ää
 
 ## Tuetut kielet
 
@@ -95,6 +98,25 @@ Kun tämä on käytössä, sovellus käyttää Wav2Lip GAN:ia synkronoimaan koht
 - Toimii CUDA:lla (suositus) tai CPU:lla
 - Lisää käsittelyaikaa merkittävästi
 - Toimii parhaiten videoissa, joissa on yksi, selvästi näkyvä kasvo
+
+## Mallit tälle tietokoneelle
+
+Lisäasetukset > Malli > **Mallit tälle tietokoneelle** avaa ikkunan, joka lukee laitteiston (suoritin, RAM, näytönohjain ja käytettävä VRAM, vapaa levytila) muuttamatta mitään ja suosittelee mallin jokaiseen vaiheeseen: puheentunnistus tiedostoille ja livenä, käännös ja ääni.
+
+- Valitse **Nopeus**, **Tasapainoinen** tai **Laatu**: jokainen suositus kertoo perusteensa.
+- Kaikki muut vaihtoehdot ovat yhä valittavissa ja arvioitu tälle koneelle: mahtuu, tiukka, liian suuri, levytila ei riitä tai verkkopalvelu.
+- **Lataa** hakee puuttuvan Whisper-mallin edistymisen ja Peruuta-painikkeen kera ja tarkistaa jokaisen tiedoston Hugging Facen tarkistussummilla; mitään ei ladata ennen painallusta.
+- **Suorituskykytesti** mittaa valitun mallin ladatulla videolla (lataus, ensimmäinen lause, nopeus); ääni ei koskaan poistu koneelta.
+- **Käytä** ottaa mallit käyttöön; **Palauta edellinen** tuo aiemman valinnan takaisin. NVIDIA-näytönohjaimia käytetään CUDAn kautta; AMD- (ROCm) ja Apple-näytönohjaimet näytetään, mutta niissä puhemallit toimivat suorittimella.
+
+## Voicebox (äänen kloonaus paikallisella palvelimella)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) on erillinen ääniä kloonaava ohjelma. Asenna ja käynnistä se itse; tämä sovellus kutsuu vain sen paikallista API:a eikä koskaan asenna sitä.
+
+- Lisäasetukset > Äänen kloonaus > **Voicebox**: aseta osoite (oletus `http://127.0.0.1:17493`), moottori (oletuksena `chatterbox`) ja paina **Tarkista**.
+- Jokaiselle videolle kloonataan väliaikainen ääni puhujan puhtaasta näytteestä (yksi puhujaa kohden puhujien erottelulla), ja se poistetaan lopuksi.
+- Vain tämän koneen osoite hyväksytään, koska Voiceboxin API:ssa ei ole todennusta.
+- Jos Voicebox ei vastaa tai ei tue kohdekieltä, video jälkiäänitetään Edge-TTS:llä.
 
 ## Vaatimukset
 
@@ -289,10 +311,12 @@ Katso paikallinen tiedosto tai ratkaistu on-demand-videolinkki käännetyillä t
 **Ladatusta tiedostosta:** lataa video soittimeen (Syöte -> Lisää ja valitse se), jätä URL-kenttä tyhjäksi, valitse samat live-asetukset ja napsauta **Käännä reaaliajassa**. URL-osoite on ensisijainen, kun kenttä ei ole tyhjä.
 
 - **Moottore:** MarianMT (offline, oletus), Google, DeepL tai Ollama. Puheentunnistus (Whisper) toimii paikallisesti. Offline-mallit tarvitsevat ensimmäisen latauksen.
+- **Viive:** viivästetyssä tilassa tiedostolla, kuinka monta sekuntia käännöstä kerätään ennen kuin kuva jatkuu tauon jälkeen (vähintään 8 s äänellä, 4 s pelkillä tekstityksillä). Jos kuva pysähtyy yhä uudelleen, puskuri kasvaa 4 s kerrallaan 30 sekuntiin asti ja palkki kertoo siitä.
 - **Ääneen jälkiäänitys:** kokeellinen Edge-TTS-puheen toisto toisen mpv-instanssin kautta. Se vaatii Internet-yhteyden ja on erillään erääänen kloonauksesta.
+- **ElevenLabsin ääni:** valinnainen, kohdassa Lisäasetukset > Äänen kloonaus > **ElevenLabsin live-ääni**. Anna API-avain, tarkista se, valitse kohdekieltä puhuva malli ja ääni. Käännetty teksti lähetetään ElevenLabsille (maksu merkkien mukaan); avain pysyy järjestelmän avainnipussa. Jos avain tai kiintiö pettää, Edge-TTS jatkaa.
 - **Mykistä alkuperäinen ääni:** käytettävissä sekä ennen käännöksen aloittamista että sen aikana. Se hiljentää koko alkuperäisen ääniraidan, mukaan lukien musiikin ja tehosteet, mutta jättää käännetyn äänen kuuluviin. Se ei eristä alkuperäisessä äänessä puhuvaa henkilöä. Kytke se pois päältä palauttaaksesi ääniraidan; se nollautuu, kun live-istunto päättyy. Soittimen kaiutinpainike on yleinen mykistys, ei tämä itsenäinen säädin.
 - **Keskeytä ja etsi:** videosoittimen säätimet on yhdistetty live-istuntoon; päästä päähän -äänen synkronointi vaatii edelleen alustakohtaisia ​​hyväksyntätestejä.
-- **Nykyiset rajat:** Leikkeiden päällekkäisyyden/häivytyksen käsittely, äänen ajoituksen kalibrointi ja Windowsin hyväksyntä pysyvät avoinna. Kasvavia suoria lähetyksiä ei vielä tueta; Live-tilan tunniste ei tarkoita tukea lähetyksen vastaanottamiselle sen kasvaessa.
+- **Nykyiset rajoitukset:** äänen ajoituksen kalibrointi ja hyväksyntä Windowsissa ovat vielä kesken. Yhä kasvavia suoria lähetyksiä ei tueta; live-tilan nimi ei tarkoita, että käynnissä olevaa lähetystä luettaisiin jatkuvasti.
 
 Jos haluat tallentaa jälkiäänitetyn videon, käytä **Lataa ja käännä** / **Aloita käännös** reaaliaikaisen esikatselun sijaan.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Tulostustiedoston polku | auto |
 | `--output-dir` | Kansio käännetyille tiedostoille (yksi paikka, Windows ja Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Käsittele useita tiedostoja | - |
+| `--voicebox` | Kloonaa äänen käynnissä olevan Voicebox-palvelimen kautta | - |
+| `--voicebox-url` | Voiceboxin osoite | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voiceboxin moottori (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### integraatiotestit todellisten mallien kanssa
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Mallit ladataan automaattisesti ensimmäisellä käyttökerralla.
 
+> Etkö tiedä, mikä malli sopii koneellesi? Avaa **Mallit tälle tietokoneelle** mallin asetuksista: se suosittelee mallia laitteistosi perusteella ja voi mitata sen.
+
 ## Erilliset moduulin CLI:t
 
 Modulaarinen paketti paljastaa neljä käyttäjäkohtaista työkalua, jotka voidaan käynnistää suoraan ilman koko putkilinjan käynnistämistä:
@@ -425,3 +454,5 @@ Arkiston koodi on MIT. Asentajat lataavat alla olevat komponentit omista lähtei
 - **Vulkan loader** (Khronos, MIT ja Apache-2.0), ladataan Windowsiin vain, kun `vulkan-1.dll` puuttuu.
 - **edge-tts** (LGPLv3), jota äänen jälkiäänitysputkisto käyttää.
 - **MarianMT-mallit** (Helsinki-NLP), ladattu Hugging Face Hubista ensimmäisellä käyttökerralla omilla lisenssillään (Apache-2.0 `opus-mt`-malleille, CC-BY-4.0 `opus-mt-tc-big`-malleille).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), valinnainen, käyttäjän erikseen asentama; sen moottoreilla on omat lisenssinsä (Chatterbox MIT äänivesileimalla, TADA-painot Llama 3.2 Community License -lisenssillä).
+- **ElevenLabs** (https://elevenlabs.io), valinnainen verkkopalvelu, jota käytetään käyttäjän omalla tilillä ja API-avaimella palvelun omin ehdoin.

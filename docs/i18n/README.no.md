@@ -28,7 +28,7 @@ AI-drevet videostemmedubbingsverktøy som automatisk transkriberer, oversetter o
 - 🌐 **UI på 26 språk** - selve grensesnittet tilpasser seg språket ditt
 - 🎬 **YouTube- og URL-støtte** - lim inn en hvilken som helst YouTube-kobling og oversett direkte (drevet av yt-dlp)
 - ▶️ **Integrert videospiller** (libmpv/mpv) - fargekodede transportkontroller, spilleliste, A/B-original vs dubbet lyd, undertekstveksling, øyeblikksbilde, fullskjerm, åpen mappe
-- ⏱️ **Sanntidsoversettelse** - se en lokal fil eller en løst videolink på forespørsel med oversatte undertekster og en skyveknapp for forsinkelser i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Eksperimentell stemmedubbing bruker Edge-TTS og en andre mpv-forekomst. Stemmeoverlappingshåndtering og ekte lyd/Windows-godkjenning fortsetter; voksende direktesendinger støttes ikke ennå.
+- ⏱️ **Oversettelse i sanntid** - se en lokal fil eller en videolenke på forespørsel med oversatte undertekster og en forsinkelsesglidebryter; motorer MarianMT / Google / DeepL / Ollama. Dubbingen bruker Edge-TTS eller, valgfritt, ElevenLabs-stemmer via en andre mpv-instans; overlappende setninger venter, øker farten eller tones ut. Pågående direktesendinger støttes ikke ennå.
 - 🎵 Stemme-/musikkseparasjon via Demucs (beholder bakgrunnsmusikk)
 - 🔇 **Demp originallyd**, tilgjengelig før og under direkteoversettelse, demper videoens lydspor mens den oversatte stemmen holdes hørbar. Slå den av for å gjenopprette den originale lyden; den tilbakestilles når live-økten avsluttes.
 - 🧠 **MarianMT** - fullstendig lokal, offline nevral oversettelse (Helsinki-NLP, ingen grenser for forespørselshastighet, ingen API-nøkkel)
@@ -43,6 +43,9 @@ AI-drevet videostemmedubbingsverktøy som automatisk transkriberer, oversetter o
 - 📄 Valgfri `.srt` underteksteksport
 - 🔁 **DeepL Free** oversettelsesmotor (valgfritt - 500 000 tegn/måned, krever gratis API-nøkkel)
 - 🔧 **Autoinstaller** - manglende Python-pakker og ffmpeg installeres automatisk ved første oppstart
+- 🧮 **Modeller for denne PC-en** - oppdager CPU, RAM, GPU, VRAM og ledig diskplass, anbefaler modeller for talegjenkjenning, oversettelse og stemme etter hastighet, balanse eller kvalitet, laster ned og kontrollerer Whisper-modeller og måler dem på din egen video
+- 🗣️ **ElevenLabs-stemmer** *(valgfritt, på nett, betalt)* - naturlige flerspråklige stemmer til direktedubbingen med din egen API-nøkkel; svikter nøkkelen eller kvoten, tar Edge-TTS over
+- 🧬 **Stemmekloning med Voicebox** *(valgfritt)* - kloner stemmen til den som snakker via en egen lokal [Voicebox](https://github.com/jamiepine/voicebox)-server; kjører den ikke, bruker videoen Edge-TTS
 
 ## Støttede språk
 
@@ -95,6 +98,25 @@ Når den er aktivert, bruker appen Wav2Lip GAN for å synkronisere motivets munn
 - Kjører på CUDA (anbefalt) eller CPU
 - Øker behandlingstiden betraktelig
 - Fungerer best på videoer med ett enkelt, godt synlig ansikt
+
+## Modeller for denne PC-en
+
+Avanserte innstillinger > Modell > **Modeller for denne PC-en** åpner et vindu som leser maskinvaren (CPU, RAM, GPU og brukbar VRAM, ledig diskplass) uten å endre noe og anbefaler én modell for hvert trinn: talegjenkjenning for filer og direkte, oversettelse og stemme.
+
+- Velg **Hastighet**, **Balansert** eller **Kvalitet**: hver anbefaling oppgir sine grunner.
+- Alle andre valg kan fortsatt velges og vurderes for denne PC-en: passer, i grenseland, for stor, for lite diskplass eller nettjeneste.
+- **Last ned** henter en manglende Whisper-modell med fremdrift og Avbryt og kontrollerer hver fil mot sjekksummene fra Hugging Face; ingenting lastes ned før du trykker på knappen.
+- **Ytelsestest** måler den valgte modellen på den innlastede videoen (lasting, første setning, hastighet); lyden forlater aldri PC-en.
+- **Bruk** setter modellene; **Gjenopprett forrige** henter tilbake det tidligere valget. NVIDIA-GPU-er brukes via CUDA; AMD- (ROCm) og Apple-GPU-er vises, men der kjører talemodellene på CPU-en.
+
+## Voicebox (stemmekloning via en lokal server)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) er et eget program som kloner stemmer. Installer og start det selv; denne appen kaller bare det lokale API-et og installerer det aldri.
+
+- Avanserte innstillinger > Stemmekloning > **Voicebox**: angi adressen (standard `http://127.0.0.1:17493`), motoren (`chatterbox` som standard) og trykk **Kontroller**.
+- For hver video klones en midlertidig stemme fra en ren prøve av den som snakker (én per taler med talerskille), og den slettes etterpå.
+- Bare en adresse på denne PC-en godtas, fordi Voicebox-API-et ikke har autentisering.
+- Svarer ikke Voicebox eller støtter det ikke målspråket, dubbes videoen med Edge-TTS.
 
 ## Krav
 
@@ -289,10 +311,12 @@ Se en lokal fil eller en løst videolenke på forespørsel med oversatte underte
 **Fra en lastet fil:** last inn en video i spilleren (Input -> Legg til, velg den), la URL-feltet stå tomt, velg de samme liveinnstillingene og klikk på **Oversett i sanntid**. En URL har prioritet når feltet ikke er tomt.
 
 - **Motor:** MarianMT (frakoblet, standard), Google, DeepL eller Ollama. Talegjenkjenning (Whisper) kjører lokalt. Frakoblede modeller trenger en første nedlasting.
+- **Forsinkelse:** på en fil i forsinket modus, hvor mange sekunder oversettelse som bufres før bildet fortsetter etter en pause (minst 8 s med stemme, 4 s med bare undertekster). Stopper bildet gang på gang, vokser bufferen med 4 s opp til 30 s, og linjen sier fra.
 - **Stemmedubbing:** eksperimentell Edge-TTS-taleavspilling gjennom en andre mpv-forekomst. Den krever internettilgang og er atskilt fra batch-stemmekloning.
+- **ElevenLabs-stemme:** valgfri, under Avanserte innstillinger > Stemmekloning > **ElevenLabs direktestemme**. Skriv inn API-nøkkelen, kontroller den, velg en modell som snakker målspråket og en stemme. Den oversatte teksten sendes til ElevenLabs (betales per tegn); nøkkelen blir i systemets nøkkelring. Svikter nøkkelen eller kvoten, fortsetter Edge-TTS.
 - **Demp originallyd:** tilgjengelig både før start og under oversettelsen. Den demper hele det originale lydsporet, inkludert musikk og effekter, men lar den oversatte stemmen være hørbar. Det isolerer ikke personen som snakker i den originale lyden. Slå den av for å gjenopprette lydsporet; den tilbakestilles når live-økten avsluttes. Spillerens høyttalerknapp er den generelle dempingen, ikke denne uavhengige kontrollen.
 - **Pause og søk:** videospillerkontroller er koblet til live-økten; ende-til-ende lydsynkronisering trenger fortsatt plattformspesifikke aksepttester.
-- **Gjeldende grenser:** håndtering av klippoverlapping/fade, kalibrering av lydtiming og Windows-godkjenning forblir åpne. Økende direktesendinger støttes ikke ennå; etiketten for live-modus antyder ikke støtte for inntak av en sending mens den vokser.
+- **Nåværende begrensninger:** kalibrering av lydtimingen og godkjenning på Windows gjenstår. Direktesendinger som fortsatt vokser støttes ikke; betegnelsen på direktemodusen betyr ikke at en pågående sending leses inn fortløpende.
 
 For en lagret dubbet video, bruk **Last ned og oversett** / **Start oversettelse** i stedet for forhåndsvisningen i sanntid.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Utdatafilbane | auto |
 | `--output-dir` | Mappe for oversatte filer (ett sted, Windows og Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Behandle flere filer | - |
+| `--voicebox` | Kloner stemmen via en kjørende Voicebox-server | - |
+| `--voicebox-url` | Voicebox-adresse | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox-motor (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### integrasjonstester med ekte modeller
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modeller lastes ned automatisk ved første gangs bruk.
 
+> Usikker på hvilken modell som passer PC-en din? Åpne **Modeller for denne PC-en** i modellinnstillingene: den anbefaler en ut fra maskinvaren og kan måle den.
+
 ## Frittstående modul CLI-er
 
 Den modulære pakken viser fire brukervendte verktøy som kan påkalles direkte uten å starte hele pipelinen:
@@ -425,3 +454,5 @@ Lagringskoden er MIT. Installatørene laster ned komponentene nedenfor fra sine 
 - **Vulkan-laster** (Khronos, MIT og Apache-2.0), lastet ned på Windows kun når `vulkan-1.dll` mangler.
 - **edge-tts** (LGPLv3), brukt av pipeline for stemmedubbing.
 - **MarianMT-modeller** (Helsinki-NLP), lastet ned fra Hugging Face Hub ved første gangs bruk under egne lisenser (Apache-2.0 for `opus-mt`-modellene, CC-BY-4.0 for `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), valgfritt, installeres separat av brukeren; motorene har egne lisenser (Chatterbox MIT med lydvannmerke, TADA-vekter under Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), valgfri nettjeneste som brukes med brukerens egen konto og API-nøkkel på tjenestens egne vilkår.

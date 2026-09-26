@@ -28,7 +28,7 @@ A mesterséges intelligencia által vezérelt videó hangszinkronizálási eszk�
 - 🌐 **UI 26 nyelven** - maga a felület igazodik az Ön nyelvéhez
 - 🎬 **YouTube és URL-támogatás** - illesszen be bármilyen YouTube-linket, és fordítsa le közvetlenül (az yt-dlp segítségével)
 - ▶️ **Integrált videolejátszó** (libmpv/mpv) - színkódolt átviteli vezérlők, lejátszási lista, A/B eredeti vs szinkronhang, feliratok váltása, pillanatfelvétel, teljes képernyő, mappa megnyitása
-- ⏱️ **Valós idejű fordítás** - nézzen meg egy helyi fájlt vagy egy megoldott igény szerinti videólinket lefordított feliratokkal és egy YouTube-stílusú késleltetési csúszkával; motorok MarianMT / Google / DeepL / Ollama. A kísérleti hangszinkronizálás Edge-TTS-t és egy második mpv-példányt használ. A hangátfedés kezelése és a valódi hang/Windows elfogadás folyamatban van; a növekvő élő adások még nem támogatottak.
+- ⏱️ **Valós idejű fordítás** - nézz helyi fájlt vagy igény szerinti videolinket lefordított feliratokkal és késleltetési csúszkával; motorok: MarianMT / Google / DeepL / Ollama. A szinkron Edge-TTS-t vagy opcionálisan ElevenLabs-hangokat használ egy második mpv-példányon; az egymásra lógó mondatok várnak, gyorsulnak vagy elhalkulnak. A még zajló élő adások egyelőre nem támogatottak.
 - 🎵 Hang/zene elválasztás a Demucs segítségével (megtartja a háttérzenét)
 - 🔇 Az élő fordítás előtt és közben elérhető **Eredeti hang némítása** elnémítja a videó hangsávját, miközben a lefordított hang hallható marad. Kapcsolja ki az eredeti hang visszaállításához; az élő munkamenet végén visszaáll.
 - 🧠 **MarianMT** - teljesen lokális, offline neurális fordítás (Helsinki-NLP, nincs kérési sebességkorlát, nincs API kulcs)
@@ -43,6 +43,9 @@ A mesterséges intelligencia által vezérelt videó hangszinkronizálási eszk�
 - 📄 Opcionális `.srt` felirat exportálás
 - 🔁 **DeepL Free** fordítómotor (opcionális - 500 000 karakter/hó, ingyenes API-kulcs szükséges)
 - 🔧 **Automatikus telepítés** - a hiányzó Python-csomagok és az ffmpeg automatikusan telepítésre kerülnek az első indításkor
+- 🧮 **Modellek ehhez a géphez** - felismeri a processzort, a RAM-ot, a GPU-t, a VRAM-ot és a szabad lemezterületet, beszédfelismerő, fordító és hangmodelleket ajánl sebességre, egyensúlyra vagy minőségre, letölti és ellenőrzi a Whisper-modelleket, és a saját videódon méri őket
+- 🗣️ **ElevenLabs-hangok** *(opcionális, online, fizetős)* - természetes többnyelvű hangok az élő szinkronhoz a saját API-kulcsoddal; ha a kulcs vagy a keret elfogy, az Edge-TTS veszi át
+- 🧬 **Hangklónozás Voiceboxszal** *(opcionális)* - a beszélő hangját egy különálló helyi [Voicebox](https://github.com/jamiepine/voicebox)-szerverrel klónozza; ha nem fut, a videó az Edge-TTS-t használja
 
 ## Támogatott nyelvek
 
@@ -95,6 +98,25 @@ Ha engedélyezve van, az alkalmazás a Wav2Lip GAN-t alkalmazza, hogy szinkroniz
 - CUDA-n (ajánlott) vagy CPU-n fut
 - Jelentősen megnöveli a feldolgozási időt
 - Egyetlen, jól látható arcú videóknál működik a legjobban
+
+## Modellek ehhez a géphez
+
+Speciális beállítások > Modell > **Modellek ehhez a géphez** egy ablakot nyit, amely semmit sem módosítva beolvassa a hardvert (processzor, RAM, GPU és használható VRAM, szabad lemezterület), és minden szakaszhoz ajánl egy modellt: beszédfelismerés fájlokhoz és élőben, fordítás és hang.
+
+- Válaszd a **Sebesség**, a **Kiegyensúlyozott** vagy a **Minőség** lehetőséget: minden ajánlás felsorolja az indokait.
+- Minden más lehetőség is választható marad, és értékelést kap erre a gépre: elfér, szűkös, túl nagy, kevés a hely vagy online szolgáltatás.
+- A **Letöltés** előhoz egy hiányzó Whisper-modellt folyamatjelzővel és Mégse gombbal, majd minden fájlt ellenőriz a Hugging Face ellenőrzőösszegeivel; a gomb megnyomása előtt semmi sem töltődik le.
+- A **Teljesítményteszt** a betöltött videón méri a választott modellt (betöltés, első mondat, sebesség); a hang soha nem hagyja el a gépet.
+- Az **Alkalmaz** beállítja a modelleket; az **Előző visszaállítása** visszahozza a korábbi választást. Az NVIDIA GPU-k CUDA-n keresztül működnek; az AMD (ROCm) és Apple GPU-k megjelennek, de ott a beszédmodellek a processzoron futnak.
+
+## Voicebox (hangklónozás helyi szerverrel)
+
+A [Voicebox](https://github.com/jamiepine/voicebox) (MIT) különálló, hangokat klónozó program. Telepítsd és indítsd el külön; ez az alkalmazás csak a helyi API-ját hívja, és soha nem telepíti.
+
+- Speciális beállítások > Hangklónozás > **Voicebox**: add meg a címet (alapértelmezés `http://127.0.0.1:17493`), a motort (alapértelmezés `chatterbox`), majd nyomd meg az **Ellenőrzés** gombot.
+- Minden videóhoz ideiglenes hang készül a beszélő tiszta mintájából (beszélőnként egy a beszélőfelismeréssel), amelyet utána törlünk.
+- Csak ezen a gépen lévő cím fogadható el, mert a Voicebox API-ja nem használ hitelesítést.
+- Ha a Voicebox nem válaszol vagy nem támogatja a célnyelvet, a videó szinkronja Edge-TTS-sel készül.
 
 ## Követelmények
 
@@ -289,10 +311,12 @@ Nézzen meg egy helyi fájlt vagy egy megoldott igény szerinti videólinket lef
 **Betöltött fájlból:** töltsön be egy videót a lejátszóba (Bevitel -> Hozzáadás, majd válassza ki), hagyja üresen az URL mezőt, válassza ki ugyanazokat az élő beállításokat, majd kattintson a **Valós idejű fordítás** lehetőségre. Az URL elsőbbséget élvez, ha a mező nem üres.
 
 - **Motor:** MarianMT (offline, alapértelmezett), Google, DeepL vagy Ollama. A beszédfelismerés (Whisper) helyileg fut. Az offline modellekhez először le kell tölteni.
+- **Késleltetés:** fájlnál, késleltetett módban, hány másodpercnyi fordítás gyűlik össze, mielőtt a kép szünet után továbbmegy (hanggal legalább 8 s, csak felirattal 4 s). Ha a kép újra és újra megáll, a puffer 4 s-mal nő egészen 30 s-ig, és a sáv jelzi ezt.
 - **Hangszinkronizálás:** kísérleti Edge-TTS beszédlejátszás egy második mpv-példányon keresztül. Internet-hozzáférést igényel, és különálló a kötegelt hangklónozástól.
+- **ElevenLabs-hang:** opcionális, a Speciális beállítások > Hangklónozás > **ElevenLabs élő hang** helyen. Add meg az API-kulcsot, ellenőrizd, válassz a célnyelven beszélő modellt és egy hangot. A lefordított szöveg az ElevenLabshez kerül (karakterenként fizetős); a kulcs a rendszer kulcstartójában marad. Ha a kulcs vagy a keret elfogy, az Edge-TTS folytatja.
 - **Eredeti hang némítása:** A fordítás megkezdése előtt és közben is elérhető. Elnémítja a teljes eredeti hangsávot, beleértve a zenét és az effektusokat is, de hallhatóvá teszi a lefordított hangot. Nem izolálja az eredeti hanganyagban beszélő személyt. Kapcsolja ki a hangsáv visszaállításához; az élő munkamenet végén visszaáll. A lejátszó hangszóró gombja az általános némítás, nem ez a független vezérlő.
 - **Szünet és keresés:** A videolejátszó vezérlői az élő munkamenethez csatlakoznak; A végpontok közötti hangszinkronizáláshoz továbbra is platform-specifikus elfogadási tesztekre van szükség.
-- **Jelenlegi korlátok:** A klipek átfedésének/elhalványításának kezelése, a hangidőzítés kalibrálása és a Windows elfogadása nyitva marad. A növekvő élő adások még nem támogatottak; az élő mód címke nem jelenti azt, hogy támogatja a közvetítés növekedését.
+- **Jelenlegi korlátok:** a hangidőzítés kalibrálása és a windowsos átvétel még nyitott. A még bővülő élő adások nem támogatottak; az élő mód elnevezése nem jelenti egy zajló adás folyamatos beolvasását.
 
 Mentett szinkronizált videóhoz használja a **Letöltés és fordítás** / **Fordítás indítása** lehetőséget a valós idejű előnézet helyett.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Kimeneti fájl elérési útja | auto |
 | `--output-dir` | Mappa a lefordított fájlokhoz (egy helyen, Windows és Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Több fájl feldolgozása | - |
+| `--voicebox` | A hangot egy futó Voicebox-szerverrel klónozza | - |
+| `--voicebox-url` | A Voicebox címe | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox-motor (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### integrációs tesztek valós modellekkel
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > A modellek első használatkor automatikusan letöltődnek.
 
+> Nem tudod, melyik modell illik a gépedhez? Nyisd meg a **Modellek ehhez a géphez** ablakot a modellbeállításokban: a hardver alapján ajánl egyet, és meg is tudja mérni.
+
 ## Önálló modul CLI-k
 
 A moduláris csomag négy felhasználóbarát eszközt tesz elérhetővé, amelyek közvetlenül, a teljes folyamat elindítása nélkül hívhatók meg:
@@ -425,3 +454,5 @@ Az adattár kódja MIT. A telepítők a telepítéskor letöltik az alábbi öss
 - **Vulkan loader** (Khronos, MIT és Apache-2.0), csak akkor tölthető le Windows rendszerre, ha a `vulkan-1.dll` hiányzik.
 - **edge-tts** (LGPLv3), a hangszinkronizálási folyamat használja.
 - **MarianMT modellek** (Helsinki-NLP), letöltve a Hugging Face Hub-ról első használatkor saját licencük alapján (Apache-2.0 a `opus-mt` modellekhez, CC-BY-4.0 a `opus-mt-tc-big`-hez).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opcionális, a felhasználó külön telepíti; a motorjainak saját licencük van (Chatterbox MIT hangvízjellel, TADA-súlyok a Llama 3.2 Community License alatt).
+- **ElevenLabs** (https://elevenlabs.io), opcionális online szolgáltatás, amelyet a felhasználó saját fiókjával és API-kulcsával, a szolgáltatás saját feltételei szerint használ.

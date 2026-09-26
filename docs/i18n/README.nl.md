@@ -28,7 +28,7 @@ Door AI aangedreven tool voor het nasynchroniseren van video's die video's autom
 - 🌐 **UI in 26 talen** - de interface past zich aan uw taal aan
 - 🎬 **YouTube- en URL-ondersteuning** - plak een YouTube-link en vertaal deze direct (mogelijk gemaakt door yt-dlp)
 - ▶️ **Geïntegreerde videospeler** (libmpv/mpv) - kleurgecodeerde transportbedieningen, afspeellijst, A/B origineel versus nagesynchroniseerde audio, ondertitels schakelen, momentopname, volledig scherm, map openen
-- ⏱️ **Realtime vertaling** - bekijk een lokaal bestand of een opgeloste on-demand videolink met vertaalde ondertitels en een vertragingsschuifregelaar in YouTube-stijl; motoren MarianMT / Google / DeepL / Ollama. Experimentele voice-nasynchronisatie maakt gebruik van Edge-TTS en een tweede mpv-instantie. De afhandeling van spraakoverlappingen en de acceptatie van echte audio/Windows blijven aan de gang; groeiende live-uitzendingen worden nog niet ondersteund.
+- ⏱️ **Realtimevertaling** - bekijk een lokaal bestand of een on-demand videolink met vertaalde ondertitels en een vertragingsschuif; engines MarianMT / Google / DeepL / Ollama. Nasynchronisatie gebruikt Edge-TTS of, optioneel, ElevenLabs-stemmen via een tweede mpv-instantie; overlappende zinnen wachten, versnellen of vervagen. Lopende liveuitzendingen worden nog niet ondersteund.
 - 🎵 Stem-/muziekscheiding via Demucs (behoudt achtergrondmuziek)
 - 🔇 **Originele audio dempen**, beschikbaar voor en tijdens live vertaling, dempt de soundtrack van de video terwijl de vertaalde stem hoorbaar blijft. Schakel het uit om de originele audio te herstellen; het wordt gereset wanneer de livesessie eindigt.
 - 🧠 **MarianMT** - volledig lokale, offline neurale vertaling (Helsinki-NLP, geen limieten voor verzoeksnelheid, geen API-sleutel)
@@ -43,6 +43,9 @@ Door AI aangedreven tool voor het nasynchroniseren van video's die video's autom
 - 📄 Optionele `.srt` ondertitelexport
 - 🔁 **DeepL Free** vertaalengine (optioneel - 500.000 tekens/maand, vereist gratis API-sleutel)
 - 🔧 **Auto-installatie** - ontbrekende Python-pakketten en ffmpeg worden automatisch geïnstalleerd bij de eerste keer opstarten
+- 🧮 **Modellen voor deze pc** - detecteert CPU, RAM, GPU, VRAM en vrije schijfruimte, raadt modellen aan voor spraakherkenning, vertaling en stem voor snelheid, balans of kwaliteit, downloadt en controleert Whisper-modellen en meet ze met je eigen video
+- 🗣️ **ElevenLabs-stemmen** *(optioneel, online, betaald)* - natuurlijke meertalige stemmen voor de livenasynchronisatie met je eigen API-sleutel; als de sleutel of het tegoed faalt, neemt Edge-TTS het over
+- 🧬 **Stemklonen met Voicebox** *(optioneel)* - kloont de stem van de spreker via een aparte lokale [Voicebox](https://github.com/jamiepine/voicebox)-server; draait die niet, dan gebruikt de video Edge-TTS
 
 ## Ondersteunde talen
 
@@ -95,6 +98,25 @@ Indien ingeschakeld, past de app Wav2Lip GAN toe om de mondbewegingen van het on
 - Draait op CUDA (aanbevolen) of CPU
 - Verhoogt de verwerkingstijd aanzienlijk
 - Werkt het beste bij video's met één duidelijk zichtbaar gezicht
+
+## Modellen voor deze pc
+
+Geavanceerde instellingen > Model > **Modellen voor deze pc** opent een venster dat de hardware leest (CPU, RAM, GPU en bruikbaar VRAM, vrije schijfruimte) zonder iets te wijzigen en voor elke stap een model aanraadt: spraakherkenning voor bestanden en live, vertaling en stem.
+
+- Kies **Snelheid**, **Gebalanceerd** of **Kwaliteit**: elk advies noemt zijn redenen.
+- Alle andere opties blijven kiesbaar en krijgen een beoordeling voor deze pc: past, krap, te groot, te weinig schijfruimte of onlinedienst.
+- **Downloaden** haalt een ontbrekend Whisper-model op, met voortgang en Annuleren, en controleert elk bestand met de controlesommen van Hugging Face; er wordt niets gedownload voordat je erop drukt.
+- **Benchmark** meet het gekozen model met de geladen video (laden, eerste zin, snelheid); het geluid verlaat de pc nooit.
+- **Toepassen** stelt de modellen in; **Vorige herstellen** brengt de eerdere keuze terug. NVIDIA-GPU's worden via CUDA gebruikt; AMD- (ROCm) en Apple-GPU's worden getoond, maar daar draaien de spraakmodellen op de CPU.
+
+## Voicebox (stemklonen via een lokale server)
+
+[Voicebox](https://github.com/jamiepine/voicebox) (MIT) is een apart programma dat stemmen kloont. Installeer en start het zelf; deze app roept alleen de lokale API aan en installeert het nooit.
+
+- Geavanceerde instellingen > Spraakklonen > **Voicebox**: stel het adres in (standaard `http://127.0.0.1:17493`), de engine (standaard `chatterbox`) en druk op **Controleren**.
+- Voor elke video wordt een tijdelijke stem gekloond uit een schoon fragment van de spreker (één per spreker met sprekerherkenning) en daarna verwijderd.
+- Alleen een adres op deze pc wordt geaccepteerd, omdat de Voicebox-API geen authenticatie heeft.
+- Antwoordt Voicebox niet of ondersteunt het de doeltaal niet, dan wordt de video nagesynchroniseerd met Edge-TTS.
 
 ## Vereisten
 
@@ -289,10 +311,12 @@ Bekijk een lokaal bestand of een opgeloste on-demand videolink met vertaalde ond
 **Vanuit een geladen bestand:** laad een video in de speler (Invoer -> Toevoegen en selecteer deze), laat het URL-veld leeg, kies dezelfde live-instellingen en klik op **Vertalen in realtime**. Een URL heeft voorrang als het veld niet leeg is.
 
 - **Engine:** MarianMT (offline, standaard), Google, DeepL of Ollama. Spraakherkenning (Whisper) wordt lokaal uitgevoerd. Offline modellen hebben een eerste download nodig.
+- **Vertraging:** bij een bestand in vertraagde modus, hoeveel seconden vertaling worden gebufferd voordat het beeld na een pauze verdergaat (minstens 8 s met stem, 4 s met alleen ondertitels). Blijft het beeld stoppen, dan groeit de buffer met 4 s tot 30 s en meldt de balk dat.
 - **Voice dubbing:** experimentele Edge-TTS-spraakweergave via een tweede mpv-instantie. Het vereist internettoegang en staat los van batch-spraakklonen.
+- **ElevenLabs-stem:** optioneel, in Geavanceerde instellingen > Spraakklonen > **ElevenLabs-livestem**. Voer je API-sleutel in, controleer hem, kies een model dat de doeltaal spreekt en een stem. De vertaalde tekst gaat naar ElevenLabs (betaald per teken); de sleutel blijft in de sleutelbos van het systeem. Faalt de sleutel of het tegoed, dan gaat Edge-TTS verder.
 - **Originele audio dempen:** beschikbaar zowel vóór het starten als tijdens de vertaling. Het legt de volledige originele soundtrack stil, inclusief muziek en effecten, maar laat de vertaalde stem hoorbaar. Het isoleert niet de persoon die in de originele audio spreekt. Schakel het uit om de soundtrack te herstellen; het wordt gereset wanneer de livesessie eindigt. De luidsprekerknop van de speler is de algemene mute-knop, niet deze onafhankelijke bediening.
 - **Pauzeer en zoek:** de bedieningselementen van de videospeler zijn verbonden met de livesessie; end-to-end audiosynchronisatie vereist nog steeds platformspecifieke acceptatietests.
-- **Huidige limieten:** verwerking van clipoverlap/fade, kalibratie van audiotiming en Windows-acceptatie blijven open. Groeiende live-uitzendingen worden nog niet ondersteund; het live-moduslabel impliceert geen ondersteuning voor het opnemen van een uitzending naarmate deze groeit.
+- **Huidige beperkingen:** de kalibratie van de audiotiming en de acceptatie op Windows staan nog open. Liveuitzendingen die nog groeien worden niet ondersteund; het label van de livemodus betekent niet dat een lopende uitzending doorlopend wordt ingelezen.
 
 Voor een opgeslagen nagesynchroniseerde video gebruikt u **Downloaden en vertalen** / **Vertaling starten** in plaats van het realtime voorbeeld.
 
@@ -344,6 +368,9 @@ videotranslatorai video.mp4 --lang-target en
 | `--output` / `-o` | Pad voor uitvoerbestand | auto |
 | `--output-dir` | Map voor vertaalde bestanden (één plaats, Windows en Linux) | `<videos>/VideoTranslatorAI` |
 | `--batch` | Verwerk meerdere bestanden | - |
+| `--voicebox` | Kloont de stem via een draaiende Voicebox-server | - |
+| `--voicebox-url` | Adres van Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox-engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
 
 ### integratietesten met echte modellen
 
@@ -387,6 +414,8 @@ python video_translator_gui.py video.mp4 --lang-target fr --subs-only
 
 > Modellen worden automatisch gedownload bij het eerste gebruik.
 
+> Weet je niet welk model bij je pc past? Open **Modellen voor deze pc** in de modelinstellingen: het raadt er een aan op basis van je hardware en kan het meten.
+
 ## Stand-alone module-CLI's
 
 Het modulaire pakket bevat vier gebruikersgerichte tools die direct kunnen worden aangeroepen zonder de volledige pijplijn te lanceren:
@@ -425,3 +454,5 @@ De repositorycode is MIT. De installatieprogramma's downloaden de onderstaande c
 - **Vulkan loader** (Khronos, MIT en Apache-2.0), alleen gedownload op Windows als `vulkan-1.dll` ontbreekt.
 - **edge-tts** (LGPLv3), gebruikt door de pijplijn voor spraaknasynchronisatie.
 - **MarianMT-modellen** (Helsinki-NLP), bij eerste gebruik gedownload van de Hugging Face Hub onder hun eigen licenties (Apache-2.0 voor de `opus-mt`-modellen, CC-BY-4.0 voor `opus-mt-tc-big`).
+- **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optioneel, door de gebruiker apart geïnstalleerd; de engines hebben eigen licenties (Chatterbox MIT met een audiowatermerk, TADA-gewichten onder de Llama 3.2 Community License).
+- **ElevenLabs** (https://elevenlabs.io), optionele onlinedienst die wordt gebruikt met het eigen account en de API-sleutel van de gebruiker, onder de eigen voorwaarden.
