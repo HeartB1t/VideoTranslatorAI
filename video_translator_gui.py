@@ -95,6 +95,10 @@ XTTS_LANGS = {
 }
 
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3", "large-v3-turbo"]
+# Config keys of the 'Models for this PC' window: the choices applied last
+# (restored at startup) and the ones they replaced (Restore previous).
+_MODELS_CHOICE_KEY = "models_choice"
+_MODELS_PREVIOUS_KEY = "models_previous"
 
 
 def _pick_default_whisper_model() -> str:
@@ -3880,6 +3884,8 @@ UI_LANG_CODES = {code for code, _ in UI_LANG_OPTIONS}
 # never raises: problems are logged at startup and caught by the i18n tests.
 from videotranslator.ui_strings_player import merge_into as _merge_player_strings  # noqa: E402
 _PLAYER_STRING_PROBLEMS = _merge_player_strings(UI_STRINGS)
+from videotranslator.ui_strings_models import merge_into as _merge_models_strings  # noqa: E402
+_PLAYER_STRING_PROBLEMS += _merge_models_strings(UI_STRINGS)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -6156,6 +6162,10 @@ class App(tk.Tk):
             self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
         for problem in _PLAYER_STRING_PROBLEMS:
             self._log_write(f"[!] Player strings: {problem}\n")
+        # Models applied in the 'Models for this PC' window survive a restart.
+        self._models_dialog = None
+        self._models_choice_restored = False
+        self.after(1000, self._restore_model_choices)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Minimum window size + reasonable default geometry so the window
         # remains usable on small displays (1366×768, 1280×720) and at
@@ -6874,6 +6884,12 @@ class App(tk.Tk):
     def _apply_profile(self, name):
         """Apply a quality preset by setting existing Tk vars."""
         self._active_profile.set(name)
+        # A preset is the newest explicit choice: the models chosen in the
+        # 'Models for this PC' window no longer apply at the next launch.
+        if getattr(self, "_models_choice_restored", False) or load_config().get(
+                _MODELS_CHOICE_KEY):
+            save_config({_MODELS_CHOICE_KEY: None})
+            self._models_choice_restored = False
         if name == "fast":
             self._no_demucs.set(True)
             self._use_xtts.set(False)
@@ -7151,6 +7167,11 @@ class App(tk.Tk):
             bg=SURFACE, fg=FG2, font="VT.Small",
             wraplength=_HINT_WRAP, justify="left")
         self._lbl_model_hint.pack(anchor="w", padx=4, pady=(0, 4))
+        # Hardware-aware model selection: recommendations for this PC, manual
+        # choice of every option, verified downloads and a benchmark.
+        models_wrap, self._btn_models = self._flat_btn(
+            body, text=self._s("mdl_button"), command=self._open_models_dialog)
+        models_wrap.pack(anchor="w", padx=4, pady=(2, 6))
 
         # ── 2. TRANSLATION ENGINE ─────────────────────────────────────────
         # body2 uses grid layout so _ollama_row/_deepl_row work with
@@ -8110,6 +8131,7 @@ class App(tk.Tk):
         self._lbl_output_dir.configure(text=self._s("label_output_dir"))
         self._lbl_section_model.configure(text=self._s("section_model"))
         self._lbl_model_hint.configure(text=self._s("label_model_hint"))
+        self._btn_models.configure(text=self._s("mdl_button"))
         self._lbl_from.configure(text=self._s("label_from"))
         self._lbl_to.configure(text=self._s("label_to"))
         self._lbl_voice.configure(text=self._s("label_voice"))
@@ -8573,6 +8595,103 @@ class App(tk.Tk):
             session.set_subs_enabled(bool(params.get("enabled", True)))
         elif intent == "original_mute":
             session.set_original_muted(bool(params.get("muted", False)))
+
+    # -- Hardware-aware model selection ('Models for this PC') -------------------
+
+    def _current_model_choices(self) -> dict:
+        """The models in use, per stage, as option keys of the model catalogue."""
+        engine = self._translation_engine.get()
+        mt = ((self._ollama_model_var.get().strip() or "qwen3:8b")
+              if engine == "llm_ollama" else engine)
+        live = _player_settings_module.normalize_live_settings(load_config()).asr_model
+        if live == "auto":                  # PersistentWhisper's own default
+            live = "large-v3-turbo" if shutil.which("nvidia-smi") else "small"
+        return {"asr": self._model.get(), "asr_live": live, "mt": mt,
+                "tts": "xtts" if self._use_xtts.get() else "edge"}
+
+    def _set_model_choices(self, choices: dict) -> None:
+        """Put per-stage choices into the GUI variables and the live settings."""
+        if choices.get("asr") in WHISPER_MODELS:
+            self._model.set(choices["asr"])
+        mt = choices.get("mt")
+        live_engine = None
+        if mt in ("google", "deepl", "marian"):
+            self._translation_engine.set(mt)
+            live_engine = mt
+        elif isinstance(mt, str) and mt.startswith("qwen3"):
+            self._translation_engine.set("llm_ollama")
+            self._ollama_model_var.set(mt)
+            live_engine = "ollama"
+        if choices.get("tts") in ("edge", "xtts"):
+            self._use_xtts.set(choices["tts"] == "xtts")
+        update = {}
+        if choices.get("asr_live") in _player_settings_module.LIVE_ASR_MODELS:
+            update["live_asr_model"] = choices["asr_live"]
+        if live_engine is not None:
+            update["live_engine"] = live_engine
+        if mt and live_engine == "ollama":
+            update["ollama_model"] = mt
+        if update:
+            save_config(update)
+            if live_engine is not None:
+                self._live_bar.set_config_values(
+                    _player_settings_module.normalize_live_settings(load_config()))
+        self._active_profile.set("custom")    # no preset highlighted
+        self._on_engine_change()
+        self._update_profile_buttons()
+        self._update_start_summary()
+
+    def _apply_model_choices(self, choices: dict) -> None:
+        """Apply from the window, keeping what it replaces for Restore previous."""
+        save_config({_MODELS_PREVIOUS_KEY: self._current_model_choices(),
+                     _MODELS_CHOICE_KEY: dict(choices)})
+        self._set_model_choices(choices)
+        self._models_choice_restored = True
+
+    def _revert_model_choices(self) -> dict | None:
+        """Swap back to the choices before the last Apply (None if there are none)."""
+        previous = load_config().get(_MODELS_PREVIOUS_KEY)
+        if not isinstance(previous, dict) or not previous:
+            return None
+        current = self._current_model_choices()
+        self._set_model_choices(previous)
+        save_config({_MODELS_PREVIOUS_KEY: current, _MODELS_CHOICE_KEY: dict(previous)})
+        self._models_choice_restored = True
+        return dict(previous)
+
+    def _restore_model_choices(self) -> None:
+        """At startup: re-apply the models chosen in the window last time."""
+        if self._destroying:
+            return
+        choices = load_config().get(_MODELS_CHOICE_KEY)
+        if isinstance(choices, dict) and choices:
+            try:
+                self._set_model_choices(choices)
+                self._models_choice_restored = True
+            except Exception as exc:                 # noqa: BLE001
+                print(f"     ! Could not restore the chosen models: {exc}", flush=True)
+
+    def _benchmark_media_path(self) -> str | None:
+        """Local media for the model benchmark: the player's, else the first file."""
+        path = self._live_media_path()
+        if path:
+            return path
+        for candidate in self._batch_files:
+            if Path(candidate).is_file():
+                return candidate
+        return None
+
+    def _open_models_dialog(self) -> None:
+        dialog = self._models_dialog
+        if dialog is not None and not dialog.closed:
+            dialog.win.lift()
+            return
+        from videotranslator.models_dialog_tk import ModelsDialog
+        self._models_dialog = ModelsDialog(
+            self, ui_s=self._s, theme=self._theme, make_button=self._flat_btn,
+            current=self._current_model_choices(), on_apply=self._apply_model_choices,
+            on_revert=self._revert_model_choices, media_path=self._benchmark_media_path,
+            busy=lambda: bool(self._running) or self._live_session is not None)
 
     def _schedule_live_save(self) -> None:
         """Save the live bar choices shortly after the last change.

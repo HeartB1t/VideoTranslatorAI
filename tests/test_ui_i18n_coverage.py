@@ -174,6 +174,15 @@ class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
                     legacy._FLAG_WHISPER_SUSPICIOUS,
                 )
             ],
+            # 'Models for this PC' window: fit ratings and the evidence keys the
+            # model catalogue returns (rendered with ui_s(key)).
+            "mdl_fit_{fit}": [f"mdl_fit_{fit}" for fit in (
+                "ok", "tight", "too_big", "no_disk", "online")],
+            "rec_reason_*": [
+                "rec_reason_gpu", "rec_reason_gpu_unusable", "rec_reason_cpu",
+                "rec_reason_fits", "rec_reason_disk", "rec_reason_fallback",
+                "rec_reason_online_fast", "rec_reason_offline", "rec_reason_ollama",
+                "rec_reason_licence", "rec_reason_needs_gpu", "rec_reason_online_free"],
         }
 
     def test_every_fstring_family_in_source_is_known(self):

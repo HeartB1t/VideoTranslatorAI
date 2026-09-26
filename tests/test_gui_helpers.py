@@ -99,6 +99,93 @@ class LiveChoicesPersistenceTests(unittest.TestCase):
         app._save_live_choices.assert_not_called()
 
 
+class _Var:
+    def __init__(self, value):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+
+class ModelChoicesTests(unittest.TestCase):
+    """'Models for this PC': apply, restore previous, survive a restart."""
+
+    def setUp(self):
+        self.config = {}
+        self.enterContext(mock.patch.object(gui, "load_config",
+                                            side_effect=lambda: dict(self.config)))
+        self.enterContext(mock.patch.object(gui, "save_config",
+                                            side_effect=self.config.update))
+        self.app = SimpleNamespace(
+            _model=_Var("small"), _translation_engine=_Var("google"),
+            _ollama_model_var=_Var("qwen3:8b"), _use_xtts=_Var(False),
+            _active_profile=_Var("balanced"), _live_bar=Mock(), _destroying=False,
+            _on_engine_change=Mock(), _update_profile_buttons=Mock(),
+            _update_start_summary=Mock(), _models_choice_restored=False)
+        for name in ("_current_model_choices", "_set_model_choices"):
+            setattr(self.app, name, getattr(gui.App, name).__get__(self.app))
+
+    def test_current_choices_map_the_gui_state(self):
+        self.config["live_asr_model"] = "base"
+        self.assertEqual(self.app._current_model_choices(),
+                         {"asr": "small", "asr_live": "base", "mt": "google", "tts": "edge"})
+        self.app._translation_engine.set("llm_ollama")
+        self.app._use_xtts.set(True)
+        self.assertEqual(self.app._current_model_choices()["mt"], "qwen3:8b")
+        self.assertEqual(self.app._current_model_choices()["tts"], "xtts")
+
+    def test_set_choices_updates_batch_and_live_settings(self):
+        gui.App._set_model_choices(self.app, {"asr": "large-v3", "asr_live": "medium",
+                                              "mt": "qwen3:14b", "tts": "xtts"})
+        self.assertEqual((self.app._model.get(), self.app._translation_engine.get(),
+                          self.app._ollama_model_var.get(), self.app._use_xtts.get()),
+                         ("large-v3", "llm_ollama", "qwen3:14b", True))
+        self.assertEqual((self.config["live_asr_model"], self.config["live_engine"]),
+                         ("medium", "ollama"))
+        self.app._live_bar.set_config_values.assert_called_once()
+        self.assertEqual(self.app._active_profile.get(), "custom")
+        self.app._on_engine_change.assert_called_once_with()
+
+    def test_unknown_values_are_ignored(self):
+        gui.App._set_model_choices(self.app, {"asr": "huge", "mt": "bing", "tts": "robot",
+                                              "asr_live": "giant"})
+        self.assertEqual((self.app._model.get(), self.app._translation_engine.get(),
+                          self.app._use_xtts.get()), ("small", "google", False))
+        self.assertNotIn("live_asr_model", self.config)
+
+    def test_apply_saves_previous_and_revert_swaps_back(self):
+        new = {"asr": "medium", "asr_live": "small", "mt": "marian", "tts": "edge"}
+        gui.App._apply_model_choices(self.app, new)
+        self.assertEqual(self.config[gui._MODELS_CHOICE_KEY], new)
+        self.assertEqual(self.config[gui._MODELS_PREVIOUS_KEY]["asr"], "small")
+        self.assertEqual(self.app._model.get(), "medium")
+        restored = gui.App._revert_model_choices(self.app)
+        self.assertEqual(restored["asr"], "small")
+        self.assertEqual(self.app._model.get(), "small")
+        self.assertEqual(self.config[gui._MODELS_PREVIOUS_KEY]["asr"], "medium")
+
+    def test_revert_without_previous_returns_none(self):
+        self.assertIsNone(gui.App._revert_model_choices(self.app))
+
+    def test_startup_restores_the_applied_choices(self):
+        self.config[gui._MODELS_CHOICE_KEY] = {"asr": "tiny", "mt": "deepl"}
+        gui.App._restore_model_choices(self.app)
+        self.assertEqual((self.app._model.get(), self.app._translation_engine.get()),
+                         ("tiny", "deepl"))
+        self.assertTrue(self.app._models_choice_restored)
+
+    def test_a_preset_click_forgets_the_window_choice(self):
+        self.config[gui._MODELS_CHOICE_KEY] = {"asr": "tiny"}
+        app = SimpleNamespace(**vars(self.app), _no_demucs=_Var(False),
+                              _use_lipsync=_Var(False))
+        gui.App._apply_profile(app, "fast")
+        self.assertIsNone(self.config[gui._MODELS_CHOICE_KEY])
+        self.assertEqual(app._model.get(), "small")
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))
