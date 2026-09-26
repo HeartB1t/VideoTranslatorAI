@@ -268,7 +268,8 @@ class _PipelineSilence:
     end: float
 
 from .live_scheduler import (
-    ClearSubtitle, ClipSpeed, Drop, DubScheduler, Duck, DuckEnvelope, LiveSegment,
+    ClearSubtitle, ClipSpeed, Drop, DubScheduler, Duck, DuckEnvelope, FadeRamp,
+    LiveSegment,
     PauseClip, PreloadClip, RequestTts, ResumeClip, ShowSubtitle, StartClip, StopClip,
 )
 from .live_sync import FilePacer, derive_live_timing
@@ -356,7 +357,8 @@ class LiveSession:
         # Dub/voice state (design 4.11). The voice backend and the TTS worker are
         # created lazily on start(); the scheduler drives them through _execute.
         self._synth: Any = None
-        self._voice_state = "idle"          # idle | preloaded | playing
+        self._voice_state = "idle"          # idle | preloaded | playing | fading
+        self._voice_fade: FadeRamp | None = None   # StopClip(fade_s) in progress
         self._bridge = getattr(video, "bridge", None)
         self._last_eof_count = 0
         self._voice_fail = 0
@@ -620,6 +622,13 @@ class LiveSession:
             except Exception:
                 pass
             self._voice_state = "idle"
+        if self._voice_fade is not None:
+            # The voice player outlives the session: never leave it faded out.
+            self._voice_fade = None
+            try:
+                self._restore_voice_volume()
+            except Exception:
+                pass
         self._overlay = None
 
     def _tick_once(self, mono: float) -> list[object]:
@@ -642,6 +651,7 @@ class LiveSession:
                                                      and not self._user_paused
                                                      and not self._startup_hold))
         self._execute(actions)
+        self._step_voice_fade()
         self._apply_duck(frozen=not main_running)
         if mono - self._last_status_mono >= 0.25:
             self._last_status_mono = mono
@@ -666,7 +676,8 @@ class LiveSession:
         rt = getattr(self._video, "rt", None)
         if rt is not None:
             rt.set_duck(self._duck_env.current)     # user volume at the current duck
-        if self._voice is not None:
+        if self._voice is not None and self._voice_fade is None:
+            # (during a fade the volume is restored from the mixer at its end)
             self._voice.set_volume(st.voice_volume)  # 0 when muted
 
     def _drain_synth(self) -> None:
@@ -719,11 +730,15 @@ class LiveSession:
             return                              # our own stop/loadfile, not a clip end
         if reason == "error":
             self._voice_fail += 1
+            self._end_voice_fade()
             self._voice_state = "idle"
             if self._voice_fail >= 3:
                 self._disable_dub("tts_unavailable")
             return
-        if self._voice_state == "playing":
+        if self._voice_state == "fading":
+            self._end_voice_fade()               # the clip ended during its fade
+            self._voice_state = "idle"
+        elif self._voice_state == "playing":
             self._voice_state = "idle"
 
     def _drain_control(self, mono: float) -> None:
@@ -850,13 +865,55 @@ class LiveSession:
                 if self._voice is not None:
                     self._voice.set_pause(False)
             elif isinstance(action, StopClip):
-                if self._voice is not None:
-                    self._voice.stop()
-                self._voice_state = "idle"
+                if (action.fade_s > 0 and self._voice is not None
+                        and self._voice_state == "playing"):
+                    # Fade the voice out, then stop (_step_voice_fade). The device
+                    # stays busy meanwhile, so no clip is loaded over the fade.
+                    self._voice_fade = FadeRamp(self._voice_volume(),
+                                                fade_s=action.fade_s,
+                                                tick_s=self._tick_interval)
+                    self._voice_state = "fading"
+                else:
+                    if self._voice is not None:
+                        self._voice.stop()
+                    self._end_voice_fade()       # an immediate stop cancels a fade
+                    self._voice_state = "idle"
             elif isinstance(action, Duck):
                 self._duck_env.set_target(action.gain)
             elif isinstance(action, Drop):
                 self._log_lost_voice(action.seg_id, action.reason)
+
+    def _voice_volume(self) -> float:
+        """The voice volume the mixer wants (0 when muted); 100 without a mixer."""
+        mixer = getattr(self._video, "mixer", None)
+        return float(mixer.snapshot().voice_volume) if mixer is not None else 100.0
+
+    def _restore_voice_volume(self) -> None:
+        if self._voice is not None:
+            self._voice.set_volume(self._voice_volume())
+
+    def _end_voice_fade(self) -> None:
+        """Drop a fade in progress and put the voice volume back."""
+        if self._voice_fade is not None:
+            self._voice_fade = None
+            self._restore_voice_volume()
+
+    def _step_voice_fade(self) -> None:
+        """One step of a StopClip fade; stop the clip when it reaches silence."""
+        fade = self._voice_fade
+        if fade is None:
+            return
+        if self._voice is None:
+            self._voice_fade = None
+            self._voice_state = "idle"
+            return
+        value = fade.step()
+        if not fade.done:
+            self._voice.set_volume(value)
+            return
+        self._voice.stop()
+        self._end_voice_fade()
+        self._voice_state = "idle"
 
     # Why a dubbed line was not voiced, for the log (developer-facing, English).
     _LOST_VOICE_REASONS = {

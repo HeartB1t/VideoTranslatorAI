@@ -947,6 +947,95 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertIsNone(sess.status().warning_key)
 
 
+class LiveSessionVoiceFadeTests(unittest.TestCase):
+    """StopClip(fade_s) fades the voice out before stopping it (design 4.11)."""
+
+    def _playing(self, tmp):
+        sess, video, voice, _, _ = _dub_session(tmp)
+        sess._voice_state = "playing"
+        voice.calls.clear()
+        return sess, video, voice
+
+    def test_fade_lowers_the_volume_then_stops_and_restores(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._execute([StopClip(0.18)])
+            self.assertEqual(sess._voice_state, "fading")      # device still busy
+            self.assertNotIn(("stop",), voice.calls)
+            for _ in range(20):
+                sess._step_voice_fade()
+            vols = [c[1] for c in voice.calls if c[0] == "set_volume"]
+            self.assertGreater(len(vols), 5)
+            self.assertEqual(vols[:-1], sorted(vols[:-1], reverse=True))
+            self.assertIn(("stop",), voice.calls)
+            self.assertEqual(vols[-1], 100.0)                   # restored after stop
+            self.assertLess(voice.calls.index(("stop",)),
+                            len(voice.calls) - 1)
+            self.assertEqual(sess._voice_state, "idle")
+            self.assertIsNone(sess._voice_fade)
+
+    def test_clip_ending_during_the_fade_restores_the_volume(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._execute([StopClip(0.18)])
+            sess._step_voice_fade()
+            video.bridge.extra_latest("voice-eof", (3, "eof"), 1.0)
+            sess._sync_voice_state()
+            self.assertEqual(sess._voice_state, "idle")
+            self.assertIsNone(sess._voice_fade)
+            self.assertEqual(voice.calls[-1], ("set_volume", 100.0))
+
+    def test_immediate_stop_cancels_a_fade(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._execute([StopClip(0.18)])
+            sess._step_voice_fade()
+            sess._execute([StopClip(0.0)])                      # seek / stop
+            self.assertEqual(sess._voice_state, "idle")
+            self.assertIsNone(sess._voice_fade)
+            self.assertEqual(voice.calls[-2:], [("stop",), ("set_volume", 100.0)])
+
+    def test_fade_while_idle_is_an_immediate_stop(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._voice_state = "preloaded"
+            sess._execute([StopClip(0.18)])
+            self.assertEqual(sess._voice_state, "idle")
+            self.assertEqual(voice.calls, [("stop",)])
+
+    def test_mute_during_the_fade_is_applied_at_its_end(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._start_dub()
+            voice.calls.clear()
+            sess._voice_state = "playing"
+            sess._execute([StopClip(0.18)])
+            sess._step_voice_fade()
+            video.mixer.set_muted(True)
+            sess._reassert_mixer()                 # does not jump the fade back up
+            vols = [c[1] for c in voice.calls if c[0] == "set_volume"]
+            self.assertTrue(all(v < 100.0 for v in vols))
+            for _ in range(20):
+                sess._step_voice_fade()
+            self.assertEqual(voice.calls[-1], ("set_volume", 0.0))  # muted, not 100
+
+    def test_teardown_during_a_fade_restores_the_volume(self):
+        from videotranslator.live_scheduler import StopClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice = self._playing(tmp)
+            sess._execute([StopClip(0.18)])
+            sess._step_voice_fade()
+            sess._teardown_outputs()
+            self.assertIn(("stop",), voice.calls)
+            self.assertEqual(voice.calls[-1], ("set_volume", 100.0))
+            self.assertIsNone(sess._voice_fade)
+
+
 class _RecordingVoice:
     """Wraps a real voice backend, recording the ops the session issues."""
 

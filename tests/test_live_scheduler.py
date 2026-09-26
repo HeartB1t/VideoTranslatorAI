@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from videotranslator.live_scheduler import (
     ClearSubtitle,
+    ClipSpeed,
     Drop,
     DubScheduler,
     Duck,
@@ -602,6 +603,122 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         acts = s.tick(10.0, mono=104.5, voice_state="idle")   # 5 s behind > 4 s lag
         drops = [a for a in acts if isinstance(a, Drop)]
         self.assertTrue(drops and drops[0].reason == "lag")
+
+
+class OverlapPolicyTests(unittest.TestCase):
+    """Delayed mode, design 4.11: a next sentence due while a clip still plays."""
+
+    LATENCY = 0.25   # a started clip becomes audible after the lead
+
+    def _run(self, segs, t_end, *, fade_s_seen=None, pause_at=None, resume_at=None):
+        """Tick a delayed scheduler at 50 Hz with a simulated voice device."""
+        s = _dub_sched()
+        clips = {}
+        for seg_id, start, end, audible in segs:
+            s.upsert(LiveSegment(seg_id, 0, start, end, "x", text_tgt=f"t{seg_id}",
+                                 dub_ok=True))
+            clips[seg_id] = _clip(f"{seg_id}.mp3", audible=audible, vstart=0.0)
+        voice = {"state": "idle", "left": 0.0, "speed": 1.0, "at": 0.0,
+                 "seg": None, "fade_until": None}
+        log = {"started": {}, "dropped": [], "speeds": [], "stops": [], "ducks": []}
+        now, mono, dt = 0.0, 100.0, 0.02
+        for seg_id, clip in clips.items():
+            s.clip_ready(seg_id, 0, clip)
+        while now < t_end and mono < 100.0 + t_end + 5.0:
+            running = not (pause_at is not None and pause_at <= now
+                           and (resume_at is None or now < resume_at))
+            if voice["state"] == "playing" and running and mono >= voice["at"]:
+                voice["left"] -= voice["speed"] * dt
+                if voice["left"] <= 0:
+                    voice["state"] = "idle"
+            if voice["state"] == "fading" and mono >= voice["fade_until"]:
+                voice["state"] = "idle"
+            for a in s.tick(now, mono=mono, main_running=running,
+                            voice_state=voice["state"]):
+                if isinstance(a, PreloadClip):
+                    voice.update(state="preloaded", seg=a.seg_id,
+                                 left=clips[a.seg_id].audible_s)
+                elif isinstance(a, StartClip):
+                    voice.update(state="playing", speed=a.speed,
+                                 at=mono + self.LATENCY)
+                    log["started"][a.seg_id] = now
+                elif isinstance(a, ClipSpeed):
+                    voice["speed"] = a.value
+                    log["speeds"].append((voice["seg"], a.value))
+                elif isinstance(a, StopClip):
+                    log["stops"].append((voice["seg"], a.fade_s))
+                    if a.fade_s > 0 and voice["state"] == "playing":
+                        voice.update(state="fading", fade_until=mono + a.fade_s)
+                    else:
+                        voice["state"] = "idle"
+                elif isinstance(a, Drop):
+                    log["dropped"].append((a.seg_id, a.reason))
+                elif isinstance(a, Duck):
+                    log["ducks"].append((now, a.gain))
+            if running:
+                now = round(now + dt, 4)
+            mono = round(mono + dt, 4)
+        return s, log
+
+    def test_short_overlap_makes_the_next_sentence_wait(self):
+        # A (fit capped at 1.3) is audible until ~7.77, 0.82 s after B is due:
+        # B waits for it instead of being dropped as late.
+        s, log = self._run([(1, 5.0, 7.0, 3.6), (2, 7.2, 9.0, 1.0)], 10.0)
+        self.assertEqual(log["dropped"], [])
+        self.assertEqual(log["stops"], [])
+        self.assertIn(2, log["started"])
+        self.assertGreater(log["started"][2], log["started"][1])
+        self.assertLess(log["started"][2], 7.2 - 0.25 + 1.5)
+        # the original audio stays ducked between the two clips (no pumping)
+        self.assertFalse([t for t, g in log["ducks"]
+                          if g == 1.0 and t < log["started"][2]])
+
+    def test_long_overlap_fades_the_playing_clip_out(self):
+        s, log = self._run([(1, 5.0, 7.0, 4.5), (2, 7.2, 9.0, 1.0)], 10.0)
+        self.assertEqual(log["stops"], [(1, 0.18)])
+        self.assertEqual(log["dropped"], [])
+        self.assertIn(2, log["started"])
+        self.assertLess(log["started"][2], 7.2)
+
+    def test_clip_started_late_is_sped_up_before_being_cut(self):
+        # B waits behind A and starts late at its own speed 1.0; when C is due,
+        # B still has more than 0.6 s: it goes to 1.3x and finishes, no cut.
+        s, log = self._run([(1, 1.0, 3.0, 3.6), (2, 3.2, 6.0, 2.8),
+                            (3, 6.0, 8.0, 1.0)], 9.0)
+        self.assertEqual(log["dropped"], [])
+        self.assertIn((2, 1.3), log["speeds"])
+        self.assertEqual(log["stops"], [])
+        self.assertEqual(sorted(log["started"]), [1, 2, 3])
+
+    def test_no_overlap_keeps_the_old_behaviour(self):
+        s, log = self._run([(1, 5.0, 7.0, 1.5), (2, 8.0, 9.0, 0.8)], 10.0)
+        self.assertEqual((log["dropped"], log["stops"], log["speeds"]), ([], [], []))
+        self.assertAlmostEqual(log["started"][2], 7.76, places=2)
+
+    def test_pause_during_overlap_keeps_both_sentences(self):
+        s, log = self._run([(1, 5.0, 7.0, 3.6), (2, 7.2, 9.0, 1.0)], 10.0,
+                           pause_at=7.0, resume_at=None)
+        self.assertEqual(log["dropped"], [])
+        self.assertNotIn(2, log["started"])      # still paused: waits, no drop
+
+    def test_seek_clears_the_held_sentence(self):
+        s, log = self._run([(1, 5.0, 7.0, 3.6), (2, 7.2, 9.0, 1.0)], 7.1)
+        self.assertEqual(s._held, 2)
+        s.on_seek(2.0, 1)
+        self.assertIsNone(s._held)
+
+    def test_live_mode_is_untouched(self):
+        s = _dub_sched(mode="live")
+        s.upsert(LiveSegment(1, 0, 5.0, 7.0, "x", text_tgt="a", dub_ok=True))
+        s.upsert(LiveSegment(2, 0, 7.2, 9.0, "x", text_tgt="b", dub_ok=True))
+        s.clip_ready(1, 0, _clip(audible=4.5))
+        s.tick(4.0, voice_state="idle")
+        s.tick(4.8, voice_state="preloaded")
+        self.assertEqual(s._playing, 1)
+        s.clip_ready(2, 0, _clip(audible=1.0))
+        acts = s.tick(7.0, voice_state="playing")
+        self.assertNotIn("StopClip", _types(acts))
+        self.assertNotIn("ClipSpeed", _types(acts))
 
 
 class DuckEnvelopeTests(unittest.TestCase):

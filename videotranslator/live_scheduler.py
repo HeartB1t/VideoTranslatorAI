@@ -275,7 +275,8 @@ class DubScheduler:
                  max_live_lag_s: float = 4.0, max_speed: float = 1.3,
                  unduck_tail_s: float = 0.2, duck_gain: float = 0.3,
                  duck_ramp_s: float = 0.2, duck_latency_s: float = 0.4,
-                 max_in_flight: int = 8) -> None:
+                 max_in_flight: int = 8, overlap_wait_s: float = 0.6,
+                 overlap_max_s: float = 1.0, overlap_fade_s: float = 0.18) -> None:
         self._mode = mode
         self._overhang = overhang_s
         self._merge_gap = merge_gap_s
@@ -302,6 +303,16 @@ class DubScheduler:
         self._duck_ramp = duck_ramp_s
         self._duck_latency = duck_latency_s
         self._max_in_flight = max_in_flight
+        # Overlap policy, delayed mode (design 4.11): a next clip waits up to
+        # overlap_wait_s for the playing one; beyond that the playing clip goes
+        # to max_speed, and if the wait would still exceed overlap_max_s it
+        # stops with an overlap_fade_s fade.
+        self._overlap_wait = overlap_wait_s
+        self._overlap_max = overlap_max_s
+        self._overlap_fade = overlap_fade_s
+        self._held: int | None = None          # next clip waiting behind the playing one
+        self._playing_fit = 1.0                # speed factor of the playing clip
+        self._overlap_sped = False
         self._dub_state: dict[int, str] = {}   # seg_id -> translated/synth/ready/
                                                # preloaded/playing/done/dropped
         self._clips: dict[int, object] = {}    # seg_id -> Clip
@@ -321,6 +332,7 @@ class DubScheduler:
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
+        self._held = None          # the overlap policy is delayed-mode only
 
     def set_subs(self, on: bool) -> list[object]:
         self._subs = on
@@ -411,6 +423,7 @@ class DubScheduler:
                 actions.append(StopClip(0.18))
             self._playing = self._preloaded = None
             self._pacer_recovery_seg = None
+            self._held = None
             self._clip_paused = False
             if self._duck_target != 1.0:
                 self._duck_target = 1.0
@@ -437,16 +450,21 @@ class DubScheduler:
         return self._pacer_recovery_seg is not None
 
     def _next_ready(self, now: float, pacer_paused: bool = False) -> LiveSegment | None:
-        tol = self._max_live_lag if self._mode == "live" else self._late_tol
+        live = self._mode == "live"
         cands = [s for s in self._segments.values()
                  if self._dub_state.get(s.seg_id) == "ready"
-                 and (s.start >= now - tol or
+                 and (s.start >= now - (self._max_live_lag if live
+                                        else self._late_tolerance(s)) or
                       (pacer_paused and s.seg_id == self._pacer_recovery_seg))]
         return min(cands, key=lambda s: s.start) if cands else None
 
     def _imminent_clip(self, now: float) -> bool:
-        return any(self._dub_state.get(s.seg_id) in ("ready", "preloaded")
-                   and 0.0 <= s.start - now <= 0.6 for s in self._segments.values())
+        # A clip held behind the previous one is due already: keep the duck.
+        held_due = (self._held is not None
+                    and self._dub_state.get(self._held) in ("ready", "preloaded"))
+        return held_due or any(
+            self._dub_state.get(s.seg_id) in ("ready", "preloaded")
+            and 0.0 <= s.start - now <= 0.6 for s in self._segments.values())
 
     def _dub_reset(self) -> list[object]:
         """Stop any clip and unduck (epoch change / seek)."""
@@ -455,10 +473,51 @@ class DubScheduler:
             actions.append(StopClip(0.0))
         self._playing = self._preloaded = None
         self._pacer_recovery_seg = None
+        self._held = None
         self._clip_paused = False
         if self._duck_target != 1.0:
             self._duck_target = 1.0
             actions.append(Duck(1.0))
+        return actions
+
+    def _late_tolerance(self, seg: LiveSegment) -> float:
+        """How long after its lead time a delayed clip may still start.
+
+        A clip held behind a playing one gets the overlap budget on top: the
+        overlap policy guarantees the device is free within overlap_max_s.
+        """
+        if seg.seg_id == self._held:
+            return self._late_tol + self._overlap_max
+        return self._late_tol
+
+    def _overlap_actions(self, now: float, main_speed: float) -> list[object]:
+        """Delayed mode: the next sentence is due while a clip still plays."""
+        cur = self._segments.get(self._playing) if self._playing is not None else None
+        if cur is None:
+            return []
+        nexts = [s for s in self._segments.values()
+                 if s.start > cur.start and self._dub_state.get(s.seg_id) == "ready"]
+        if not nexts:
+            return []
+        nxt = min(nexts, key=lambda s: s.start)
+        if now < nxt.start - self._lead:
+            return []
+        self._held = nxt.seg_id
+        actions: list[object] = []
+        remaining = self._expected_end - now
+        if (remaining > self._overlap_wait and not self._overlap_sped
+                and self._playing_fit < self._max_speed):
+            # Speed the playing clip up: the audio left plays in less media time.
+            remaining = remaining * self._playing_fit / self._max_speed
+            self._playing_fit = self._max_speed
+            self._expected_end = now + remaining
+            self._overlap_sped = True
+            actions.append(ClipSpeed(self._max_speed * main_speed))
+        if remaining > self._overlap_max or now >= self._expected_end + 0.2:
+            # Still too long (or running past its estimate): fade it out so the
+            # next sentence is not lost.
+            actions.append(StopClip(self._overlap_fade))
+            self._finish_playing()
         return actions
 
     def _dub_freeze(self) -> list[object]:
@@ -500,6 +559,9 @@ class DubScheduler:
             elif now >= self._expected_end + 1.0:
                 actions.append(StopClip(0.0))
                 self._finish_playing()
+        if (not live and self._playing is not None and main_running
+                and self._playing != self._pacer_recovery_seg):
+            actions.extend(self._overlap_actions(now, main_speed))
         # Request TTS for translated segments still inside their slot; also let a
         # "synth" that never produced a result expire, so a stuck or rejected
         # request cannot leave a permanent coverage hole (the pacer then waits
@@ -540,7 +602,8 @@ class DubScheduler:
             if live:
                 too_late, reason = now - seg.start > self._max_live_lag, "lag"
             else:
-                too_late, reason = now > seg.start - self._lead + self._late_tol, "late"
+                too_late = now > seg.start - self._lead + self._late_tolerance(seg)
+                reason = "late"
             if too_late:
                 # A clip late only because the pacer held the picture can still
                 # be voiced (recovery) while the picture stays held. Only a clip
@@ -562,6 +625,8 @@ class DubScheduler:
                 actions.append(Drop(seg.seg_id, reason))
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
+                if self._held == seg.seg_id:
+                    self._held = None
         # Preload the next ready clip when the voice device is free.
         if voice_state == "idle" and self._preloaded is None and self._playing is None:
             cand = self._next_ready(now, pacer_paused)
@@ -576,7 +641,8 @@ class DubScheduler:
                                         and now - cand.start <= self._max_live_lag)
                 else:
                     ready_to_preload = (cand.start - self._preload_s <= now
-                                        < cand.start - self._lead + self._late_tol
+                                        < cand.start - self._lead
+                                        + self._late_tolerance(cand)
                                         or (pacer_paused
                                             and cand.seg_id == self._pacer_recovery_seg))
                 if ready_to_preload:
@@ -607,7 +673,10 @@ class DubScheduler:
                 start_now = (now >= seg.start - self._lead
                              or (pacer_paused and seg.seg_id == self._pacer_recovery_seg))
                 fit = min(self._max_speed, max(1.0, audible / slot_len))
-                base = now if seg.seg_id == self._pacer_recovery_seg else seg.start
+                # A clip started after its sentence (recovery, or held behind the
+                # previous clip) ends from now, not from the sentence start.
+                base = (now if seg.seg_id == self._pacer_recovery_seg
+                        else max(now, seg.start))
             if start_now and (main_running or (pacer_paused
                                                and seg.seg_id == self._pacer_recovery_seg)):
                 actions.append(StartClip(seg.seg_id, fit * main_speed))
@@ -615,6 +684,10 @@ class DubScheduler:
                 self._preloaded = None
                 self._clip_paused = False
                 self._dub_state[seg.seg_id] = "playing"
+                self._playing_fit = fit
+                self._overlap_sped = False
+                if self._held == seg.seg_id:
+                    self._held = None
                 self._expected_end = base + audible / max(fit, 0.1)
                 self._recovery_mono_end = mono + audible / max(fit, 0.1) + 1.0
                 self._voiced += 1
