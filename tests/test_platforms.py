@@ -4,13 +4,17 @@ import unittest
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from subprocess import CompletedProcess, CalledProcessError, TimeoutExpired
 
+import os
+
 from videotranslator.platforms import (
     APP_OUTPUT_DIR_NAME,
     Wav2LipPaths,
     default_output_dir,
     default_videos_dir,
     linux_xdg_videos_dir,
+    pid_alive,
     platform_info,
+    process_start_token,
     resolve_output_dir,
     reveal_in_file_manager,
     resolve_app_paths,
@@ -176,6 +180,53 @@ class PlatformTests(unittest.TestCase):
         # The exact parent depends on the machine's videos dir; the leaf is fixed.
         self.assertEqual(resolve_output_dir(None).name, APP_OUTPUT_DIR_NAME)
         self.assertEqual(resolve_output_dir("").name, APP_OUTPUT_DIR_NAME)
+
+
+class PidAliveTests(unittest.TestCase):
+    def test_posix_alive(self):
+        self.assertTrue(pid_alive(123, sys_platform="linux", kill=lambda p, s: None))
+
+    def test_posix_dead(self):
+        def _dead(p, s):
+            raise ProcessLookupError
+
+        self.assertFalse(pid_alive(123, sys_platform="linux", kill=_dead))
+
+    def test_posix_permission_means_alive(self):
+        def _perm(p, s):
+            raise PermissionError
+
+        self.assertTrue(pid_alive(123, sys_platform="linux", kill=_perm))
+
+    def test_nonpositive_pid_is_dead(self):
+        self.assertFalse(pid_alive(0, sys_platform="linux", kill=lambda p, s: None))
+
+    def test_windows_uses_probe(self):
+        self.assertTrue(pid_alive(1, sys_platform="win32", win_probe=lambda p: True))
+        self.assertFalse(pid_alive(1, sys_platform="win32", win_probe=lambda p: False))
+
+    def test_current_process_is_alive(self):
+        self.assertTrue(pid_alive(os.getpid()))
+
+
+class ProcessStartTokenTests(unittest.TestCase):
+    def test_parses_field_22_from_injected_stat(self):
+        # comm has a space and parens; starttime is field 22 (value 22 below).
+        tail = " ".join(str(i) for i in range(3, 52))
+        stat = f"1234 (my (proc)) {tail}"
+        token = process_start_token(1234, sys_platform="linux",
+                                    proc_stat_reader=lambda pid: stat)
+        self.assertEqual(token, "22")
+
+    def test_non_linux_without_reader_is_none(self):
+        self.assertIsNone(process_start_token(1234, sys_platform="darwin"))
+
+    def test_current_process_has_a_token_on_linux(self):
+        if not __import__("sys").platform.startswith("linux"):
+            self.skipTest("Linux only")
+        token = process_start_token(os.getpid())
+        self.assertIsNotNone(token)
+        self.assertTrue(token.isdigit())
 
     def test_default_videos_dir_windows_falls_back_to_home_videos(self):
         self.assertEqual(

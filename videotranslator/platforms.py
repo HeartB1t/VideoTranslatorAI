@@ -322,6 +322,82 @@ def resolve_output_dir(
     return default_output_dir(sys_platform, home)
 
 
+def _windows_pid_alive(pid: int) -> bool:
+    try:
+        import ctypes
+        from ctypes import wintypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        exit_code = wintypes.DWORD()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+        kernel32.CloseHandle(handle)
+        return bool(ok) and exit_code.value == 259  # STILL_ACTIVE
+    except Exception:
+        return True  # inconclusive: do not treat as dead
+
+
+def pid_alive(pid: int, *, sys_platform: str | None = None,
+              kill: Callable[[int, int], None] = os.kill,
+              win_probe: Callable[[int], bool] | None = None) -> bool:
+    """Whether ``pid`` is a live process (design G12).
+
+    ``os.kill(pid, 0)`` is a liveness probe on POSIX only; on Windows a handle is
+    opened and its exit code checked. Injected ``kill``/``win_probe`` keep both
+    branches testable.
+    """
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if pid <= 0:
+        return False
+    if sys_platform.startswith("win"):
+        return (win_probe or _windows_pid_alive)(pid)
+    try:
+        kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def process_start_token(pid: int, *, sys_platform: str | None = None,
+                        proc_stat_reader: Callable[[int], str] | None = None) -> str | None:
+    """A token that changes when a PID is reused (design G12, 4.15).
+
+    On Linux it is field 22 (``starttime``) of ``/proc/<pid>/stat``. On other
+    platforms it returns ``None`` unless a reader is injected. Paired with the
+    PID, it detects a stale ``session.lock`` whose owner has exited and a new
+    process took the number.
+    """
+    if sys_platform is None:
+        sys_platform = sys.platform
+    if not sys_platform.startswith("linux") and proc_stat_reader is None:
+        return None
+    reader = proc_stat_reader or _read_proc_stat
+    try:
+        stat = reader(pid)
+    except OSError:
+        return None
+    # The comm field is in parentheses and may contain spaces/parens; split
+    # after the last ')'.
+    tail = stat[stat.rfind(")") + 1:].split()
+    # After comm, fields are state (index 0), ..., starttime is field 22 overall
+    # which is index 22 - 3 = 19 in the post-comm tail.
+    if len(tail) <= 19:
+        return None
+    return tail[19]
+
+
+def _read_proc_stat(pid: int) -> str:
+    with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+        return fh.read()
+
+
 def reveal_in_file_manager(
     path: PurePath,
     *,
