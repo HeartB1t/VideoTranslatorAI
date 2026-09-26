@@ -253,6 +253,14 @@ def _percentile(values: Sequence[float], pct: int) -> float:
 
 
 _GRACE = {"delayed": 1.5, "live": 6.0}
+# Memory bound for long videos: finished segments older than _KEEP_HISTORY_S
+# behind the playhead are forgotten (a backward seek there restarts the
+# producers, and the clip cache still avoids a second TTS), and at most
+# _MAX_SEGMENTS are kept, so the 50 Hz tick never scans an unbounded history.
+_KEEP_HISTORY_S = 120.0
+_MAX_SEGMENTS = 2000
+_MAX_CLIP_CACHE = 2000
+_ACTIVE_DUB = frozenset(("translated", "synth", "ready", "preloaded", "playing"))
 _SUB_MIN_DISPLAY_S = 1.5
 _CAPTION_CLEAR_TAIL_S = 0.3
 
@@ -329,6 +337,7 @@ class DubScheduler:
         self._margins: list[float] = []        # recent start margins for p90
         self._voiced = 0
         self._dub_dropped = 0
+        self._last_prune: float | None = None
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
@@ -397,6 +406,8 @@ class DubScheduler:
         seg.clip = clip
         self._dub_state[seg_id] = "ready"
         self._clip_cache[self._cache_key(seg)] = clip
+        while len(self._clip_cache) > _MAX_CLIP_CACHE:
+            self._clip_cache.pop(next(iter(self._clip_cache)))    # oldest first
         return True
 
     def _still_voiceable(self, seg: LiveSegment, now: float | None) -> bool:
@@ -789,7 +800,35 @@ class DubScheduler:
         if self._dub:
             actions.extend(self._dub_actions(now, mono, main_running, main_speed,
                                              voice_state, pacer_paused))
+        if (self._last_prune is None or abs(now - self._last_prune) >= 1.0
+                or len(self._segments) > _MAX_SEGMENTS):
+            self._last_prune = now
+            self._prune(now)
         return actions
+
+    def _prune(self, now: float) -> None:
+        """Forget finished segments far behind the playhead (memory bound)."""
+        busy = {self._playing, self._preloaded, self._held, self._pacer_recovery_seg,
+                self._shown[0] if self._shown is not None else None}
+
+        def finished(seg: LiveSegment) -> bool:
+            return (seg.seg_id not in busy
+                    and self._dub_state.get(seg.seg_id) not in _ACTIVE_DUB)
+
+        old = [s.seg_id for s in self._segments.values()
+               if s.end < now - _KEEP_HISTORY_S and finished(s)]
+        excess = len(self._segments) - len(old) - _MAX_SEGMENTS
+        if excess > 0:
+            behind = sorted((s for s in self._segments.values()
+                             if s.end < now and finished(s) and s.seg_id not in old),
+                            key=lambda s: s.end)
+            old.extend(s.seg_id for s in behind[:excess])
+        for seg_id in old:
+            del self._segments[seg_id]
+            self._arrival.pop(seg_id, None)
+            self._dropped.discard(seg_id)
+            self._dub_state.pop(seg_id, None)
+            self._clips.pop(seg_id, None)
 
     def _dub_pending(self, seg: LiveSegment) -> bool:
         """Whether this segment's dubbed clip can still arrive (dub on).

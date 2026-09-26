@@ -721,6 +721,46 @@ class OverlapPolicyTests(unittest.TestCase):
         self.assertNotIn("ClipSpeed", _types(acts))
 
 
+class LongVideoMemoryTests(unittest.TestCase):
+    """Old finished segments are forgotten so the 50 Hz tick stays cheap."""
+
+    def test_three_hour_video_keeps_a_bounded_history(self):
+        s = DubScheduler(mode="delayed", dub=False, subs=True)
+        shown = 0
+        peak = 0
+        for i in range(3600):                       # one 3 s sentence every 3 s
+            start = i * 3.0
+            s.upsert(LiveSegment(i, 0, start, start + 2.5, "x", text_tgt=f"t{i}"))
+            for step in (0.5, 1.5):
+                acts = s.tick(start + step)
+                shown += sum(isinstance(a, ShowSubtitle) for a in acts)
+            peak = max(peak, len(s._segments))
+        self.assertEqual(shown, 3600)               # every caption still shown
+        self.assertLessEqual(peak, 50)              # ~120 s of history, not 3 h
+        now = 3599 * 3.0 + 1.5
+        self.assertTrue(s.covers(now - 60.0))       # recent past: cheap backward seek
+        self.assertFalse(s.covers(10.0))            # far past: producers restart
+
+    def test_active_dub_segments_are_never_forgotten(self):
+        s = _dub_sched()
+        s.upsert(LiveSegment(1, 0, 5.0, 7.0, "x", text_tgt="uno", dub_ok=True))
+        s.tick(0.0, mono=100.0, voice_state="idle")          # -> synth (in flight)
+        s._prune(1000.0)
+        self.assertIn(1, s._segments)
+        s._dub_state[1] = "done"
+        s._prune(1000.0)
+        self.assertNotIn(1, s._segments)
+
+    def test_clip_cache_is_bounded(self):
+        from videotranslator import live_scheduler as ls
+        s = _dub_sched()
+        for i in range(ls._MAX_CLIP_CACHE + 5):
+            s.upsert(LiveSegment(i, 0, float(i), i + 0.5, "x", text_tgt=f"t{i}",
+                                 dub_ok=True))
+            s.clip_ready(i, 0, _clip())
+        self.assertEqual(len(s._clip_cache), ls._MAX_CLIP_CACHE)
+
+
 class DuckEnvelopeTests(unittest.TestCase):
     def test_ramps_to_target_in_about_ten_small_steps(self):
         env = DuckEnvelope(ramp_s=0.2, tick_s=0.02)
