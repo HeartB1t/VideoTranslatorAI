@@ -403,9 +403,9 @@ UI_STRINGS = {
         "panel_profile": "Profilo di lavoro",
         "panel_start": "Avvio",
         "section_audio": "Audio",
-        "section_voice_cloning": "Voice Cloning",
-        "section_lip_sync": "Lip Sync",
-        "section_diarization": "Diarization",
+        "section_voice_cloning": "Clonazione vocale",
+        "section_lip_sync": "Sincronizzazione labiale",
+        "section_diarization": "Riconoscimento dei parlanti",
         "section_model": "Modello",
         "section_engine": "Motore traduzione",
         "section_subtitles": "Sottotitoli",
@@ -942,7 +942,7 @@ UI_STRINGS = {
         "panel_start": "Start",
         "section_audio": "Zvuk",
         "section_voice_cloning": "Hlasové klonování",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Synchronizace rtů",
         "section_diarization": "Rozpoznávání mluvčích",
         "section_model": "Model",
         "section_engine": "Překladač",
@@ -1075,7 +1075,7 @@ UI_STRINGS = {
         "panel_start": "Start",
         "section_audio": "Lyd",
         "section_voice_cloning": "Stemmekloning",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Læbesynkronisering",
         "section_diarization": "Taleridentifikation",
         "section_model": "Model",
         "section_engine": "Oversættelsesmotor",
@@ -1208,7 +1208,7 @@ UI_STRINGS = {
         "panel_start": "Start",
         "section_audio": "Audio",
         "section_voice_cloning": "Spraakklonen",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Lipsynchronisatie",
         "section_diarization": "Sprekerdiarisatie",
         "section_model": "Model",
         "section_engine": "Vertaalengine",
@@ -1606,7 +1606,7 @@ UI_STRINGS = {
         "panel_profile": "Workflow-Profil",
         "panel_start": "Start",
         "section_audio": "Audio",
-        "section_voice_cloning": "Voice Cloning",
+        "section_voice_cloning": "Stimmklonen",
         "section_lip_sync": "Lippensynchronisation",
         "section_diarization": "Sprechertrennung",
         "section_model": "Modell",
@@ -1740,7 +1740,7 @@ UI_STRINGS = {
         "panel_start": "Έναρξη",
         "section_audio": "Ήχος",
         "section_voice_cloning": "Κλωνοποίηση φωνής",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Συγχρονισμός χειλιών",
         "section_diarization": "Διαχωρισμός ομιλητών",
         "section_model": "Μοντέλο",
         "section_engine": "Μηχανή μετάφρασης",
@@ -2538,7 +2538,7 @@ UI_STRINGS = {
         "panel_start": "Start",
         "section_audio": "Lyd",
         "section_voice_cloning": "Stemmekloning",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Leppesynkronisering",
         "section_diarization": "Taleridentifikasjon",
         "section_model": "Modell",
         "section_engine": "Oversettelsesmotor",
@@ -2937,7 +2937,7 @@ UI_STRINGS = {
         "panel_start": "Start",
         "section_audio": "Audio",
         "section_voice_cloning": "Clonarea vocii",
-        "section_lip_sync": "Lip Sync",
+        "section_lip_sync": "Sincronizare labială",
         "section_diarization": "Identificare vorbitori",
         "section_model": "Model",
         "section_engine": "Motor de traducere",
@@ -7199,7 +7199,8 @@ class App(tk.Tk):
     def _build_advanced_panel(self, parent):
         """Right-pane card, below Start: collapsible accordion sections for
         all advanced options."""
-        adv, _ = self._panel(parent, "settings", None, pady=(4, 0))
+        adv, self._lbl_panel_settings = self._panel(
+            parent, "settings", self._s("panel_settings"), pady=(4, 0))
         self._advanced_card = adv
 
         def cb(par, text_key, var, cmd=None):
@@ -8242,6 +8243,8 @@ class App(tk.Tk):
         self._lbl_panel_input.configure(text=self._title_upper(self._s("panel_input"), lang))
         self._lbl_panel_translation.configure(text=self._title_upper(self._s("panel_translation"), lang))
         self._lbl_panel_profile.configure(text=self._title_upper(self._s("panel_profile"), lang))
+        self._lbl_panel_settings.configure(
+            text=self._title_upper(self._s("panel_settings"), lang))
         self._lbl_panel_start.configure(text=self._title_upper(self._s("panel_start"), lang))
         self._lbl_video.configure(text=self._s("label_video"))
         self._lbl_output.configure(text=self._s("label_output"))
