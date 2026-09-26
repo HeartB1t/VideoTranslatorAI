@@ -281,6 +281,19 @@ class LanguageNameTests(unittest.TestCase):
         self.assertEqual(gui.UI_STRINGS["de"]["lang_auto_detect"], "Automatisch erkennen")
 
 
+class VoiceboxCheckTests(unittest.TestCase):
+    def test_result_text_is_built_on_the_tk_thread(self):
+        app = SimpleNamespace(_destroying=False, _lbl_vb_status=Mock(),
+                              _btn_vb_check=Mock(),
+                              _s=lambda key: {"vb_ok": "ok {device}",
+                                              "vb_unreachable": "down {url}"}[key])
+        gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", "CUDA")
+        app._lbl_vb_status.configure.assert_called_with(text="ok CUDA")
+        gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", None)
+        app._lbl_vb_status.configure.assert_called_with(text="down http://127.0.0.1:17493")
+        app._btn_vb_check.configure.assert_called_with(state="normal")
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))

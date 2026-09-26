@@ -353,6 +353,17 @@ class FileBufferTests(unittest.TestCase):
             self.assertFalse(sess._self_paused)
             self.assertIsNone(sess.status().warning_key)
 
+    def test_pauses_right_after_a_seek_do_not_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            for clock in (100.0, 104.0):
+                sess._clock = lambda c=clock: c
+                sess.notify_user_seek(50.0)
+                sess._drain_control(0.0)
+                self._paused_once(sess, clock + 1.0)
+            self.assertEqual(sess._pacer.resume_ahead_s, 8.0)
+            self.assertIsNone(sess.status().warning_key)
+
     def test_auto_off_keeps_the_buffer(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, _, _ = _session(tmp, overrides={"live_delay_auto": False})

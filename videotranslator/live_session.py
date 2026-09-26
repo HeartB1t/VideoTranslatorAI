@@ -367,6 +367,7 @@ class LiveSession:
                                 resume_ahead_s=self._timing.resume_ahead_s)
         from .live_sync import AutoDelay
         self._auto_delay = AutoDelay() if s.delay_auto else None
+        self._last_seek_mono: float | None = None
 
         from .live_asr import HallucinationFilter, LanguageLock
         from .live_segment import SentenceAssembler, UtteranceSegmenter
@@ -847,6 +848,7 @@ class LiveSession:
                 if rt is not None:
                     rt.set_pause(self._user_paused or self._self_paused)
             elif kind == "seek":
+                self._last_seek_mono = self._clock()
                 restart = not self._scheduler.covers(value)
                 if restart:
                     with self._decode_lock:
@@ -1045,7 +1047,10 @@ class LiveSession:
         happening, rebuild a larger buffer before resuming (delay_auto)."""
         if self._auto_delay is None:
             return
-        raised = self._auto_delay.on_pause(self._clock(), self._pacer.resume_ahead_s)
+        mono = self._clock()
+        if self._last_seek_mono is not None and mono - self._last_seek_mono < 10.0:
+            return          # waiting after the user's seek, not falling behind
+        raised = self._auto_delay.on_pause(mono, self._pacer.resume_ahead_s)
         if raised is None:
             return
         self._pacer.set_resume_ahead(raised)

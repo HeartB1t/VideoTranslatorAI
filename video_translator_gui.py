@@ -8843,18 +8843,21 @@ class App(tk.Tk):
         self._btn_vb_check.configure(state="disabled")
 
         def work() -> None:
+            # Network only here; the text is built on the Tk thread (self._s
+            # reads a Tk variable).
             try:
                 device = vbe.describe_health(vbe.VoiceboxClient(url).health())
-                text = self._s("vb_ok").format(device=device)
             except Exception:                         # noqa: BLE001
-                text = self._s("vb_unreachable").format(url=url)
-            self.after(0, self._show_voicebox_check, text)
+                device = None
+            self.after(0, self._show_voicebox_check, url, device)
 
         threading.Thread(target=work, name="voicebox-check", daemon=True).start()
 
-    def _show_voicebox_check(self, text: str) -> None:
+    def _show_voicebox_check(self, url: str, device: str | None) -> None:
         if self._destroying:
             return
+        text = (self._s("vb_ok").format(device=device) if device is not None
+                else self._s("vb_unreachable").format(url=url))
         self._lbl_vb_status.configure(text=text)
         self._btn_vb_check.configure(state="normal")
 
@@ -10256,6 +10259,8 @@ class App(tk.Tk):
             save_hf_token(hf_token)
         # Persist Ollama prefs (model/url/slot_aware/thinking) when the user
         # has selected this engine - so the fields are pre-filled on next launch.
+        if self._use_voicebox.get():
+            self._save_voicebox_settings()      # the address/engine used last
         if translation_engine == "llm_ollama":
             try:
                 save_config({
