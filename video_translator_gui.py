@@ -8448,6 +8448,8 @@ class App(tk.Tk):
             "voice": "",
             "engine": raw["engine"],
             "deepl_key": self._deepl_key_var.get().strip(),
+            "ollama_url": self._ollama_url_var.get().strip(),
+            "ollama_model": self._ollama_model_var.get().strip(),
         }
         settings = _player_settings_module.normalize_live_settings({
             "live_sync_mode": raw["mode"], "live_delay_s": raw["delay"],

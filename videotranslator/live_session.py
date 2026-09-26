@@ -122,6 +122,11 @@ def build_live_factories(cfg: LiveConfig,
         if engine == "marian":
             return make_translator("marian", is_cached=_default_is_cached,
                                    hub_has=default_hub_has)
+        if engine == "ollama":
+            return make_translator(
+                "ollama", sync_mode=cfg.settings.sync_mode,
+                api_url=cfg.engine_opts.get("ollama_url", "http://localhost:11434"),
+                model=cfg.engine_opts.get("ollama_model", "qwen3:8b"))
         return make_translator(engine, **cfg.engine_opts)
 
     return LiveFactories(
@@ -141,6 +146,10 @@ def build_live_config(values: dict, *, settings: LiveSettings, cache_dir: Path,
     engine_opts = {}
     if values.get("deepl_key"):
         engine_opts["deepl_key"] = values["deepl_key"]
+    if values.get("ollama_url"):
+        engine_opts["ollama_url"] = values["ollama_url"]
+    if values.get("ollama_model"):
+        engine_opts["ollama_model"] = values["ollama_model"]
     return LiveConfig(
         source=values["source"],
         source_kind=values.get("source_kind", "file"),
@@ -593,7 +602,10 @@ class LiveSession:
     def _mt_loop(self) -> None:
         translator = None
         prepared = False
-        timeout = TIMEOUTS_S.get(self._cfg.engine, 5.0)
+        key = self._cfg.engine
+        if key == "ollama":
+            key = "ollama_live" if self._cfg.settings.sync_mode == "live" else "ollama_delayed"
+        timeout = TIMEOUTS_S.get(key, 5.0)
         breaker = CircuitBreaker()
         try:
             translator = self._factories.translator(self._cfg.engine)

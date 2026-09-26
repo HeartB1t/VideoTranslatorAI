@@ -329,17 +329,21 @@ class BuildLiveFactoriesTests(unittest.TestCase):
         for f in (fac.decoder, fac.vad, fac.whisper, fac.translator, fac.tts):
             self.assertTrue(callable(f))
 
-    def test_unbuilt_online_engine_raises(self):
-        # Ollama live is not wired yet, so its factory still raises; Google and
-        # DeepL are built and covered in test_live_translate.
+    def test_factory_builds_engines_and_rejects_unknown(self):
+        # marian/google/deepl/ollama all build without a network call at
+        # construction (prepare/translate do the work); an unknown engine raises.
         from videotranslator.live_session import build_live_factories
         from videotranslator.live_translate import LiveTranslateError
         settings = normalize_live_settings({})
-        cfg = build_live_config({"source": "s", "lang_target": "it", "engine": "ollama"},
+        for engine in ("marian", "google", "deepl", "ollama"):
+            cfg = build_live_config(
+                {"source": "s", "lang_target": "it", "engine": engine, "deepl_key": "k"},
+                settings=settings, cache_dir=Path("/c"), now=1.0)
+            self.assertIsNotNone(build_live_factories(cfg).translator(engine))
+        cfg = build_live_config({"source": "s", "lang_target": "it", "engine": "bing"},
                                 settings=settings, cache_dir=Path("/c"), now=1.0)
-        fac = build_live_factories(cfg)
         with self.assertRaises(LiveTranslateError):
-            fac.translator("ollama")
+            build_live_factories(cfg).translator("bing")
 
 
 @unittest.skipUnless(os.environ.get("VTAI_RUN_HEAVY_SMOKE"),

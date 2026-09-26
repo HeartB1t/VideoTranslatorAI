@@ -287,6 +287,8 @@ def _classify_online_error(exc: Exception) -> str:
         return "rate_limited"
     if "quota" in text or "456" in text:
         return "quota"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
     return "error"
 
 
@@ -408,11 +410,100 @@ class DeeplLiveTranslator:
         pass
 
 
+class OllamaLiveTranslator:
+    """Per-sentence translation through a local Ollama daemon (design 4.9).
+
+    Resolves and health-checks the model once at prepare (raising ``ollama`` when
+    the daemon is unreachable or has no model), warms it up with keep_alive
+    "30m", and translates one sentence per call with thinking disabled. On close
+    it releases the model (keep_alive 0). Never raises from :meth:`translate`.
+    """
+
+    name = "ollama"
+    online = True
+
+    def __init__(self, *, api_url: str = "http://localhost:11434",
+                 model: str = "qwen3:8b", sync_mode: str = "delayed",
+                 generate=None, health_check=None,
+                 clock: Callable[[], float] | None = None) -> None:
+        self._api_url = api_url.rstrip("/")
+        self._model_req = model or "qwen3:8b"
+        self._sync_mode = sync_mode
+        self._generate = generate          # (prompt, *, num_predict, timeout) -> str
+        self._health = health_check
+        import time as _t
+        self._clock = clock or _t.monotonic
+        self._model = self._model_req
+        self._src_name = ""
+        self._tgt_name = ""
+        self._is_qwen3 = False
+
+    def prepare(self, src: str, tgt: str) -> None:
+        if self._health is not None:
+            ok, _msg, resolved = self._health(self._api_url, self._model_req)
+        else:
+            from .ollama_runtime import _ollama_health_check
+            ok, _msg, resolved = _ollama_health_check(self._api_url, self._model_req)
+        if not ok:
+            raise LiveTranslateError("ollama", {})
+        self._model = resolved or self._model_req
+        self._is_qwen3 = "qwen3" in self._model.lower()
+        from .ollama_runtime import _ollama_lang_name
+        self._src_name = _ollama_lang_name(src)
+        self._tgt_name = _ollama_lang_name(tgt)
+        if self._generate is None:          # warm the model up (best effort)
+            try:
+                self._http_generate(".", num_predict=1, timeout=(3.05, 10.0),
+                                    keep_alive="30m")
+            except Exception:               # noqa: BLE001
+                pass
+
+    def translate(self, text: str, *, context=(), timeout_s: float = 8.0) -> Outcome:
+        from .ollama_prompt import build_translation_prompt
+        from .ollama_runtime import _ollama_strip_preamble
+        start = self._clock()
+        prompt = build_translation_prompt(
+            text, 0.0, self._src_name, self._tgt_name, slot_aware=False,
+            is_qwen3=self._is_qwen3, thinking=False, prev_text=None,
+            next_text=None, global_context=None)
+        try:
+            if self._generate is not None:
+                raw = self._generate(prompt, num_predict=256, timeout=timeout_s)
+            else:
+                raw = self._http_generate(prompt, num_predict=256,
+                                          timeout=(3.05, timeout_s), keep_alive="30m")
+            out = _ollama_strip_preamble((raw or "").strip())
+            if not out:
+                return Outcome(text, False, self._clock() - start, error="error")
+            return Outcome(out, True, self._clock() - start)
+        except Exception as exc:            # noqa: BLE001 - never raises to the caller
+            return Outcome(text, False, self._clock() - start,
+                           error=_classify_online_error(exc))
+
+    def _http_generate(self, prompt: str, *, num_predict: int, timeout, keep_alive):
+        import requests
+        payload = {"model": self._model, "prompt": prompt, "stream": False,
+                   "think": False, "keep_alive": keep_alive,
+                   "options": {"temperature": 0, "num_predict": num_predict}}
+        resp = requests.post(f"{self._api_url}/api/generate", json=payload,
+                             timeout=timeout)
+        resp.raise_for_status()
+        return resp.json().get("response", "")
+
+    def close(self) -> None:
+        if self._generate is None:
+            try:
+                self._http_generate("", num_predict=1, timeout=(3.05, 5.0),
+                                    keep_alive=0)
+            except Exception:               # noqa: BLE001
+                pass
+
+
 def make_translator(engine: str, **deps) -> Any:
     """Build the per-sentence translator for ``engine`` (design 4.9).
 
-    MarianMT is fully offline; Google and DeepL are the online engines. Ollama is
-    not wired yet and raises. Unknown engines raise ``internal``.
+    MarianMT is fully offline; Google, DeepL and a local Ollama daemon are the
+    remaining engines. Unknown engines raise ``internal``.
     """
     if engine == "marian":
         return MarianLiveTranslator(**{k: deps[k] for k in (
@@ -424,5 +515,8 @@ def make_translator(engine: str, **deps) -> Any:
     if engine == "deepl":
         return DeeplLiveTranslator(**{k: deps[k] for k in (
             "deepl_key", "post", "clock") if k in deps})
-    raise LiveTranslateError("ollama" if engine == "ollama" else "internal",
-                             {"engine": engine})
+    if engine == "ollama":
+        return OllamaLiveTranslator(**{k: deps[k] for k in (
+            "api_url", "model", "sync_mode", "generate", "health_check",
+            "clock") if k in deps})
+    raise LiveTranslateError("internal", {"engine": engine})

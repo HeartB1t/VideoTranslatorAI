@@ -8,6 +8,7 @@ from videotranslator.live_translate import (
     DeeplLiveTranslator,
     GoogleLiveTranslator,
     LiveTranslateError,
+    OllamaLiveTranslator,
     MarianLeg,
     MarianLiveTranslator,
     MarianRoute,
@@ -110,6 +111,9 @@ class MarianLiveTranslatorTests(unittest.TestCase):
         self.assertIsInstance(make_translator("deepl", deepl_key="k"),
                               DeeplLiveTranslator)
 
+    def test_make_translator_ollama(self):
+        self.assertIsInstance(make_translator("ollama"), OllamaLiveTranslator)
+
     def test_make_translator_unknown_raises(self):
         with self.assertRaises(LiveTranslateError):
             make_translator("bing")
@@ -210,6 +214,51 @@ class DeeplLiveTranslatorTests(unittest.TestCase):
         self.assertEqual(seen["data"]["target_lang"], "EN-US")
         self.assertEqual(seen["data"]["source_lang"], "IT")
         self.assertIn("://api.deepl.com", seen["url"])
+
+
+class OllamaLiveTranslatorTests(unittest.TestCase):
+    @staticmethod
+    def _ok_health(url, model):
+        return (True, "", model)
+
+    @staticmethod
+    def _down_health(url, model):
+        return (False, "daemon down", "")
+
+    def test_translates(self):
+        tr = OllamaLiveTranslator(
+            model="qwen3:8b", health_check=self._ok_health,
+            generate=lambda prompt, *, num_predict, timeout: "Ciao, come stai?")
+        tr.prepare("en", "it")
+        out = tr.translate("Hello, how are you?")
+        tr.close()
+        self.assertTrue(out.ok)
+        self.assertEqual(out.text, "Ciao, come stai?")
+
+    def test_daemon_down_raises_on_prepare(self):
+        tr = OllamaLiveTranslator(health_check=self._down_health,
+                                  generate=lambda *a, **k: "x")
+        with self.assertRaises(LiveTranslateError) as ctx:
+            tr.prepare("en", "it")
+        self.assertEqual(ctx.exception.key, "ollama")
+
+    def test_timeout_keeps_original(self):
+        def boom(prompt, *, num_predict, timeout):
+            raise RuntimeError("HTTPSConnectionPool: Read timed out")
+        tr = OllamaLiveTranslator(health_check=self._ok_health, generate=boom)
+        tr.prepare("en", "it")
+        out = tr.translate("Hello")
+        self.assertFalse(out.ok)
+        self.assertEqual(out.error, "timeout")
+        self.assertEqual(out.text, "Hello")
+
+    def test_empty_response_is_a_failure(self):
+        tr = OllamaLiveTranslator(health_check=self._ok_health,
+                                  generate=lambda *a, **k: "   ")
+        tr.prepare("en", "it")
+        out = tr.translate("Hello")
+        self.assertFalse(out.ok)
+        self.assertEqual(out.error, "error")
 
 
 @unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
