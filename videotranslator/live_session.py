@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .live_health import LIVE_STATES
+from .live_health import LIVE_STATES, WARN_KEYS, CircuitBreaker
 from .platforms import pid_alive, process_start_token
 from .player_settings import LiveSettings
 
@@ -501,6 +501,19 @@ class LiveSession:
         self._decode_cancel.set()
         self._stop.set()
 
+    def _set_warning(self, code: str, engine: str) -> None:
+        with self._status_lock:
+            self._status.warning_key = WARN_KEYS.get(code, code)
+            self._status.warning_params = {"engine": engine}
+            self._status.warning_action = None
+
+    def _clear_warning(self) -> None:
+        with self._status_lock:
+            if self._status.warning_key is not None:
+                self._status.warning_key = None
+                self._status.warning_params = {}
+                self._status.warning_action = None
+
     def _decode_loop(self) -> None:
         decoder = None
         try:
@@ -580,10 +593,11 @@ class LiveSession:
     def _mt_loop(self) -> None:
         translator = None
         prepared = False
-        key = "marian" if self._cfg.engine == "marian" else self._cfg.engine
-        timeout = TIMEOUTS_S.get(key, 5.0)
+        timeout = TIMEOUTS_S.get(self._cfg.engine, 5.0)
+        breaker = CircuitBreaker()
         try:
             translator = self._factories.translator(self._cfg.engine)
+            online = bool(getattr(translator, "online", False))
             while not self._stop.is_set():
                 try:
                     sentence = self._mt_q.get(timeout=0.2)
@@ -597,7 +611,23 @@ class LiveSession:
                     src = self._langlock.locked or self._cfg.lang_source
                     translator.prepare(src, self._cfg.lang_target)
                     prepared = True
-                outcome = translator.translate(sentence.text, context=(), timeout_s=timeout)
+                # An online engine whose breaker is open keeps the original text
+                # (shown in the source language) without spending a call.
+                if online and not breaker.allow():
+                    self._emit_segment(sentence.start, sentence.end, sentence.text,
+                                       None, italic=True, gen=sentence.gen,
+                                       seg_id=sentence.seg_id)
+                    continue
+                outcome = translator.translate(sentence.text, context=(),
+                                               timeout_s=timeout)
+                if online:
+                    if outcome.ok:
+                        breaker.record_success()
+                        self._clear_warning()
+                    else:
+                        warn = breaker.record_failure(kind=outcome.error or "error")
+                        if warn:
+                            self._set_warning(warn, self._cfg.engine)
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,
                     outcome.text if outcome.ok else None, italic=not outcome.ok,

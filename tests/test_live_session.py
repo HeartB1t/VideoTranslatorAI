@@ -330,14 +330,16 @@ class BuildLiveFactoriesTests(unittest.TestCase):
             self.assertTrue(callable(f))
 
     def test_unbuilt_online_engine_raises(self):
+        # Ollama live is not wired yet, so its factory still raises; Google and
+        # DeepL are built and covered in test_live_translate.
         from videotranslator.live_session import build_live_factories
         from videotranslator.live_translate import LiveTranslateError
         settings = normalize_live_settings({})
-        cfg = build_live_config({"source": "s", "lang_target": "it", "engine": "google"},
+        cfg = build_live_config({"source": "s", "lang_target": "it", "engine": "ollama"},
                                 settings=settings, cache_dir=Path("/c"), now=1.0)
         fac = build_live_factories(cfg)
         with self.assertRaises(LiveTranslateError):
-            fac.translator("google")
+            fac.translator("ollama")
 
 
 @unittest.skipUnless(os.environ.get("VTAI_RUN_HEAVY_SMOKE"),

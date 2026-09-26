@@ -280,15 +280,149 @@ class MarianLiveTranslator:
                 pass
 
 
+def _classify_online_error(exc: Exception) -> str:
+    """Map a translator client exception to an Outcome error kind."""
+    text = f"{type(exc).__name__} {exc}".lower()
+    if "toomanyrequests" in text or "429" in text or "rate" in text:
+        return "rate_limited"
+    if "quota" in text or "456" in text:
+        return "quota"
+    return "error"
+
+
+class GoogleLiveTranslator:
+    """Per-sentence Google translation via deep_translator (design 4.9).
+
+    Runs each call in a single-slot executor with ``future.result(timeout)`` so a
+    hung request is abandoned instead of blocking the MT thread, and paces calls
+    0.3 s apart to stay under the free endpoint's rate limit. Never raises from
+    :meth:`translate`; a failure returns the original text with an error kind.
+    """
+
+    name = "google"
+    online = True
+    _PACE_S = 0.3
+
+    def __init__(self, *, translator_factory=None,
+                 clock: Callable[[], float] | None = None, sleep=None) -> None:
+        self._factory = translator_factory
+        import time as _t
+        self._clock = clock or _t.monotonic
+        self._sleep = sleep or _t.sleep
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._translator = None
+        self._last_call = 0.0
+
+    def prepare(self, src: str, tgt: str) -> None:
+        source = "auto" if not src or src == "auto" else src
+        if self._factory is not None:
+            self._translator = self._factory(source, tgt)
+            return
+        from deep_translator import GoogleTranslator
+        self._translator = GoogleTranslator(source=source, target=tgt)
+
+    def translate(self, text: str, *, context=(), timeout_s: float = 5.0) -> Outcome:
+        start = self._clock()
+        wait = self._PACE_S - (start - self._last_call)
+        if wait > 0:
+            self._sleep(wait)
+        self._last_call = self._clock()
+        try:
+            future = self._executor.submit(self._translator.translate, text)
+            result = future.result(timeout=timeout_s)
+            return Outcome(result or text, bool(result), self._clock() - start)
+        except concurrent.futures.TimeoutError:
+            return Outcome(text, False, self._clock() - start, error="timeout")
+        except Exception as exc:            # noqa: BLE001 - never raises to the caller
+            return Outcome(text, False, self._clock() - start,
+                           error=_classify_online_error(exc))
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False)
+
+
+def _deepl_target(tgt: str) -> str:
+    code = tgt.upper()
+    return "EN-US" if code == "EN" else code
+
+
+class DeeplLiveTranslator:
+    """Per-sentence DeepL translation over the v2 endpoint (design 4.9).
+
+    Maps the documented statuses to Outcome error kinds: 429 rate_limited, 456
+    quota, 403 unavailable, anything else error. Uses a short connect/read
+    timeout so a slow response never stalls the MT thread. Never raises.
+    """
+
+    name = "deepl"
+    online = True
+
+    def __init__(self, *, deepl_key: str = "", post=None,
+                 clock: Callable[[], float] | None = None) -> None:
+        self._key = (deepl_key or "").strip()
+        self._post = post
+        import time as _t
+        self._clock = clock or _t.monotonic
+        self._src: str | None = None
+        self._tgt = ""
+
+    def prepare(self, src: str, tgt: str) -> None:
+        if not self._key:
+            raise LiveTranslateError("deepl_key", {})
+        self._src = None if not src or src == "auto" else src.upper()
+        self._tgt = _deepl_target(tgt)
+
+    def _endpoint(self) -> str:
+        return ("https://api-free.deepl.com/v2/translate" if self._key.endswith(":fx")
+                else "https://api.deepl.com/v2/translate")
+
+    def translate(self, text: str, *, context=(), timeout_s: float = 5.0) -> Outcome:
+        start = self._clock()
+        payload = [("target_lang", self._tgt), ("text", text)]
+        if self._src:
+            payload.append(("source_lang", self._src))
+        headers = {"Authorization": f"DeepL-Auth-Key {self._key}"}
+        try:
+            if self._post is not None:
+                resp = self._post(self._endpoint(), data=payload, headers=headers,
+                                  timeout=(3, 5))
+            else:
+                import requests
+                resp = requests.post(self._endpoint(), data=payload, headers=headers,
+                                     timeout=(3, 5))
+            status = resp.status_code
+            if status == 429:
+                return Outcome(text, False, self._clock() - start, error="rate_limited")
+            if status == 456:
+                return Outcome(text, False, self._clock() - start, error="quota")
+            if status == 403:
+                return Outcome(text, False, self._clock() - start, error="unavailable")
+            if status != 200:
+                return Outcome(text, False, self._clock() - start, error="error")
+            out = (resp.json()["translations"][0]["text"] or "").strip()
+            return Outcome(out or text, bool(out), self._clock() - start)
+        except Exception:                   # noqa: BLE001 - never raises to the caller
+            return Outcome(text, False, self._clock() - start, error="error")
+
+    def close(self) -> None:
+        pass
+
+
 def make_translator(engine: str, **deps) -> Any:
     """Build the per-sentence translator for ``engine`` (design 4.9).
 
-    MarianMT is fully offline. The online engines are thin wrappers to be filled
-    in with their real clients; unknown engines raise.
+    MarianMT is fully offline; Google and DeepL are the online engines. Ollama is
+    not wired yet and raises. Unknown engines raise ``internal``.
     """
     if engine == "marian":
         return MarianLiveTranslator(**{k: deps[k] for k in (
             "hub_has", "is_cached", "tokenizer_loader", "model_loader",
             "torch_module", "clock") if k in deps})
+    if engine == "google":
+        return GoogleLiveTranslator(**{k: deps[k] for k in (
+            "translator_factory", "clock", "sleep") if k in deps})
+    if engine == "deepl":
+        return DeeplLiveTranslator(**{k: deps[k] for k in (
+            "deepl_key", "post", "clock") if k in deps})
     raise LiveTranslateError("ollama" if engine == "ollama" else "internal",
                              {"engine": engine})

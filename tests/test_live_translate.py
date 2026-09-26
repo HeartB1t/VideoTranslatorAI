@@ -5,6 +5,8 @@ import unittest
 from videotranslator.live_translate import (
     EN_LEGS,
     TIMEOUTS_S,
+    DeeplLiveTranslator,
+    GoogleLiveTranslator,
     LiveTranslateError,
     MarianLeg,
     MarianLiveTranslator,
@@ -101,9 +103,134 @@ class MarianLiveTranslatorTests(unittest.TestCase):
                              model_loader=lambda m: _FakeModel())
         self.assertIsInstance(tr, MarianLiveTranslator)
 
+    def test_make_translator_google(self):
+        self.assertIsInstance(make_translator("google"), GoogleLiveTranslator)
+
+    def test_make_translator_deepl(self):
+        self.assertIsInstance(make_translator("deepl", deepl_key="k"),
+                              DeeplLiveTranslator)
+
     def test_make_translator_unknown_raises(self):
         with self.assertRaises(LiveTranslateError):
-            make_translator("google")
+            make_translator("bing")
+
+
+class GoogleLiveTranslatorTests(unittest.TestCase):
+    def _google(self, fn):
+        class _T:
+            def translate(self, text):
+                return fn(text)
+        return GoogleLiveTranslator(translator_factory=lambda s, t: _T(),
+                                    sleep=lambda _s: None)
+
+    def test_translates(self):
+        tr = self._google(lambda _t: "ciao")
+        tr.prepare("en", "it")
+        out = tr.translate("hello")
+        tr.close()
+        self.assertTrue(out.ok)
+        self.assertEqual(out.text, "ciao")
+
+    def test_rate_limit_is_classified_and_keeps_original(self):
+        def boom(_t):
+            raise RuntimeError("TooManyRequests: 429")
+        tr = self._google(boom)
+        tr.prepare("en", "it")
+        out = tr.translate("hello")
+        tr.close()
+        self.assertFalse(out.ok)
+        self.assertEqual(out.error, "rate_limited")
+        self.assertEqual(out.text, "hello")
+
+    def test_timeout_abandons_the_call(self):
+        def slow(_t):
+            time.sleep(0.5)
+            return "x"
+        tr = self._google(slow)
+        tr.prepare("en", "it")
+        out = tr.translate("hello", timeout_s=0.05)
+        tr.close()
+        self.assertFalse(out.ok)
+        self.assertEqual(out.error, "timeout")
+
+
+class _FakeResp:
+    def __init__(self, status, payload=None):
+        self.status_code = status
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+
+class DeeplLiveTranslatorTests(unittest.TestCase):
+    def test_translates_over_free_endpoint(self):
+        posts = []
+
+        def post(url, data, headers, timeout):
+            posts.append((url, dict(data), headers, timeout))
+            return _FakeResp(200, {"translations": [{"text": "ciao"}]})
+
+        tr = DeeplLiveTranslator(deepl_key="key:fx", post=post)
+        tr.prepare("en", "it")
+        out = tr.translate("hello")
+        self.assertTrue(out.ok)
+        self.assertEqual(out.text, "ciao")
+        self.assertIn("api-free.deepl.com", posts[0][0])
+        self.assertEqual(posts[0][3], (3, 5))
+
+    def test_status_codes_map_to_error_kinds(self):
+        for status, kind in ((429, "rate_limited"), (456, "quota"),
+                             (403, "unavailable"), (500, "error")):
+            tr = DeeplLiveTranslator(deepl_key="key",
+                                     post=lambda *a, **k: _FakeResp(status))
+            tr.prepare("en", "it")
+            out = tr.translate("hi")
+            self.assertFalse(out.ok)
+            self.assertEqual(out.error, kind, status)
+            self.assertEqual(out.text, "hi")
+
+    def test_missing_key_raises_on_prepare(self):
+        tr = DeeplLiveTranslator(deepl_key="")
+        with self.assertRaises(LiveTranslateError) as ctx:
+            tr.prepare("en", "it")
+        self.assertEqual(ctx.exception.key, "deepl_key")
+
+    def test_english_target_becomes_en_us_and_paid_endpoint(self):
+        seen = {}
+
+        def post(url, data, headers, timeout):
+            seen["url"] = url
+            seen["data"] = dict(data)
+            return _FakeResp(200, {"translations": [{"text": "x"}]})
+
+        tr = DeeplLiveTranslator(deepl_key="paidkey", post=post)
+        tr.prepare("it", "en")
+        tr.translate("ciao")
+        self.assertEqual(seen["data"]["target_lang"], "EN-US")
+        self.assertEqual(seen["data"]["source_lang"], "IT")
+        self.assertIn("://api.deepl.com", seen["url"])
+
+
+@unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
+class GoogleLiveTranslatorHeavyTests(unittest.TestCase):
+    def test_real_en_to_it(self):
+        # The unofficial free Google endpoint often rate-limits a host (a first
+        # call can already return TooManyRequests). The contract is that the real
+        # call never raises and returns a well-formed Outcome: a real translation
+        # when it succeeds, or the original text with a known error kind when the
+        # endpoint refuses.
+        tr = GoogleLiveTranslator()
+        tr.prepare("en", "it")
+        out = tr.translate("Hello, how are you?", timeout_s=15.0)
+        tr.close()
+        self.assertIsInstance(out.text, str)
+        if out.ok:
+            self.assertNotEqual(out.text.strip().lower(), "hello, how are you?")
+        else:
+            self.assertIn(out.error,
+                          ("rate_limited", "quota", "timeout", "unavailable", "error"))
+            self.assertEqual(out.text, "Hello, how are you?")
 
 
 @unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
