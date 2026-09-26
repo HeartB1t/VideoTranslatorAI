@@ -6713,8 +6713,26 @@ class App(tk.Tk):
         def _leave(_e, b=btn, p=primary):
             b.configure(bg=ACC if p else BTN)
 
+        # Keyboard focus ring: the 1 px wrap turns to the accent (or to the
+        # text colour on the accent-filled primary button) while focused, and
+        # Return activates it like the space bar already does.
+        def _focus_in(_e, w=wrap, p=primary):
+            w.configure(bg=FG if p else ACC)
+
+        def _focus_out(_e, w=wrap, p=primary):
+            w.configure(bg=ACC if p else BORDER)
+
+        def _return(_e, b=btn):
+            if str(b.cget("state")) != "disabled":
+                b.invoke()
+            return "break"
+
         btn.bind("<Enter>", _enter)
         btn.bind("<Leave>", _leave)
+        btn.bind("<FocusIn>", _focus_in)
+        btn.bind("<FocusOut>", _focus_out)
+        btn.bind("<Return>", _return)
+        btn.bind("<KP_Enter>", _return)
         return wrap, btn
 
     @staticmethod
@@ -6880,6 +6898,9 @@ class App(tk.Tk):
         for pid in ordered:
             outer, opts = self._panels[pid]
             outer.pack(fill="x", **opts)
+            # Tab follows the stacking order of siblings: raising each card in
+            # turn makes the keyboard order match the order on screen.
+            outer.lift()
 
     def _make_accordion_section(self, parent, title_text):
         """Return (outer_frame, body_frame, arrow_label, title_label). Starts

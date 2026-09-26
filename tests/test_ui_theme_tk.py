@@ -686,6 +686,58 @@ class KeyboardAccessTests(unittest.TestCase):
                     saved = json.loads(cfg_path.read_text(encoding="utf-8"))
                     self.assertEqual(saved["ui_accent"], value)
 
+    def test_flat_buttons_show_a_focus_ring_and_run_on_return(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            self._show(app)
+            ran = []
+            for primary in (False, True):
+                with self.subTest(primary=primary):
+                    wrap, btn = app._flat_btn(app._right_pane, text="x", primary=primary,
+                                              command=lambda: ran.append(1))
+                    wrap.pack()
+                    app.update()
+                    idle = wrap.cget("bg")
+                    self._press(app, btn, "<Return>")
+                    app.update()
+                    self.assertEqual(wrap.cget("bg"), gui.FG if primary else gui.ACC)
+                    self.assertNotEqual(wrap.cget("bg"), idle)
+                    app._btn_settings.focus_force()
+                    app.update()
+                    self.assertEqual(wrap.cget("bg"), idle)
+                    wrap.destroy()
+            self.assertEqual(ran, [1, 1])
+
+    def test_tab_follows_the_card_order_after_a_reorder(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en",
+                        "ui_panel_order": ["profile", "input", "start", "translation",
+                                           "settings"]}) as (gui, app, _):
+            self._show(app)
+
+            def card_of(widget):
+                while widget is not None:
+                    for pid, (outer, _opts) in app._panels.items():
+                        if widget is outer:
+                            return pid
+                    widget = widget.master
+                return None
+            first = next(w for w in self._tab_walk(app._panels["profile"][0], 1)[1:])
+            seen = []
+            widget = first
+            for _ in range(400):
+                pid = card_of(widget)
+                if pid and (not seen or seen[-1] != pid):
+                    seen.append(pid)
+                widget = widget.tk_focusNext()
+                if widget is None or widget is first:
+                    break
+            order = [pid for pid in seen if pid in app._panel_order]
+            deduped = [pid for i, pid in enumerate(order) if pid not in order[:i]]
+            # Cards with nothing focusable (settings, all sections closed) are
+            # skipped by Tab; the others follow the order on screen.
+            self.assertGreaterEqual(len(deduped), 4)
+            self.assertEqual(deduped, [p for p in app._panel_order if p in deduped])
+            self.assertEqual(deduped[0], "profile")
+
     def test_focus_rings_follow_theme_and_accent_changes_while_focused(self):
         with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
             self._show(app)
