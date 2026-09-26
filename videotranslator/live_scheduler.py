@@ -717,19 +717,30 @@ class DubScheduler:
             return True
         return False
 
-    def on_seek(self, now: float, gen: int) -> list[object]:
+    def on_seek(self, now: float, gen: int, *, restart: bool = False) -> list[object]:
+        """Reset presentation state for a seek to ``now``.
+
+        ``restart`` is True when the producers restart decoding from this point
+        (a seek outside coverage): they will emit the rest of the file again with
+        new segment ids, so the segments after ``now`` are superseded and dropped
+        here. Otherwise the same sentence would exist twice, requested from TTS
+        and voiced twice. Clips stay in the timing/text cache for reuse.
+        """
         self._last_now = now
-        # Clear the caption and let segments after the new position show again.
-        for seg in self._segments.values():
-            if seg.end > now:
-                self._arrival.pop(seg.seg_id, None)
-                self._dropped.discard(seg.seg_id)
         actions: list[object] = []
         if self._shown is not None:
             self._shown = None
             actions.append(ClearSubtitle())
         if self._dub:
             actions.extend(self._dub_reset())    # stop any clip, unduck
+        if restart:
+            self._forget_after(now)
+        # Let the remaining segments after the new position show again.
+        for seg in self._segments.values():
+            if seg.end > now:
+                self._arrival.pop(seg.seg_id, None)
+                self._dropped.discard(seg.seg_id)
+        if self._dub:
             # Segments after the new position play again: ready if the clip is
             # cached, else re-request from scratch.
             for seg in self._segments.values():
@@ -740,6 +751,15 @@ class DubScheduler:
                     # An in-flight request retains its original gen and filename.
                     # Reissuing it races os.replace and wastes a network request.
         return actions
+
+    def _forget_after(self, now: float) -> None:
+        """Drop every segment ending after ``now`` and its per-segment state."""
+        for seg_id in [s.seg_id for s in self._segments.values() if s.end > now]:
+            del self._segments[seg_id]
+            self._arrival.pop(seg_id, None)
+            self._dropped.discard(seg_id)
+            self._dub_state.pop(seg_id, None)
+            self._clips.pop(seg_id, None)
 
     def covers(self, now: float) -> bool:
         """Whether a seek target already has a translated/caption fallback segment."""

@@ -739,7 +739,8 @@ class LiveSession:
                 if rt is not None:
                     rt.set_pause(self._user_paused or self._self_paused)
             elif kind == "seek":
-                if not self._scheduler.covers(value):
+                restart = not self._scheduler.covers(value)
+                if restart:
                     with self._decode_lock:
                         self._gen += 1
                         self._source_done = False
@@ -748,7 +749,10 @@ class LiveSession:
                         self._decode_request = (self._gen, max(0.0, value - 0.5),
                                                 self._decode_cancel)
                         self._decode_wake.set()
-                self._execute(self._scheduler.on_seek(value, self._gen))
+                # A restarted decoder re-emits the span after the target with new
+                # ids: drop the superseded segments so no sentence exists twice.
+                self._execute(self._scheduler.on_seek(value, self._gen,
+                                                      restart=restart))
                 self._last_pacer_mono = -1e9
             elif kind == "engine":
                 with self._status_lock:

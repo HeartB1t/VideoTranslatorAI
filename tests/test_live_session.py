@@ -734,6 +734,34 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertIsNone(sess._synth)
             self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
 
+    def test_seek_outside_coverage_keeps_one_segment_per_sentence(self):
+        # review D: the restarted decoder re-emits the span after the target with
+        # new ids; the superseded segment must go, and its late clip must not be
+        # accepted, so the sentence is never voiced twice. Both sync modes.
+        for mode in ("live", "delayed"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                sess, _v, _voice, synth, view = _dub_session(
+                    tmp, media=9.0, overrides={"live_sync_mode": mode})
+                sess._start_dub()
+                sess._last_pacer_mono = 1e9          # isolate from the file pacer
+                sess._emit_segment(10.0, 12.0, "hello", "ciao", italic=False)
+                sess._tick_once(time.monotonic())
+                old_id = synth.submitted[0][0]
+                sess.notify_user_seek(5.0)           # not covered: decoder restarts
+                view.media = 5.0
+                sess._tick_once(time.monotonic())
+                sess._emit_segment(10.0, 12.0, "hello", "ciao", italic=False)
+                view.media = 9.5
+                sess._tick_once(time.monotonic())
+                covering = [s for s in sess._scheduler._segments.values()
+                            if s.start <= 10.5 < s.end]
+                self.assertEqual([s.gen for s in covering], [sess._gen])
+                # the old request's clip arrives late: it is not accepted
+                synth.push(old_id, 0, Clip(old_id, 0, "/old.mp3", 2.0, "+0%",
+                                           voice_start_s=0.0, voice_end_s=2.0))
+                sess._tick_once(time.monotonic())
+                self.assertNotIn(old_id, sess._scheduler._dub_state)
+
     def test_rejected_tts_marks_the_segment_dropped_not_synth(self):
         # review finding 1: a submit that returns False must drop the segment, or
         # it stays "synth" forever and stalls the pacer.

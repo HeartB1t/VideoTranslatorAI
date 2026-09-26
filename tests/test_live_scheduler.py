@@ -189,6 +189,47 @@ class DubSchedulerDubPathTests(unittest.TestCase):
             acts = s.tick(4.8, main_running=True, voice_state="preloaded")
             self.assertIn("StartClip", _types(acts))
 
+    def test_restart_seek_drops_segments_the_producers_will_emit_again(self):
+        # A seek outside coverage restarts the decoder, which re-emits this span
+        # with new ids: the superseded segment must go, so the sentence is not
+        # requested (and voiced) twice.
+        s = _dub_sched()
+        s.upsert(LiveSegment(1, 0, 10.0, 12.0, "hello", text_tgt="ciao", dub_ok=True))
+        s.tick(9.0, mono=100.0, voice_state="idle")           # old request in flight
+        s.on_seek(5.0, 1, restart=True)
+        s.upsert(LiveSegment(2, 1, 10.0, 12.0, "hello", text_tgt="ciao", dub_ok=True))
+        reqs = [a for a in s.tick(9.0, mono=101.0, voice_state="idle")
+                if isinstance(a, RequestTts)]
+        self.assertEqual([r.seg_id for r in reqs], [2])
+        self.assertEqual([seg.seg_id for seg in s._segments.values()
+                          if seg.start <= 10.5 < seg.end], [2])
+        # the old in-flight result is not accepted for a segment that is gone
+        self.assertFalse(s.clip_ready(1, 0, _clip()))
+
+    def test_restart_seek_reuses_an_identical_cached_clip(self):
+        s = _dub_sched()
+        s.upsert(LiveSegment(1, 0, 10.0, 12.0, "hello", text_tgt="ciao", dub_ok=True))
+        s.tick(9.0, mono=100.0, voice_state="idle")
+        s.clip_ready(1, 0, _clip())
+        s.on_seek(5.0, 1, restart=True)
+        s.upsert(LiveSegment(2, 1, 10.0, 12.0, "hello", text_tgt="ciao", dub_ok=True))
+        self.assertEqual(s._dub_state.get(2), "ready")        # clip reused
+        self.assertNotIn("RequestTts", _types(s.tick(9.0, mono=101.0,
+                                                      voice_state="idle")))
+
+    def test_restart_seek_keeps_segments_before_the_target(self):
+        s = _dub_sched()
+        s.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="uno", dub_ok=True))
+        s.upsert(LiveSegment(2, 0, 10.0, 12.0, "b", text_tgt="due", dub_ok=True))
+        s.on_seek(5.0, 1, restart=True)
+        self.assertEqual(sorted(s._segments), [1])
+
+    def test_covered_seek_keeps_the_segments(self):
+        s = _dub_sched()
+        s.upsert(LiveSegment(1, 0, 10.0, 12.0, "hello", text_tgt="ciao", dub_ok=True))
+        s.on_seek(10.5, 0)
+        self.assertEqual(sorted(s._segments), [1])
+
     def test_seek_does_not_duplicate_an_inflight_request(self):
         s = _dub_sched()
         s.upsert(self._seg())
