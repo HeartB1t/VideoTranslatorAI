@@ -1,7 +1,48 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import video_translator_gui as gui
+
+
+class LiveTransportRoutingTests(unittest.TestCase):
+    def setUp(self):
+        self.session = Mock()
+        self.controller = Mock()
+        self.controller.state = SimpleNamespace(position=15.0, duration=22.0)
+        self.app = SimpleNamespace(
+            _live_session=self.session, _player_controller=self.controller,
+            _player_clock=Mock(), _stop_live_session=Mock())
+
+    def test_live_pause_is_an_intent_not_a_second_player_writer(self):
+        gui.App._on_player_command(self.app, "play_pause", {})
+        self.session.toggle_user_pause.assert_called_once_with()
+        self.controller.play_pause.assert_not_called()
+
+    def test_regular_player_keeps_its_pause_behavior(self):
+        self.app._live_session = None
+        gui.App._on_player_command(self.app, "play_pause", {})
+        self.controller.play_pause.assert_called_once_with()
+
+    def test_live_relative_seek_uses_same_bounded_target_for_both_consumers(self):
+        for name, expected in (("back_10", 5.0), ("forward_10", 22.0)):
+            gui.App._on_player_command(self.app, name, {})
+            self.controller.seek.assert_called_with(expected)
+            self.session.notify_user_seek.assert_called_with(expected)
+
+    def test_drag_restarts_pipeline_only_on_release(self):
+        for target in (3, 9, 14):
+            gui.App._on_player_command(self.app, "seek", {"seconds": target, "dragging": True})
+        self.session.notify_user_seek.assert_not_called()
+        self.controller.seek.assert_not_called()
+        gui.App._on_player_command(self.app, "seek", {"seconds": 14})
+        self.session.notify_user_seek.assert_called_once_with(14)
+        self.controller.seek.assert_called_once_with(14, dragging=False)
+
+    def test_player_stop_also_stops_live_outputs(self):
+        gui.App._on_player_command(self.app, "stop", {})
+        self.app._stop_live_session.assert_called_once_with()
+        self.controller.stop.assert_called_once_with()
 
 
 class LiveVoiceForTests(unittest.TestCase):

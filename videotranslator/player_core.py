@@ -99,6 +99,10 @@ class PlayerController:
             self._apply_initial_mix(backend)
 
     @property
+    def paused(self) -> bool:
+        return self._paused
+
+    @property
     def playlist(self) -> tuple[MediaItem, ...]:
         return tuple(self._playlist)
 

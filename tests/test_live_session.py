@@ -163,6 +163,45 @@ def _seg(tgt="ciao", *, gen=0, start=1.0, end=3.0):
 
 
 class LiveSessionTickTests(unittest.TestCase):
+    def test_user_pause_and_pacer_pause_have_independent_ownership(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp)
+            sess._tick_once(0.0)  # pacer owns the pause, user still wants playback
+            self.assertTrue(sess._self_paused)
+            self.assertFalse(sess._user_paused)
+            sess.toggle_user_pause()
+            sess._tick_once(0.02)
+            self.assertTrue(sess._user_paused)
+            sess._source_done = True
+            sess._tick_once(2.0)
+            self.assertTrue(video.rt.pauses[-1])  # EOF cannot override user pause
+            sess.toggle_user_pause()
+            sess._tick_once(2.02)
+            self.assertFalse(sess._user_paused)
+            self.assertFalse(sess._self_paused)
+            self.assertFalse(video.rt.pauses[-1])
+
+    def test_resume_intent_does_not_override_buffering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp)
+            sess._tick_once(0.0)
+            sess.notify_user_pause(True)
+            sess.notify_user_pause(False)
+            sess._tick_once(0.02)
+            self.assertTrue(video.rt.pauses[-1])
+            self.assertFalse(sess._user_paused)
+
+    def test_cached_seek_keeps_producers_and_generation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess.submit_segment(_seg())
+            sess._tick_once(0.0)
+            cancel = sess._decode_cancel
+            sess.notify_user_seek(2.0)
+            sess._tick_once(0.02)
+            self.assertEqual(sess._gen, 0)
+            self.assertFalse(cancel.is_set())
+
     def test_translated_segment_becomes_a_caption(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, video, _ = _session(tmp, media=1.5)
@@ -274,6 +313,99 @@ def _pipeline_factories():
 
 
 class LiveSessionPipelineTests(unittest.TestCase):
+    def test_seek_during_transcription_discards_old_result(self):
+        from dataclasses import replace
+        from videotranslator.live_segment import Utterance
+        from videotranslator.live_asr import LanguageLock
+        entered, release = threading.Event(), threading.Event()
+
+        class BlockingWhisper(_FakeWhisper):
+            def transcribe(self, utt, *, language):
+                entered.set()
+                if not release.wait(3):
+                    raise RuntimeError("test did not release transcription")
+                return super().transcribe(utt, language=language)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess._langlock = LanguageLock("en")
+            sess._factories = replace(_pipeline_factories(), whisper=BlockingWhisper)
+            sess._utt_q.put(Utterance(0, 0, 1, np.ones(16000), False))
+            worker = threading.Thread(target=sess._asr_loop)
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(2))
+                sess.notify_user_seek(20)
+                sess._drain_control(0)
+                release.set()
+                sess.request_stop()
+                worker.join(3)
+                self.assertFalse(worker.is_alive())
+                self.assertTrue(sess._mt_q.empty())
+                self.assertTrue(sess._sched_in.empty())
+            finally:
+                release.set()
+                sess.request_stop()
+                worker.join(3)
+
+    def test_seek_after_eof_reopens_decoder_without_reloading_whisper(self):
+        from dataclasses import replace
+        opened, closed, models = [], [], []
+
+        class Decoder(_FakeDecoder):
+            def __init__(self, source, *, start_at, **kw):
+                self.offset = start_at
+                opened.append(start_at)
+
+            def blocks(self, cancel):
+                for t, pcm in super().blocks(cancel):
+                    yield t + self.offset, pcm
+
+            def close(self):
+                closed.append(self.offset)
+
+        class Whisper(_FakeWhisper):
+            def __init__(self, **kw):
+                models.append(self)
+
+            def transcribe(self, utt, *, language):
+                segs, lang, prob = super().transcribe(utt, language=language)
+                for seg in segs:
+                    seg.update(start=utt.start, end=utt.end)
+                return segs, lang, prob
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, cfg = _session(tmp, media=0.1)
+            sess._cfg = replace(cfg, lang_source="en")
+            from videotranslator.live_asr import LanguageLock
+            sess._langlock = LanguageLock("en")
+            sess._factories = replace(_pipeline_factories(), decoder=Decoder, whisper=Whisper)
+            sess.start()
+            try:
+                deadline = time.monotonic() + 3
+                while not sess._source_done and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(sess._source_done)
+                sess._clock_view.media = 20.0
+                sess.notify_user_seek(20.0)
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    if sess._gen == 1 and sess._source_done:
+                        break
+                    time.sleep(0.01)
+                self.assertEqual(opened, [0.0, 19.5])
+                self.assertEqual(closed, opened)
+                self.assertEqual(len(models), 1)
+                self.assertTrue(sess._source_done)
+                deadline = time.monotonic() + 1
+                while sess._sched_in.qsize() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(any(s.gen == 1 and s.start >= 19.5
+                                    for s in sess._scheduler._segments.values()))
+            finally:
+                sess.request_stop()
+                self.assertTrue(sess.join(3.0))
+
     def test_end_to_end_fake_pipeline_produces_a_caption(self):
         settings = normalize_live_settings(
             {"live_dub_enabled": False, "live_subs_enabled": True,

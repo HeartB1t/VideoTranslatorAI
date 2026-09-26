@@ -288,6 +288,7 @@ class DubScheduler:
         self._shown: tuple[int, int] | None = None  # (seg_id, page index)
         self._shown_at: float | None = None
         self._last_epoch = 0
+        self._last_now: float | None = None
         self._metrics = {"voiced": 0.0, "dropped": 0.0, "late": 0.0, "margin_p90": 0.0}
         # --- dub path (P5) ---
         self._rate_for = rate_for
@@ -341,7 +342,7 @@ class DubScheduler:
         return bool(seg.dub_ok and seg.text_tgt and seg.seg_id not in self._dropped)
 
     def _cache_key(self, seg: LiveSegment) -> tuple:
-        return (round(seg.start, 1), round(seg.end, 1), seg.text_tgt)
+        return (round(seg.start, 2), round(seg.end, 2), seg.text_tgt)
 
     def _slot_end(self, seg: LiveSegment) -> float:
         cap = seg.end + self._overhang
@@ -537,7 +538,7 @@ class DubScheduler:
                 start_now = now >= seg.start - self._lead
                 fit = min(self._max_speed, max(1.0, audible / slot_len))
                 base = seg.start
-            if start_now:
+            if start_now and main_running:
                 actions.append(StartClip(seg.seg_id, fit * main_speed))
                 self._playing = seg.seg_id
                 self._preloaded = None
@@ -605,13 +606,6 @@ class DubScheduler:
              main_speed: float = 1.0, voice_state: str = "idle",
              clock_epoch: int = 0) -> list[object]:
         actions: list[object] = []
-        if clock_epoch != self._last_epoch:
-            self._last_epoch = clock_epoch
-            if self._shown is not None:
-                self._shown = None
-                actions.append(ClearSubtitle())
-            if self._dub:
-                actions.extend(self._dub_reset())
         if now is None:  # invalid clock (loading / seeking)
             if self._shown is not None:
                 self._shown = None
@@ -619,6 +613,11 @@ class DubScheduler:
             if self._dub:
                 actions.extend(self._dub_freeze())
             return actions
+        if (clock_epoch != self._last_epoch and self._last_now is not None
+                and abs(now - self._last_now) > 1.0):
+            actions.extend(self.on_seek(now, 0))
+        self._last_epoch = clock_epoch
+        self._last_now = now
         # Caption path (only when subtitles are on).
         if self._subs:
             for seg in self._segments.values():
@@ -673,6 +672,7 @@ class DubScheduler:
         return coverage
 
     def on_seek(self, now: float, gen: int) -> list[object]:
+        self._last_now = now
         # Clear the caption and let segments after the new position show again.
         for seg in self._segments.values():
             if seg.end > now:
@@ -688,9 +688,17 @@ class DubScheduler:
             # cached, else re-request from scratch.
             for seg in self._segments.values():
                 if seg.end > now and self._dub_eligible(seg):
-                    self._dub_state[seg.seg_id] = (
-                        "ready" if seg.seg_id in self._clips else "translated")
+                    if self._dub_state.get(seg.seg_id) != "synth":
+                        self._dub_state[seg.seg_id] = (
+                            "ready" if seg.seg_id in self._clips else "translated")
+                    # An in-flight request retains its original gen and filename.
+                    # Reissuing it races os.replace and wastes a network request.
         return actions
+
+    def covers(self, now: float) -> bool:
+        """Whether a seek target already has a translated/caption fallback segment."""
+        return any(s.start <= now < s.end and self._caption_ready(s)
+                   for s in self._segments.values())
 
     def on_discontinuity(self, now: float) -> list[object]:
         # Drop the slots already passed; keep the ASR (caller's concern).

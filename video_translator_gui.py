@@ -8362,9 +8362,15 @@ class App(tk.Tk):
             self._install_player()
             return
         controller = self._player_controller
+        session = self._live_session
         if name == "play_pause":
-            controller.play_pause()
+            if session is not None:
+                session.toggle_user_pause()
+            else:
+                controller.play_pause()
         elif name == "stop":
+            if session is not None:
+                self._stop_live_session()
             controller.stop()
         elif name == "previous":
             controller.previous()
@@ -8372,14 +8378,32 @@ class App(tk.Tk):
             controller.next()
         elif name == "back_10":
             self._player_clock.expect_restart()
-            controller.seek_relative(-10.0)
+            if session is not None:
+                target = max(0.0, controller.state.position - 10.0)
+                session.notify_user_seek(target)
+                controller.seek(target)
+            else:
+                controller.seek_relative(-10.0)
         elif name == "forward_10":
             self._player_clock.expect_restart()
-            controller.seek_relative(10.0)
+            if session is not None:
+                target = controller.state.position + 10.0
+                if controller.state.duration is not None:
+                    target = min(target, controller.state.duration)
+                session.notify_user_seek(target)
+                controller.seek(target)
+            else:
+                controller.seek_relative(10.0)
         elif name == "seek":
             self._player_clock.expect_restart()
-            controller.seek(float(args.get("seconds", 0.0)),
-                            dragging=bool(args.get("dragging", False)))
+            target = max(0.0, float(args.get("seconds", 0.0)))
+            dragging = bool(args.get("dragging", False))
+            if session is not None and not dragging:
+                session.notify_user_seek(target)
+            # Live dragging previews only the bar; one exact seek on release
+            # prevents ASR restarts and intermediate playback-restart events.
+            if session is None or not dragging:
+                controller.seek(target, dragging=dragging)
         elif name == "volume":
             controller.set_volume(int(args.get("value", controller.state.volume)))
         elif name == "toggle_audio":
@@ -8590,6 +8614,7 @@ class App(tk.Tk):
         tgt = self._lang_tgt.get()
         values = {
             "source": source, "source_kind": source_kind,
+            "start_at": max(0.0, self._player_controller.state.position - 0.5),
             "lang_source": self._lang_src.get(),
             "lang_target": tgt,
             "voice": self._live_voice_for(tgt),
@@ -8619,6 +8644,7 @@ class App(tk.Tk):
                 cfg, video=self._player_backend, clock_view=self._player_clock,
                 factories=factories, voice=voice_backend, log=self._player_log,
                 thread_factory=self._redirecting_thread_factory)
+            self._live_session.notify_user_pause(self._player_controller.paused)
             self._live_session.start()
         except Exception as exc:                     # noqa: BLE001
             self._player_log(f"[live] start failed: {exc}")

@@ -178,6 +178,35 @@ class DubSchedulerCaptionTests(unittest.TestCase):
 
 
 class DubSchedulerDubPathTests(unittest.TestCase):
+    def test_preloaded_clip_waits_for_resume_in_both_modes(self):
+        for mode in ("live", "delayed"):
+            s = _dub_sched(mode=mode)
+            s.upsert(self._seg())
+            s.clip_ready(0, 0, _clip())
+            s.tick(4.8, main_running=False)
+            acts = s.tick(4.8, main_running=False, voice_state="preloaded")
+            self.assertNotIn("StartClip", _types(acts))
+            acts = s.tick(4.8, main_running=True, voice_state="preloaded")
+            self.assertIn("StartClip", _types(acts))
+
+    def test_seek_does_not_duplicate_an_inflight_request(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.tick(1.0)
+        s.on_seek(4.0, 1)
+        self.assertNotIn("RequestTts", _types(s.tick(4.0)))
+        s.clip_ready(0, 0, _clip())
+        self.assertIn("PreloadClip", _types(s.tick(4.0)))
+
+    def test_restart_event_without_jump_does_not_abandon_preload(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.clip_ready(0, 0, _clip())
+        s.tick(4.0)
+        s.tick(None, clock_epoch=1, voice_state="preloaded")
+        acts = s.tick(4.8, clock_epoch=1, voice_state="preloaded")
+        self.assertIn("StartClip", _types(acts))
+
     def _seg(self, seg_id=0, *, start=5.0, end=7.0, gen=0):
         return LiveSegment(seg_id, gen, start, end, "hello", text_tgt="ciao",
                            dub_ok=True)
