@@ -1,6 +1,11 @@
 import unittest
 
+import video_translator_gui as legacy
 from videotranslator.live_health import (
+    ERROR_KEYS,
+    LIVE_STATES,
+    STATUS_KEYS,
+    WARN_KEYS,
     CircuitBreaker,
     FaultRule,
     RollingStats,
@@ -122,6 +127,25 @@ class RollingStatsTests(unittest.TestCase):
             s.add(x)
         self.assertEqual(s.count(), 32)
         self.assertEqual(s.p50(), 83)      # last 32 are 68..99, median-ish
+
+
+class CodeMapTests(unittest.TestCase):
+    def test_status_keys_cover_every_state(self):
+        self.assertEqual(set(STATUS_KEYS), set(LIVE_STATES))
+
+    def test_key_naming_conventions(self):
+        for state, key in STATUS_KEYS.items():
+            self.assertEqual(key, f"live_status_{state}")
+        for code, key in WARN_KEYS.items():
+            self.assertEqual(key, f"live_warn_{code}")
+        for code, key in ERROR_KEYS.items():
+            self.assertEqual(key, f"live_err_{code}")
+
+    def test_all_mapped_keys_exist_in_english_ui(self):
+        en = legacy.UI_STRINGS["en"]
+        for mapping in (STATUS_KEYS, WARN_KEYS, ERROR_KEYS):
+            for key in mapping.values():
+                self.assertIn(key, en)
 
 
 class ParseFaultSpecTests(unittest.TestCase):

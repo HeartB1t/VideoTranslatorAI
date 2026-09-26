@@ -5,9 +5,9 @@ percentile window, and a parser for the developer fault-injection spec (env
 ``VTAI_LIVE_FAULTS``).
 
 The status/warning/error code maps (``STATUS_KEYS``/``WARN_KEYS``/``ERROR_KEYS``
-and ``LIVE_STATES``) land together with their 26-language UI strings, so that
-the i18n literal-key scanner stays green; likewise ``wrap_factories_with_faults``
-lands with the live session (it needs the ``LiveFactories`` protocol).
+and ``LIVE_STATES``) map internal codes to UI keys that exist in all 26 languages
+(``ui_strings_player``). ``wrap_factories_with_faults`` lands with the live
+session (it needs the ``LiveFactories`` protocol).
 """
 
 from __future__ import annotations
@@ -147,6 +147,63 @@ class RollingStats:
 
     def p95(self) -> float | None:
         return self._percentile(95)
+
+
+# Session states and their UI keys (design 4.3). A test asserts
+# set(STATUS_KEYS) == LIVE_STATES.
+LIVE_STATES: frozenset[str] = frozenset({
+    "starting", "loading_models", "connecting", "detecting", "buffering",
+    "waiting", "running", "lag", "reconnecting", "stopping", "ended",
+    "stopped", "failed", "time_limit",
+})
+
+STATUS_KEYS: dict[str, str] = {
+    "starting": "live_status_starting",
+    "loading_models": "live_status_loading_models",
+    "connecting": "live_status_connecting",
+    "detecting": "live_status_detecting",
+    "buffering": "live_status_buffering",
+    "waiting": "live_status_waiting",
+    "running": "live_status_running",
+    "lag": "live_status_lag",
+    "reconnecting": "live_status_reconnecting",
+    "stopping": "live_status_stopping",
+    "ended": "live_status_ended",
+    "stopped": "live_status_stopped",
+    "failed": "live_status_failed",
+    "time_limit": "live_status_time_limit",
+}
+
+WARN_KEYS: dict[str, str] = {
+    "online_engine": "live_warn_online_engine",
+    "rate_limited": "live_warn_rate_limited",
+    "quota": "live_warn_quota",
+    "engine_slow": "live_warn_engine_slow",
+    "tts_unavailable": "live_warn_tts_unavailable",
+    "cpu_fallback": "live_warn_cpu_fallback",
+    "falling_behind": "live_warn_falling_behind",
+    "skipped": "live_warn_skipped",
+}
+
+ERROR_KEYS: dict[str, str] = {
+    "busy": "live_err_busy",
+    "busy_job": "live_err_busy_job",
+    "busy_install": "live_err_busy_install",
+    "editor_open": "live_err_editor_open",
+    "no_url": "live_err_no_url",
+    "deps": "live_err_deps",
+    "disk": "live_err_disk",
+    "deepl_key": "live_err_deepl_key",
+    "marian_pair": "live_err_marian_pair",
+    "ollama": "live_err_ollama",
+    "resolve": "live_err_resolve",
+    "upcoming": "live_err_upcoming",
+    "codec": "live_err_codec",
+    "need_source_lang": "live_err_need_source_lang",
+    "ingest": "live_err_ingest",
+    "asr": "live_err_asr",
+    "internal": "live_err_internal",
+}
 
 
 @dataclass(frozen=True)
