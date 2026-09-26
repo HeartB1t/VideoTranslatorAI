@@ -492,5 +492,140 @@ class MpvBackendTests(unittest.TestCase):
         self.assertTrue(backend.terminate(1.0))
 
 
+class ExtraLatestTests(unittest.TestCase):
+    def test_extra_values_are_kept_apart_from_the_latest_set(self):
+        bridge = pe.EventBridge()
+        bridge.set_latest("time-pos", 5.0, 10.0)
+        bridge.extra_latest("voice-time-pos", 0.4, 10.0)
+        bridge.extra_latest("voice-time-pos", 0.9, 11.0)
+        self.assertEqual(bridge.extra("voice-time-pos"), (0.9, 11.0))
+        self.assertIsNone(bridge.extra("missing"))
+        # the video time-pos is untouched by the voice value
+        self.assertEqual(bridge.latest("time-pos"), (5.0, 10.0))
+        self.assertNotIn("voice-time-pos", bridge.drain().changed)
+
+    def test_extra_latest_is_a_no_op_after_close(self):
+        bridge = pe.EventBridge()
+        bridge.close()
+        bridge.extra_latest("voice-time-pos", 1.0, 1.0)
+        self.assertIsNone(bridge.extra("voice-time-pos"))
+
+
+class DuckAfTests(unittest.TestCase):
+    def test_issues_the_af_command_and_reports_success(self):
+        player = _FakeMpv()
+        self.assertTrue(pe.duck_af(player, 0.3))
+        self.assertEqual(player.actions[-1],
+                         ("command", "af-command", "vtduck", "volume", "0.300", "volume"))
+
+    def test_none_player_is_false(self):
+        self.assertFalse(pe.duck_af(None, 0.3))
+
+    def test_failure_is_reported_and_false(self):
+        class _Boom(_FakeMpv):
+            def command(self, *args):
+                raise RuntimeError("no filter")
+        seen = []
+        self.assertFalse(pe.duck_af(_Boom(), 0.5, on_error=seen.append))
+        self.assertEqual(len(seen), 1)
+
+
+class MpvVoiceBackendTests(unittest.TestCase):
+    def make_voice(self):
+        module = _FakeMpvModule()
+        bridge = pe.EventBridge()
+        voice = pe.create_voice_backend(
+            bridge=bridge, mpv_module=module, sys_platform="linux",
+            log=lambda *_args: None,
+        )
+        return voice, module.instances[0], bridge
+
+    def test_factory_builds_a_videoless_instance_with_observers(self):
+        voice, player, _bridge = self.make_voice()
+        self.assertEqual(player.kwargs["vid"], "no")
+        self.assertEqual(player.kwargs["force_window"], "no")
+        self.assertIn("time-pos", player.observers)
+        self.assertIsNotNone(player.event_callback)
+        self.assertEqual(voice.mpv_version, (0, 41))
+        self.assertTrue(voice.terminate(1.0))
+
+    def test_preload_then_start_command_order(self):
+        voice, player, _bridge = self.make_voice()
+        voice.preload("/clip.mp3", skip_s=0.2)
+        load = player.actions.index(("command", "loadfile", "/clip.mp3", "replace"))
+        self.assertIn(("command", "set", "pause", "yes"), player.actions[:load])
+        self.assertIn(("command", "set", "start", 0.2), player.actions[:load])
+        voice.start(1.1)
+        speed = player.actions.index(("command", "set", "speed", 1.1))
+        unpause = player.actions.index(("command", "set", "pause", "no"))
+        self.assertGreater(speed, load)
+        self.assertGreater(unpause, speed)
+
+    def test_callbacks_feed_bridge_and_never_raise(self):
+        voice, player, bridge = self.make_voice()
+        player.observers["time-pos"]("time-pos", 0.75)
+        player.event_callback(SimpleNamespace(
+            event_id=SimpleNamespace(value=_FakeMpvModule.MpvEventID.END_FILE),
+            data=SimpleNamespace(reason=0),
+        ))
+        player.event_callback(SimpleNamespace(event_id=SimpleNamespace(value=999)))
+        self.assertEqual(bridge.extra("voice-time-pos")[0], 0.75)
+        self.assertIn("voice-end-file", [event.kind for event in bridge.drain().events])
+        self.assertTrue(voice.terminate(1.0))
+
+    def test_transport_helpers_map_to_commands(self):
+        voice, player, _bridge = self.make_voice()
+        voice.set_pause(True)
+        voice.set_volume(80)
+        voice.set_speed(1.25)
+        voice.stop()
+        self.assertIn(("command", "set", "pause", "yes"), player.actions)
+        self.assertIn(("command", "set", "volume", 80.0), player.actions)
+        self.assertIn(("command", "set", "speed", 1.25), player.actions)
+        self.assertIn(("command", "stop"), player.actions)
+        self.assertTrue(voice.terminate(1.0))
+
+    def test_terminate_refused_on_event_thread_and_idempotent(self):
+        voice, player, bridge = self.make_voice()
+        player._event_thread = threading.current_thread()
+        self.assertFalse(voice.terminate(0.1))
+        self.assertIn("voice-terminate-refused",
+                      [event.kind for event in bridge.drain().events])
+        player._event_thread = object()
+        self.assertTrue(voice.terminate(1.0))
+        self.assertTrue(player.terminated)
+        self.assertFalse(voice.terminate(1.0))
+
+    def test_ops_are_no_ops_after_terminate(self):
+        voice, player, _bridge = self.make_voice()
+        self.assertTrue(voice.terminate(1.0))
+        before = list(player.actions)
+        voice.preload("/x.mp3")
+        voice.start(1.0)
+        voice.set_pause(False)
+        self.assertEqual(player.actions, before)
+
+
+class InMemoryVoiceTests(unittest.TestCase):
+    def test_records_every_operation_in_order(self):
+        voice = pe.InMemoryVoice(mpv_version=(0, 41))
+        voice.preload("/clip.mp3", skip_s=0.15)
+        voice.start(1.2)
+        voice.set_pause(True)
+        voice.set_volume(90)
+        voice.set_speed(1.3)
+        voice.stop()
+        self.assertEqual(voice.calls, [
+            ("preload", "/clip.mp3", 0.15),
+            ("start", 1.2),
+            ("set_pause", True),
+            ("set_volume", 90.0),
+            ("set_speed", 1.3),
+            ("stop",),
+        ])
+        self.assertTrue(voice.terminate(0.5))
+        self.assertFalse(voice.terminate(0.5))
+
+
 if __name__ == "__main__":
     unittest.main()

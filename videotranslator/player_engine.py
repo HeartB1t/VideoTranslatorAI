@@ -47,6 +47,7 @@ class EventBridge:
             raise ValueError("max_events must be positive")
         self._max_events = int(max_events)
         self._values: dict[str, tuple[object, float]] = {}
+        self._extra: dict[str, tuple[object, float]] = {}
         self._changed: set[str] = set()
         self._events: deque[BridgeEvent] = deque()
         self._closed = False
@@ -60,6 +61,21 @@ class EventBridge:
                 return
             self._values[name] = (value, float(mono))
             self._changed.add(name)
+
+    def extra_latest(self, name: str, value: object, mono: float) -> None:
+        """Store a property outside the fixed LATEST set (the voice mpv time-pos).
+
+        Kept separate from the video values so a second mpv instance sharing the
+        bridge cannot overwrite the player's own time-pos or track list.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            self._extra[str(name)] = (value, float(mono))
+
+    def extra(self, name: str) -> tuple[object, float] | None:
+        with self._lock:
+            return self._extra.get(str(name))
 
     def post(self, kind: str, payload: object = None) -> None:
         if not isinstance(kind, str):
@@ -357,6 +373,25 @@ def duck_channel_for(mpv_version: tuple[int, int] | None) -> str:
 def af_duck_command(gain: float) -> list[str]:
     safe_gain = min(1.0, max(0.0, float(gain)))
     return ["af-command", "vtduck", "volume", f"{safe_gain:.3f}", "volume"]
+
+
+def duck_af(player: object, gain: float, *,
+            on_error: Callable[[BaseException], None] | None = None) -> bool:
+    """Apply the af-command duck on a live mpv player, returning success.
+
+    Used for the smooth ramp on mpv >= 0.37 (the "vtduck" lavfi volume filter is
+    installed at session start). Any failure is reported and returns False so the
+    caller can fall back to the volume channel.
+    """
+    if player is None:
+        return False
+    try:
+        player.command(*af_duck_command(gain))
+        return True
+    except Exception as exc:
+        if on_error is not None:
+            on_error(exc)
+        return False
 
 
 class X11ErrorGuard:
@@ -813,6 +848,225 @@ class InMemoryBackend:
 
     def register_stream_protocol(self, name: str, open_adapter: Callable) -> None:
         self._record("register_stream_protocol", name, open_adapter)
+
+    def terminate(self, timeout_s: float) -> bool:
+        if self.terminated:
+            return False
+        self.terminated = True
+        self._record("terminate", float(timeout_s))
+        return True
+
+
+class MpvVoiceBackend:
+    """Second, video-less mpv instance that plays the translated voice clips.
+
+    Owned exclusively by the live scheduler thread, so ordinary commands are
+    issued directly (loadfile and set are non-blocking in libmpv). Only
+    terminate, which blocks, runs on a helper thread, and never on the mpv event
+    thread. It shares the video EventBridge but writes only namespaced values
+    (extra_latest) and voice-prefixed events, so it can never clobber the
+    player's own state.
+    """
+
+    def __init__(self, *, mpv_module, options: Mapping[str, object],
+                 bridge: EventBridge,
+                 log: Callable[..., None] | None = None) -> None:
+        self.bridge = bridge
+        self.mpv_version: tuple[int, int] | None = None
+        self._mpv_module = mpv_module
+        self._log = log
+        self._state_lock = threading.Lock()
+        self._terminated = False
+        self._terminate_done = threading.Event()
+        self._terminate_helper: threading.Thread | None = None
+        self._terminate_error: BaseException | None = None
+        constructor_options = dict(options)
+        constructor_options["log_handler"] = self._on_log
+        self._player = mpv_module.MPV(**constructor_options)
+        try:
+            self.mpv_version = parse_mpv_version(str(self._player.mpv_version))
+        except Exception:
+            self.mpv_version = None
+        self._register_callbacks()
+
+    def _live_player(self):
+        with self._state_lock:
+            return None if self._terminated else self._player
+
+    def _callback_error(self, where: str, exc: BaseException) -> None:
+        try:
+            self.bridge.post("voice-error", {"where": where, "detail": str(exc)})
+        except Exception:
+            pass
+
+    def _on_log(self, level, component, message) -> None:
+        try:
+            if callable(self._log):
+                self._log(level, component, str(message).rstrip())
+        except Exception:
+            pass
+
+    def _event_id(self, name: str) -> int | None:
+        try:
+            value = getattr(self._mpv_module.MpvEventID, name)
+            return int(getattr(value, "value", value))
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    def _observe_time(self, _name, value) -> None:
+        try:
+            self.bridge.extra_latest("voice-time-pos", value, time.monotonic())
+        except Exception:
+            pass
+
+    def _on_event(self, event) -> None:
+        try:
+            event_id = MpvBackend._event_value(event)
+            if event_id is None:
+                return
+            if event_id == self._event_id("END_FILE"):
+                self.bridge.post("voice-end-file")
+        except Exception:
+            pass
+
+    def _register_callbacks(self) -> None:
+        self._player.observe_property("time-pos", self._observe_time)
+        self._player.register_event_callback(self._on_event)
+
+    def preload(self, path: str, *, skip_s: float = 0.0) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", "pause", "yes")
+            player.command("set", "start", max(0.0, float(skip_s)))
+            player.command("loadfile", str(path), "replace")
+        except Exception as exc:
+            self._callback_error("preload", exc)
+
+    def start(self, speed: float) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", "speed", max(0.01, float(speed)))
+            player.command("set", "pause", "no")
+        except Exception as exc:
+            self._callback_error("start", exc)
+
+    def set_pause(self, paused: bool) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", "pause", "yes" if paused else "no")
+        except Exception as exc:
+            self._callback_error("pause", exc)
+
+    def stop(self) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("stop")
+        except Exception as exc:
+            self._callback_error("stop", exc)
+
+    def set_volume(self, value: float) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", "volume", min(130.0, max(0.0, float(value))))
+        except Exception as exc:
+            self._callback_error("volume", exc)
+
+    def set_speed(self, x: float) -> None:
+        player = self._live_player()
+        if player is None:
+            return
+        try:
+            player.command("set", "speed", max(0.01, float(x)))
+        except Exception as exc:
+            self._callback_error("speed", exc)
+
+    def terminate(self, timeout_s: float) -> bool:
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        with self._state_lock:
+            player = self._player
+            if self._terminated or player is None:
+                return False
+        if threading.current_thread() is getattr(player, "_event_thread", None):
+            self.bridge.post("voice-terminate-refused")
+            return False
+
+        def stop_player() -> None:
+            try:
+                player.terminate()
+            except Exception as exc:
+                self._terminate_error = exc
+                self._callback_error("terminate", exc)
+            finally:
+                self._terminate_done.set()
+
+        with self._state_lock:
+            if self._terminate_helper is None:
+                self._terminate_helper = threading.Thread(
+                    target=stop_player, name="mpv-voice-stop", daemon=True,
+                )
+                self._terminate_helper.start()
+            helper = self._terminate_helper
+        helper.join(max(0.0, deadline - time.monotonic()))
+        if not self._terminate_done.is_set():
+            return False
+        with self._state_lock:
+            self._terminated = True
+            self._player = None
+        return self._terminate_error is None
+
+
+def create_voice_backend(*, bridge: EventBridge, mpv_module,
+                         sys_platform: str = sys.platform,
+                         log=None) -> MpvVoiceBackend:
+    """Construct the second, video-less mpv instance for translated voice clips."""
+    options = build_mpv_options(
+        "voice", sys_platform=sys_platform, wid=None, vo_profile="none",
+    )
+    return MpvVoiceBackend(
+        mpv_module=mpv_module, options=options, bridge=bridge, log=log,
+    )
+
+
+class InMemoryVoice:
+    """VoiceBackend test double that records every operation in order."""
+
+    def __init__(self, *, mpv_version: tuple[int, int] | None = None) -> None:
+        self.mpv_version = mpv_version
+        self.calls: list[tuple[Any, ...]] = []
+        self.terminated = False
+        self._lock = threading.Lock()
+
+    def _record(self, name: str, *args: object) -> None:
+        with self._lock:
+            self.calls.append((name, *args))
+
+    def preload(self, path: str, *, skip_s: float = 0.0) -> None:
+        self._record("preload", path, float(skip_s))
+
+    def start(self, speed: float) -> None:
+        self._record("start", float(speed))
+
+    def set_pause(self, paused: bool) -> None:
+        self._record("set_pause", bool(paused))
+
+    def stop(self) -> None:
+        self._record("stop")
+
+    def set_volume(self, value: float) -> None:
+        self._record("set_volume", float(value))
+
+    def set_speed(self, x: float) -> None:
+        self._record("set_speed", float(x))
 
     def terminate(self, timeout_s: float) -> bool:
         if self.terminated:
