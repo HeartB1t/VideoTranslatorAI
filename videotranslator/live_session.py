@@ -407,15 +407,18 @@ class LiveSession:
     def join(self, timeout_s: float) -> bool:
         deadline = self._clock() + timeout_s
         ok = True
+        stuck = []
         for thread in self._threads:
             remaining = max(0.0, deadline - self._clock())
             thread.join(remaining)
             if thread.is_alive():
                 ok = False
+                stuck.append(thread.name)
         if self._synth is not None:
             try:
                 if not self._synth.stop(max(0.0, deadline - self._clock())):
                     ok = False
+                    stuck.append("live-tts")
             except Exception:
                 ok = False
         mixer = getattr(self._video, "mixer", None)
@@ -424,6 +427,11 @@ class LiveSession:
                 mixer.set_owner("cmd")
             except Exception:
                 pass
+        if stuck:
+            # The state still goes to stopped so the GUI can start again, but a
+            # thread that outlived the join (e.g. a model still in VRAM) is worth
+            # flagging: a new session then briefly runs two of them (review S8).
+            self._log(f"live: threads still alive after join: {', '.join(stuck)}")
         with self._status_lock:
             if self._status.state != "failed":
                 self._status.state = "stopped"
