@@ -1,16 +1,23 @@
 """Live TTS helpers (design 4.10).
 
-Pure, dependency-free pieces: the MP3 CBR duration, the Clip descriptor, the
-per-language duration model and rate choice. The real ``EdgeClipSynth`` (an
-asyncio edge-tts worker) and ``measure_silence`` (PyAV) land with the real-audio
-integration (spike S3).
+Pure pieces (MP3 CBR duration, Clip, per-language duration model, rate choice,
+silence bounds) plus ``EdgeClipSynth``, the asyncio edge-tts worker that
+synthesizes one clip per sentence on a dedicated thread. Network and PyAV are
+injected so the worker is unit-testable without either.
 """
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import math
+import os
+import queue
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 # 48 kbit/s CBR mono mp3: bytes / 6000 equals the decoded duration to the
 # millisecond ([CT] C34).
@@ -197,3 +204,203 @@ class LeadCalibrator:
         self._lead = (measured if self._count == 1
                       else self._alpha * measured + (1 - self._alpha) * self._lead)
         return self._lead
+
+
+class LiveTtsUnavailable(RuntimeError):
+    """Raised by EdgeClipSynth.start() when edge-tts cannot be used."""
+
+
+class EdgeClipSynth:
+    """Synthesize one mp3 clip per sentence with edge-tts on a live-tts thread.
+
+    Owns its own asyncio loop on a daemon thread. ``submit`` (called from the
+    live-sched thread) enqueues a request; each is streamed to a ``.mp3.part``
+    file, atomically renamed, measured, and pushed to :attr:`results` as
+    ``(seg_id, gen, Clip | None, reason | None)``. Concurrency is bounded and
+    calls are spaced to stay under the free endpoint's limits; a failure trips
+    the injected circuit breaker (kind "tts") with one retry when time allows.
+    ``communicate_factory`` (edge-tts) and ``av_module`` (PyAV) are injected so
+    the worker runs in tests without the network or PyAV.
+    """
+
+    def __init__(self, voice: str, out_dir, *, breaker,
+                 communicate_factory=None, av_module=None,
+                 max_concurrent: int = 2, min_interval_s: float = 0.25,
+                 connect_timeout: int = 3, receive_timeout: int = 5,
+                 max_in_flight: int = 8, clock: Callable[[], float] | None = None,
+                 sleep=None, thread_factory=threading.Thread, sanitize=None) -> None:
+        self._voice = voice
+        self._out_dir = Path(out_dir)
+        self._breaker = breaker
+        self._factory = communicate_factory
+        self._av = av_module
+        self._max_concurrent = max_concurrent
+        self._min_interval = min_interval_s
+        self._connect_timeout = connect_timeout
+        self._receive_timeout = receive_timeout
+        self._max_in_flight = max_in_flight
+        self._clock = clock or time.monotonic
+        self._sleep = sleep or asyncio.sleep
+        self._thread_factory = thread_factory
+        self._sanitize = sanitize
+        self.results: queue.Queue = queue.Queue()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread = None
+        self._ready = threading.Event()
+        self._stopping = threading.Event()
+        self._sem: asyncio.Semaphore | None = None
+        self._aq: asyncio.Queue | None = None
+        self._tasks: set = set()
+        self._in_flight = 0
+        self._last_start = 0.0
+        self._accepts_timeout_kwargs = False
+
+    def start(self) -> None:
+        if self._factory is None:
+            try:
+                import edge_tts
+            except ImportError as exc:
+                raise LiveTtsUnavailable("edge-tts is not installed") from exc
+            self._factory = lambda text, voice, **kw: edge_tts.Communicate(text, voice, **kw)
+        try:
+            params = inspect.signature(self._factory).parameters
+            self._accepts_timeout_kwargs = ("connect_timeout" in params
+                                            or any(p.kind == p.VAR_KEYWORD
+                                                   for p in params.values()))
+        except (TypeError, ValueError):
+            self._accepts_timeout_kwargs = False
+        try:
+            self._out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise LiveTtsUnavailable(f"cannot create tts dir: {exc}") from exc
+        self._thread = self._thread_factory(target=self._run, name="live-tts", daemon=True)
+        self._thread.start()
+        self._ready.wait(5.0)
+
+    def submit(self, seg_id: int, gen: int, text: str, rate_pct: int,
+               deadline_mono: float) -> bool:
+        if (not self._ready.is_set() or self._loop is None or self._stopping.is_set()
+                or not self._breaker.allow() or self._in_flight >= self._max_in_flight
+                or deadline_mono - self._clock() <= 0):
+            return False
+        self._in_flight += 1
+        self._loop.call_soon_threadsafe(
+            self._aq.put_nowait, (seg_id, gen, text, rate_pct, deadline_mono))
+        return True
+
+    def stop(self, timeout_s: float) -> bool:
+        self._stopping.set()
+        if self._loop is not None:
+            try:
+                self._loop.call_soon_threadsafe(self._aq.put_nowait, None)
+            except Exception:
+                pass
+        if self._thread is not None:
+            self._thread.join(timeout_s)
+        try:
+            for part in self._out_dir.glob("clip_*.mp3.part"):
+                part.unlink()
+        except OSError:
+            pass
+        return self._thread is None or not self._thread.is_alive()
+
+    # -- internals (run on the live-tts thread) -----------------------------
+
+    def _run(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self._sem = asyncio.Semaphore(self._max_concurrent)
+        self._aq = asyncio.Queue()
+        self._ready.set()
+        try:
+            self._loop.run_until_complete(self._dispatch())
+        finally:
+            for task in list(self._tasks):
+                task.cancel()
+            self._loop.close()
+
+    async def _dispatch(self) -> None:
+        while not self._stopping.is_set():
+            try:
+                req = await asyncio.wait_for(self._aq.get(), timeout=0.2)
+            except asyncio.TimeoutError:
+                continue
+            if req is None:
+                return
+            task = self._loop.create_task(self._one(req))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+
+    def _clean(self, text: str) -> str:
+        if self._sanitize is not None:
+            return self._sanitize(text)
+        return (text or "").strip()
+
+    async def _one(self, req) -> None:
+        seg_id, gen, text, rate_pct, deadline = req
+        try:
+            clean = self._clean(text)
+            if not clean:
+                self.results.put((seg_id, gen, None, "empty"))
+                return
+            async with self._sem:
+                wait = self._min_interval - (self._clock() - self._last_start)
+                if wait > 0:
+                    await self._sleep(wait)
+                self._last_start = self._clock()
+                if deadline - self._clock() < 0.3:
+                    self.results.put((seg_id, gen, None, "late"))
+                    return
+                clip = await self._synth(seg_id, gen, clean, rate_pct,
+                                         deadline - self._clock())
+                if clip is None:
+                    self._breaker.record_failure(kind="tts")
+                    if deadline - self._clock() > 3.0:
+                        clip = await self._synth(seg_id, gen, clean, rate_pct,
+                                                 deadline - self._clock())
+                if clip is not None:
+                    self._breaker.record_success()
+                    self.results.put((seg_id, gen, clip, None))
+                else:
+                    self.results.put((seg_id, gen, None, "error"))
+        except asyncio.CancelledError:
+            raise
+        except Exception:                       # noqa: BLE001 - never crash the loop
+            self.results.put((seg_id, gen, None, "error"))
+        finally:
+            self._in_flight = max(0, self._in_flight - 1)
+
+    async def _synth(self, seg_id: int, gen: int, text: str, rate_pct: int,
+                     timeout: float):
+        part = self._out_dir / f"clip_{gen}_{seg_id}.mp3.part"
+        final = self._out_dir / f"clip_{gen}_{seg_id}.mp3"
+        try:
+            kwargs = {"rate": f"+{rate_pct}%"}
+            if self._accepts_timeout_kwargs:
+                kwargs["connect_timeout"] = int(self._connect_timeout)
+                kwargs["receive_timeout"] = int(self._receive_timeout)
+            comm = self._factory(text, self._voice, **kwargs)
+            await asyncio.wait_for(self._stream_to(comm, part), timeout=max(0.1, timeout))
+            size = part.stat().st_size if part.exists() else 0
+            if size <= 0:
+                return None
+            os.replace(part, final)
+            duration = mp3_cbr_duration_s(size)
+            bounds = (measure_silence(str(final), av_module=self._av)
+                      if self._av is not None else None)
+            vstart, vend = bounds if bounds else (0.0, duration)
+            return Clip(seg_id, gen, str(final), duration, f"+{rate_pct}%", vstart, vend)
+        except (asyncio.TimeoutError, Exception):   # noqa: BLE001
+            return None
+        finally:
+            try:
+                if part.exists():
+                    part.unlink()
+            except OSError:
+                pass
+
+    async def _stream_to(self, comm, part: Path) -> None:
+        with open(part, "wb") as handle:
+            async for chunk in comm.stream():
+                if chunk.get("type") == "audio":
+                    handle.write(chunk["data"])

@@ -1,16 +1,108 @@
+import tempfile
+import time
 import unittest
 
 import numpy as np
 
 from videotranslator.live_tts import (
     Clip,
+    EdgeClipSynth,
     EdgeDurationModel,
     LeadCalibrator,
+    LiveTtsUnavailable,
     choose_rate,
     measure_silence,
     mp3_cbr_duration_s,
     silence_bounds,
 )
+
+
+async def _noop_sleep(_seconds):
+    return None
+
+
+class _FakeComm:
+    def __init__(self, data):
+        self._data = data
+
+    async def stream(self):
+        yield {"type": "WordBoundary"}          # non-audio, ignored
+        yield {"type": "audio", "data": self._data}
+
+
+class _FakeBreaker:
+    def __init__(self, allow=True):
+        self._allow = allow
+        self.successes = 0
+        self.failures = 0
+
+    def allow(self):
+        return self._allow
+
+    def record_success(self):
+        self.successes += 1
+
+    def record_failure(self, *, kind):
+        self.failures += 1
+        return None
+
+
+class EdgeClipSynthTests(unittest.TestCase):
+    def _synth(self, tmp, factory, **kw):
+        br = kw.pop("breaker", _FakeBreaker())
+        s = EdgeClipSynth("v", tmp, breaker=br, communicate_factory=factory,
+                          av_module=None, min_interval_s=0.0, sleep=_noop_sleep, **kw)
+        s._breaker_ref = br
+        return s
+
+    def test_synthesizes_a_clip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda t, v, **k: _FakeComm(b"\x00" * 6000))
+            s.start()
+            self.assertTrue(s.submit(0, 0, "hello", 10, time.monotonic() + 10))
+            seg_id, gen, clip, reason = s.results.get(timeout=5)
+            s.stop(3.0)
+            self.assertIsNone(reason)
+            self.assertIsNotNone(clip)
+            self.assertAlmostEqual(clip.duration, 1.0, places=2)
+            self.assertEqual(clip.rate, "+10%")
+            self.assertEqual(s._breaker_ref.successes, 1)
+
+    def test_empty_text_reports_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda t, v, **k: _FakeComm(b"\x00" * 100))
+            s.start()
+            s.submit(1, 0, "   ", 0, time.monotonic() + 10)
+            _sid, _g, clip, reason = s.results.get(timeout=5)
+            s.stop(3.0)
+            self.assertIsNone(clip)
+            self.assertEqual(reason, "empty")
+
+    def test_failure_trips_the_breaker_and_reports_error(self):
+        def boom(t, v, **k):
+            raise RuntimeError("network down")
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, boom)
+            s.start()
+            s.submit(2, 0, "hello", 0, time.monotonic() + 10)
+            _sid, _g, clip, reason = s.results.get(timeout=5)
+            s.stop(3.0)
+            self.assertIsNone(clip)
+            self.assertEqual(reason, "error")
+            self.assertGreaterEqual(s._breaker_ref.failures, 1)
+
+    def test_submit_rejected_when_breaker_open_or_deadline_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda t, v, **k: _FakeComm(b"\x00" * 100),
+                            breaker=_FakeBreaker(allow=False))
+            s.start()
+            self.assertFalse(s.submit(0, 0, "x", 0, time.monotonic() + 10))  # breaker open
+            s.stop(3.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda t, v, **k: _FakeComm(b"\x00" * 100))
+            s.start()
+            self.assertFalse(s.submit(0, 0, "x", 0, time.monotonic() - 1))   # past deadline
+            s.stop(3.0)
 
 
 class Mp3DurationTests(unittest.TestCase):
