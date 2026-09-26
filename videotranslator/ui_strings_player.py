@@ -3191,6 +3191,39 @@ for _tog_lang, (_dub, _subs) in _LIVE_TOGGLE_STRINGS.items():
     })
 
 
+
+
+_ORIGINAL_MUTE_LABELS = {
+    "ar": "كتم الصوت الأصلي",
+    "zh": "静音原声",
+    "cs": "Ztlumit původní zvuk",
+    "da": "Slå originallyden fra",
+    "nl": "Origineel geluid dempen",
+    "en": "Mute original audio",
+    "fi": "Mykistä alkuperäinen ääni",
+    "fr": "Couper le son original",
+    "de": "Originalton stummschalten",
+    "el": "Σίγαση αρχικού ήχου",
+    "hi": "मूल ऑडियो म्यूट करें",
+    "hu": "Eredeti hang némítása",
+    "id": "Bisukan audio asli",
+    "it": "Silenzia originale",
+    "ja": "元の音声をミュート",
+    "ko": "원본 오디오 음소거",
+    "no": "Demp originallyden",
+    "pl": "Wycisz oryginalny dźwięk",
+    "pt": "Silenciar áudio original",
+    "ro": "Dezactivează sunetul original",
+    "ru": "Выключить исходный звук",
+    "es": "Silenciar audio original",
+    "sv": "Stäng av originalljudet",
+    "tr": "Orijinal sesi kapat",
+    "uk": "Вимкнути оригінальний звук",
+    "vi": "Tắt âm thanh gốc",
+}
+for _mute_lang, _mute_label in _ORIGINAL_MUTE_LABELS.items():
+    PLAYER_UI_STRINGS[_mute_lang]["live_opt_mute_original"] = _mute_label
+
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 
 

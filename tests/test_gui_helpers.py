@@ -6,6 +6,10 @@ import video_translator_gui as gui
 
 
 class LiveTransportRoutingTests(unittest.TestCase):
+    def test_original_mute_routes_to_session(self):
+        gui.App._on_live_command(self.app, "original_mute", {"muted": True})
+        self.session.set_original_muted.assert_called_once_with(True)
+
     def setUp(self):
         self.session = Mock()
         self.controller = Mock()

@@ -130,6 +130,22 @@ class CommandQueueTests(unittest.TestCase):
 
 
 class VolumeMixerTests(unittest.TestCase):
+    def test_original_mute_survives_duck_and_volume_changes_without_muting_voice(self):
+        mixer = pe.VolumeMixer(user_volume=80)
+        mixer.set_original_muted(True)
+        for gain in (0.3, 0.6, 1.0):
+            mixer.set_duck_gain(gain)
+            state = mixer.snapshot()
+            self.assertEqual((state.video_volume, state.voice_volume), (0, 80))
+        mixer.set_user_volume(60)
+        self.assertEqual(mixer.snapshot().voice_volume, 60)
+        mixer.set_muted(True)
+        self.assertEqual(mixer.snapshot().voice_volume, 0)
+        mixer.set_muted(False)
+        self.assertEqual(mixer.snapshot().video_volume, 0)
+        mixer.set_original_muted(False)
+        self.assertEqual(mixer.snapshot().video_volume, 60)
+
     def test_volume_duck_mute_and_owner_increment_versions(self):
         mixer = pe.VolumeMixer(user_volume=100)
         initial = mixer.snapshot()

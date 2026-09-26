@@ -72,6 +72,28 @@ class LiveBarTests(unittest.TestCase):
         self.bar._stop_button.invoke()
         self.assertIn(("stop", {}), self.commands)
 
+    def test_original_mute_is_available_while_running_and_resets_on_stop(self):
+        self.bar.show_running()
+        self.bar._chk_original_mute.invoke()
+        self.assertIn(("original_mute", {"muted": True}), self.commands)
+        self.bar.relabel()
+        self.bar.apply_theme()
+        self.assertTrue(self.bar._original_mute_var.get())
+        self.bar._chk_original_mute.invoke()
+        self.assertEqual(self.commands[-1], ("original_mute", {"muted": False}))
+        self.bar._chk_original_mute.invoke()
+        self.bar.show_idle()
+        self.assertFalse(self.bar._original_mute_var.get())
+
+    def test_original_mute_can_be_selected_before_start_and_kept_while_running(self):
+        self.assertTrue(self.bar._chk_original_mute_idle.winfo_manager())
+        self.bar._chk_original_mute_idle.invoke()
+        self.assertTrue(self.bar.current_settings()["original_mute"])
+        self.bar.show_running()
+        self.assertTrue(self.bar._original_mute_var.get())
+        self.bar._chk_original_mute.invoke()
+        self.assertFalse(self.bar.current_settings()["original_mute"])
+
     def test_config_values_reflect_selection(self):
         self.bar._mode_var.set("live")
         self.bar._dub_var.set(False)

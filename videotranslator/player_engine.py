@@ -236,6 +236,7 @@ class VolumeMixer:
     def __init__(self, *, user_volume: float = 100.0, muted: bool = False) -> None:
         self._user_volume = min(130.0, max(0.0, float(user_volume)))
         self._muted = bool(muted)
+        self._original_muted = False
         self._duck_gain = 1.0
         self._owner = "cmd"
         self._version = 0
@@ -253,6 +254,10 @@ class VolumeMixer:
     def set_muted(self, muted: bool) -> None:
         self._set("_muted", bool(muted))
 
+    def set_original_muted(self, muted: bool) -> None:
+        """Mute the video's whole soundtrack without changing dubbed voice volume."""
+        self._set("_original_muted", bool(muted))
+
     def set_duck_gain(self, gain: float) -> None:
         self._set("_duck_gain", min(1.0, max(0.0, float(gain))))
 
@@ -266,7 +271,7 @@ class VolumeMixer:
             if self._muted:
                 video = voice = 0.0
             else:
-                video = self._user_volume * self._duck_gain
+                video = 0.0 if self._original_muted else self._user_volume * self._duck_gain
                 voice = self._user_volume
             return MixState(self._version, self._owner, video, voice, self._muted)
 

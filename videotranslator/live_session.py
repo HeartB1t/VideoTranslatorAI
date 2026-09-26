@@ -460,6 +460,7 @@ class LiveSession:
         if mixer is not None:
             try:
                 mixer.set_owner("cmd")
+                mixer.set_original_muted(False)
                 # Re-assert the user volume through the command path now that the
                 # scheduler no longer owns the mixer, so the player does not stay
                 # at the ducked level after the session ends (review finding 5).
@@ -500,6 +501,9 @@ class LiveSession:
     def toggle_user_pause(self) -> None:
         """Toggle user intent on the scheduler thread, independent of pacer pauses."""
         self._control.put(("pause_toggle", None))
+
+    def set_original_muted(self, muted: bool) -> None:
+        self._control.put(("original_mute", bool(muted)))
 
     def submit_segment(self, seg: LiveSegment) -> None:
         """Producer entry point (the MT thread; tests call it directly)."""
@@ -545,13 +549,16 @@ class LiveSession:
         clip still playing, or the original audio attenuated on the next video.
         Safe after the backend is terminated (rt calls become no-ops).
         """
+        mixer = getattr(self._video, "mixer", None)
+        if mixer is not None:
+            mixer.set_original_muted(False)
         rt = getattr(self._video, "rt", None)
         if rt is not None:
             try:
                 rt.set_overlay(None)
             except Exception:
                 pass
-            if self._duck_applied != 1.0:
+            if self._duck_applied != 1.0 or mixer is not None:
                 try:
                     rt.set_duck(1.0)
                 except Exception:
@@ -668,6 +675,14 @@ class LiveSession:
                 self._pacer.set_mode(value)
             elif kind == "subs":
                 self._execute(self._scheduler.set_subs(value))
+            elif kind == "original_mute":
+                mixer = getattr(self._video, "mixer", None)
+                if mixer is not None:
+                    mixer.set_original_muted(value)
+                    rt = getattr(self._video, "rt", None)
+                    if rt is not None:
+                        rt.set_duck(self._duck_env.current)
+                    self._reassert_mixer()
             elif kind in ("pause", "pause_toggle"):
                 self._user_paused = (not self._user_paused if kind == "pause_toggle"
                                      else value)

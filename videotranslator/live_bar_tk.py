@@ -69,6 +69,7 @@ class LiveBar(tk.Frame):
         self._engine_var = tk.StringVar(value="marian")
         self._dub_var = tk.BooleanVar(value=True)
         self._subs_var = tk.BooleanVar(value=True)
+        self._original_mute_var = tk.BooleanVar(value=False)
 
         self._build_idle()
         self._build_running()
@@ -141,6 +142,14 @@ class LiveBar(tk.Frame):
             command=self._on_subs, bg=pal.SURFACE, fg=pal.FG, selectcolor=pal.FIELD,
             activebackground=pal.SURFACE, activeforeground=pal.FG, font="VT.Small")
         self._chk_subs.pack(side="left", padx=(0, 4))
+        self._chk_original_mute_idle = tk.Checkbutton(
+            row2, text=self._s("live_opt_mute_original"),
+            variable=self._original_mute_var,
+            command=lambda: self._emit("original_mute", muted=bool(self._original_mute_var.get())),
+            bg=pal.SURFACE, fg=pal.FG, selectcolor=pal.FIELD,
+            activebackground=pal.SURFACE, activeforeground=pal.FG,
+            font="VT.Small", takefocus=1)
+        self._chk_original_mute_idle.pack(side="left", padx=(0, 4))
 
         row3 = tk.Frame(self._idle, bg=pal.SURFACE)
         row3.pack(fill="x", padx=8, pady=(0, 6))
@@ -168,6 +177,17 @@ class LiveBar(tk.Frame):
             row, primary=False, text=self._s("live_btn_stop"),
             command=lambda: self._emit("stop"))
         self._stop_wrap.pack(side="right", padx=(6, 0))
+
+        audio_row = tk.Frame(self._running, bg=pal.SURFACE)
+        audio_row.pack(fill="x", padx=8, pady=(0, 6))
+        self._chk_original_mute = tk.Checkbutton(
+            audio_row, text=self._s("live_opt_mute_original"),
+            variable=self._original_mute_var,
+            command=lambda: self._emit("original_mute", muted=bool(self._original_mute_var.get())),
+            bg=pal.SURFACE, fg=pal.FG, selectcolor=pal.FIELD,
+            activebackground=pal.SURFACE, activeforeground=pal.FG,
+            font="VT.Small", takefocus=1)
+        self._chk_original_mute.pack(side="left")
 
     def _build_banner(self) -> None:
         pal = self._palette
@@ -252,6 +272,7 @@ class LiveBar(tk.Frame):
 
     def show_idle(self) -> None:
         self._active = False
+        self._original_mute_var.set(False)
         self._running.pack_forget()
         self._idle.pack(fill="x")
 
@@ -281,6 +302,7 @@ class LiveBar(tk.Frame):
             "engine": LIVE_ENGINES[self._engine_combo.current()],
             "dub": bool(self._dub_var.get()),
             "subs": bool(self._subs_var.get()),
+            "original_mute": bool(self._original_mute_var.get()),
         }
 
     def render(self, status: Any) -> None:
@@ -344,6 +366,8 @@ class LiveBar(tk.Frame):
         self._engine_combo.current(LIVE_ENGINES.index(self._engine_var.get()))
         self._chk_dub.configure(text=self._s("live_opt_dub"))
         self._chk_subs.configure(text=self._s("live_opt_subs"))
+        self._chk_original_mute.configure(text=self._s("live_opt_mute_original"))
+        self._chk_original_mute_idle.configure(text=self._s("live_opt_mute_original"))
         self._privacy_label.configure(text=self._s("live_tip_privacy"))
         self._start_button.configure(text=self._s("player_btn_live"))
         self._badge.configure(text=self._s("live_badge"))

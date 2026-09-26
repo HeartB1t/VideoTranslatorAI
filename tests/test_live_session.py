@@ -594,6 +594,18 @@ def _dub_seg(tgt="ciao", *, gen=0, start=2.0, end=3.0):
 
 
 class LiveSessionDubTests(unittest.TestCase):
+    def test_original_mute_control_and_teardown_preserve_voice_volume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice, _, _ = _dub_session(tmp)
+            sess._start_dub()
+            sess.set_original_muted(True)
+            sess._drain_control(0)
+            state = video.mixer.snapshot()
+            self.assertEqual((state.video_volume, state.voice_volume), (0, 100))
+            self.assertTrue(video.rt.ducks)
+            sess._teardown_outputs()
+            self.assertEqual(video.mixer.snapshot().video_volume, 100)
+
     def test_duration_feedback_uses_successful_clip_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, _, _, synth, _ = _dub_session(tmp)

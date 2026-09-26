@@ -8518,6 +8518,8 @@ class App(tk.Tk):
             session.set_dub_enabled(bool(params.get("enabled", True)))
         elif intent == "subs":
             session.set_subs_enabled(bool(params.get("enabled", True)))
+        elif intent == "original_mute":
+            session.set_original_muted(bool(params.get("muted", False)))
 
     def _start_live_session(self) -> None:
         if self._live_session is not None or self._live_resolving:
@@ -8645,6 +8647,7 @@ class App(tk.Tk):
                 factories=factories, voice=voice_backend, log=self._player_log,
                 thread_factory=self._redirecting_thread_factory)
             self._live_session.notify_user_pause(self._player_controller.paused)
+            self._live_session.set_original_muted(raw.get("original_mute", False))
             self._live_session.start()
         except Exception as exc:                     # noqa: BLE001
             self._player_log(f"[live] start failed: {exc}")
