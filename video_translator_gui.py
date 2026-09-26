@@ -10060,14 +10060,14 @@ class App(tk.Tk):
         """Stop native player resources before destroying their Tk host window."""
         self._destroying = True
         self._theme.close()
-        # Stop a live session first: its sched thread writes to backend.rt, so it
-        # must be gone before the backend is terminated below.
+        # Signal a live session to stop now (fast, non-blocking); the actual join
+        # happens on the close worker below, before the backend is terminated, so
+        # the Tk thread never blocks (up to 4 s) on a network read in PyAV.
         live = self._live_session
         if live is not None:
             self._live_session = None
-            live.request_stop()
             with contextlib.suppress(Exception):
-                live.join(4.0)
+                live.request_stop()
         if self._live_poll_after is not None:
             with contextlib.suppress(tk.TclError):
                 self.after_cancel(self._live_poll_after)
@@ -10083,7 +10083,7 @@ class App(tk.Tk):
         self._voice_backend = None
         guard = self._player_guard
         init_thread = self._player_init_thread
-        if (backend is None and voice_backend is None
+        if (backend is None and voice_backend is None and live is None
                 and (init_thread is None or not init_thread.is_alive())):
             self._player_bridge.close()
             if guard is not None:
@@ -10094,6 +10094,12 @@ class App(tk.Tk):
 
         def work():
             try:
+                # Join the live session first: its sched thread writes to
+                # backend.rt (and clears the overlay), so it must be gone before
+                # the backend is terminated.
+                if live is not None:
+                    with contextlib.suppress(Exception):
+                        live.join(4.0)
                 self._player_bridge.close()
                 if voice_backend is not None:
                     with contextlib.suppress(Exception):
