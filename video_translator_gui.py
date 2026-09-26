@@ -6080,6 +6080,14 @@ class App(tk.Tk):
         self._player_clock = _player_engine.PlaybackClock()
         self._player_backend = None
         self._voice_backend = None            # second mpv for live dubbed voice (P5)
+        # The voice mpv is built on a worker; the result is handed to Tk through
+        # _voice_built under _voice_lock, so close and VO fallback can always take
+        # (and terminate) a result that is in flight. The token marks the one
+        # current build: close/fallback clear it to invalidate a build under way.
+        self._voice_lock = threading.Lock()
+        self._voice_build_token = None
+        self._voice_built = None
+        self._voice_init_thread = None
         self._player_controller = _player_core.PlayerController(
             None, self._player_settings, on_change=self._on_player_state,
             save=save_config)
@@ -8515,7 +8523,15 @@ class App(tk.Tk):
         elif intent == "engine":
             session.set_engine(params.get("engine", "marian"))
         elif intent == "dub":
-            session.set_dub_enabled(bool(params.get("enabled", True)))
+            enabled = bool(params.get("enabled", True))
+            session.set_dub_enabled(enabled)
+            if enabled:
+                # A session started with the dub off has no voice backend: hand it
+                # the existing one, or build it (attached when ready).
+                if self._voice_backend is not None:
+                    session.attach_voice(self._voice_backend)
+                else:
+                    self._request_voice_backend()
         elif intent == "subs":
             session.set_subs_enabled(bool(params.get("enabled", True)))
         elif intent == "original_mute":
@@ -8648,10 +8664,14 @@ class App(tk.Tk):
                 values, settings=settings, cache_dir=cache_dir, now=time.time())
             factories = _live_session_module.build_live_factories(
                 cfg, log=self._player_log)
-            voice_backend = self._ensure_voice_backend() if raw["dub"] else None
+            # The voice mpv is built on a worker: if it is not ready yet, the
+            # session starts with the dub pending and receives it later.
+            voice_backend = self._voice_backend if raw["dub"] else None
+            voice_pending = bool(raw["dub"]) and voice_backend is None
             self._live_session = _live_session_module.LiveSession(
                 cfg, video=self._player_backend, clock_view=self._player_clock,
-                factories=factories, voice=voice_backend, log=self._player_log,
+                factories=factories, voice=voice_backend,
+                voice_pending=voice_pending, log=self._player_log,
                 thread_factory=self._redirecting_thread_factory)
             self._live_session.notify_user_pause(initial_user_paused)
             self._live_session.set_original_muted(raw.get("original_mute", False))
@@ -8670,6 +8690,8 @@ class App(tk.Tk):
         self._live_bar.set_active(True)
         self._live_bar.set_start_enabled(False)
         self._schedule_live_poll()
+        if voice_pending:
+            self._request_voice_backend()        # attached to the session when ready
 
     def _schedule_live_poll(self) -> None:
         if self._destroying or self._live_session is None:
@@ -8868,25 +8890,91 @@ class App(tk.Tk):
             return current
         return voices[0] if voices else current
 
-    def _ensure_voice_backend(self):
-        """Create the second, video-less mpv for the live dub, once per app run.
+    def _request_voice_backend(self) -> None:
+        """Build the second, video-less mpv for the live dub on a worker.
 
-        Shares the player bridge (it writes only namespaced values and voice-*
-        events, never the player state). Returns None if libmpv cannot build it;
-        the session then degrades to subtitles only.
+        libmpv never runs on the Tk thread (spec 2.4). One build at a time, once
+        per player bridge: the backend shares the player bridge (it writes only
+        namespaced values and voice-* events). The result is adopted on Tk only if
+        the player backend and bridge are still those it was built for; a running
+        session receives it through attach_voice(). A failure turns the session's
+        dub off with the TTS warning, subtitles keep working.
         """
-        if self._voice_backend is not None or self._player_backend is None:
-            return self._voice_backend
-        try:
-            module = _libmpv_runtime.load_mpv()
-            self._voice_backend = _player_engine.create_voice_backend(
-                bridge=self._player_bridge, mpv_module=module,
-                sys_platform="win32" if sys.platform == "win32" else "linux",
-                log=None)
-        except Exception as exc:                     # noqa: BLE001
-            self._player_log(f"[live] dubbed voice unavailable: {exc}")
-            self._voice_backend = None
-        return self._voice_backend
+        if (self._destroying or self._player_backend is None
+                or self._voice_backend is not None):
+            return
+        with self._voice_lock:
+            if self._voice_build_token is not None:
+                return                               # a build is already running
+            token = object()
+            self._voice_build_token = token
+        bridge = self._player_bridge
+        backend = self._player_backend
+        platform_key = "win32" if sys.platform == "win32" else "linux"
+
+        def work():
+            try:
+                module = _libmpv_runtime.load_mpv()
+                voice = _player_engine.create_voice_backend(
+                    bridge=bridge, mpv_module=module, sys_platform=platform_key,
+                    log=None)
+            except Exception as exc:                 # noqa: BLE001
+                with self._voice_lock:
+                    current = self._voice_build_token is token
+                    if current:
+                        self._voice_build_token = None
+                if current:
+                    self._post_if_alive(
+                        lambda error=exc: self._on_voice_backend_failed(error))
+                return
+            with self._voice_lock:
+                adopt = self._voice_build_token is token
+                if adopt:
+                    self._voice_built = (bridge, backend, voice)
+            if not adopt:                            # closed or invalidated meanwhile
+                voice.terminate(3.0)
+                return
+            self._post_if_alive(self._on_voice_backend_ready)
+
+        self._voice_init_thread = self._redirecting_thread_factory(
+            work, name="voice-init")
+        self._voice_init_thread.start()
+
+    def _take_voice_build(self):
+        """Invalidate the build under way and take any result not adopted yet."""
+        with self._voice_lock:
+            built, self._voice_built = self._voice_built, None
+            self._voice_build_token = None
+        return None if built is None else built[2]
+
+    def _on_voice_backend_ready(self) -> None:
+        with self._voice_lock:
+            built, self._voice_built = self._voice_built, None
+            self._voice_build_token = None
+        if built is None:
+            return                                   # taken by close or fallback
+        bridge, backend, voice = built
+        if (self._destroying or bridge is not self._player_bridge
+                or backend is not self._player_backend):
+            self._terminate_voice_async(voice)       # built for a replaced player
+            return
+        self._voice_backend = voice
+        session = self._live_session
+        if session is not None:
+            session.attach_voice(voice)
+
+    def _on_voice_backend_failed(self, exc: BaseException) -> None:
+        self._player_log(f"[live] dubbed voice unavailable: {exc}")
+        session = self._live_session
+        if session is not None:
+            session.voice_unavailable()
+
+    def _terminate_voice_async(self, voice) -> None:
+        """Terminate a voice mpv off the Tk thread (terminate blocks)."""
+        def work():
+            with contextlib.suppress(Exception):
+                voice.terminate(3.0)
+        self._redirecting_thread_factory(work, name="voice-stop").start()
 
     def _start_player_poll(self) -> None:
         if self._destroying or self._player_poll_after is not None:
@@ -10133,12 +10221,17 @@ class App(tk.Tk):
         self._close_started_at = time.monotonic()
         self._close_done = threading.Event()
         backend = self._player_backend
-        voice_backend = self._voice_backend
+        # The adopted voice backend, plus one built but not adopted yet; clearing
+        # the build token also makes a build still running terminate its result.
+        voice_backends = [v for v in (self._voice_backend, self._take_voice_build())
+                          if v is not None]
         self._voice_backend = None
+        voice_init = self._voice_init_thread
         guard = self._player_guard
         init_thread = self._player_init_thread
-        if (backend is None and voice_backend is None and live is None
-                and (init_thread is None or not init_thread.is_alive())):
+        if (backend is None and not voice_backends and live is None
+                and (init_thread is None or not init_thread.is_alive())
+                and (voice_init is None or not voice_init.is_alive())):
             self._player_bridge.close()
             if guard is not None:
                 guard.restore()
@@ -10154,8 +10247,10 @@ class App(tk.Tk):
                 if live is not None:
                     with contextlib.suppress(Exception):
                         live.join(4.0)
+                if voice_init is not None and voice_init.is_alive():
+                    voice_init.join(6.0)         # it terminates its own late result
                 self._player_bridge.close()
-                if voice_backend is not None:
+                for voice_backend in voice_backends:
                     with contextlib.suppress(Exception):
                         voice_backend.terminate(3.0)
                 if backend is not None:

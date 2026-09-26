@@ -1,5 +1,7 @@
+import threading
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 from unittest.mock import Mock
 
 import video_translator_gui as gui
@@ -67,61 +69,108 @@ class LiveVoiceForTests(unittest.TestCase):
         self.assertEqual(self._call("whatever", "zz"), "whatever")
 
 
-class EnsureVoiceBackendTests(unittest.TestCase):
-    def test_returns_the_existing_backend_without_rebuilding(self):
-        existing = object()
-        fake = SimpleNamespace(_voice_backend=existing, _player_backend=object())
-        self.assertIs(gui.App._ensure_voice_backend(fake), existing)
+class _FakeVoice:
+    def __init__(self):
+        self.terminated = False
 
-    def test_none_when_the_player_is_not_ready(self):
-        fake = SimpleNamespace(_voice_backend=None, _player_backend=None)
-        self.assertIsNone(gui.App._ensure_voice_backend(fake))
+    def terminate(self, _timeout):
+        self.terminated = True
+        return True
 
-    def test_builds_once_and_shares_the_player_bridge(self):
-        bridge = object()
-        made = object()
-        calls = {}
 
-        def fake_create(*, bridge, mpv_module, sys_platform, log):
-            calls["bridge"] = bridge
-            calls["module"] = mpv_module
-            return made
+class RequestVoiceBackendTests(unittest.TestCase):
+    """The voice mpv is built on a worker and adopted on Tk only if still valid."""
 
-        orig_create = gui._player_engine.create_voice_backend
-        orig_load = gui._libmpv_runtime.load_mpv
-        gui._player_engine.create_voice_backend = fake_create
-        gui._libmpv_runtime.load_mpv = lambda: "MODULE"
-        try:
-            fake = SimpleNamespace(_voice_backend=None, _player_backend=object(),
-                                   _player_bridge=bridge,
-                                   _player_log=lambda *_a: None)
-            result = gui.App._ensure_voice_backend(fake)
-        finally:
-            gui._player_engine.create_voice_backend = orig_create
-            gui._libmpv_runtime.load_mpv = orig_load
-        self.assertIs(result, made)
-        self.assertIs(fake._voice_backend, made)
-        self.assertIs(calls["bridge"], bridge)
-        self.assertEqual(calls["module"], "MODULE")
+    def _fake(self, *, session=None):
+        threads, posted, logged, stopped = [], [], [], []
+        fake = SimpleNamespace(
+            _destroying=False, _player_backend=object(), _player_bridge=object(),
+            _voice_backend=None, _voice_lock=threading.Lock(),
+            _voice_build_token=None, _voice_built=None, _voice_init_thread=None,
+            _live_session=session, _player_log=logged.append,
+            threads=threads, posted=posted, logged=logged, stopped=stopped)
+        fake._redirecting_thread_factory = (
+            lambda target, name=None: threads.append(target) or SimpleNamespace(
+                start=lambda: None, is_alive=lambda: False, join=lambda *_a: None))
+        fake._post_if_alive = posted.append
+        fake._on_voice_backend_ready = lambda: gui.App._on_voice_backend_ready(fake)
+        fake._on_voice_backend_failed = (
+            lambda exc: gui.App._on_voice_backend_failed(fake, exc))
+        fake._terminate_voice_async = stopped.append
+        return fake
 
-    def test_build_failure_degrades_to_none(self):
+    def _build(self, fake, create):
+        # Patches stay active for the whole test: the worker runs after this
+        # returns, and must never reach the real libmpv.
+        self.enterContext(mock.patch.object(gui._libmpv_runtime, "load_mpv",
+                                            return_value="MOD"))
+        self.enterContext(mock.patch.object(gui._player_engine,
+                                            "create_voice_backend", create))
+        gui.App._request_voice_backend(fake)
+        return list(fake.threads)
+
+    def test_libmpv_runs_on_the_worker_not_on_tk(self):
+        voice = _FakeVoice()
+        calls = []
+        create = lambda **kw: calls.append(kw) or voice
+        fake = self._fake()
+        with mock.patch.object(gui._libmpv_runtime, "load_mpv", return_value="MOD"), \
+                mock.patch.object(gui._player_engine, "create_voice_backend", create):
+            gui.App._request_voice_backend(fake)
+            self.assertEqual(calls, [])                   # nothing built on Tk
+            fake.threads[0]()                             # the worker runs it
+        self.assertIs(calls[0]["bridge"], fake._player_bridge)
+        for fn in fake.posted:
+            fn()
+        self.assertIs(fake._voice_backend, voice)
+
+    def test_only_one_build_at_a_time(self):
+        fake = self._fake()
+        self._build(fake, lambda **kw: _FakeVoice())
+        with mock.patch.object(gui._libmpv_runtime, "load_mpv", return_value="MOD"):
+            gui.App._request_voice_backend(fake)
+        self.assertEqual(len(fake.threads), 1)
+
+    def test_ready_backend_is_attached_to_the_running_session(self):
+        session = Mock()
+        fake = self._fake(session=session)
+        voice = _FakeVoice()
+        worker, = self._build(fake, lambda **kw: voice)
+        worker()
+        fake.posted[0]()
+        session.attach_voice.assert_called_once_with(voice)
+
+    def test_result_for_a_replaced_bridge_is_terminated_not_adopted(self):
+        fake = self._fake()
+        voice = _FakeVoice()
+        worker, = self._build(fake, lambda **kw: voice)
+        worker()
+        fake._player_bridge = object()                    # VO fallback replaced it
+        fake.posted[0]()
+        self.assertIsNone(fake._voice_backend)
+        self.assertEqual(fake.stopped, [voice])
+
+    def test_close_during_the_build_terminates_the_result(self):
+        fake = self._fake()
+        voice = _FakeVoice()
+        worker, = self._build(fake, lambda **kw: voice)
+        gui.App._take_voice_build(fake)                   # what close/fallback do
+        worker()                                          # build ends afterwards
+        self.assertTrue(voice.terminated)
+        self.assertEqual(fake.posted, [])
+
+    def test_build_failure_tells_the_session_and_logs(self):
+        session = Mock()
+        fake = self._fake(session=session)
+
         def boom(**_kw):
             raise RuntimeError("no libmpv")
-
-        orig_create = gui._player_engine.create_voice_backend
-        orig_load = gui._libmpv_runtime.load_mpv
-        gui._player_engine.create_voice_backend = boom
-        gui._libmpv_runtime.load_mpv = lambda: "MODULE"
-        try:
-            logged = []
-            fake = SimpleNamespace(_voice_backend=None, _player_backend=object(),
-                                   _player_bridge=object(),
-                                   _player_log=logged.append)
-            self.assertIsNone(gui.App._ensure_voice_backend(fake))
-        finally:
-            gui._player_engine.create_voice_backend = orig_create
-            gui._libmpv_runtime.load_mpv = orig_load
-        self.assertTrue(logged)
+        worker, = self._build(fake, boom)
+        worker()
+        fake.posted[0]()
+        session.voice_unavailable.assert_called_once_with()
+        self.assertTrue(fake.logged)
+        self.assertIsNone(fake._voice_build_token)
 
 
 class OnPlayerStateLiveTests(unittest.TestCase):
