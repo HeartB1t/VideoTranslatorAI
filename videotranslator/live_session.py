@@ -345,7 +345,13 @@ class LiveSession:
         self._timing = derive_live_timing(
             s.delay_s if s.delay_s is not None else (s.file_ahead_s or 8.0),
             mode=s.sync_mode, device=device, engine=cfg.engine, dub=s.dub_enabled)
-        from .live_tts import EdgeDurationModel, choose_rate
+        from .live_tts import (VOICE_LEAD_INITIAL_S, EdgeDurationModel, LeadCalibrator,
+                               choose_rate)
+        # Voice lead learned from the first clips (design 4.11): requested
+        # unpause -> first voice time-pos past the skipped leading silence.
+        self._lead_cal = LeadCalibrator(VOICE_LEAD_INITIAL_S)
+        self._lead_start_mono: float | None = None
+        self._preload_skip = 0.0
         from .timing import estimate_tts_duration_s
         from .tts_text_sanitizer import sanitize_for_tts
         # Speed the TTS to fit the slot (was hard +0%: long translations overran
@@ -688,6 +694,7 @@ class LiveSession:
         # file pacer catching translation up.
         main_running = not (self._user_paused or self._self_paused)
         self._sync_voice_state()
+        self._calibrate_lead()
         actions = self._scheduler.tick(now, mono, main_running=main_running,
                                        main_speed=1.0, voice_state=self._voice_state,
                                        clock_epoch=epoch,
@@ -752,6 +759,24 @@ class LiveSession:
                         self._status.warning_key = None
                         self._status.warning_params = {}
                         self._status.warning_action = None
+
+    def _calibrate_lead(self) -> None:
+        """Feed the voice position to the lead calibrator (first clips only)."""
+        if self._bridge is None or self._lead_start_mono is None:
+            return
+        observed = self._bridge.extra("voice-time-pos")
+        if observed is None:
+            return
+        pts, stamp = observed
+        # Only a position read after this start, and past the skipped silence
+        # (the preloaded clip sits exactly at skip_s until it plays).
+        if pts is None or stamp <= self._lead_start_mono or \
+                float(pts) <= self._preload_skip + 0.01:
+            return
+        self._lead_start_mono = None
+        lead = self._lead_cal.on_voice_pts(stamp, float(pts))
+        if lead is not None:
+            self._scheduler.set_lead(lead)
 
     def _sync_voice_state(self) -> None:
         """Consume the voice end marker and flip to idle when a CLIP ends.
@@ -898,10 +923,13 @@ class LiveSession:
                 if self._voice is not None:
                     self._voice.preload(action.path, skip_s=action.skip_s)
                 self._voice_state = "preloaded"
+                self._preload_skip = float(action.skip_s)
             elif isinstance(action, StartClip):
                 if self._voice is not None:
                     self._voice.start(action.speed)
                 self._voice_state = "playing"
+                self._lead_start_mono = self._clock()
+                self._lead_cal.on_start(self._lead_start_mono, self._preload_skip)
             elif isinstance(action, ClipSpeed):
                 if self._voice is not None:
                     self._voice.set_speed(action.value)

@@ -261,11 +261,6 @@ class OptionBuilderTests(unittest.TestCase):
             "cache_pause": "yes",
             "cache_pause_wait": "1",
         })
-        self.assertEqual(pe.duck_channel_for((0, 36)), "volume")
-        self.assertEqual(pe.duck_channel_for((0, 37)), "af")
-        self.assertEqual(pe.duck_channel_for(None), "volume")
-        self.assertEqual(pe.af_duck_command(0.257),
-                         ["af-command", "vtduck", "volume", "0.257", "volume"])
 
 
 class InMemoryBackendTests(unittest.TestCase):
@@ -525,25 +520,6 @@ class ExtraLatestTests(unittest.TestCase):
         bridge.close()
         bridge.extra_latest("voice-time-pos", 1.0, 1.0)
         self.assertIsNone(bridge.extra("voice-time-pos"))
-
-
-class DuckAfTests(unittest.TestCase):
-    def test_issues_the_af_command_and_reports_success(self):
-        player = _FakeMpv()
-        self.assertTrue(pe.duck_af(player, 0.3))
-        self.assertEqual(player.actions[-1],
-                         ("command", "af-command", "vtduck", "volume", "0.300", "volume"))
-
-    def test_none_player_is_false(self):
-        self.assertFalse(pe.duck_af(None, 0.3))
-
-    def test_failure_is_reported_and_false(self):
-        class _Boom(_FakeMpv):
-            def command(self, *args):
-                raise RuntimeError("no filter")
-        seen = []
-        self.assertFalse(pe.duck_af(_Boom(), 0.5, on_error=seen.append))
-        self.assertEqual(len(seen), 1)
 
 
 class MpvVoiceBackendTests(unittest.TestCase):

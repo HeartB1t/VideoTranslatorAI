@@ -371,34 +371,6 @@ def stream_session_options(delay_max_s: float) -> dict[str, str]:
     }
 
 
-def duck_channel_for(mpv_version: tuple[int, int] | None) -> str:
-    return "af" if mpv_version is not None and mpv_version >= (0, 37) else "volume"
-
-
-def af_duck_command(gain: float) -> list[str]:
-    safe_gain = min(1.0, max(0.0, float(gain)))
-    return ["af-command", "vtduck", "volume", f"{safe_gain:.3f}", "volume"]
-
-
-def duck_af(player: object, gain: float, *,
-            on_error: Callable[[BaseException], None] | None = None) -> bool:
-    """Apply the af-command duck on a live mpv player, returning success.
-
-    Used for the smooth ramp on mpv >= 0.37 (the "vtduck" lavfi volume filter is
-    installed at session start). Any failure is reported and returns False so the
-    caller can fall back to the volume channel.
-    """
-    if player is None:
-        return False
-    try:
-        player.command(*af_duck_command(gain))
-        return True
-    except Exception as exc:
-        if on_error is not None:
-            on_error(exc)
-        return False
-
-
 class X11ErrorGuard:
     """Capture and restore Tk's process-global Xlib error handler."""
 

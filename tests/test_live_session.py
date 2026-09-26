@@ -1106,6 +1106,30 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertIsNone(sess.status().warning_key)
 
 
+class LeadCalibrationTests(unittest.TestCase):
+    """The voice lead is learned from the first clips' real start delay."""
+
+    def test_first_voice_position_after_start_sets_the_lead(self):
+        from videotranslator.live_scheduler import PreloadClip, StartClip
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice, _, _ = _dub_session(tmp)
+            clock = {"t": 100.0}
+            sess._clock = lambda: clock["t"]
+            video.bridge.extra_latest("voice-time-pos", 3.0, 99.0)   # previous clip
+            sess._execute([PreloadClip(1, "/c.mp3", 0.1), StartClip(1, 1.0)])
+            sess._calibrate_lead()
+            self.assertEqual(sess._scheduler._lead, 0.25)          # stale: ignored
+            video.bridge.extra_latest("voice-time-pos", 0.1, 100.05)  # still at skip
+            sess._calibrate_lead()
+            self.assertEqual(sess._scheduler._lead, 0.25)
+            video.bridge.extra_latest("voice-time-pos", 0.15, 100.18)
+            sess._calibrate_lead()
+            self.assertAlmostEqual(sess._scheduler._lead, 0.18)
+            video.bridge.extra_latest("voice-time-pos", 0.9, 100.9)  # later reads
+            sess._calibrate_lead()
+            self.assertAlmostEqual(sess._scheduler._lead, 0.18)    # one per clip
+
+
 class LiveSessionVoiceFadeTests(unittest.TestCase):
     """StopClip(fade_s) fades the voice out before stopping it (design 4.11)."""
 
