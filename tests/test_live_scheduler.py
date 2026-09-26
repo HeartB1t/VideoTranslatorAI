@@ -1,17 +1,43 @@
 import unittest
 
+from types import SimpleNamespace
+
 from videotranslator.live_scheduler import (
     ClearSubtitle,
+    Drop,
     DubScheduler,
+    Duck,
     DuckEnvelope,
     FadeRamp,
     LiveSegment,
+    PauseClip,
+    PreloadClip,
+    RequestTts,
+    ResumeClip,
     ShowSubtitle,
+    StartClip,
+    StopClip,
     ass_escape,
     caption_ass,
     paginate_caption,
     wrap_caption,
 )
+
+
+def _clip(path="c.mp3", *, audible=1.8, vstart=0.1):
+    return SimpleNamespace(path=path, audible_s=audible, voice_start_s=vstart)
+
+
+def _dub_sched(**kw):
+    opts = dict(mode="delayed", dub=True, subs=False, lead_s=0.25, preload_s=1.5,
+                late_tolerance_s=0.5, duck_gain=0.3, duck_ramp_s=0.2,
+                duck_latency_s=0.4, overhang_s=0.6, rate_for=lambda t, s: 10)
+    opts.update(kw)
+    return DubScheduler(**opts)
+
+
+def _types(actions):
+    return [type(a).__name__ for a in actions]
 
 WJ = "⁠"
 
@@ -149,6 +175,107 @@ class DubSchedulerCaptionTests(unittest.TestCase):
         self.assertEqual([type(a).__name__ for a in sch.on_seek(0.0, 1)], ["ClearSubtitle"])
         acts = sch.tick(1.0)                        # shows again after the seek
         self.assertEqual([type(a).__name__ for a in acts], ["ShowSubtitle"])
+
+
+class DubSchedulerDubPathTests(unittest.TestCase):
+    def _seg(self, seg_id=0, *, start=5.0, end=7.0, gen=0):
+        return LiveSegment(seg_id, gen, start, end, "hello", text_tgt="ciao",
+                           dub_ok=True)
+
+    def test_requests_tts_for_a_translated_segment(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        acts = s.tick(1.0, mono=100.0, voice_state="idle")
+        reqs = [a for a in acts if isinstance(a, RequestTts)]
+        self.assertEqual(len(reqs), 1)
+        self.assertEqual((reqs[0].seg_id, reqs[0].rate_pct), (0, 10))
+        self.assertGreater(reqs[0].deadline_mono, 100.0)
+        # no second request while it is being synthesized
+        self.assertFalse([a for a in s.tick(1.1, mono=100.1, voice_state="idle")
+                          if isinstance(a, RequestTts)])
+
+    def test_full_flow_preload_duck_start_unduck(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.tick(1.0, mono=100.0, voice_state="idle")           # -> RequestTts
+        s.clip_ready(0, 0, _clip(audible=1.8, vstart=0.1))
+        # preload while the voice device is idle and we are inside the window
+        acts = s.tick(4.0, mono=103.0, voice_state="idle")
+        pre = [a for a in acts if isinstance(a, PreloadClip)]
+        self.assertEqual(len(pre), 1)
+        self.assertEqual((pre[0].seg_id, pre[0].skip_s), (0, 0.1))
+        # duck ramp begins before the clip becomes audible
+        acts = s.tick(4.5, mono=103.5, voice_state="preloaded")
+        self.assertIn(0.3, [a.gain for a in acts if isinstance(a, Duck)])
+        # start at start - lead
+        acts = s.tick(4.8, mono=103.8, voice_state="preloaded")
+        starts = [a for a in acts if isinstance(a, StartClip)]
+        self.assertEqual(len(starts), 1)
+        self.assertAlmostEqual(starts[0].speed, 1.0, places=3)
+        self.assertEqual(s.metrics()["voiced"], 1.0)
+        # clip ends -> unduck
+        acts = s.tick(7.0, mono=106.0, voice_state="idle")
+        self.assertIn(1.0, [a.gain for a in acts if isinstance(a, Duck)])
+
+    def test_clip_none_drops_the_segment(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, None, reason="error")
+        acts = s.tick(4.0, mono=103.0, voice_state="idle")
+        self.assertFalse([a for a in acts if isinstance(a, PreloadClip)])
+        self.assertEqual(s.metrics()["dropped"], 1.0)
+
+    def test_late_clip_is_dropped(self):
+        s = _dub_sched()
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        # never preloaded/started; now well past start - lead + tol (5.25)
+        acts = s.tick(6.0, mono=105.0, voice_state="idle")
+        self.assertIn("Drop", _types(acts))
+        self.assertEqual(s.metrics()["late"], 1.0)
+
+    def test_pause_and_resume_with_main_transport(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip(audible=1.8))
+        s.tick(4.0, mono=103.0, voice_state="idle")           # preload
+        s.tick(4.8, mono=103.8, voice_state="preloaded")      # start (expected_end 6.8)
+        paused = s.tick(5.5, mono=104.5, main_running=False, voice_state="playing")
+        self.assertIn("PauseClip", _types(paused))
+        resumed = s.tick(5.6, mono=104.6, main_running=True, voice_state="paused")
+        self.assertIn("ResumeClip", _types(resumed))
+
+    def test_set_dub_off_stops_and_unducks(self):
+        s = _dub_sched()
+        s.upsert(self._seg())
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        s.tick(4.0, mono=103.0, voice_state="idle")           # preload
+        s.tick(4.5, mono=103.5, voice_state="preloaded")      # duck starts (0.3)
+        acts = s.set_dub(False)
+        self.assertIn("StopClip", _types(acts))
+        self.assertIn(1.0, [a.gain for a in acts if isinstance(a, Duck)])
+
+    def test_ready_until_requires_the_clip_when_dub_is_on(self):
+        s = _dub_sched()
+        s.upsert(self._seg(start=0.5, end=2.0))
+        # no clip yet: coverage does not extend past now
+        self.assertEqual(s.ready_until(0.0), 0.0)
+        s.tick(0.0, mono=100.0, voice_state="idle")           # requests tts
+        s.clip_ready(0, 0, _clip())
+        self.assertEqual(s.ready_until(0.0), 2.0)             # now the clip covers it
+
+    def test_cache_replay_after_seek_avoids_a_new_request(self):
+        s = _dub_sched()
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        s.on_seek(4.0, gen=1)                                  # seek back before it
+        acts = s.tick(4.0, mono=110.0, voice_state="idle")
+        self.assertFalse([a for a in acts if isinstance(a, RequestTts)])  # cached
 
 
 class DuckEnvelopeTests(unittest.TestCase):

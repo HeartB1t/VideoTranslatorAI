@@ -243,6 +243,15 @@ class FadeRamp:
         return self._value
 
 
+def _percentile(values: Sequence[float], pct: int) -> float:
+    """Nearest-rank percentile of ``values`` (0.0 when empty)."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, -(-pct * len(ordered) // 100))   # ceil(pct/100 * n)
+    return float(ordered[min(rank, len(ordered)) - 1])
+
+
 _GRACE = {"delayed": 1.5, "live": 6.0}
 _SUB_MIN_DISPLAY_S = 1.5
 _CAPTION_CLEAR_TAIL_S = 0.3
@@ -260,7 +269,13 @@ class DubScheduler:
 
     def __init__(self, *, mode: str = "delayed", overhang_s: float = 0.6,
                  merge_gap_s: float = 0.6, caption_font_px: int = 40,
-                 dub: bool = False, subs: bool = True) -> None:
+                 dub: bool = False, subs: bool = True,
+                 rate_for=lambda text, slot_s: 0, lead_s: float = 0.25,
+                 preload_s: float = 1.5, late_tolerance_s: float = 0.5,
+                 max_live_lag_s: float = 4.0, max_speed: float = 1.3,
+                 unduck_tail_s: float = 0.2, duck_gain: float = 0.3,
+                 duck_ramp_s: float = 0.2, duck_latency_s: float = 0.4,
+                 max_in_flight: int = 8) -> None:
         self._mode = mode
         self._overhang = overhang_s
         self._merge_gap = merge_gap_s
@@ -274,6 +289,30 @@ class DubScheduler:
         self._shown_at: float | None = None
         self._last_epoch = 0
         self._metrics = {"voiced": 0.0, "dropped": 0.0, "late": 0.0, "margin_p90": 0.0}
+        # --- dub path (P5) ---
+        self._rate_for = rate_for
+        self._lead = lead_s
+        self._preload_s = preload_s
+        self._late_tol = late_tolerance_s
+        self._max_live_lag = max_live_lag_s
+        self._max_speed = max_speed
+        self._unduck_tail = unduck_tail_s
+        self._duck_gain = duck_gain
+        self._duck_ramp = duck_ramp_s
+        self._duck_latency = duck_latency_s
+        self._max_in_flight = max_in_flight
+        self._dub_state: dict[int, str] = {}   # seg_id -> translated/synth/ready/
+                                               # preloaded/playing/done/dropped
+        self._clips: dict[int, object] = {}    # seg_id -> Clip
+        self._clip_cache: dict[tuple, object] = {}  # (rstart, rend, tgt) -> Clip
+        self._preloaded: int | None = None
+        self._playing: int | None = None
+        self._clip_paused = False
+        self._expected_end: float = 0.0
+        self._duck_target: float = 1.0
+        self._margins: list[float] = []        # recent start margins for p90
+        self._voiced = 0
+        self._dub_dropped = 0
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
@@ -287,6 +326,192 @@ class DubScheduler:
 
     def upsert(self, seg: LiveSegment) -> None:
         self._segments[seg.seg_id] = seg
+        if self._dub and self._dub_eligible(seg) and seg.seg_id not in self._dub_state:
+            cached = self._clip_cache.get(self._cache_key(seg))
+            if cached is not None:              # replay after a seek: reuse the clip
+                self._clips[seg.seg_id] = cached
+                seg.clip = cached
+                self._dub_state[seg.seg_id] = "ready"
+            else:
+                self._dub_state[seg.seg_id] = "translated"
+
+    # -- dub path (P5) ------------------------------------------------------
+
+    def _dub_eligible(self, seg: LiveSegment) -> bool:
+        return bool(seg.dub_ok and seg.text_tgt and seg.seg_id not in self._dropped)
+
+    def _cache_key(self, seg: LiveSegment) -> tuple:
+        return (round(seg.start, 1), round(seg.end, 1), seg.text_tgt)
+
+    def _slot_end(self, seg: LiveSegment) -> float:
+        cap = seg.end + self._overhang
+        nexts = [s.start for s in self._segments.values()
+                 if s.start > seg.start and self._dub_eligible(s)]
+        return min(cap, min(nexts)) if nexts else cap
+
+    def _slot_len(self, seg: LiveSegment) -> float:
+        return max(0.1, self._slot_end(seg) - seg.start)
+
+    def set_lead(self, lead_s: float) -> None:
+        self._lead = lead_s
+
+    def set_duck_latency(self, seconds: float) -> None:
+        self._duck_latency = seconds
+
+    def clip_ready(self, seg_id: int, gen: int, clip: object | None,
+                   reason: str | None = None) -> None:
+        """Consume a synthesized clip (or a failure) for a requested segment."""
+        seg = self._segments.get(seg_id)
+        if seg is None or seg.gen != gen:
+            return
+        if self._dub_state.get(seg_id) not in ("synth", "translated"):
+            return
+        if clip is None:
+            self._dub_state[seg_id] = "dropped"
+            self._dub_dropped += 1
+            return
+        self._clips[seg_id] = clip
+        seg.clip = clip
+        self._dub_state[seg_id] = "ready"
+        self._clip_cache[self._cache_key(seg)] = clip
+
+    def set_dub(self, on: bool) -> list[object]:
+        self._dub = on
+        actions: list[object] = []
+        if not on:
+            if self._playing is not None or self._preloaded is not None:
+                actions.append(StopClip(0.18))
+            self._playing = self._preloaded = None
+            self._clip_paused = False
+            if self._duck_target != 1.0:
+                self._duck_target = 1.0
+                actions.append(Duck(1.0))
+            return actions
+        for seg in self._segments.values():
+            if self._dub_eligible(seg) and seg.seg_id not in self._dub_state:
+                self._dub_state[seg.seg_id] = "translated"
+        return actions
+
+    def _finish_playing(self) -> None:
+        if self._playing is not None:
+            self._dub_state[self._playing] = "done"
+            self._playing = None
+        self._clip_paused = False
+
+    def _next_ready(self, now: float) -> LiveSegment | None:
+        cands = [s for s in self._segments.values()
+                 if self._dub_state.get(s.seg_id) == "ready"
+                 and s.start >= now - self._late_tol]
+        return min(cands, key=lambda s: s.start) if cands else None
+
+    def _imminent_clip(self, now: float) -> bool:
+        return any(self._dub_state.get(s.seg_id) in ("ready", "preloaded")
+                   and 0.0 <= s.start - now <= 0.6 for s in self._segments.values())
+
+    def _dub_reset(self) -> list[object]:
+        """Stop any clip and unduck (epoch change / seek)."""
+        actions: list[object] = []
+        if self._playing is not None or self._preloaded is not None:
+            actions.append(StopClip(0.0))
+        self._playing = self._preloaded = None
+        self._clip_paused = False
+        if self._duck_target != 1.0:
+            self._duck_target = 1.0
+            actions.append(Duck(1.0))
+        return actions
+
+    def _dub_freeze(self) -> list[object]:
+        """Pause a playing clip while the media clock is invalid (load/seek)."""
+        if self._playing is not None and not self._clip_paused:
+            self._clip_paused = True
+            return [PauseClip()]
+        return []
+
+    def _dub_actions(self, now: float, mono: float, main_running: bool,
+                     main_speed: float, voice_state: str) -> list[object]:
+        actions: list[object] = []
+        # Pause/resume the playing clip with the main transport, then detect end.
+        if self._playing is not None:
+            if not main_running:
+                if not self._clip_paused:
+                    self._clip_paused = True
+                    actions.append(PauseClip())
+            elif self._clip_paused:
+                if now < self._expected_end:
+                    self._clip_paused = False
+                    actions.append(ResumeClip())
+                else:
+                    actions.append(StopClip(0.0))
+                    self._finish_playing()
+            elif voice_state == "idle":
+                self._finish_playing()
+            elif now >= self._expected_end + 1.0:
+                actions.append(StopClip(0.0))
+                self._finish_playing()
+        # Request TTS for translated segments still inside their slot.
+        in_flight = sum(1 for st in self._dub_state.values() if st == "synth")
+        for seg in sorted(self._segments.values(), key=lambda s: s.start):
+            if self._dub_state.get(seg.seg_id) != "translated":
+                continue
+            if now >= self._slot_end(seg):
+                self._dub_state[seg.seg_id] = "dropped"
+                self._dub_dropped += 1
+                continue
+            if in_flight >= self._max_in_flight:
+                continue
+            rate = int(self._rate_for(seg.text_tgt, self._slot_len(seg)))
+            deadline = mono + max(0.5, (seg.start - self._lead - now) / max(main_speed, 0.1))
+            actions.append(RequestTts(seg.seg_id, seg.gen, seg.text_tgt, rate, deadline))
+            self._dub_state[seg.seg_id] = "synth"
+            in_flight += 1
+        # Late-drop clips that missed their start window.
+        for seg in list(self._segments.values()):
+            st = self._dub_state.get(seg.seg_id)
+            if st in ("ready", "preloaded") and now > seg.start - self._lead + self._late_tol:
+                if self._preloaded == seg.seg_id:
+                    self._preloaded = None
+                actions.append(Drop(seg.seg_id, "late"))
+                self._dub_state[seg.seg_id] = "dropped"
+                self._dub_dropped += 1
+        # Preload the next ready clip when the voice device is free.
+        if voice_state == "idle" and self._preloaded is None and self._playing is None:
+            cand = self._next_ready(now)
+            if (cand is not None
+                    and cand.start - self._preload_s <= now < cand.start - self._lead + self._late_tol):
+                clip = self._clips[cand.seg_id]
+                actions.append(PreloadClip(cand.seg_id, clip.path,
+                                           getattr(clip, "voice_start_s", 0.0)))
+                self._dub_state[cand.seg_id] = "preloaded"
+                self._preloaded = cand.seg_id
+        # Duck ahead of the preloaded clip.
+        if self._preloaded is not None:
+            seg = self._segments[self._preloaded]
+            if now >= seg.start - self._duck_latency - self._duck_ramp and self._duck_target != self._duck_gain:
+                self._duck_target = self._duck_gain
+                actions.append(Duck(self._duck_gain))
+        # Start the preloaded clip at its lead time.
+        if (self._preloaded is not None and voice_state == "preloaded"
+                and now >= self._segments[self._preloaded].start - self._lead):
+            seg = self._segments[self._preloaded]
+            clip = self._clips[seg.seg_id]
+            slot_len = self._slot_len(seg)
+            audible = getattr(clip, "audible_s", slot_len) or slot_len
+            fit = min(self._max_speed, max(1.0, audible / slot_len))
+            actions.append(StartClip(seg.seg_id, fit * main_speed))
+            self._playing = seg.seg_id
+            self._preloaded = None
+            self._clip_paused = False
+            self._dub_state[seg.seg_id] = "playing"
+            self._expected_end = seg.start + audible / max(fit, 0.1)
+            self._voiced += 1
+            self._margins.append(seg.start - self._lead - now)
+            self._margins = self._margins[-32:]
+        # Unduck after the clip ends, unless another clip is imminent.
+        if self._playing is None and self._duck_target != 1.0 and not self._imminent_clip(now):
+            if now >= self._expected_end + self._unduck_tail - self._duck_latency:
+                self._duck_target = 1.0
+                actions.append(Duck(1.0))
+        return actions
 
     def _caption_ready(self, seg: LiveSegment) -> bool:
         return seg.seg_id not in self._dropped and (
@@ -344,31 +569,55 @@ class DubScheduler:
             if self._shown is not None:
                 self._shown = None
                 actions.append(ClearSubtitle())
-        if now is None or not self._subs:  # invalid clock or captions off
-            if now is None and self._shown is not None:
-                self._shown = None
-                actions.append(ClearSubtitle())
-            return actions
-        for seg in self._segments.values():
-            if seg.seg_id not in self._arrival and self._caption_ready(seg):
-                self._arrival[seg.seg_id] = now
-        visible = self._visible(now)
-        if visible is None:
+            if self._dub:
+                actions.extend(self._dub_reset())
+        if now is None:  # invalid clock (loading / seeking)
             if self._shown is not None:
                 self._shown = None
                 actions.append(ClearSubtitle())
+            if self._dub:
+                actions.extend(self._dub_freeze())
             return actions
-        seg, page_idx, lines = visible
-        key = (seg.seg_id, page_idx)
-        if key != self._shown:
-            self._shown = key
-            self._shown_at = now
-            actions.append(ShowSubtitle(
-                seg.seg_id, caption_ass(lines, font_px=self._font_px, italic=seg.italic)))
+        # Caption path (only when subtitles are on).
+        if self._subs:
+            for seg in self._segments.values():
+                if seg.seg_id not in self._arrival and self._caption_ready(seg):
+                    self._arrival[seg.seg_id] = now
+            visible = self._visible(now)
+            if visible is None:
+                if self._shown is not None:
+                    self._shown = None
+                    actions.append(ClearSubtitle())
+            else:
+                seg, page_idx, lines = visible
+                key = (seg.seg_id, page_idx)
+                if key != self._shown:
+                    self._shown = key
+                    self._shown_at = now
+                    actions.append(ShowSubtitle(
+                        seg.seg_id,
+                        caption_ass(lines, font_px=self._font_px, italic=seg.italic)))
+        elif self._shown is not None:
+            self._shown = None
+            actions.append(ClearSubtitle())
+        # Dub path (independent of subtitles).
+        if self._dub:
+            actions.extend(self._dub_actions(now, mono, main_running, main_speed,
+                                             voice_state))
         return actions
 
+    def _coverage_ready(self, seg: LiveSegment) -> bool:
+        if not self._caption_ready(seg):
+            return False
+        if self._dub and self._dub_eligible(seg):
+            # With dub on, coverage requires the clip too, so the FilePacer waits
+            # for the voice, not just the subtitle (design 5.5).
+            return self._dub_state.get(seg.seg_id) in ("ready", "preloaded",
+                                                       "playing", "done")
+        return True
+
     def ready_until(self, now: float) -> float:
-        ready = sorted((s for s in self._segments.values() if self._caption_ready(s)),
+        ready = sorted((s for s in self._segments.values() if self._coverage_ready(s)),
                        key=lambda s: s.start)
         coverage = now
         for seg in ready:
@@ -390,6 +639,14 @@ class DubScheduler:
         if self._shown is not None:
             self._shown = None
             actions.append(ClearSubtitle())
+        if self._dub:
+            actions.extend(self._dub_reset())    # stop any clip, unduck
+            # Segments after the new position play again: ready if the clip is
+            # cached, else re-request from scratch.
+            for seg in self._segments.values():
+                if seg.end > now and self._dub_eligible(seg):
+                    self._dub_state[seg.seg_id] = (
+                        "ready" if seg.seg_id in self._clips else "translated")
         return actions
 
     def on_discontinuity(self, now: float) -> list[object]:
@@ -405,4 +662,9 @@ class DubScheduler:
         return actions
 
     def metrics(self) -> dict[str, float]:
-        return dict(self._metrics, dropped=float(len(self._dropped)))
+        return {
+            "voiced": float(self._voiced),
+            "dropped": float(len(self._dropped) + self._dub_dropped),
+            "late": float(self._dub_dropped),
+            "margin_p90": _percentile(self._margins, 90),
+        }
