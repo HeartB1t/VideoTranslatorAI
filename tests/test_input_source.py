@@ -99,9 +99,10 @@ class InputSourceTests(unittest.TestCase):
 
         self.assertEqual(result, str(final))
         self.assertEqual(seen_opts["merge_output_format"], "mp4")
-        # Final download line is the contract; advisory warnings precede it.
+        # Final download line is the contract.
         self.assertEqual(logs[-1], f"[+] Downloaded: {final}")
-        self.assertTrue(any("anti-bot" in line for line in logs))
+        # the anti-bot / VPN advice appears only after a bot-block error
+        self.assertFalse(any("anti-bot" in line for line in logs))
 
     def _fake_ydl(self, info):
         captured = {}
@@ -189,6 +190,43 @@ class InputSourceTests(unittest.TestCase):
     def test_emit_download_warnings_is_noop_without_callback(self):
         # Must not raise when there is no log sink.
         emit_download_warnings(None)
+
+    def test_advice_follows_the_real_error(self):
+        from videotranslator.input_source import emit_download_advice
+        cases = (
+            ("ERROR: Sign in to confirm you're not a bot", "VPN"),
+            ("HTTP Error 429: Too Many Requests", "VPN"),
+            ("ERROR: Join this channel to get access to members-only content", "members"),
+            ("ERROR: Video unavailable", None),
+        )
+        for message, expected in cases:
+            logs: list[str] = []
+            emit_download_advice(RuntimeError(message), logs.append)
+            if expected is None:
+                self.assertEqual(logs, [], message)
+            else:
+                self.assertTrue(any(expected in line for line in logs), message)
+                if expected == "members":
+                    self.assertFalse(any("switching IP" in line for line in logs))
+
+    def test_no_vpn_advice_before_a_download_that_works(self):
+        class _Ydl:
+            def __init__(self, opts):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def extract_info(self, url, download):
+                return {"title": "T", "url": "https://cdn/x.mp4", "acodec": "aac",
+                        "vcodec": "h264"}
+        logs: list[str] = []
+        with mock.patch("videotranslator.js_runtime.ensure_js_runtime", return_value={}):
+            resolve_stream_url("https://youtu.be/x", ytdlp_cls=_Ydl, log_cb=logs.append)
+        self.assertFalse(any("VPN" in line for line in logs))
 
     def test_emit_download_warnings_advises_on_vpn(self):
         logs: list[str] = []

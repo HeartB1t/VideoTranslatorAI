@@ -37,6 +37,30 @@ def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
     )
 
 
+# yt-dlp error texts that mean an IP / anti-bot block (the VPN advice helps)
+# or a video only paying members can watch (the VPN advice would mislead).
+_BOT_BLOCK_MARKERS = ("not a bot", "sign in to confirm", "http error 429",
+                      "too many requests")
+_MEMBERS_ONLY_MARKERS = ("members-only", "members only", "join this channel",
+                         "available to this channel's members")
+
+
+def emit_download_advice(error: BaseException, log_cb: Callable[[str], None] | None) -> None:
+    """After a failed yt-dlp call, explain the cause when it is a known one.
+
+    The anti-bot / VPN advice is shown only when the error is an IP or bot
+    block, not before every download (it misled on unrelated errors).
+    """
+    if log_cb is None:
+        return
+    text = str(error).lower()
+    if any(marker in text for marker in _MEMBERS_ONLY_MARKERS):
+        log_cb("[!] This video is for the channel's paying members only: it cannot be "
+               "downloaded without a member account (a VPN does not help).")
+    elif any(marker in text for marker in _BOT_BLOCK_MARKERS):
+        emit_download_warnings(log_cb)
+
+
 def build_ytdlp_options(
     out_dir: str | os.PathLike[str],
     *,
@@ -107,13 +131,16 @@ def download_url(
 
     from videotranslator.js_runtime import ensure_js_runtime
 
-    emit_download_warnings(log_cb)
     # Lazy: make sure yt-dlp has a JS runtime (auto-install deno if none).
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
     opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes)
-    with ytdlp_cls(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = resolve_downloaded_filename(ydl.prepare_filename(info))
+    try:
+        with ytdlp_cls(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = resolve_downloaded_filename(ydl.prepare_filename(info))
+    except Exception as exc:
+        emit_download_advice(exc, log_cb)
+        raise
 
     if log_cb is not None:
         log_cb(f"[+] Downloaded: {filename}")
@@ -173,15 +200,18 @@ def resolve_stream_url(
 
     from videotranslator.js_runtime import ensure_js_runtime
 
-    emit_download_warnings(log_cb)
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
     opts = build_ytdlp_options(".", js_runtimes=js_runtimes)
     opts["format"] = (
         f"best[acodec!=none][vcodec!=none][height<={max_height}]"
         "/best[acodec!=none][vcodec!=none]/best"
     )
-    with ytdlp_cls(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    try:
+        with ytdlp_cls(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:
+        emit_download_advice(exc, log_cb)
+        raise
     if info.get("entries"):
         entries = [e for e in info["entries"] if e]
         if not entries:
