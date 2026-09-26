@@ -2,6 +2,24 @@
 
 ## Live P5 handoff to Claude Code (2026-09-26)
 
+### Latest published checkpoint
+
+- `696e6a1`: startup hold, pre-lock speech retention, pacer clip recovery, and
+  linked README pages covering 26 languages. The translated pages are localized
+  quick starts; English remains the complete technical reference.
+- Verification: 1,360 pytest tests passed, 15 skipped, 864 subtests passed;
+  the existing backup directory was excluded from collection. Translation links
+  and `git diff --check` passed. [GitHub CI](https://github.com/HeartB1t/VideoTranslatorAI/actions/runs/36268476286)
+  completed successfully for this commit.
+- Operator feedback: after reconsidering the selected live/delayed mode, the
+  operator reported that playback worked perfectly and authorized commit/push.
+  Record this as a successful manual playback test, not full acceptance of
+  delayed-mode buffering, pause/seek, Windows, or every language/engine pair.
+- Hardware-aware model selection and ElevenLabs integration are documented
+  below as planned features; neither has been implemented in this delivery.
+
+The earlier delivery notes and verification counts below are historical.
+
 Operator test follow-up: live Italian-to-English translation reported working,
 but overlapping original speech was distracting. Added a running-row checkbox
 "Mute original audio" (all 26 languages), also visible before starting beside
@@ -33,7 +51,8 @@ checkpoint, not completed P5 acceptance. Local history and detailed evidence are
   and reaches the pacer after MT finishes, rather than when decoding alone finishes.
 - Scheduler: cached clips replay; in-flight TTS remains in-flight across a seek
   instead of rewriting the same clip path. A playback-restart without a time jump
-  no longer abandons a preloaded clip. A paused video cannot start a voice clip.
+  no longer abandons a preloaded clip. A user pause prevents voice playback;
+  `696e6a1` adds an exception for recovery during a pacer-owned pause.
 - Finding 10, duration feedback only: accepted successful clips update
   `EdgeDurationModel.observe()` with audible duration and rate. Rate estimation
   and synthesis use the shared `sanitize_for_tts` text.
@@ -110,9 +129,9 @@ writing deterministic software tests; it still blocks calling P5 validated.
 
 ### Operator live-test bug checklist (2026-09-26)
 
-Keep these boxes open until the code change and its regression/acceptance checks
-are complete. The first two are confirmed by the inspected code paths above; the
-TLS entry is an observed stream error whose root cause still needs diagnosis.
+Checked boxes record implemented changes and automated regression checks.
+The operator reported successful playback; the full acceptance matrix above
+remains open. TLS/reconnect diagnosis is deferred separately below.
 
 - [x] Prevent playback from advancing before live models and the initial dubbed
   audio are ready; retain and process early speech while automatic language
