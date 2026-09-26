@@ -449,23 +449,34 @@ class DubScheduler:
             elif now >= self._expected_end + 1.0:
                 actions.append(StopClip(0.0))
                 self._finish_playing()
-        # Request TTS for translated segments still inside their slot.
+        # Request TTS for translated segments still inside their slot; also let a
+        # "synth" that never produced a result expire, so a stuck or rejected
+        # request cannot leave a permanent coverage hole (the pacer then waits
+        # only for requests that can still arrive).
         in_flight = sum(1 for st in self._dub_state.values() if st == "synth")
         for seg in sorted(self._segments.values(), key=lambda s: s.start):
-            if self._dub_state.get(seg.seg_id) != "translated":
+            st = self._dub_state.get(seg.seg_id)
+            if st not in ("translated", "synth"):
                 continue
             expired = (now - seg.start > self._max_live_lag) if live else (now >= self._slot_end(seg))
             if expired:
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
                 continue
+            if st == "synth":
+                continue                      # already requested, awaiting a result
             if in_flight >= self._max_in_flight:
                 continue
             rate = int(self._rate_for(seg.text_tgt, self._slot_len(seg)))
             if live:
                 deadline = mono + max(0.5, seg.start + self._max_live_lag - now)
             else:
-                deadline = mono + max(0.5, (seg.start - self._lead - now) / max(main_speed, 0.1))
+                # The deadline only bounds the network wait; the media-time "late"
+                # rule below protects sync. While the picture is paused (the pacer
+                # holding for coverage) there is no rush, so give TTS real time
+                # instead of a sub-second deadline the first clip can never meet.
+                floor = 0.5 if main_running else 4.0
+                deadline = mono + max(floor, (seg.start - self._lead - now) / max(main_speed, 0.1))
             actions.append(RequestTts(seg.seg_id, seg.gen, seg.text_tgt, rate, deadline))
             self._dub_state[seg.seg_id] = "synth"
             in_flight += 1
@@ -479,7 +490,11 @@ class DubScheduler:
                 too_late, reason = now > seg.start - self._lead + self._late_tol, "late"
             if too_late:
                 if self._preloaded == seg.seg_id:
+                    # The clip was loaded into the voice device: stop it so the
+                    # device returns to idle, otherwise the session's voice_state
+                    # stays "preloaded" forever and no further clip can start.
                     self._preloaded = None
+                    actions.append(StopClip(0.0))
                 actions.append(Drop(seg.seg_id, reason))
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
@@ -636,10 +651,12 @@ class DubScheduler:
         if not self._caption_ready(seg):
             return False
         if self._dub and self._dub_eligible(seg):
-            # With dub on, coverage requires the clip too, so the FilePacer waits
-            # for the voice, not just the subtitle (design 5.5).
-            return self._dub_state.get(seg.seg_id) in ("ready", "preloaded",
-                                                       "playing", "done")
+            # With dub on the FilePacer waits for the voice, not just the subtitle
+            # (design 5.5), but only while the clip can still arrive: a dropped or
+            # rejected segment must NOT leave a permanent hole that stalls the
+            # pacer at frame 0. "translated"/"synth" are still pending; every other
+            # state (ready/preloaded/playing/done/dropped) is resolved.
+            return self._dub_state.get(seg.seg_id) not in ("translated", "synth")
         return True
 
     def ready_until(self, now: float) -> float:

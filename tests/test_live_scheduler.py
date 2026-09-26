@@ -236,6 +236,40 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertIn("Drop", _types(acts))
         self.assertEqual(s.metrics()["late"], 1.0)
 
+    def test_a_dropped_clip_does_not_block_ready_until(self):
+        # P0 (review finding 1): a dropped segment between two ready ones must not
+        # stop coverage, or the FilePacer stalls the video at that hole.
+        s = _dub_sched()
+        for sid, st, en in [(0, 0.5, 2.0), (1, 2.0, 4.0), (2, 4.0, 6.0)]:
+            s.upsert(LiveSegment(sid, 0, st, en, "h", text_tgt="ciao", dub_ok=True))
+        s.clip_ready(0, 0, _clip())
+        s.clip_ready(1, 0, None, reason="error")     # the middle clip failed
+        s.clip_ready(2, 0, _clip())
+        self.assertEqual(s.ready_until(0.0), 6.0)
+
+    def test_a_stuck_synth_segment_expires(self):
+        # review finding 1: a request that never returns must expire, not keep the
+        # segment "synth" (and coverage blocked) forever.
+        s = _dub_sched()
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")  # -> RequestTts, state synth
+        self.assertEqual(s.ready_until(0.0), 0.0)     # blocked while pending
+        s.tick(8.0, mono=107.0, voice_state="idle")  # past slot end (7.6): expires
+        self.assertEqual(s.metrics()["dropped"], 1.0)
+
+    def test_preloaded_clip_dropped_emits_stopclip(self):
+        # review finding 4: a preloaded clip dropped as late must free the voice
+        # device (StopClip), or the session's voice_state stays "preloaded".
+        s = _dub_sched()
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        acts = s.tick(4.0, mono=103.0, voice_state="idle")   # preload (window 3.5..5.25)
+        self.assertIn("PreloadClip", _types(acts))
+        late = s.tick(6.0, mono=105.0, voice_state="idle")   # long stall, now late
+        self.assertIn("StopClip", _types(late))
+        self.assertIn("Drop", _types(late))
+
     def test_pause_and_resume_with_main_transport(self):
         s = _dub_sched()
         s.upsert(self._seg())

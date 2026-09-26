@@ -338,6 +338,12 @@ class LiveSession:
         write_session_lock(self._cfg.session_dir / _LOCK_NAME, pid=pid,
                            start_token=process_start_token(pid))
         self._start_dub()
+        # The voice backend lives for the whole app run and the bridge keeps the
+        # last session's end marker; snapshot it so a stale marker does not close
+        # this session's first clip after one tick.
+        if self._bridge is not None:
+            marker = self._bridge.extra("voice-eof")
+            self._last_eof_count = marker[0][0] if marker else 0
         self._set_state("running")
         targets = [("live-sched", self._sched_loop)]
         # A file OR a resolved VOD stream URL is decoded the same way: PyAV opens
@@ -359,8 +365,15 @@ class LiveSession:
         If the voice backend or edge-tts is missing, the dub is turned off for the
         session and subtitles keep working (design row 21).
         """
-        if self._cfg.settings.dub_enabled and self._voice is not None:
-            self._ensure_synth()
+        if not self._cfg.settings.dub_enabled:
+            return
+        if self._voice is None:
+            # Dub was requested but no voice backend was provided (libmpv failed
+            # to build a second instance): turn the dub off so the scheduler stops
+            # requesting clips, which would otherwise stall the pacer forever.
+            self._disable_dub("tts_unavailable")
+            return
+        self._ensure_synth()
 
     def _ensure_synth(self) -> bool:
         """Create, start and register the TTS worker; return True on success."""
@@ -559,13 +572,15 @@ class LiveSession:
             self._scheduler.clip_ready(seg_id, gen, clip, reason)
 
     def _sync_voice_state(self) -> None:
-        """Flip to idle when the voice clip ends (from the bridge end marker).
+        """Consume the voice end marker and flip to idle when a CLIP ends.
 
-        The scheduler keeps a clock-based safety net (expected_end + 1 s) for the
-        no-bridge test doubles; with a real backend this makes the transition
-        prompt and counts output failures for the dub-off rule (design row 21).
+        Every new marker must be consumed in any state, or a marker that arrives
+        while not "playing" (our own StopClip/loadfile, which report reason
+        "stop") goes stale and, read one tick into the next clip, cuts it short.
+        A "stop" reason is our own doing, not a clip end; "error" feeds the
+        dub-off rule (design row 21).
         """
-        if self._voice_state != "playing" or self._bridge is None:
+        if self._bridge is None:
             return
         marker = self._bridge.extra("voice-eof")
         if marker is None:
@@ -573,12 +588,17 @@ class LiveSession:
         count, reason = marker[0]
         if count <= self._last_eof_count:
             return
-        self._last_eof_count = count
-        self._voice_state = "idle"
+        self._last_eof_count = count            # consumed in EVERY state
+        if reason == "stop":
+            return                              # our own stop/loadfile, not a clip end
         if reason == "error":
             self._voice_fail += 1
+            self._voice_state = "idle"
             if self._voice_fail >= 3:
                 self._disable_dub("tts_unavailable")
+            return
+        if self._voice_state == "playing":
+            self._voice_state = "idle"
 
     def _drain_control(self, mono: float) -> None:
         while True:
@@ -629,9 +649,15 @@ class LiveSession:
                 if rt is not None:
                     rt.set_overlay(None)
             elif isinstance(action, RequestTts):
-                if self._synth is not None:
-                    self._synth.submit(action.seg_id, action.gen, action.text,
-                                       action.rate_pct, action.deadline_mono)
+                ok = self._synth is not None and self._synth.submit(
+                    action.seg_id, action.gen, action.text,
+                    action.rate_pct, action.deadline_mono)
+                if not ok:
+                    # Rejected (no worker, breaker open, in-flight full, deadline
+                    # passed): mark it dropped now so it never stays "synth" and
+                    # stalls the pacer waiting for a result that will not come.
+                    self._scheduler.clip_ready(action.seg_id, action.gen, None,
+                                               "rejected")
             elif isinstance(action, PreloadClip):
                 if self._voice is not None:
                     self._voice.preload(action.path, skip_s=action.skip_s)

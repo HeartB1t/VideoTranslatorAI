@@ -413,12 +413,13 @@ from videotranslator.live_health import CircuitBreaker
 
 
 class _FakeSynth:
-    def __init__(self, *, start_exc=None):
+    def __init__(self, *, start_exc=None, submit_ok=True):
         self.results = _queue.Queue()
         self.submitted = []
         self.started = False
         self.stopped = False
         self._start_exc = start_exc
+        self._submit_ok = submit_ok
 
     def start(self):
         if self._start_exc is not None:
@@ -427,7 +428,7 @@ class _FakeSynth:
 
     def submit(self, seg_id, gen, text, rate, deadline):
         self.submitted.append((seg_id, gen, text, rate))
-        return True
+        return self._submit_ok
 
     def stop(self, _timeout):
         self.stopped = True
@@ -523,6 +524,65 @@ class LiveSessionDubTests(unittest.TestCase):
             sess._start_dub()
             self.assertIsNone(sess._synth)
             self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+
+    def test_rejected_tts_marks_the_segment_dropped_not_synth(self):
+        # review finding 1: a submit that returns False must drop the segment, or
+        # it stays "synth" forever and stalls the pacer.
+        with tempfile.TemporaryDirectory() as tmp:
+            synth = _FakeSynth(submit_ok=False)
+            sess, _v, _voice, _s, _ = _dub_session(tmp, media=1.8, synth=synth)
+            sess._start_dub()
+            sess.submit_segment(_dub_seg("ciao", start=2.0, end=3.0))
+            sess._tick_once(0.0)
+            self.assertEqual(sess._scheduler._dub_state.get(0), "dropped")
+
+    def test_voice_none_with_dub_disables_it(self):
+        # review finding 8: dub requested but no voice backend -> dub off, so the
+        # scheduler does not request clips that would stall the pacer.
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = normalize_live_settings(
+                {"live_dub_enabled": True, "live_subs_enabled": True,
+                 "live_sync_mode": "delayed"})
+            cfg = build_live_config({"source": "/v.mp4", "lang_target": "it"},
+                                    settings=settings, cache_dir=Path(tmp), now=1.0)
+            factories = LiveFactories(
+                decoder=lambda *a, **k: None, vad=lambda *a, **k: None,
+                whisper=lambda *a, **k: None, translator=lambda *a, **k: None,
+                tts=lambda **k: _FakeSynth(), clock=time.monotonic)
+            video = SimpleNamespace(rt=_FakeRt(), mixer=pe.VolumeMixer(),
+                                    bridge=pe.EventBridge())
+            sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(1.0),
+                               factories=factories, voice=None)
+            sess._start_dub()
+            self.assertFalse(sess._scheduler._dub)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+
+    def test_stale_stop_marker_does_not_end_the_next_clip(self):
+        # review finding 3: a "stop" eof marker (our own StopClip/loadfile) must be
+        # consumed without ending the clip; only a real "eof" ends it.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, _s, _ = _dub_session(tmp)
+            sess._voice_state = "playing"
+            video.bridge.extra_latest("voice-eof", (5, "stop"), 1.0)
+            sess._sync_voice_state()
+            self.assertEqual(sess._voice_state, "playing")   # stop ignored
+            self.assertEqual(sess._last_eof_count, 5)        # but consumed
+            video.bridge.extra_latest("voice-eof", (6, "eof"), 2.0)
+            sess._sync_voice_state()
+            self.assertEqual(sess._voice_state, "idle")      # real end applies
+
+    def test_start_snapshots_a_prior_eof_marker(self):
+        # review finding 3 (cross-session): a marker left by a previous session on
+        # the shared backend must not close this session's first clip.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, _s, _ = _dub_session(tmp)
+            video.bridge.extra_latest("voice-eof", (57, "eof"), 1.0)
+            sess.start()
+            try:
+                self.assertEqual(sess._last_eof_count, 57)
+            finally:
+                sess.request_stop()
+                sess.join(2.0)
 
     def test_missing_factory_result_disables_dub_silently(self):
         with tempfile.TemporaryDirectory() as tmp:
