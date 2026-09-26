@@ -5962,15 +5962,18 @@ def _parse_hotwords_gui(raw: str) -> list[str]:
 
 
 def _is_noisy_x11_log(line: str) -> bool:
-    """True for the harmless, repetitive mpv X11 BadWindow error lines.
+    """True for the repetitive, harmless mpv X11 BadWindow/BadDrawable blocks.
 
-    Embedded on X11, mpv keeps querying the window tree across window geometry
-    changes and logs a three-line BadWindow block for each failed query. The
-    video keeps rendering; only the log is flooded. Match the block so the GUI
-    can collapse it into one periodic summary.
+    While embedded on X11, mpv installs a process-global Xlib error handler
+    (mpv 0.41 never calls XQueryTree, so these are not window-tree queries):
+    expected X errors from Tk or the GL stack surface as three-line "[mpv] X11
+    error" blocks. The video renders fine. Only BadWindow/BadDrawable blocks are
+    collapsed into a periodic summary; other X errors (BadMatch, BadAlloc, ...)
+    are kept as real signals. The consumer logs the first full block verbatim so
+    the resourceid and request code stay available for diagnosis.
     """
     low = line.lower()
-    if "x11 error" in low or "badwindow" in low:
+    if "x11 error: badwindow" in low or "x11 error: baddrawable" in low:
         return True
     if "resourceid:" in low and "serial:" in low:
         return True
@@ -8858,12 +8861,16 @@ class App(tk.Tk):
                 line = str(event.payload)
                 if _is_noisy_x11_log(line):
                     # mpv floods the log with harmless X11 BadWindow errors while
-                    # embedded on X11 (it keeps querying the window tree across
-                    # geometry changes); the video renders fine. Collapse the
-                    # flood into one periodic summary instead of a line each.
+                    # embedded on X11 (its process-global Xlib handler reports
+                    # expected X errors from Tk or the GL stack); the video
+                    # renders fine. Log the first full block verbatim (resourceid
+                    # + request code for diagnosis), then collapse the rest into a
+                    # periodic summary instead of a line each.
                     self._mpv_x11_noise += 1
                     stamp = time.monotonic()
-                    if (self._mpv_x11_noise == 1
+                    if self._mpv_x11_noise <= 3:
+                        self._log_write(f"[mpv] {line}\n")
+                    elif (self._mpv_x11_noise == 4
                             or stamp - self._mpv_x11_noise_at >= 5.0):
                         self._mpv_x11_noise_at = stamp
                         self._log_write(

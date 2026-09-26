@@ -130,6 +130,15 @@ class NoisyX11LogTests(unittest.TestCase):
         ):
             self.assertFalse(gui._is_noisy_x11_log(line), line)
 
+    def test_keeps_non_badwindow_error_headers(self):
+        # a BadMatch/BadAlloc header is a real signal, not collapsed noise
+        for line in (
+            "X11 error: BadMatch (invalid parameter attributes)",
+            "X11 error: BadAlloc (insufficient resources for operation)",
+            "X11 error: BadValue (integer parameter out of range)",
+        ):
+            self.assertFalse(gui._is_noisy_x11_log(line), line)
+
 
 if __name__ == "__main__":
     unittest.main()
