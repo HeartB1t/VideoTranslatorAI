@@ -718,29 +718,34 @@ class DubScheduler:
                                              voice_state, pacer_paused))
         return actions
 
-    def _coverage_ready(self, seg: LiveSegment) -> bool:
-        if not self._caption_ready(seg):
-            return False
-        if self._dub and self._dub_eligible(seg):
-            # With dub on the FilePacer waits for the voice, not just the subtitle
-            # (design 5.5), but only while the clip can still arrive: a dropped or
-            # rejected segment must NOT leave a permanent hole that stalls the
-            # pacer at frame 0. "translated"/"synth" are still pending; every other
-            # state (ready/preloaded/playing/done/dropped) is resolved.
-            return self._dub_state.get(seg.seg_id) not in ("translated", "synth")
-        return True
+    def _dub_pending(self, seg: LiveSegment) -> bool:
+        """Whether this segment's dubbed clip can still arrive (dub on).
+
+        "translated"/"synth" are still coming; every other state (ready,
+        preloaded, playing, done, dropped) is resolved, so a dropped or rejected
+        clip never leaves a permanent hole that stalls the pacer.
+        """
+        return (self._dub and self._dub_eligible(seg)
+                and self._dub_state.get(seg.seg_id) in ("translated", "synth"))
 
     def ready_until(self, now: float) -> float:
-        ready = sorted((s for s in self._segments.values() if self._coverage_ready(s)),
-                       key=lambda s: s.start)
+        """End of the translated coverage ahead of ``now`` (design 5.5).
+
+        One decode, one ASR and one MT thread emit segments in media order, so
+        a gap between segments already here (or before the first one) is
+        silence, not speech still being processed: it is covered. Coverage
+        stops at a segment whose dubbed clip is still coming (the FilePacer
+        waits for the voice, not just the subtitle) and after the last segment,
+        where nothing is known yet. Stopping at every silence longer than a
+        small gap held the delayed-mode video until the whole file was done.
+        """
         coverage = now
-        for seg in ready:
+        for seg in sorted(self._segments.values(), key=lambda s: s.start):
             if seg.end <= now:
                 continue
-            if seg.start <= coverage + self._merge_gap:
-                coverage = max(coverage, seg.end)
-            else:
-                break
+            if self._dub_pending(seg):
+                return max(now, seg.start)       # the silence before it is covered
+            coverage = max(coverage, seg.end)
         return coverage
 
     @property

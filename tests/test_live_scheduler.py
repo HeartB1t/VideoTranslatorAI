@@ -161,12 +161,28 @@ class DubSchedulerCaptionTests(unittest.TestCase):
         sch.tick(1.0)
         self.assertEqual([type(a).__name__ for a in sch.tick(None)], ["ClearSubtitle"])
 
-    def test_ready_until_contiguous_coverage(self):
+    def test_ready_until_bridges_silence_between_emitted_sentences(self):
+        # The pipeline emits sentences in media order, so the gap 5-8 s between
+        # two sentences already here is silence, not speech still in progress.
+        # Stopping there held the delayed-mode video until the whole file was
+        # processed (the operator saw it stuck at 00:00 on a 44 min video).
         sch = DubScheduler(mode="delayed")
         sch.upsert(_seg(0, 1.0, 3.0, tgt="a"))
         sch.upsert(_seg(1, 3.0, 5.0, tgt="b"))
-        sch.upsert(_seg(2, 8.0, 10.0, tgt="c"))   # gap
-        self.assertEqual(sch.ready_until(1.0), 5.0)
+        sch.upsert(_seg(2, 8.0, 10.0, tgt="c"))   # silence before it
+        self.assertEqual(sch.ready_until(1.0), 10.0)
+
+    def test_ready_until_covers_leading_silence(self):
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 2.0, 4.0, tgt="a"))     # first speech at 2 s
+        self.assertEqual(sch.ready_until(0.0), 4.0)
+
+    def test_ready_until_ends_after_the_last_emitted_sentence(self):
+        # What follows the last sentence is not known yet: never covered.
+        sch = DubScheduler(mode="delayed")
+        sch.upsert(_seg(0, 1.0, 3.0, tgt="a"))
+        self.assertEqual(sch.ready_until(2.0), 3.0)
+        self.assertEqual(sch.ready_until(5.0), 5.0)
 
     def test_on_seek_clears_and_reshows(self):
         sch = DubScheduler(mode="delayed")
@@ -389,6 +405,15 @@ class DubSchedulerDubPathTests(unittest.TestCase):
                       voice_state="idle", pacer_paused=True)
         self.assertIn("Drop", _types(acts))
 
+    def test_ready_until_stops_at_a_pending_dub_clip_after_silence(self):
+        s = _dub_sched()
+        for sid, st, en in [(0, 0.5, 2.0), (1, 5.0, 7.0), (2, 9.0, 10.0)]:
+            s.upsert(LiveSegment(sid, 0, st, en, "h", text_tgt="x", dub_ok=True))
+        s.clip_ready(0, 0, _clip())
+        s.clip_ready(2, 0, _clip())
+        # silence 2-5 is covered; the voice for 5-7 is still coming: stop there
+        self.assertEqual(s.ready_until(0.0), 5.0)
+
     def test_a_dropped_clip_does_not_block_ready_until(self):
         # P0 (review finding 1): a dropped segment between two ready ones must not
         # stop coverage, or the FilePacer stalls the video at that hole.
@@ -406,7 +431,7 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         s = _dub_sched()
         s.upsert(self._seg(start=5.0, end=7.0))
         s.tick(1.0, mono=100.0, voice_state="idle")  # -> RequestTts, state synth
-        self.assertEqual(s.ready_until(0.0), 0.0)     # blocked while pending
+        self.assertEqual(s.ready_until(0.0), 5.0)     # blocked at the pending one
         s.tick(8.0, mono=107.0, voice_state="idle")  # past slot end (7.6): expires
         self.assertEqual(s.metrics()["dropped"], 1.0)
 
@@ -449,8 +474,9 @@ class DubSchedulerDubPathTests(unittest.TestCase):
     def test_ready_until_requires_the_clip_when_dub_is_on(self):
         s = _dub_sched()
         s.upsert(self._seg(start=0.5, end=2.0))
-        # no clip yet: coverage does not extend past now
-        self.assertEqual(s.ready_until(0.0), 0.0)
+        # no clip yet: coverage stops where that sentence starts (the silence
+        # before it is covered), not past it
+        self.assertEqual(s.ready_until(0.0), 0.5)
         s.tick(0.0, mono=100.0, voice_state="idle")           # requests tts
         s.clip_ready(0, 0, _clip())
         self.assertEqual(s.ready_until(0.0), 2.0)             # now the clip covers it
