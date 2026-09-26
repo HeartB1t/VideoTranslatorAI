@@ -594,6 +594,48 @@ def _dub_seg(tgt="ciao", *, gen=0, start=2.0, end=3.0):
 
 
 class LiveSessionDubTests(unittest.TestCase):
+    def test_duration_feedback_uses_successful_clip_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _, synth, _ = _dub_session(tmp)
+            sess._start_dub()
+            sess.submit_segment(_dub_seg("abcdefghij"))
+            sess._tick_once(0)
+            clip = Clip(0, 0, "/clip.mp3", 1.3, "+20%", 0.1, 1.1)
+            synth.push(0, 0, clip)
+            sess._drain_synth()
+            self.assertAlmostEqual(sess._dur_model.estimate("abcdefghij", 0), 1.2)
+            # A stale result must not update the rate estimator.
+            synth.push(0, 99, Clip(0, 99, "/old.mp3", 20, "+0%", 0, 20))
+            sess._drain_synth()
+            self.assertAlmostEqual(sess._dur_model.estimate("abcdefghij", 0), 1.2)
+
+    def test_toggle_keeps_worker_and_join_stops_it_and_restores_mix(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _, synth, _ = _dub_session(tmp)
+            video.apply_mix = Mock()
+            sess._start_dub()
+            sess.set_dub_enabled(False)
+            sess._drain_control(0)
+            self.assertIs(sess._synth, synth)
+            sess.set_dub_enabled(True)
+            sess._drain_control(0)
+            self.assertIs(sess._synth, synth)
+            sess.request_stop()
+            self.assertTrue(sess.join(1))
+            self.assertTrue(synth.stopped)
+            self.assertEqual(video.mixer.snapshot().owner, "cmd")
+            video.apply_mix.assert_called_once_with()
+
+    def test_mute_is_reasserted_on_voice_and_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice, _, _ = _dub_session(tmp)
+            sess._start_dub()
+            video.mixer.set_muted(True)
+            sess._reassert_mixer()
+            self.assertIn(("set_volume", 0.0), voice.calls)
+            self.assertTrue(video.rt.ducks)
+
     def test_start_dub_creates_and_starts_the_worker(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, video, _voice, synth, _ = _dub_session(tmp)

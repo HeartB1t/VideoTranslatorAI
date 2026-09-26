@@ -1,6 +1,8 @@
 import tempfile
 import time
 import unittest
+import asyncio
+import threading
 
 import numpy as np
 
@@ -48,6 +50,50 @@ class _FakeBreaker:
 
 
 class EdgeClipSynthTests(unittest.TestCase):
+    def test_shutdown_awaits_active_stream_cleanup_and_closes_loop(self):
+        started, cleaned = threading.Event(), threading.Event()
+
+        class BlockingComm:
+            async def stream(self):
+                try:
+                    yield {"type": "audio", "data": b"partial"}
+                    started.set()
+                    await asyncio.Event().wait()
+                finally:
+                    cleaned.set()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda *a, **kw: BlockingComm())
+            s.start()
+            try:
+                self.assertTrue(s.submit(0, 0, "hello", 0, time.monotonic() + 60))
+                self.assertTrue(started.wait(2))
+            finally:
+                self.assertTrue(s.stop(3))
+            self.assertTrue(cleaned.is_set())
+            self.assertTrue(s._loop.is_closed())
+            self.assertEqual(s._in_flight, 0)
+            self.assertEqual(list(s._out_dir.glob("*.part")), [])
+            self.assertFalse(s.submit(1, 0, "late", 0, time.monotonic() + 60))
+
+    def test_live_speech_uses_the_shared_sanitizer(self):
+        from videotranslator.tts_text_sanitizer import sanitize_for_tts
+        seen = []
+
+        def factory(text, voice, **kwargs):
+            seen.append(text)
+            return _FakeComm(b"\x00" * 6000)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, factory)
+            s.start()
+            try:
+                s.submit(0, 0, "Hello: world; again...", 0, time.monotonic() + 10)
+                s.results.get(timeout=3)
+            finally:
+                s.stop(3)
+            self.assertEqual(seen, [sanitize_for_tts("Hello: world; again...")])
+
     def _synth(self, tmp, factory, **kw):
         br = kw.pop("breaker", _FakeBreaker())
         s = EdgeClipSynth("v", tmp, breaker=br, communicate_factory=factory,

@@ -291,6 +291,7 @@ class LiveSession:
             mode=s.sync_mode, device=device, engine=cfg.engine, dub=s.dub_enabled)
         from .live_tts import EdgeDurationModel, choose_rate
         from .timing import estimate_tts_duration_s
+        from .tts_text_sanitizer import sanitize_for_tts
         # Speed the TTS to fit the slot (was hard +0%: long translations overran
         # and dropped the next clip) and use the user's duck level (was fixed 0.3).
         self._dur_model = EdgeDurationModel(cfg.lang_target,
@@ -298,7 +299,8 @@ class LiveSession:
         self._scheduler = DubScheduler(
             mode=s.sync_mode, overhang_s=0.6, merge_gap_s=0.6,
             dub=s.dub_enabled, subs=s.subs_enabled, duck_gain=s.duck_level,
-            rate_for=lambda text, slot: choose_rate(text, slot, self._dur_model))
+            rate_for=lambda text, slot: choose_rate(sanitize_for_tts(text), slot,
+                                                    self._dur_model))
         self._pacer = FilePacer(mode=s.sync_mode, min_ahead_s=self._timing.min_ahead_s,
                                 resume_ahead_s=self._timing.resume_ahead_s)
 
@@ -618,7 +620,13 @@ class LiveSession:
                 return
             except Exception:
                 return
-            self._scheduler.clip_ready(seg_id, gen, clip, reason)
+            accepted = self._scheduler.clip_ready(seg_id, gen, clip, reason)
+            if accepted:
+                seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
+                if seg is not None:
+                    from .tts_text_sanitizer import sanitize_for_tts
+                    self._dur_model.observe(sanitize_for_tts(seg.text_tgt),
+                                            int(clip.rate.rstrip("%")), clip.audible_s)
 
     def _sync_voice_state(self) -> None:
         """Consume the voice end marker and flip to idle when a CLIP ends.

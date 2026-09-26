@@ -344,6 +344,12 @@ class DubScheduler:
     def _cache_key(self, seg: LiveSegment) -> tuple:
         return (round(seg.start, 2), round(seg.end, 2), seg.text_tgt)
 
+    def segment_for_clip(self, seg_id: int, gen: int, clip: object) -> LiveSegment | None:
+        seg = self._segments.get(seg_id)
+        if seg is not None and seg.gen == gen and self._clips.get(seg_id) is clip:
+            return seg
+        return None
+
     def _slot_end(self, seg: LiveSegment) -> float:
         cap = seg.end + self._overhang
         nexts = [s.start for s in self._segments.values()
@@ -360,21 +366,22 @@ class DubScheduler:
         self._duck_latency = seconds
 
     def clip_ready(self, seg_id: int, gen: int, clip: object | None,
-                   reason: str | None = None) -> None:
+                   reason: str | None = None) -> bool:
         """Consume a synthesized clip (or a failure) for a requested segment."""
         seg = self._segments.get(seg_id)
         if seg is None or seg.gen != gen:
-            return
+            return False
         if self._dub_state.get(seg_id) not in ("synth", "translated"):
-            return
+            return False
         if clip is None:
             self._dub_state[seg_id] = "dropped"
             self._dub_dropped += 1
-            return
+            return False
         self._clips[seg_id] = clip
         seg.clip = clip
         self._dub_state[seg_id] = "ready"
         self._clip_cache[self._cache_key(seg)] = clip
+        return True
 
     def set_dub(self, on: bool) -> list[object]:
         self._dub = on

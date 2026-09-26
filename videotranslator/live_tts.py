@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .tts_text_sanitizer import sanitize_for_tts
+
 # 48 kbit/s CBR mono mp3: bytes / 6000 equals the decoded duration to the
 # millisecond ([CT] C34).
 EDGE_BYTES_PER_SECOND = 6000
@@ -242,7 +244,7 @@ class EdgeClipSynth:
         self._clock = clock or time.monotonic
         self._sleep = sleep or asyncio.sleep
         self._thread_factory = thread_factory
-        self._sanitize = sanitize
+        self._sanitize = sanitize or sanitize_for_tts
         self.results: queue.Queue = queue.Queue()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread = None
@@ -287,8 +289,12 @@ class EdgeClipSynth:
                 or deadline_mono - self._clock() <= 0):
             return False
         self._in_flight += 1
-        self._loop.call_soon_threadsafe(
-            self._aq.put_nowait, (seg_id, gen, text, rate_pct, deadline_mono))
+        try:
+            self._loop.call_soon_threadsafe(
+                self._aq.put_nowait, (seg_id, gen, text, rate_pct, deadline_mono))
+        except RuntimeError:
+            self._in_flight = max(0, self._in_flight - 1)
+            return False
         return True
 
     def stop(self, timeout_s: float) -> bool:
@@ -300,11 +306,6 @@ class EdgeClipSynth:
                 pass
         if self._thread is not None:
             self._thread.join(timeout_s)
-        try:
-            for part in self._out_dir.glob("clip_*.mp3.part"):
-                part.unlink()
-        except OSError:
-            pass
         return self._thread is None or not self._thread.is_alive()
 
     # -- internals (run on the live-tts thread) -----------------------------
@@ -318,9 +319,23 @@ class EdgeClipSynth:
         try:
             self._loop.run_until_complete(self._dispatch())
         finally:
-            for task in list(self._tasks):
+            self._ready.clear()
+            pending = asyncio.all_tasks(self._loop)
+            for task in pending:
                 task.cancel()
+            if pending:
+                self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.run_until_complete(self._loop.shutdown_default_executor())
             self._loop.close()
+            self._in_flight = 0
+            # Cleanup belongs to the worker: stop(timeout=0) may return while
+            # a file is still open on Windows.
+            for part in self._out_dir.glob("clip_*.mp3.part"):
+                try:
+                    part.unlink()
+                except OSError:
+                    pass
 
     async def _dispatch(self) -> None:
         while not self._stopping.is_set():
