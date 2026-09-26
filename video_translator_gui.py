@@ -72,19 +72,28 @@ LANGUAGES = {
     "vi":    {"name": "🇻🇳 Vietnamita",  "voices": ["vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"]},
 }
 
-SOURCE_LANGS = {
-    "auto": "🔍 Rilevamento automatico", "en": "🇬🇧 Inglese", "it": "🇮🇹 Italiano",
-    "es": "🇪🇸 Spagnolo", "fr": "🇫🇷 Francese", "de": "🇩🇪 Tedesco",
-    "pt": "🇧🇷 Portoghese", "ru": "🇷🇺 Russo", "zh-CN": "🇨🇳 Cinese",
-    "ja": "🇯🇵 Giapponese", "ko": "🇰🇷 Coreano", "ar": "🇸🇦 Arabo",
+# Language names are shown in their own language (endonyms), the usual
+# convention of language pickers: the same list reads right in every UI
+# language, and each user finds their language by its own name.
+LANGUAGE_NATIVE_NAMES = {
+    "ar": "العربية", "zh-CN": "中文", "cs": "Čeština", "da": "Dansk",
+    "de": "Deutsch", "el": "Ελληνικά", "en": "English", "es": "Español",
+    "fi": "Suomi", "fr": "Français", "hi": "हिन्दी", "hu": "Magyar",
+    "id": "Bahasa Indonesia", "it": "Italiano", "ja": "日本語", "ko": "한국어",
+    "nl": "Nederlands", "no": "Norsk", "pl": "Polski", "pt": "Português",
+    "ro": "Română", "ru": "Русский", "sv": "Svenska", "tr": "Türkçe",
+    "uk": "Українська", "vi": "Tiếng Việt",
 }
+for _code, _entry in LANGUAGES.items():
+    _flag = _entry["name"].split(" ", 1)[0]
+    _entry["name"] = f"{_flag} {LANGUAGE_NATIVE_NAMES[_code]}"
 
-SOURCE_LANGS_EN = {
-    "auto": "🔍 Auto detect", "en": "🇬🇧 English", "it": "🇮🇹 Italian",
-    "es": "🇪🇸 Spanish", "fr": "🇫🇷 French", "de": "🇩🇪 German",
-    "pt": "🇧🇷 Portuguese", "ru": "🇷🇺 Russian", "zh-CN": "🇨🇳 Chinese",
-    "ja": "🇯🇵 Japanese", "ko": "🇰🇷 Korean", "ar": "🇸🇦 Arabic",
-}
+# Source languages offered for transcription; "auto" is labelled with the
+# UI string "lang_auto_detect".
+SOURCE_LANG_CODES = ("auto", "en", "it", "es", "fr", "de", "pt", "ru", "zh-CN",
+                     "ja", "ko", "ar")
+SOURCE_LANGS = {code: ("🔍 Auto" if code == "auto" else LANGUAGES[code]["name"])
+                for code in SOURCE_LANG_CODES}
 
 # Languages supported by XTTS v2 (maps our codes → XTTS codes)
 XTTS_LANGS = {
@@ -6968,6 +6977,11 @@ class App(tk.Tk):
             self._lbl_profile_hint.configure(
                 text=_HINTS.get(active, ""))
 
+    def _source_lang_labels(self) -> list[str]:
+        """Source language choices: automatic detection, then native names."""
+        return ["🔍 " + self._s("lang_auto_detect")] + [
+            SOURCE_LANGS[code] for code in SOURCE_LANG_CODES[1:]]
+
     def _update_start_summary(self):
         """Rebuild the summary line shown in the START card."""
         if not hasattr(self, "_summary_var"):
@@ -6975,7 +6989,8 @@ class App(tk.Tk):
         try:
             src_key  = self._lang_src.get()
             tgt_key  = self._lang_tgt.get()
-            src_name = SOURCE_LANGS.get(src_key, src_key)
+            src_name = (self._source_lang_labels()[0] if src_key == "auto"
+                        else SOURCE_LANGS.get(src_key, src_key))
             tgt_name = LANGUAGES.get(tgt_key, {}).get("name", tgt_key)
             eng = self._translation_engine.get()
             eng_label = {
@@ -7487,7 +7502,7 @@ class App(tk.Tk):
             bg=CARD, fg=FG2, font="VT.Small", width=6, anchor="e")
         self._lbl_from.pack(side="left")
         self._src_combo = ttk.Combobox(
-            from_row, values=list(SOURCE_LANGS.values()),
+            from_row, values=self._source_lang_labels(),
             state="readonly", width=22)
         self._src_combo.current(0)
         self._src_combo.pack(side="left", padx=(4, 0))
@@ -8273,12 +8288,10 @@ class App(tk.Tk):
         self._btn_log_save.configure(text=self._s("btn_log_save"))
         self._btn_log_clear.configure(text=self._s("btn_log_clear"))
         self._btn_preflight.configure(text=self._s("btn_preflight"))
-        # Update source language combo labels
-        lang = self._ui_lang.get()
-        src_map  = SOURCE_LANGS_EN if lang == "en" else SOURCE_LANGS
-        src_keys = list(src_map.keys())
+        # Update source language combo labels ("auto" is translated)
+        src_keys = list(SOURCE_LANG_CODES)
         cur_key  = self._lang_src.get()
-        self._src_combo["values"] = list(src_map.values())
+        self._src_combo["values"] = self._source_lang_labels()
         try:
             self._src_combo.current(src_keys.index(cur_key))
         except ValueError:

@@ -1594,9 +1594,42 @@ _VB_T: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# --- general UI strings kept here to avoid touching UI_STRINGS in 26 places ----
+_GEN_KEYS = ('lang_auto_detect',)
+
+_GEN_T: dict[str, tuple[str, ...]] = {
+    'en': ('Auto detect',),
+    'it': ('Rilevamento automatico',),
+    'ar': ('اكتشاف تلقائي',),
+    'zh': ('自动检测',),
+    'cs': ('Automatická detekce',),
+    'da': ('Automatisk registrering',),
+    'nl': ('Automatisch detecteren',),
+    'fi': ('Automaattinen tunnistus',),
+    'fr': ('Détection automatique',),
+    'de': ('Automatisch erkennen',),
+    'el': ('Αυτόματη ανίχνευση',),
+    'hi': ('स्वचालित पहचान',),
+    'hu': ('Automatikus felismerés',),
+    'id': ('Deteksi otomatis',),
+    'ja': ('自動検出',),
+    'ko': ('자동 감지',),
+    'no': ('Automatisk gjenkjenning',),
+    'pl': ('Wykrywanie automatyczne',),
+    'pt': ('Deteção automática',),
+    'ro': ('Detectare automată',),
+    'ru': ('Автоопределение',),
+    'es': ('Detección automática',),
+    'sv': ('Automatisk identifiering',),
+    'tr': ('Otomatik algıla',),
+    'uk': ('Автовизначення',),
+    'vi': ('Tự động nhận diện',),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
-           **dict(zip(_VB_KEYS, _VB_T.get(lang, ())))}
+           **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
+           **dict(zip(_GEN_KEYS, _GEN_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 
@@ -1608,7 +1641,8 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
     present with another value, or a language the target lacks is reported.
     """
     problems: list[str] = []
-    for keys, table in ((_KEYS, _T), (_EL_KEYS, _EL_T), (_VB_KEYS, _VB_T)):
+    for keys, table in ((_KEYS, _T), (_EL_KEYS, _EL_T), (_VB_KEYS, _VB_T),
+                        (_GEN_KEYS, _GEN_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

@@ -246,6 +246,22 @@ class LaunchLiveSessionConfigTests(unittest.TestCase):
                                       el_key="sk").tts_opts, {})
 
 
+class LanguageNameTests(unittest.TestCase):
+    def test_languages_are_named_in_their_own_language(self):
+        self.assertEqual(gui.LANGUAGES["de"]["name"], "🇩🇪 Deutsch")
+        self.assertEqual(gui.LANGUAGES["ja"]["name"], "🇯🇵 日本語")
+        self.assertEqual(set(gui.LANGUAGE_NATIVE_NAMES), set(gui.LANGUAGES))
+
+    def test_auto_detect_label_follows_the_ui_language(self):
+        for lang in ("en", "it", "de"):
+            app = SimpleNamespace(_s=lambda key, lang=lang: gui.UI_STRINGS[lang][key])
+            labels = gui.App._source_lang_labels(app)
+            self.assertEqual(labels[0], "🔍 " + gui.UI_STRINGS[lang]["lang_auto_detect"])
+            self.assertEqual(labels[1:], [gui.SOURCE_LANGS[c]
+                                          for c in gui.SOURCE_LANG_CODES[1:]])
+        self.assertEqual(gui.UI_STRINGS["de"]["lang_auto_detect"], "Automatisch erkennen")
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))
