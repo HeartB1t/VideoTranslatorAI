@@ -50,6 +50,24 @@ class LiveBarTests(unittest.TestCase):
         self.bar._start_button.invoke()
         self.assertIn(("start", {"source": "file"}), self.commands)
 
+    def test_voice_counter_shows_lines_said_and_lost_while_dubbing(self):
+        self.bar.show_running()
+        self.bar.render(SimpleNamespace(state="running", lag_s=None, warning_key=None,
+                                        error_key=None, dub_on=True, voiced=12,
+                                        voice_dropped=1))
+        self.assertTrue(self.bar._voice_counter.winfo_manager())
+        self.assertEqual(self.bar._voice_counter.cget("text"),
+                         _s("live_voice_counter").format(said=12, lost=1))
+
+    def test_voice_counter_is_hidden_without_dubbing(self):
+        self.bar.show_running()
+        self.bar.render(SimpleNamespace(state="running", lag_s=None, warning_key=None,
+                                        error_key=None, dub_on=True, voiced=1,
+                                        voice_dropped=0))
+        self.bar.render(SimpleNamespace(state="running", lag_s=None, warning_key=None,
+                                        error_key=None, dub_on=False))
+        self.assertFalse(self.bar._voice_counter.winfo_manager())
+
     def test_mode_buttons_have_hover_tips_in_the_ui_language(self):
         texts = {mode: tip._text_fn() for mode, tip in self.bar._mode_tips.items()}
         self.assertEqual(set(texts), {"delayed", "live"})

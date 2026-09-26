@@ -195,6 +195,9 @@ class LiveBar(tk.Frame):
             activebackground=pal.SURFACE, activeforeground=pal.FG,
             font="VT.Small", takefocus=1)
         self._chk_original_mute.pack(side="left")
+        # Dubbed lines said / lost; packed by render() only while dubbing.
+        self._voice_counter = tk.Label(audio_row, text="", bg=pal.SURFACE, fg=pal.FG2,
+                                       font="VT.Small", anchor="e")
 
     def _build_banner(self) -> None:
         pal = self._palette
@@ -325,6 +328,14 @@ class LiveBar(tk.Frame):
                 self._badge.pack(side="left", padx=(0, 8))
         elif self._badge.winfo_manager():
             self._badge.pack_forget()
+        if getattr(status, "dub_on", False):
+            self._voice_counter.configure(text=self._s("live_voice_counter").format(
+                said=int(getattr(status, "voiced", 0) or 0),
+                lost=int(getattr(status, "voice_dropped", 0) or 0)))
+            if not self._voice_counter.winfo_manager():
+                self._voice_counter.pack(side="right")
+        elif self._voice_counter.winfo_manager():
+            self._voice_counter.pack_forget()
         error_key = getattr(status, "error_key", None)
         warning_key = getattr(status, "warning_key", None)
         if error_key:

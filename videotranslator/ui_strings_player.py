@@ -3356,6 +3356,39 @@ for _tip_lang, (_tip_delayed, _tip_live) in _LIVE_MODE_TIPS.items():
     PLAYER_UI_STRINGS[_tip_lang]["live_tip_mode_delayed"] = _tip_delayed
     PLAYER_UI_STRINGS[_tip_lang]["live_tip_mode_live"] = _tip_live
 
+# Live-bar counter of dubbed lines, "label value" form so no plural agreement is
+# needed in any language: {said} voiced lines, {lost} lines not voiced.
+_VOICE_COUNTER = {
+    "en": "Voice: said {said} · lost {lost}",
+    "it": "Voce: dette {said} · perse {lost}",
+    "ar": "الصوت: المنطوقة {said} · المفقودة {lost}",
+    "zh": "语音：已播 {said} · 丢失 {lost}",
+    "cs": "Hlas: vyslovené {said} · ztracené {lost}",
+    "da": "Stemme: læst op {said} · tabt {lost}",
+    "nl": "Stem: uitgesproken {said} · verloren {lost}",
+    "fi": "Ääni: luettu {said} · menetetty {lost}",
+    "fr": "Voix : dites {said} · perdues {lost}",
+    "de": "Stimme: gesprochen {said} · verloren {lost}",
+    "el": "Φωνή: ειπώθηκαν {said} · χάθηκαν {lost}",
+    "hi": "आवाज़: बोली गईं {said} · छूटीं {lost}",
+    "hu": "Hang: elhangzott {said} · elveszett {lost}",
+    "id": "Suara: terucap {said} · hilang {lost}",
+    "ja": "音声: 再生 {said} · 欠落 {lost}",
+    "ko": "음성: 재생 {said} · 누락 {lost}",
+    "no": "Stemme: lest opp {said} · tapt {lost}",
+    "pl": "Głos: wypowiedziane {said} · utracone {lost}",
+    "pt": "Voz: ditas {said} · perdidas {lost}",
+    "ro": "Voce: rostite {said} · pierdute {lost}",
+    "ru": "Голос: озвучено {said} · потеряно {lost}",
+    "es": "Voz: dichas {said} · perdidas {lost}",
+    "sv": "Röst: upplästa {said} · förlorade {lost}",
+    "tr": "Ses: söylenen {said} · kaybolan {lost}",
+    "uk": "Голос: озвучено {said} · втрачено {lost}",
+    "vi": "Giọng: đã đọc {said} · bị mất {lost}",
+}
+for _counter_lang, _counter_text in _VOICE_COUNTER.items():
+    PLAYER_UI_STRINGS[_counter_lang]["live_voice_counter"] = _counter_text
+
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 
 
