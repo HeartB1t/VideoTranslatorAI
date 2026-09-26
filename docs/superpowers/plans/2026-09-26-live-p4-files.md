@@ -1,7 +1,28 @@
 # Live P4: Real-time translation of local files, subtitles
 
-**Status:** not started. Plan only. Needs P2 (done). Does NOT need P3 or the S2
-stream spike.
+**Status:** pure foundation IMPLEMENTED and verified (2026-09-26 autonomous
+session); integration, GUI, i18n and real-hardware acceptance remain. Needs P2
+(done). Does NOT need P3 or the S2 stream spike.
+
+## Progress (2026-09-26)
+
+Done, each its own commit, TDD, suite green (1154 tests), CI green:
+
+- `live_health.py` (`dddc64a`): CircuitBreaker, RollingStats, VTAI_LIVE_FAULTS parser.
+- `live_segment.py` (`5092f3a`): UtteranceSegmenter, SentenceAssembler.
+- `live_sync.py` (`a8cc621`): FilePacer, derive_live_timing, recommended_delay_s,
+  live_distance_s (file side; stream EdgeEstimator/DelayController still P6).
+- `live_translate.py` (`9b4b0c9`): EN_LEGS, marian_route, marian_is_cached, TIMEOUTS_S.
+- `live_asr.py` (`34b2321`): decoder_time, HallucinationFilter, LanguageLock (pure
+  parts; PyAV/onnxruntime/Whisper classes still to add for real hardware).
+- `live_scheduler.py` (`e4c8165`, `f993473`): caption wrap/paginate/ASS render, and
+  DubScheduler caption path (media-time caption emission, ready_until, on_seek).
+
+Remaining for P4 (see the split below): the live_* i18n vocabulary in 26 languages
+plus live_health's STATUS/WARN/ERROR code maps (blocked on the i18n literal-key
+scanner); live_asr ML classes; live_session wiring; live_bar_tk + player button;
+ComponentInstaller live deps; the DubScheduler dub path is P5. All acceptance
+items in section 9 need real GPU/CPU/media and Windows.
 
 **Goal:** while a local file plays in the integrated player, translate it in near
 real time and show translated captions, in two modes: Delayed (pre-roll, high
