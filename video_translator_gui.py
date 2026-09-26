@@ -6082,6 +6082,7 @@ class App(tk.Tk):
         self._live_poll_after = None
         self._live_stopping = False
         self._live_resolving = False
+        self._pending_live_source = None
         self._close_started_at = None
         self._close_done = None
 
@@ -8466,9 +8467,6 @@ class App(tk.Tk):
         if self._editor_open:
             self._live_bar.show_banner("live_err_editor_open", is_error=True)
             return
-        if self._player_backend is None:
-            self._live_bar.show_banner("player_unavailable_title", is_error=True)
-            return
         urls = self._get_urls()
         if urls:                       # a link takes priority over a loaded file
             self._start_live_from_url(urls[0])
@@ -8508,14 +8506,37 @@ class App(tk.Tk):
 
     def _on_live_resolved(self, stream_url: str, title: str) -> None:
         self._live_resolving = False
-        if self._destroying or self._player_backend is None:
+        if self._destroying:
             return
         # Play the resolved stream in the player while the same URL is translated.
+        # The mpv backend is created lazily on first load, so start the session
+        # only once it exists (below), not synchronously here.
         item = _player_core.MediaItem(path=stream_url, kind="source", title=title)
         self._player_controller.set_playlist([item], index=0)
         self._player_controller.load(item, paused=False)
         self._ensure_or_show_player_status()
-        self._launch_live_session(stream_url, "url", title=title)
+        self._pending_live_source = (stream_url, "url", title)
+        self._await_backend_and_launch(time.monotonic() + 20.0)
+
+    def _await_backend_and_launch(self, deadline: float) -> None:
+        """Wait for the lazily-created mpv backend, then launch the live session."""
+        pending = self._pending_live_source
+        if self._destroying or pending is None:
+            return
+        if self._player_backend is not None:
+            self._pending_live_source = None
+            source, kind, title = pending
+            self._launch_live_session(source, kind, title=title)
+            return
+        unavailable = self._player_status is not None and not self._player_status.ok
+        if unavailable or time.monotonic() >= deadline:
+            self._pending_live_source = None
+            self._live_bar.show_banner("player_unavailable_title", is_error=True)
+            self._refresh_live_bar_enabled()
+            return
+        if not self._player_init_running:
+            self._ensure_or_show_player_status()   # (re)trigger backend creation
+        self.after(150, lambda: self._await_backend_and_launch(deadline))
 
     def _launch_live_session(self, source: str, source_kind: str, *,
                              title: str | None) -> None:
