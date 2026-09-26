@@ -311,6 +311,9 @@ class DubScheduler:
         self._pacer_recovery_seg: int | None = None
         self._clip_paused = False
         self._expected_end: float = 0.0
+        # Wall-clock (mono) bound of a recovery clip: with the picture held the
+        # media clock is frozen, so its end cannot be detected from media time.
+        self._recovery_mono_end: float = 0.0
         self._duck_target: float = 1.0
         self._margins: list[float] = []        # recent start margins for p90
         self._voiced = 0
@@ -438,7 +441,7 @@ class DubScheduler:
         cands = [s for s in self._segments.values()
                  if self._dub_state.get(s.seg_id) == "ready"
                  and (s.start >= now - tol or
-                      (pacer_paused and now - s.start <= self._max_live_lag))]
+                      (pacer_paused and s.seg_id == self._pacer_recovery_seg))]
         return min(cands, key=lambda s: s.start) if cands else None
 
     def _imminent_clip(self, now: float) -> bool:
@@ -474,7 +477,12 @@ class DubScheduler:
         if self._playing is not None:
             recovery_playing = (self._playing == self._pacer_recovery_seg
                                 and pacer_paused)
-            if recovery_playing and voice_state == "idle":
+            if recovery_playing and (voice_state == "idle"
+                                     or mono >= self._recovery_mono_end):
+                # Ended, or its end-of-file marker was lost: the wall-clock bound
+                # keeps the recovery (and the pacer waiting for it) from hanging.
+                if voice_state != "idle":
+                    actions.append(StopClip(0.0))
                 self._finish_playing()
             elif not main_running and not recovery_playing:
                 if not self._clip_paused:
@@ -533,12 +541,17 @@ class DubScheduler:
                 too_late, reason = now - seg.start > self._max_live_lag, "lag"
             else:
                 too_late, reason = now > seg.start - self._lead + self._late_tol, "late"
-            recover_late = (pacer_paused and not live
-                            and now - seg.start <= self._max_live_lag)
-            if recover_late and self._pacer_recovery_seg is None:
-                self._pacer_recovery_seg = seg.seg_id
             if too_late:
+                # A clip late only because the pacer held the picture can still
+                # be voiced (recovery) while the picture stays held. Only a clip
+                # that is actually late, within the freshness bound, and only with
+                # the voice device free: a paused clip occupying it would never let
+                # the recovery start, and the pacer waits for the recovery.
+                recover_late = (pacer_paused and not live and self._playing is None
+                                and now - seg.start <= self._max_live_lag)
                 if recover_late:
+                    if self._pacer_recovery_seg is None:
+                        self._pacer_recovery_seg = seg.seg_id
                     continue
                 if self._preloaded == seg.seg_id:
                     # The clip was loaded into the voice device: stop it so the
@@ -565,7 +578,7 @@ class DubScheduler:
                     ready_to_preload = (cand.start - self._preload_s <= now
                                         < cand.start - self._lead + self._late_tol
                                         or (pacer_paused
-                                            and now - cand.start <= self._max_live_lag))
+                                            and cand.seg_id == self._pacer_recovery_seg))
                 if ready_to_preload:
                     clip = self._clips[cand.seg_id]
                     actions.append(PreloadClip(cand.seg_id, clip.path,
@@ -603,6 +616,7 @@ class DubScheduler:
                 self._clip_paused = False
                 self._dub_state[seg.seg_id] = "playing"
                 self._expected_end = base + audible / max(fit, 0.1)
+                self._recovery_mono_end = mono + audible / max(fit, 0.1) + 1.0
                 self._voiced += 1
                 self._margins.append(seg.start - self._lead - now)
                 self._margins = self._margins[-32:]

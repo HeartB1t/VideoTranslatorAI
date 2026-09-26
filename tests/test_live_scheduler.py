@@ -306,6 +306,58 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertIn("Drop", _types(acts))
         self.assertEqual(s.metrics()["late"], 1.0)
 
+    def test_pacer_hold_does_not_start_a_future_clip(self):
+        # R3: while the pacer holds the picture at 1.0 s, a clip whose sentence
+        # starts at 5.0 s is not late: it must not be recovered and voiced now.
+        s = _dub_sched(max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(0.5, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        vs = "idle"
+        for i in range(3):
+            acts = _types(s.tick(1.0, mono=101.0 + i, main_running=False,
+                                 voice_state=vs, pacer_paused=True))
+            self.assertNotIn("StartClip", acts)
+            if "PreloadClip" in acts:
+                vs = "preloaded"
+        self.assertFalse(s.pacer_recovery_pending)
+
+    def test_no_recovery_while_a_paused_clip_holds_the_voice_device(self):
+        # R1: a clip paused by the pacer still occupies the voice device, so a
+        # late clip cannot be recovered; marking it pending would freeze the
+        # pacer (it waits for the recovery) and the video forever.
+        s = _dub_sched(max_live_lag_s=4.0)
+        s.upsert(LiveSegment(1, 0, 2.0, 4.0, "a", text_tgt="uno", dub_ok=True))
+        s.upsert(LiveSegment(2, 0, 4.2, 6.0, "b", text_tgt="due", dub_ok=True))
+        s.tick(0.5, mono=100.0)
+        s.clip_ready(1, 0, _clip(audible=3.0))
+        s.tick(1.0, mono=100.5, voice_state="idle")               # preload 1
+        s.tick(1.8, mono=101.3, voice_state="preloaded")          # start 1
+        s.tick(4.6, mono=102.0, main_running=False, voice_state="playing",
+               pacer_paused=True)                                  # clip 1 paused
+        s.clip_ready(2, 0, _clip())                                # clip 2 late
+        s.tick(4.6, mono=103.0, main_running=False, voice_state="playing",
+               pacer_paused=True)
+        self.assertFalse(s.pacer_recovery_pending)
+
+    def test_recovery_clip_without_an_eof_is_stopped_after_its_length(self):
+        # R2: with the picture held the media clock does not move, so the
+        # recovery clip needs a wall-clock bound in case its end-of-file
+        # marker is lost; otherwise the recovery (and the pacer) waits forever.
+        s = _dub_sched(max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip(audible=1.8))
+        s.tick(6.0, mono=105.0, main_running=False, voice_state="idle",
+               pacer_paused=True)                                  # preload
+        s.tick(6.0, mono=105.02, main_running=False, voice_state="preloaded",
+               pacer_paused=True)                                  # start
+        self.assertTrue(s.pacer_recovery_pending)
+        acts = s.tick(6.0, mono=200.0, main_running=False, voice_state="playing",
+                      pacer_paused=True)                           # no eof ever
+        self.assertIn("StopClip", _types(acts))
+        self.assertFalse(s.pacer_recovery_pending)
+
     def test_late_clip_is_recovered_while_the_pacer_holds_the_playhead(self):
         s = _dub_sched(max_live_lag_s=4.0)
         s.upsert(self._seg(start=5.0, end=7.0))
