@@ -83,6 +83,15 @@ class LiveSettingsTests(unittest.TestCase):
         self.assertEqual(normalize_live_settings(cfg), normalize_live_settings({}))
         self.assertIsNone(normalize_live_settings({"live_delay_s": True}).delay_s)
 
+    def test_live_asr_model_is_auto_unless_a_known_model(self):
+        self.assertEqual(normalize_live_settings({}).asr_model, "auto")
+        self.assertEqual(normalize_live_settings({"live_asr_model": "base"}).asr_model,
+                         "base")
+        self.assertEqual(normalize_live_settings({"live_asr_model": "huge"}).asr_model,
+                         "auto")
+        s = normalize_live_settings({"live_asr_model": "medium"})
+        self.assertEqual(normalize_live_settings(settings_to_config(s)), s)
+
     def test_round_trip_and_absent_delays_stay_absent(self):
         s = normalize_live_settings({"live_engine": "deepl", "live_delay_s": 20})
         cfg = settings_to_config(s)

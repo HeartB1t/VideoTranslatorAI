@@ -17,6 +17,9 @@ AUDIO_CHOICES = ("dubbed", "original")
 SYNC_MODES = ("delayed", "live")
 LIVE_ENGINES = ("marian", "ollama", "google", "deepl")
 LIVE_MAX_HEIGHTS = (480, 720, 1080)
+# Whisper model of live sessions; "auto" = large-v3-turbo on CUDA, small on CPU.
+LIVE_ASR_MODELS = ("auto", "tiny", "base", "small", "medium", "large-v3-turbo",
+                   "large-v2", "large-v3")
 PLAYER_VOLUME_KEY = "player_volume"
 PLAYER_MUTED_KEY = "player_muted"
 PLAYER_AUDIO_KEY = "player_audio"
@@ -48,6 +51,7 @@ class LiveSettings:
     duck_level: float
     max_height: int
     buffer_max_mb: int
+    asr_model: str = "auto"
 
 
 def _bool(cfg: Mapping[str, Any], key: str, default: bool) -> bool:
@@ -105,6 +109,7 @@ def normalize_live_settings(cfg: Mapping[str, Any]) -> LiveSettings:
         duck_level=_float(cfg, "live_duck_level", 0.3, 0.1, 0.6),
         max_height=_choice(cfg, "live_max_height", LIVE_MAX_HEIGHTS, 720),
         buffer_max_mb=_int(cfg, "live_buffer_max_mb", 1024, 256, 8192),
+        asr_model=_choice(cfg, "live_asr_model", LIVE_ASR_MODELS, "auto"),
     )
 
 
@@ -131,6 +136,7 @@ def settings_to_config(settings: PlayerSettings | LiveSettings) -> dict[str, Any
         "live_duck_level": settings.duck_level,
         "live_max_height": settings.max_height,
         "live_buffer_max_mb": settings.buffer_max_mb,
+        "live_asr_model": settings.asr_model,
     }
     if settings.delay_s is not None:
         cfg["live_delay_s"] = settings.delay_s

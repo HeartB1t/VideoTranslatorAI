@@ -109,6 +109,36 @@ class PersistentWhisperUnitTests(unittest.TestCase):
         self.assertEqual(segs[0]["text"], "ok")
 
 
+    def test_chosen_model_replaces_the_default_on_both_devices(self):
+        from types import SimpleNamespace
+        from videotranslator.live_asr import PersistentWhisper
+        for cuda, device, compute in ((True, "cuda", "float16"), (False, "cpu", "int8")):
+            constructed = []
+
+            class Model:
+                def __init__(self, name, device, compute_type):
+                    constructed.append((name, device, compute_type))
+
+            pw = PersistentWhisper(model="base", whisper_model_cls=Model,
+                                   torch_module=SimpleNamespace(cuda=_FakeCuda(cuda)))
+            self.assertEqual(constructed, [("base", device, compute)])
+            self.assertEqual(pw.model_name, "base")
+            if cuda:
+                pw._fallback_to_cpu()            # a CUDA failure keeps the chosen model
+                self.assertEqual(constructed[-1], ("base", "cpu", "int8"))
+
+    def test_auto_keeps_the_default_model(self):
+        from types import SimpleNamespace
+        from videotranslator.live_asr import PersistentWhisper
+
+        class Model:
+            def __init__(self, name, device, compute_type):
+                pass
+        pw = PersistentWhisper(model="auto", whisper_model_cls=Model,
+                               torch_module=SimpleNamespace(cuda=_FakeCuda(True)))
+        self.assertEqual(pw.model_name, "large-v3-turbo")
+
+
 @unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
 class LiveAsrHeavySmokeTests(unittest.TestCase):
     def _wav(self, path):

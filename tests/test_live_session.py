@@ -327,6 +327,21 @@ def _pipeline_factories():
 
 
 class LiveSessionPipelineTests(unittest.TestCase):
+    def test_asr_loop_passes_the_chosen_live_model(self):
+        from dataclasses import replace
+        for choice, expected in (("base", {"model": "base"}), ("auto", {})):
+            seen = []
+
+            def whisper(**kw):
+                seen.append(kw)
+                raise RuntimeError("stop here")
+            with tempfile.TemporaryDirectory() as tmp:
+                sess, _, _ = _session(tmp, overrides={"live_asr_model": choice})
+                sess._factories = replace(_pipeline_factories(), whisper=whisper)
+                sess._asr_loop()
+            self.assertEqual(len(seen), 1)
+            self.assertEqual({k: v for k, v in seen[0].items() if k == "model"}, expected)
+
     def test_seek_during_transcription_discards_old_result(self):
         from dataclasses import replace
         from videotranslator.live_segment import Utterance

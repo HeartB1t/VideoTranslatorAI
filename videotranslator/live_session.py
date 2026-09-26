@@ -1090,8 +1090,12 @@ class LiveSession:
         whisper = None
         media_edge = 0.0
         try:
-            whisper = self._factories.whisper(
-                device_policy=self._cfg.device_policy, hotwords=self._cfg.hotwords)
+            kwargs = {"device_policy": self._cfg.device_policy,
+                      "hotwords": self._cfg.hotwords}
+            asr_model = getattr(self._cfg.settings, "asr_model", "auto")
+            if asr_model != "auto":
+                kwargs["model"] = asr_model
+            whisper = self._factories.whisper(**kwargs)
             # Report the device Whisper actually loaded on (the GUI defaults to
             # "cpu"; on a GPU box the model picks "cuda"), so the badge is honest.
             actual = getattr(whisper, "device", None)

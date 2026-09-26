@@ -284,7 +284,7 @@ class PersistentWhisper:
     _CPU = ("small", "cpu", "int8", 1)
 
     def __init__(self, *, device_policy: str = "auto", hotwords: str | None = None,
-                 whisper_model_cls=None, torch_module=None,
+                 model: str | None = None, whisper_model_cls=None, torch_module=None,
                  log: Callable[[str], None] = lambda _m: None) -> None:
         self._hotwords = hotwords
         self._log = log
@@ -298,6 +298,11 @@ class PersistentWhisper:
         use_gpu = device_policy != "cpu" and bool(self._torch.cuda.is_available())
         self.model_name, self.device, self._compute, self._beam = (
             self._GPU if use_gpu else self._CPU)
+        # A model chosen by the user (hardware-aware selection) replaces the
+        # default on either device; device, precision and beam stay the same.
+        self._chosen = model if model and model != "auto" else None
+        if self._chosen:
+            self.model_name = self._chosen
         self.fell_back = False
         self._model = self._cls(self.model_name, device=self.device,
                                 compute_type=self._compute)
@@ -347,6 +352,8 @@ class PersistentWhisper:
     def _fallback_to_cpu(self) -> None:
         self.close()
         self.model_name, self.device, self._compute, self._beam = self._CPU
+        if self._chosen:
+            self.model_name = self._chosen
         self.fell_back = True
         self._model = self._cls(self.model_name, device=self.device,
                                 compute_type=self._compute)
