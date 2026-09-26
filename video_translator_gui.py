@@ -8384,15 +8384,18 @@ class App(tk.Tk):
         return item.path
 
     def _refresh_live_bar_enabled(self) -> None:
-        """Start is available with a local media loaded OR a URL, and no batch job."""
+        """Keep Start clickable while idle so a press always gets a response.
+
+        Rather than greying the button when nothing is loaded (a silent dead end),
+        it stays enabled and _start_live_session shows a banner telling the user
+        to load a video or paste a link.
+        """
         bar = getattr(self, "_live_bar", None)
         if bar is None:
             return
         if self._live_session is not None or self._live_resolving:
             return  # a session is running/starting; the bar shows its Stop row
-        ready = ((self._live_media_path() is not None or bool(self._get_urls()))
-                 and not self._running)
-        bar.set_start_enabled(ready)
+        bar.set_start_enabled(not self._running)
 
     def _block_if_live_active(self) -> bool:
         """True (and warns) when a live session forbids starting a batch job."""
@@ -8440,6 +8443,7 @@ class App(tk.Tk):
             self._live_bar.show_banner("live_err_editor_open", is_error=True)
             return
         if self._player_backend is None:
+            self._live_bar.show_banner("player_unavailable_title", is_error=True)
             return
         urls = self._get_urls()
         if urls:                       # a link takes priority over a loaded file
@@ -8448,6 +8452,9 @@ class App(tk.Tk):
         source = self._live_media_path()
         if source is not None:
             self._launch_live_session(source, "file", title=None)
+            return
+        # Nothing to translate: tell the user instead of doing nothing.
+        self._live_bar.show_banner("live_err_no_source", is_error=True)
 
     def _start_live_from_url(self, url: str) -> None:
         """Resolve a link to a progressive stream, play it, then translate it live."""
