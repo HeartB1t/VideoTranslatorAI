@@ -8597,6 +8597,11 @@ class App(tk.Tk):
             "live_subs_enabled": raw["subs"],
         })
         cache_dir = Path(tempfile.gettempdir()) / "VideoTranslatorAI" / "live"
+        # Sweep leftover session dirs from crashed or killed runs so they do not
+        # pile up in TEMP (best effort; never blocks a new session).
+        with contextlib.suppress(Exception):
+            _live_session_module.cleanup_stale_sessions(
+                cache_dir, owner_alive=_live_session_module.default_owner_alive)
         try:
             cfg = _live_session_module.build_live_config(
                 values, settings=settings, cache_dir=cache_dir, now=time.time())
