@@ -753,6 +753,47 @@ class LiveSessionDubTests(unittest.TestCase):
         sess._last_pacer_mono = 1e9
         return sess, synth
 
+    def test_lost_voice_lines_are_logged_with_their_reason(self):
+        # Both cases that used to be silent now leave a log line: a rejected TTS
+        # request and a sentence whose voice was not ready in time.
+        with tempfile.TemporaryDirectory() as tmp:
+            logged = []
+            synth = _FakeSynth(submit_ok=False)
+            sess, _v, _voice, _s, view = _dub_session(
+                tmp, media=5.5, synth=synth, overrides={"live_sync_mode": "live"})
+            sess._log = logged.append
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9
+            sess.submit_segment(_dub_seg("ciao", start=5.0, end=7.0))
+            sess._tick_once(time.monotonic())                # rejected
+            self.assertTrue(any("rejected" in line for line in logged), logged)
+        with tempfile.TemporaryDirectory() as tmp:
+            logged = []
+            sess, _v, _voice, synth, view = _dub_session(
+                tmp, media=5.5, overrides={"live_sync_mode": "live"})
+            sess._log = logged.append
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9
+            sess.submit_segment(_dub_seg("ciao", start=5.0, end=7.0))
+            sess._tick_once(time.monotonic())                # requested, no clip yet
+            view.media = 9.6                                 # 4.6 s behind the start
+            sess._tick_once(time.monotonic())
+            self.assertTrue(any("expired" in line for line in logged), logged)
+
+    def test_status_reports_voice_lines_said_and_lost(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            synth = _FakeSynth(submit_ok=False)
+            sess, _v, _voice, _s, _view = _dub_session(
+                tmp, media=5.5, synth=synth, overrides={"live_sync_mode": "live"})
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9
+            sess.submit_segment(_dub_seg("ciao", start=5.0, end=7.0))
+            sess._tick_once(time.monotonic())
+            sess._publish_status(5.5)
+            st = sess.status()
+            self.assertTrue(st.dub_on)
+            self.assertEqual((st.voiced, st.voice_dropped), (0, 1))
+
     def test_pending_voice_keeps_dub_off_quietly_until_attached(self):
         # The GUI builds the voice mpv on a worker: until it arrives the dub stays
         # off without the "TTS unavailable" warning, then turns on by itself.

@@ -482,6 +482,40 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertAlmostEqual(started[1], 1.76, delta=0.03)   # 2.0 - lead
         self.assertAlmostEqual(started[2], 7.76, delta=0.03)   # 8.0 - lead
 
+    def test_expired_request_emits_a_drop_with_its_reason(self):
+        # A sentence whose voice was not ready in time used to vanish silently:
+        # it now emits Drop("expired") so the session can log it, and counts as a
+        # lost voice line.
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(5.5, mono=100.0, voice_state="idle")           # -> RequestTts (synth)
+        acts = s.tick(9.6, mono=104.1, voice_state="idle")    # 4.6 s behind, no clip
+        drops = [a for a in acts if isinstance(a, Drop)]
+        self.assertEqual([(d.seg_id, d.reason) for d in drops], [(0, "expired")])
+        self.assertEqual(s.metrics()["voice_dropped"], 1.0)
+
+    def test_voice_dropped_counts_only_voice_not_captions(self):
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(5.5, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, None, reason="error")               # one lost voice line
+        m = s.metrics()
+        self.assertEqual((m["voiced"], m["voice_dropped"]), (0.0, 1.0))
+
+    def test_enabling_dub_skips_sentences_already_past(self):
+        # Turning the dub on mid-session (or the voice arriving late) must not
+        # queue sentences whose moment has passed: they would expire at once and
+        # be counted as lost voice lines that were never really missed.
+        s = _dub_sched(mode="live", max_live_lag_s=4.0, dub=False)
+        s.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="uno", dub_ok=True))
+        s.upsert(LiveSegment(2, 0, 12.0, 14.0, "b", text_tgt="due", dub_ok=True))
+        s.tick(10.0, mono=100.0)                                # playhead at 10 s
+        s.set_dub(True)
+        self.assertNotIn(1, s._dub_state)                       # 9 s behind: skipped
+        self.assertEqual(s._dub_state.get(2), "translated")
+        s.tick(10.1, mono=100.1, voice_state="idle")
+        self.assertEqual(s.metrics()["voice_dropped"], 0.0)
+
     def test_live_mode_drops_segments_too_far_behind(self):
         s = _dub_sched(mode="live", max_live_lag_s=4.0)
         s.upsert(self._seg(start=5.0, end=7.0))

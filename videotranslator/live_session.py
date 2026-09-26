@@ -64,7 +64,9 @@ class LiveStatus:
     engine: str = "marian"
     startup_ready: bool = False
     voiced: int = 0
-    dropped: int = 0
+    dropped: int = 0          # captions and voice lines together (legacy total)
+    voice_dropped: int = 0    # voice lines lost only (the "said / lost" counter)
+    dub_on: bool = False
     skipped_s: float = 0.0
     status_params: dict = field(default_factory=dict)  # extra {s}/{total}/{n}
     warning_key: str | None = None
@@ -559,6 +561,7 @@ class LiveSession:
             return LiveStatus(
                 state=st.state, lag_s=st.lag_s, target_delay_s=st.target_delay_s,
                 device=st.device, engine=st.engine, voiced=st.voiced, dropped=st.dropped,
+                voice_dropped=st.voice_dropped, dub_on=st.dub_on,
                 startup_ready=st.startup_ready,
                 skipped_s=st.skipped_s, status_params=dict(st.status_params),
                 warning_key=st.warning_key, warning_params=dict(st.warning_params),
@@ -680,7 +683,7 @@ class LiveSession:
             accepted = self._scheduler.clip_ready(seg_id, gen, clip, reason)
             if clip is None:
                 detail = str(reason or "TTS synthesis failed")
-                self._log(f"live: clip {seg_id} synthesis failed: {detail}")
+                self._log(f"live: voice line {seg_id} lost (tts_failed: {detail})")
                 self._set_warning("tts_unavailable", "edge-tts")
             if accepted:
                 seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
@@ -828,6 +831,7 @@ class LiveSession:
                     # stalls the pacer waiting for a result that will not come.
                     self._scheduler.clip_ready(action.seg_id, action.gen, None,
                                                "rejected")
+                    self._log_lost_voice(action.seg_id, "rejected")
             elif isinstance(action, PreloadClip):
                 if self._voice is not None:
                     self._voice.preload(action.path, skip_s=action.skip_s)
@@ -852,7 +856,19 @@ class LiveSession:
             elif isinstance(action, Duck):
                 self._duck_env.set_target(action.gain)
             elif isinstance(action, Drop):
-                self._log(f"live: clip {action.seg_id} dropped ({action.reason})")
+                self._log_lost_voice(action.seg_id, action.reason)
+
+    # Why a dubbed line was not voiced, for the log (developer-facing, English).
+    _LOST_VOICE_REASONS = {
+        "late": "clip ready too late for its sentence",
+        "lag": "more than the live lag behind the picture",
+        "expired": "voice not ready in time (translation or TTS too slow)",
+        "rejected": "TTS request rejected (service unavailable or busy)",
+    }
+
+    def _log_lost_voice(self, seg_id: int, reason: str) -> None:
+        detail = self._LOST_VOICE_REASONS.get(reason, reason)
+        self._log(f"live: voice line {seg_id} lost ({reason}: {detail})")
 
     def _apply_duck(self, *, frozen: bool) -> None:
         """Ramp the original audio toward the scheduler's duck target each tick.
@@ -902,6 +918,8 @@ class LiveSession:
         with self._status_lock:
             self._status.voiced = int(metrics.get("voiced", 0))
             self._status.dropped = int(metrics.get("dropped", 0))
+            self._status.voice_dropped = int(metrics.get("voice_dropped", 0))
+            self._status.dub_on = self._scheduler.dub_on
             self._status.target_delay_s = self._timing_delay()
             self._status.startup_ready = self.startup_ready
 

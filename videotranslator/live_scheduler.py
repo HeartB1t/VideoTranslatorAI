@@ -384,6 +384,22 @@ class DubScheduler:
         self._clip_cache[self._cache_key(seg)] = clip
         return True
 
+    def _still_voiceable(self, seg: LiveSegment, now: float | None) -> bool:
+        """Whether a clip for ``seg`` could still be voiced at media time ``now``.
+
+        Live mode tolerates up to the lag bound behind the sentence start;
+        delayed mode needs the slot not to have ended yet.
+        """
+        if now is None:
+            return True
+        if self._mode == "live":
+            return now - seg.start <= self._max_live_lag
+        return now < self._slot_end(seg)
+
+    @property
+    def dub_on(self) -> bool:
+        return self._dub
+
     def set_dub(self, on: bool) -> list[object]:
         self._dub = on
         actions: list[object] = []
@@ -397,8 +413,11 @@ class DubScheduler:
                 self._duck_target = 1.0
                 actions.append(Duck(1.0))
             return actions
+        # Only sentences that can still be voiced: past ones would expire at once
+        # and be counted as lost voice lines that were never really missed.
         for seg in self._segments.values():
-            if self._dub_eligible(seg) and seg.seg_id not in self._dub_state:
+            if (self._dub_eligible(seg) and seg.seg_id not in self._dub_state
+                    and self._still_voiceable(seg, self._last_now)):
                 self._dub_state[seg.seg_id] = "translated"
         return actions
 
@@ -482,8 +501,10 @@ class DubScheduler:
             st = self._dub_state.get(seg.seg_id)
             if st not in ("translated", "synth"):
                 continue
-            expired = (now - seg.start > self._max_live_lag) if live else (now >= self._slot_end(seg))
-            if expired:
+            if not self._still_voiceable(seg, now):
+                # The voice was not ready in time (never requested, or the TTS
+                # too slow): report it instead of dropping it silently.
+                actions.append(Drop(seg.seg_id, "expired"))
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
                 continue
@@ -787,5 +808,6 @@ class DubScheduler:
             "voiced": float(self._voiced),
             "dropped": float(len(self._dropped) + self._dub_dropped),
             "late": float(self._dub_dropped),
+            "voice_dropped": float(self._dub_dropped),   # voice lines only
             "margin_p90": _percentile(self._margins, 90),
         }
