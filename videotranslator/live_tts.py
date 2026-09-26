@@ -256,14 +256,17 @@ class EdgeClipSynth:
         self._accepts_timeout_kwargs = False
 
     def start(self) -> None:
+        check_target = self._factory
         if self._factory is None:
             try:
                 import edge_tts
             except ImportError as exc:
                 raise LiveTtsUnavailable("edge-tts is not installed") from exc
-            self._factory = lambda text, voice, **kw: edge_tts.Communicate(text, voice, **kw)
+            communicate = edge_tts.Communicate
+            self._factory = lambda text, voice, **kw: communicate(text, voice, **kw)
+            check_target = communicate      # inspect the real ctor, not the **kw lambda
         try:
-            params = inspect.signature(self._factory).parameters
+            params = inspect.signature(check_target).parameters
             self._accepts_timeout_kwargs = ("connect_timeout" in params
                                             or any(p.kind == p.VAR_KEYWORD
                                                    for p in params.values()))

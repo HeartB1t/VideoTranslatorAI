@@ -514,7 +514,7 @@ class LiveSessionDubTests(unittest.TestCase):
                 sess._voice_state = "playing"
                 video.bridge.extra_latest("voice-eof", (n, "error"), float(n))
                 sess._sync_voice_state()
-            self.assertIsNone(sess._synth)
+            self.assertFalse(sess._scheduler._dub)   # dub turned off
             self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
 
     def test_tts_unavailable_disables_dub_with_warning(self):

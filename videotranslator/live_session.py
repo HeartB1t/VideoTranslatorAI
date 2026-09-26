@@ -284,9 +284,16 @@ class LiveSession:
         self._timing = derive_live_timing(
             s.delay_s if s.delay_s is not None else (s.file_ahead_s or 8.0),
             mode=s.sync_mode, device=device, engine=cfg.engine, dub=s.dub_enabled)
+        from .live_tts import EdgeDurationModel, choose_rate
+        from .timing import estimate_tts_duration_s
+        # Speed the TTS to fit the slot (was hard +0%: long translations overran
+        # and dropped the next clip) and use the user's duck level (was fixed 0.3).
+        self._dur_model = EdgeDurationModel(cfg.lang_target,
+                                            seed_estimate=estimate_tts_duration_s)
         self._scheduler = DubScheduler(
             mode=s.sync_mode, overhang_s=0.6, merge_gap_s=0.6,
-            dub=s.dub_enabled, subs=s.subs_enabled)
+            dub=s.dub_enabled, subs=s.subs_enabled, duck_gain=s.duck_level,
+            rate_for=lambda text, slot: choose_rate(text, slot, self._dur_model))
         self._pacer = FilePacer(mode=s.sync_mode, min_ahead_s=self._timing.min_ahead_s,
                                 resume_ahead_s=self._timing.resume_ahead_s)
 
@@ -324,6 +331,7 @@ class LiveSession:
         self._voice_fail = 0
         self._duck_env = DuckEnvelope(ramp_s=0.2)
         self._duck_applied = 1.0
+        self._mix_version = -1
 
         self._status_lock = threading.Lock()
         self._status = LiveStatus(
@@ -407,7 +415,9 @@ class LiveSession:
         return True
 
     def _disable_dub(self, warn_code: str | None) -> None:
-        self._synth = None
+        # Keep the worker: set_dub(False) stops new RequestTts, join() stops the
+        # thread. Nulling it here would leak the live-tts thread and event loop on
+        # every runtime dub toggle (review finding 7).
         self._execute(self._scheduler.set_dub(False))
         if warn_code is not None:
             self._set_warning(warn_code, "edge-tts")
@@ -438,6 +448,10 @@ class LiveSession:
         if mixer is not None:
             try:
                 mixer.set_owner("cmd")
+                # Re-assert the user volume through the command path now that the
+                # scheduler no longer owns the mixer, so the player does not stay
+                # at the ducked level after the session ends (review finding 5).
+                self._video.apply_mix()
             except Exception:
                 pass
         if stuck:
@@ -556,7 +570,28 @@ class LiveSession:
         if mono - self._last_status_mono >= 0.25:
             self._last_status_mono = mono
             self._publish_status(now)
+            self._reassert_mixer()
         return actions
+
+    def _reassert_mixer(self) -> None:
+        """While the scheduler owns the mixer, apply user volume/mute changes.
+
+        With owner 'sched' the Tk apply_mix defers, so a volume or mute change
+        would otherwise not take until the next duck ramp, and the voice would
+        follow neither. Re-write on the mixer version bump (design 4.13).
+        """
+        mixer = getattr(self._video, "mixer", None)
+        if mixer is None:
+            return
+        st = mixer.snapshot()
+        if st.owner != "sched" or st.version == self._mix_version:
+            return
+        self._mix_version = st.version
+        rt = getattr(self._video, "rt", None)
+        if rt is not None:
+            rt.set_duck(self._duck_env.current)     # user volume at the current duck
+        if self._voice is not None:
+            self._voice.set_volume(st.voice_volume)  # 0 when muted
 
     def _drain_synth(self) -> None:
         """Hand synthesized clips (or failures) to the scheduler."""
