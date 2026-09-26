@@ -3129,6 +3129,41 @@ _LIVE_STRINGS = {
 for _live_lang, _live_entries in _LIVE_STRINGS.items():
     PLAYER_UI_STRINGS[_live_lang].update(_live_entries)
 
+# Live idle-row toggle labels (dubbed voice / subtitles), all 26 languages.
+_LIVE_TOGGLE_STRINGS = {
+    "it": ("Voce doppiata", "Sottotitoli"),
+    "en": ("Dubbed voice", "Subtitles"),
+    "es": ("Voz doblada", "Subtítulos"),
+    "fr": ("Voix doublée", "Sous-titres"),
+    "pt": ("Voz dublada", "Legendas"),
+    "de": ("Synchronstimme", "Untertitel"),
+    "nl": ("Nagesynchroniseerde stem", "Ondertitels"),
+    "sv": ("Dubbad röst", "Undertexter"),
+    "da": ("Dubbet stemme", "Undertekster"),
+    "no": ("Dubbet stemme", "Undertekster"),
+    "fi": ("Dubattu ääni", "Tekstitykset"),
+    "ro": ("Voce dublată", "Subtitrări"),
+    "pl": ("Głos dubbingu", "Napisy"),
+    "cs": ("Dabovaný hlas", "Titulky"),
+    "hu": ("Szinkronhang", "Feliratok"),
+    "el": ("Μεταγλωττισμένη φωνή", "Υπότιτλοι"),
+    "ru": ("Озвученный голос", "Субтитры"),
+    "uk": ("Озвучений голос", "Субтитри"),
+    "tr": ("Dublajlı ses", "Altyazılar"),
+    "ar": ("الصوت المدبلج", "الترجمة"),
+    "hi": ("डब आवाज़", "उपशीर्षक"),
+    "id": ("Suara sulih", "Subtitle"),
+    "vi": ("Giọng lồng tiếng", "Phụ đề"),
+    "zh": ("配音语音", "字幕"),
+    "ja": ("吹き替え音声", "字幕"),
+    "ko": ("더빙 음성", "자막"),
+}
+for _tog_lang, (_dub, _subs) in _LIVE_TOGGLE_STRINGS.items():
+    PLAYER_UI_STRINGS[_tog_lang].update({
+        "live_opt_dub": _dub,
+        "live_opt_subs": _subs,
+    })
+
 
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 
