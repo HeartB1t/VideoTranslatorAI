@@ -5961,6 +5961,24 @@ def _parse_hotwords_gui(raw: str) -> list[str]:
         return []
 
 
+def _is_noisy_x11_log(line: str) -> bool:
+    """True for the harmless, repetitive mpv X11 BadWindow error lines.
+
+    Embedded on X11, mpv keeps querying the window tree across window geometry
+    changes and logs a three-line BadWindow block for each failed query. The
+    video keeps rendering; only the log is flooded. Match the block so the GUI
+    can collapse it into one periodic summary.
+    """
+    low = line.lower()
+    if "x11 error" in low or "badwindow" in low:
+        return True
+    if "resourceid:" in low and "serial:" in low:
+        return True
+    if low.startswith("error code:") and "request code:" in low:
+        return True
+    return False
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -6073,6 +6091,8 @@ class App(tk.Tk):
         self._player_loaded_at = None
         self._player_video_params_seen = False
         self._player_log_lines: list[str] = []
+        self._mpv_x11_noise = 0        # count of suppressed harmless X11 errors
+        self._mpv_x11_noise_at = 0.0   # last time a summary was logged
         self._player_fallback_notice_pending = False
         self._player_release_pending = False
         self._player_fullscreen = False
@@ -8797,9 +8817,24 @@ class App(tk.Tk):
             elif event.kind == "adapter-error":
                 self._player_log(f"[!] mpv adapter: {event.payload}")
             elif event.kind == "log":
-                self._player_log_lines.append(str(event.payload))
-                del self._player_log_lines[:-100]
-                self._log_write(f"[mpv] {event.payload}\n")
+                line = str(event.payload)
+                if _is_noisy_x11_log(line):
+                    # mpv floods the log with harmless X11 BadWindow errors while
+                    # embedded on X11 (it keeps querying the window tree across
+                    # geometry changes); the video renders fine. Collapse the
+                    # flood into one periodic summary instead of a line each.
+                    self._mpv_x11_noise += 1
+                    stamp = time.monotonic()
+                    if (self._mpv_x11_noise == 1
+                            or stamp - self._mpv_x11_noise_at >= 5.0):
+                        self._mpv_x11_noise_at = stamp
+                        self._log_write(
+                            f"[mpv] harmless X11 window errors during playback "
+                            f"({self._mpv_x11_noise} so far, repeats suppressed)\n")
+                else:
+                    self._player_log_lines.append(line)
+                    del self._player_log_lines[:-100]
+                    self._log_write(f"[mpv] {line}\n")
         video_params = snapshot.changed.get("video-params")
         if video_params is not None and video_params[0]:
             self._player_video_params_seen = True
