@@ -23,6 +23,8 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🌍 **26 target languages** with multiple voices per language
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
+- ▶️ **Integrated video player** (libmpv/mpv) - playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
+- ⏱️ **Real-time translation (live subtitles)** - watch a local file or a link and get translated subtitles on the video as it plays, with a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama, with automatic fallback to offline MarianMT when an online engine is blocked. (Live *voice* dubbing is planned; live mode currently shows subtitles.)
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - 🧠 **MarianMT** - fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
 - 🤖 **Ollama LLM translation** *(new in v2.0)* - local LLM (Qwen3, Llama, Mistral) producing slot-aware concise translations for natural dubbing, auto-detects/installs/starts/pulls model on first use
@@ -247,10 +249,13 @@ python video_translator_gui.py
 cards: **Input**, **Translation**, **Workflow profile**, **Start**, and the
 collapsible advanced sections (model, translation engine, audio, voice
 cloning, lip sync, diarization, options, hotwords). The large area on the
-left is reserved for the built-in video player that is coming next. Drag a
-card by its title or by the **≡** handle to move it up or down the column;
-the order is saved (`ui_panel_order`) and restored at the next start. The
-log panel at the bottom can be hidden with **Hide log**.
+left is the **integrated video player** (transport, playlist, A/B original vs
+dubbed audio, subtitles, snapshot, fullscreen), with the **real-time
+translation** bar underneath it. Drag a card by its title or by the **≡**
+handle to move it up or down the column; the order is saved (`ui_panel_order`)
+and restored at the next start. The log panel at the bottom can be hidden with
+**Hide log**. On start the window opens centered on the current monitor (the one
+under the pointer) and maximized, so it behaves well on a multi-monitor setup.
 
 **From local files:**
 1. Click **Add** to select one or more video files
@@ -270,6 +275,35 @@ log panel at the bottom can be hidden with **Hide log**.
 > yt-dlp supports YouTube, Vimeo, Twitter/X, TikTok, and [1000+ other sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
 > ⚠️ **Fair use notice:** Downloading videos via yt-dlp is considered automated access by platforms like YouTube and may violate their Terms of Service. Heavy or repeated use from the same IP address can result in temporary blocks (HTTP 429 / sign-in required errors). Use a VPN or rotate your IP if you encounter download failures. This tool is intended for personal, non-commercial use only. Redistribution of translated content may infringe copyright - always respect the original creator's rights.
+
+### Real-time translation (live subtitles)
+
+Watch a video and get translated subtitles on it as it plays, synced with a
+delay slider (YouTube-style). Use the bar under the player:
+
+**From a link:**
+1. Paste a link in the **URL** field
+2. Set source and target language and the **Delay** slider
+3. Click **Translate in real time** - the stream is resolved, played, and
+   subtitled live on the video overlay
+
+**From a loaded file:** load a video in the player (Input -> Add, then select
+it), leave the URL field empty, and click **Translate in real time**.
+
+- **Engine:** MarianMT (offline, default), Google, DeepL, or Ollama. Speech
+  recognition (Whisper) always runs locally on your machine.
+- **Voice dubbing in real time is not available yet** (planned): live mode
+  currently produces subtitles only. For a fully dubbed file, use the batch
+  flow above (**Download & Translate** / **Start Translation**).
+
+### Translation engine blocks and VPN
+
+Two different blocks can happen, with different fixes:
+
+| Block | Symptom | Fix |
+|-------|---------|-----|
+| **Download** (yt-dlp) | "Sign in to confirm you're not a bot", HTTP 429 | **VPN** / rotate IP, or be logged into YouTube in your browser (cookies are read automatically) |
+| **Translation** (Google free endpoint) | "Google Translate could not translate... rate limited/blocked" | Use **MarianMT** (offline) or **Ollama** (local) - no rate limit. A VPN also helps. The batch flow now **falls back to MarianMT automatically** when Google is blocked. |
 
 ### Themes and appearance
 
