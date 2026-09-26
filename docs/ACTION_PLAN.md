@@ -159,6 +159,20 @@ decided with the operator.
   with new ids, while the old segments stayed. The same sentence was requested
   from TTS twice and could be voiced twice. `on_seek(restart=True)` now drops the
   superseded segments; identical sentences reuse their cached clip.
+- [x] **Live-mode voice ahead of the picture** (fixed in `a7eaa42`; introduced by
+  the P5 live scheduling in `4752bc6`, before this delivery): live mode started a
+  ready clip as soon as the voice device was free. On a file the decoder is not
+  paced to playback, so clips were ready early and played back to back. Measured
+  with the real pipeline on a five-sentence file with 2 s pauses, the voice
+  drifted to -9.1 s; after the fix every sentence after the first starts at
+  -0.25 s (the lead). Early clips now wait for their sentence; late clips keep
+  the FIFO catch-up and lag bound.
+- [ ] **Startup released by leading silence**: with two or more seconds of
+  silence at the start, the startup gate releases playback before the first clip
+  is ready (measured: released with `first-output=False`), so the first sentence
+  is voiced about 2 s late in live mode. This follows the documented gate rule;
+  whether silence should release playback before the first dubbed clip is a
+  product decision for the operator.
 - [ ] **R3, delayed mode only**: the pacer-held recovery also starts clips that
   are not late. While the pacer holds the picture at 1.0 s, a ready clip that
   starts at 5.0 s is preloaded and started at once, so the voice runs up to the
