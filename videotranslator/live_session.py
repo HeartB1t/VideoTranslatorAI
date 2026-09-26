@@ -359,6 +359,8 @@ class LiveSession:
                                                     self._dur_model))
         self._pacer = FilePacer(mode=s.sync_mode, min_ahead_s=self._timing.min_ahead_s,
                                 resume_ahead_s=self._timing.resume_ahead_s)
+        from .live_sync import AutoDelay
+        self._auto_delay = AutoDelay() if s.delay_auto else None
 
         from .live_asr import HallucinationFilter, LanguageLock
         from .live_segment import SentenceAssembler, UtteranceSegmenter
@@ -617,6 +619,9 @@ class LiveSession:
     # -- internals ----------------------------------------------------------
 
     def _timing_delay(self) -> float:
+        """The delay in use: on files, the buffer rebuilt after a pause."""
+        if self._cfg.source_kind == "file":
+            return self._pacer.resume_ahead_s
         s = self._cfg.settings
         return s.delay_s if s.delay_s is not None else (s.file_ahead_s or 8.0)
 
@@ -853,7 +858,9 @@ class LiveSession:
                 self._voice_pending = False
                 if self._dub_wanted:
                     self._disable_dub("tts_unavailable")
-            # "delay" refines the timing; applied by the pipeline.
+            elif kind == "delay" and self._cfg.source_kind == "file":
+                # On files the delay is the buffer rebuilt after a pause.
+                self._pacer.set_resume_ahead(float(value))
 
     def _drain_sched_in(self) -> None:
         while True:
@@ -993,10 +1000,32 @@ class LiveSession:
             self._self_paused = True
             if rt is not None:
                 rt.set_pause(True)
+            self._maybe_raise_buffer()
         elif action.kind == "resume":
             self._self_paused = False
             if rt is not None:
                 rt.set_pause(False)
+            # The "falling behind" notice explains the longer wait; once the
+            # picture runs again it has done its job.
+            with self._status_lock:
+                if self._status.warning_key == WARN_KEYS.get("falling_behind"):
+                    self._status.warning_key = None
+                    self._status.warning_params = {}
+
+    def _maybe_raise_buffer(self) -> None:
+        """The picture stopped to wait for the translation: if that keeps
+        happening, rebuild a larger buffer before resuming (delay_auto)."""
+        if self._auto_delay is None:
+            return
+        raised = self._auto_delay.on_pause(self._clock(), self._pacer.resume_ahead_s)
+        if raised is None:
+            return
+        self._pacer.set_resume_ahead(raised)
+        self._log(f"live: translation falling behind; buffer raised to {raised:.0f} s")
+        with self._status_lock:
+            self._status.warning_key = WARN_KEYS.get("falling_behind", "falling_behind")
+            self._status.warning_params = {"s": int(round(raised))}
+            self._status.warning_action = None
 
     def _publish_status(self, now: float | None) -> None:
         metrics = self._scheduler.metrics()

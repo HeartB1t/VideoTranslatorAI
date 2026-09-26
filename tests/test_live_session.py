@@ -326,6 +326,48 @@ def _pipeline_factories():
         tts=lambda *a, **k: None, clock=time.monotonic)
 
 
+class FileBufferTests(unittest.TestCase):
+    """On files the delay slider is the buffer rebuilt after a pause."""
+
+    def _paused_once(self, sess, clock):
+        sess._clock = lambda: clock
+        sess._self_paused = False
+        sess._scheduler.ready_until = lambda now: now + 0.5        # nearly no coverage
+        sess._run_pacer(10.0)
+        self.assertTrue(sess._self_paused)
+
+    def test_repeated_pauses_raise_the_buffer_and_warn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, overrides={"live_file_ahead_s": 8.0})
+            self.assertEqual(sess._timing_delay(), 8.0)
+            self._paused_once(sess, 100.0)
+            self.assertIsNone(sess.status().warning_key)
+            self._paused_once(sess, 110.0)
+            self.assertEqual(sess._pacer.resume_ahead_s, 12.0)
+            self.assertEqual(sess._timing_delay(), 12.0)
+            st = sess.status()
+            self.assertEqual(st.warning_key, "live_warn_falling_behind")
+            self.assertEqual(st.warning_params, {"s": 12})
+            sess._scheduler.ready_until = lambda now: now + 13.0
+            sess._run_pacer(10.0)                                 # buffer rebuilt
+            self.assertFalse(sess._self_paused)
+            self.assertIsNone(sess.status().warning_key)
+
+    def test_auto_off_keeps_the_buffer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, overrides={"live_delay_auto": False})
+            for clock in (100.0, 101.0, 102.0):
+                self._paused_once(sess, clock)
+            self.assertEqual(sess._pacer.resume_ahead_s, 8.0)
+
+    def test_delay_control_changes_the_file_buffer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess.set_delay(20.0)
+            sess._drain_control(0.0)
+            self.assertEqual(sess._pacer.resume_ahead_s, 20.0)
+
+
 class StartupSilenceTests(unittest.TestCase):
     """A leading silence releases the startup hold only when it is long."""
 

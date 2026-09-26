@@ -8990,8 +8990,11 @@ class App(tk.Tk):
             "ollama_model": self._ollama_model_var.get().strip(),
             "tts_opts": self._live_tts_opts(),
         }
+        # The slider is the file buffer (4-30 s) on files, the stream delay
+        # (6-30 s) on links: each has its own key and range.
+        delay_key = "live_file_ahead_s" if source_kind == "file" else "live_delay_s"
         settings = _player_settings_module.normalize_live_settings({
-            "live_sync_mode": raw["mode"], "live_delay_s": raw["delay"],
+            "live_sync_mode": raw["mode"], delay_key: raw["delay"],
             "live_engine": raw["engine"], "live_dub_enabled": raw["dub"],
             "live_subs_enabled": raw["subs"],
             # Chosen in the 'Models for this PC' window (not on the bar).

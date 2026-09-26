@@ -57,6 +57,36 @@ class TimingHelperTests(unittest.TestCase):
                                             engine="marian", dub=False).min_ahead_s, 4.0)
 
 
+class ResumeBufferTests(unittest.TestCase):
+    def test_slider_sets_the_buffer_never_below_the_minimum(self):
+        self.assertEqual(derive_live_timing(20, mode="delayed", device="cuda",
+                                            engine="marian", dub=True).resume_ahead_s, 20.0)
+        self.assertEqual(derive_live_timing(5, mode="delayed", device="cuda",
+                                            engine="marian", dub=True).resume_ahead_s, 8.0)
+        self.assertEqual(derive_live_timing(5, mode="delayed", device="cuda",
+                                            engine="marian", dub=False).resume_ahead_s, 5.0)
+
+    def test_pacer_resumes_only_with_the_larger_buffer(self):
+        pacer = FilePacer(mode="delayed", min_ahead_s=8.0, resume_ahead_s=8.0)
+        pacer.set_resume_ahead(4.0)
+        self.assertEqual(pacer.resume_ahead_s, 8.0)            # clamped to the minimum
+        pacer.set_resume_ahead(12.0)
+        step = dict(player=10.0, source_done=False, user_paused=False, self_paused=True)
+        self.assertEqual(pacer.step(ready_until=20.0, **step).kind, "none")
+        self.assertEqual(pacer.step(ready_until=22.0, **step).kind, "resume")
+
+    def test_auto_delay_raises_after_repeated_pauses_in_the_window(self):
+        from videotranslator.live_sync import AutoDelay
+        auto = AutoDelay(window_s=60.0, pauses=2, step_s=4.0, max_s=30.0)
+        self.assertIsNone(auto.on_pause(0.0, 8.0))
+        self.assertEqual(auto.on_pause(30.0, 8.0), 12.0)
+        self.assertIsNone(auto.on_pause(40.0, 12.0))           # the count restarts
+        self.assertIsNone(auto.on_pause(200.0, 12.0))          # too far apart
+        self.assertEqual(auto.on_pause(220.0, 28.0), 30.0)     # capped
+        self.assertIsNone(auto.on_pause(230.0, 30.0))
+        self.assertIsNone(auto.on_pause(231.0, 30.0))
+
+
 class FilePacerDelayedTests(unittest.TestCase):
     def _pacer(self):
         return FilePacer(mode="delayed", min_ahead_s=8.0, resume_ahead_s=8.0)

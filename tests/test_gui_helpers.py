@@ -226,6 +226,10 @@ class LaunchLiveSessionConfigTests(unittest.TestCase):
             gui.App._launch_live_session(app, "/v.mp4", "file", title=None)
         return captured["cfg"]
 
+    def test_file_slider_is_the_file_buffer(self):
+        settings = self._launch({}).settings
+        self.assertEqual((settings.file_ahead_s, settings.delay_s), (8.0, None))
+
     def test_live_asr_model_from_the_models_window_reaches_the_session(self):
         self.assertEqual(self._launch({"live_asr_model": "base"}).settings.asr_model, "base")
         self.assertEqual(self._launch({}).settings.asr_model, "auto")

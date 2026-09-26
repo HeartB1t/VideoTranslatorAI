@@ -67,8 +67,10 @@ def derive_live_timing(delay_s: float, *, mode: str, device: str, engine: str,
         umax = _clamp(delay_s - ready_p95 - 1.0, 4.0, 8.0)
     hold = 1.5 if mode != "live" else 0.4
     min_ahead = 8.0 if dub else 4.0
+    # The delay slider is the translation buffered before the picture resumes
+    # after a pause (delayed mode): never below the minimum for the output.
     return LiveTiming(umax_s=umax, hold_s=hold, min_ahead_s=min_ahead,
-                      resume_ahead_s=min_ahead)
+                      resume_ahead_s=max(min_ahead, float(delay_s)))
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,14 @@ class FilePacer:
     def set_mode(self, mode: str) -> None:
         self._mode = mode
 
+    @property
+    def resume_ahead_s(self) -> float:
+        return self._resume_ahead
+
+    def set_resume_ahead(self, seconds: float) -> None:
+        """Change the buffer rebuilt after a pause (never below the minimum)."""
+        self._resume_ahead = max(self._min_ahead, float(seconds))
+
     def step(self, *, player: float | None, ready_until: float, source_done: bool,
              user_paused: bool, self_paused: bool) -> SyncAction:
         if player is None or user_paused:
@@ -118,6 +128,35 @@ class FilePacer:
         if not source_done and ahead < _PAUSE_MARGIN_S:
             return _PAUSE
         return _NONE
+
+
+class AutoDelay:
+    """Raise the buffer when the picture keeps stopping (``live_delay_auto``).
+
+    Each pacer pause is reported with ``on_pause``; ``pauses`` of them within
+    ``window_s`` seconds mean the translation cannot keep up with the current
+    buffer, so the next buffer is ``step_s`` larger (up to ``max_s``). The
+    raise is kept for the rest of the session: waiting once for a longer
+    buffer beats stopping every few seconds.
+    """
+
+    def __init__(self, *, window_s: float = 60.0, pauses: int = 2, step_s: float = 4.0,
+                 max_s: float = 30.0) -> None:
+        self._window = window_s
+        self._pauses = pauses
+        self._step = step_s
+        self._max = max_s
+        self._times: deque[float] = deque()
+
+    def on_pause(self, mono: float, current_s: float) -> float | None:
+        """The new buffer to use, or None to keep ``current_s``."""
+        self._times.append(mono)
+        while self._times and mono - self._times[0] > self._window:
+            self._times.popleft()
+        if len(self._times) < self._pauses or current_s >= self._max:
+            return None
+        self._times.clear()
+        return min(self._max, current_s + self._step)
 
 
 # --- Stream-side sync (design 5.2, 5.3, 5.4). Pure; used by P6. -------------
