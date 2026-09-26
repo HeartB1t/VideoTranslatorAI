@@ -279,12 +279,19 @@ class LiveSession:
 
     def __init__(self, cfg: LiveConfig, *, video: Any, clock_view: Any,
                  factories: LiveFactories, voice: Any = None,
+                 voice_pending: bool = False,
                  thread_factory: Callable[..., Any] = threading.Thread,
                  log: Callable[[str], None] = lambda _m: None,
                  device: str = "cpu", tick_interval: float = 0.02) -> None:
         self._cfg = cfg
         self._video = video
+        # The voice backend may arrive after start (the GUI builds the second mpv
+        # on a worker): voice_pending means "coming, do not warn"; attach_voice()
+        # delivers it and voice_unavailable() reports a failed build. _voice is
+        # only written on the scheduler thread once the session runs.
         self._voice = voice
+        self._voice_pending = bool(voice_pending)
+        self._dub_wanted = bool(cfg.settings.dub_enabled)
         self._clock_view = clock_view
         self._factories = factories
         self._thread_factory = thread_factory
@@ -401,9 +408,14 @@ class LiveSession:
         If the voice backend or edge-tts is missing, the dub is turned off for the
         session and subtitles keep working (design row 21).
         """
-        if not self._cfg.settings.dub_enabled:
+        if not self._dub_wanted:
             return
         if self._voice is None:
+            if self._voice_pending:
+                # The voice backend is still being built: keep the dub off quietly
+                # (no requests nobody can play, no warning) until attach_voice().
+                self._execute(self._scheduler.set_dub(False))
+                return
             # Dub was requested but no voice backend was provided (libmpv failed
             # to build a second instance): turn the dub off so the scheduler stops
             # requesting clips, which would otherwise stall the pacer forever.
@@ -505,6 +517,14 @@ class LiveSession:
 
     def set_dub_enabled(self, on: bool) -> None:
         self._control.put(("dub", bool(on)))
+
+    def attach_voice(self, voice: Any) -> None:
+        """Hand over a voice backend built after start (applied on the sched thread)."""
+        self._control.put(("voice_attach", voice))
+
+    def voice_unavailable(self) -> None:
+        """Report that the voice backend could not be built: dub off, with a warning."""
+        self._control.put(("voice_failed", None))
 
     def set_subs_enabled(self, on: bool) -> None:
         self._control.put(("subs", bool(on)))
@@ -758,11 +778,23 @@ class LiveSession:
                 with self._status_lock:
                     self._status.engine = value
             elif kind == "dub":
+                self._dub_wanted = value
                 if value:
-                    if self._ensure_synth():
+                    # Without a voice backend yet, wait for attach_voice() (the GUI
+                    # builds it on a worker) instead of silently doing nothing.
+                    if self._voice is not None and self._ensure_synth():
                         self._execute(self._scheduler.set_dub(True))
                 else:
                     self._disable_dub(None)
+            elif kind == "voice_attach":
+                self._voice = value
+                self._voice_pending = False
+                if self._dub_wanted and value is not None and self._ensure_synth():
+                    self._execute(self._scheduler.set_dub(True))
+            elif kind == "voice_failed":
+                self._voice_pending = False
+                if self._dub_wanted:
+                    self._disable_dub("tts_unavailable")
             # "delay" refines the timing; applied by the pipeline.
 
     def _drain_sched_in(self) -> None:

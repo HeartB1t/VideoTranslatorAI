@@ -734,6 +734,71 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertIsNone(sess._synth)
             self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
 
+    def _voiceless_session(self, tmp, *, dub, voice_pending):
+        settings = normalize_live_settings(
+            {"live_dub_enabled": dub, "live_subs_enabled": True,
+             "live_sync_mode": "live"})
+        cfg = build_live_config({"source": "/v.mp4", "lang_target": "it", "voice": "x"},
+                                settings=settings, cache_dir=Path(tmp), now=1.0)
+        synth = _FakeSynth()
+        factories = LiveFactories(
+            decoder=lambda *a, **k: None, vad=lambda *a, **k: None,
+            whisper=lambda *a, **k: None, translator=lambda *a, **k: None,
+            tts=lambda **k: synth, clock=time.monotonic)
+        video = SimpleNamespace(rt=_FakeRt(), mixer=pe.VolumeMixer(),
+                                bridge=pe.EventBridge(), apply_mix=lambda: None)
+        sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(1.0),
+                           factories=factories, voice=None,
+                           voice_pending=voice_pending)
+        sess._last_pacer_mono = 1e9
+        return sess, synth
+
+    def test_pending_voice_keeps_dub_off_quietly_until_attached(self):
+        # The GUI builds the voice mpv on a worker: until it arrives the dub stays
+        # off without the "TTS unavailable" warning, then turns on by itself.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, synth = self._voiceless_session(tmp, dub=True, voice_pending=True)
+            sess._start_dub()
+            self.assertFalse(sess._scheduler._dub)
+            self.assertIsNone(sess.status().warning_key)
+            sess.attach_voice(pe.InMemoryVoice())
+            sess._tick_once(time.monotonic())
+            self.assertTrue(synth.started)
+            self.assertTrue(sess._scheduler._dub)
+
+    def test_enabling_dub_at_runtime_waits_for_the_voice_backend(self):
+        # Started with the dub off (no voice backend): turning it on must not be a
+        # silent no-op; it waits for the backend and then enables the dub.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, synth = self._voiceless_session(tmp, dub=False, voice_pending=False)
+            sess._start_dub()
+            sess.set_dub_enabled(True)
+            sess._tick_once(time.monotonic())
+            self.assertFalse(synth.started)                  # nothing to play on yet
+            self.assertFalse(sess._scheduler._dub)
+            sess.attach_voice(pe.InMemoryVoice())
+            sess._tick_once(time.monotonic())
+            self.assertTrue(synth.started)
+            self.assertTrue(sess._scheduler._dub)
+
+    def test_attached_voice_does_not_enable_an_unwanted_dub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, synth = self._voiceless_session(tmp, dub=False, voice_pending=False)
+            sess._start_dub()
+            sess.attach_voice(pe.InMemoryVoice())
+            sess._tick_once(time.monotonic())
+            self.assertFalse(synth.started)
+            self.assertFalse(sess._scheduler._dub)
+
+    def test_voice_build_failure_turns_the_dub_off_with_a_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, synth = self._voiceless_session(tmp, dub=True, voice_pending=True)
+            sess._start_dub()
+            sess.voice_unavailable()
+            sess._tick_once(time.monotonic())
+            self.assertFalse(sess._scheduler._dub)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+
     def test_seek_outside_coverage_keeps_one_segment_per_sentence(self):
         # review D: the restarted decoder re-emits the span after the target with
         # new ids; the superseded segment must go, and its late clip must not be
