@@ -8535,8 +8535,13 @@ class App(tk.Tk):
         self._refresh_live_bar_enabled()
 
     def _on_live_resolved(self, stream_url: str, title: str) -> None:
-        self._live_resolving = False
+        # Keep _live_resolving True until _launch_live_session: loading the stream
+        # below re-enters _on_player_state/_refresh_live_bar_enabled, which would
+        # otherwise re-enable Start while the launch is still pending (a second
+        # click reruns yt-dlp). It is cleared in _launch_live_session and on the
+        # unavailable/deadline exit of _await_backend_and_launch.
         if self._destroying:
+            self._live_resolving = False
             return
         # Play the resolved stream in the player while the same URL is translated.
         # The mpv backend is created lazily on first load, so start the session
@@ -8561,6 +8566,7 @@ class App(tk.Tk):
         unavailable = self._player_status is not None and not self._player_status.ok
         if unavailable or time.monotonic() >= deadline:
             self._pending_live_source = None
+            self._live_resolving = False
             self._live_bar.show_banner("player_unavailable_title", is_error=True)
             self._refresh_live_bar_enabled()
             return
@@ -8570,6 +8576,9 @@ class App(tk.Tk):
 
     def _launch_live_session(self, source: str, source_kind: str, *,
                              title: str | None) -> None:
+        # The launch is the terminal step of a start: clear the resolving flag so
+        # the bar reflects the session (or, on failure below, re-enables Start).
+        self._live_resolving = False
         raw = self._live_bar.current_settings()
         tgt = self._lang_tgt.get()
         values = {
