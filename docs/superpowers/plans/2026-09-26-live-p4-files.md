@@ -1,8 +1,12 @@
 # Live P4: Real-time translation of local files, subtitles
 
-**Status:** pure foundation IMPLEMENTED and verified (2026-09-26 autonomous
-session); integration, GUI, i18n and real-hardware acceptance remain. Needs P2
-(done). Does NOT need P3 or the S2 stream spike.
+**Current status (2026-09-26):** P4 file pipeline, GUI and i18n are integrated;
+P5 file voice dubbing is implemented with review work and acceptance still open.
+The local Codex patch on `65e91fd` adds pause/seek wiring and generation-safe
+producer restart. Read the current
+[handoff](../../ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26)
+before resuming. The progress list and implementation sequence below are the
+historical foundation plan, not the current remaining-work checklist.
 
 ## Progress (2026-09-26)
 

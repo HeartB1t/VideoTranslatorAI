@@ -24,8 +24,9 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
 - ▶️ **Integrated video player** (libmpv/mpv) - playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
-- ⏱️ **Real-time translation (live subtitles)** - watch a local file or a link and get translated subtitles on the video as it plays, with a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama, with automatic fallback to offline MarianMT when an online engine is blocked. (Live *voice* dubbing is planned; live mode currently shows subtitles.)
+- ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama. Experimental voice dubbing uses Edge-TTS and a second mpv instance. Voice overlap handling and real audio/Windows acceptance remain in progress; growing live broadcasts are not supported yet. See the [live implementation status](docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
 - 🎵 Voice/music separation via Demucs (keeps background music)
+- 🔇 **Mute original audio**, available before and during live translation, silences the video's soundtrack while keeping the translated voice audible. Toggle it off to restore the original audio; it resets when the live session ends.
 - 🧠 **MarianMT** - fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
 - 🤖 **Ollama LLM translation** *(new in v2.0)* - local LLM (Qwen3, Llama, Mistral) producing slot-aware concise translations for natural dubbing, auto-detects/installs/starts/pulls model on first use
 - 🎙️ **Voice cloning** - Coqui XTTS v2 clones the original speaker's voice in the target language (~1.8 GB model), with per-segment adaptive speed and multi-seed retry on hallucinations

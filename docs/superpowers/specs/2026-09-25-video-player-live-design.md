@@ -14,6 +14,16 @@ tecnica avversaria (con prove eseguite) e critica di completezza, versione final
 
 Il documento che segue e' in inglese (lingua di lavoro dei sub-agenti).
 
+**Implementation checkpoint (2026-09-26):** the specification describes the target,
+not completed acceptance. The local patch based on `65e91fd` wires user pause/seek,
+generation-safe decoder restart after EOF, cached replay without duplicate in-flight
+TTS, duration feedback, text sanitization and awaited TTS shutdown. The current
+completed/open checklist and local test evidence are in
+[ACTION_PLAN.md](../../ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+Overlap/fade, voice-backend worker/fallback lifecycle, segment retention and real
+audio/Windows acceptance remain open. Do not infer their completion from the API
+descriptions below.
+
 ---
 
 # Integrated player and real-time translation: final design
