@@ -1,10 +1,15 @@
 import unittest
 
+import numpy as np
+
 from videotranslator.live_tts import (
     Clip,
     EdgeDurationModel,
+    LeadCalibrator,
     choose_rate,
+    measure_silence,
     mp3_cbr_duration_s,
+    silence_bounds,
 )
 
 
@@ -61,6 +66,90 @@ class ChooseRateTests(unittest.TestCase):
 
     def test_nonpositive_slot_returns_max(self):
         self.assertEqual(choose_rate("x", 0.0, self._model(4.0)), 30)
+
+
+class SilenceBoundsTests(unittest.TestCase):
+    def test_finds_the_audible_span(self):
+        rate = 16000
+        sil = np.zeros(rate // 2, dtype=np.float32)          # 0.5 s silence
+        tone = (0.5 * np.sin(2 * np.pi * 220 * np.arange(rate) / rate)).astype(np.float32)
+        clip = np.concatenate([sil, tone, sil])              # silence, 1 s tone, silence
+        bounds = silence_bounds(clip, rate)
+        self.assertIsNotNone(bounds)
+        start, end = bounds
+        self.assertAlmostEqual(start, 0.5, delta=0.05)
+        self.assertAlmostEqual(end, 1.5, delta=0.05)
+
+    def test_all_silence_is_none(self):
+        self.assertIsNone(silence_bounds(np.zeros(16000, dtype=np.float32), 16000))
+
+    def test_empty_is_none(self):
+        self.assertIsNone(silence_bounds(np.zeros(0, dtype=np.float32), 16000))
+
+
+class MeasureSilenceTests(unittest.TestCase):
+    def test_uses_injected_av_and_delegates(self):
+        rate = 16000
+        tone = (0.5 * np.sin(2 * np.pi * 220 * np.arange(rate) / rate))
+        pcm16 = (np.concatenate([np.zeros(rate // 2), tone]) * 32768).astype(np.int16)
+
+        class _Frame:
+            pass
+
+        class _Resampled:
+            def to_ndarray(self):
+                return pcm16.reshape(1, -1)
+
+        class _Resampler:
+            def resample(self, frame):
+                return [_Resampled()]
+
+        class _Container:
+            streams = type("S", (), {"audio": [object()]})()
+
+            def decode(self, stream):
+                return [_Frame()]
+
+            def close(self):
+                pass
+
+        class _Av:
+            AudioResampler = staticmethod(lambda **k: _Resampler())
+
+            @staticmethod
+            def open(path):
+                return _Container()
+
+        bounds = measure_silence("x.mp3", av_module=_Av())
+        self.assertIsNotNone(bounds)
+        self.assertAlmostEqual(bounds[0], 0.5, delta=0.05)
+
+    def test_returns_none_on_failure(self):
+        class _Av:
+            @staticmethod
+            def open(path):
+                raise OSError("no file")
+        self.assertIsNone(measure_silence("x.mp3", av_module=_Av()))
+
+
+class LeadCalibratorTests(unittest.TestCase):
+    def test_seed_is_bounded(self):
+        self.assertEqual(LeadCalibrator(0.9, hi=0.6).lead, 0.6)
+        self.assertEqual(LeadCalibrator(0.0, lo=0.1).lead, 0.1)
+
+    def test_measures_onset_and_emas(self):
+        cal = LeadCalibrator(0.25, alpha=0.5)
+        cal.on_start(mono_unpause=10.0, skip_s=0.1)
+        # first audible pts (>= skip) at mono 10.30 -> onset 0.30
+        self.assertAlmostEqual(cal.on_voice_pts(10.30, 0.12), 0.30, places=3)
+        cal.on_start(mono_unpause=20.0, skip_s=0.1)
+        # onset 0.20 -> EMA 0.5*0.20 + 0.5*0.30 = 0.25
+        self.assertAlmostEqual(cal.on_voice_pts(20.20, 0.15), 0.25, places=3)
+
+    def test_ignores_pts_before_skip(self):
+        cal = LeadCalibrator(0.25)
+        cal.on_start(mono_unpause=10.0, skip_s=0.2)
+        self.assertIsNone(cal.on_voice_pts(10.10, 0.05))     # pts below skip
 
 
 if __name__ == "__main__":
