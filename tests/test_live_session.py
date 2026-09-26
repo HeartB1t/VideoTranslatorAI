@@ -393,7 +393,8 @@ class LiveSessionHeavyTests(unittest.TestCase):
 import queue as _queue
 
 from videotranslator import player_engine as pe
-from videotranslator.live_tts import Clip, LiveTtsUnavailable
+from videotranslator.live_tts import Clip, EdgeClipSynth, LiveTtsUnavailable
+from videotranslator.live_health import CircuitBreaker
 
 
 class _FakeSynth:
@@ -526,6 +527,152 @@ class LiveSessionDubTests(unittest.TestCase):
             sess._start_dub()
             self.assertIsNone(sess._synth)
             self.assertIsNone(sess.status().warning_key)
+
+
+class _RecordingVoice:
+    """Wraps a real voice backend, recording the ops the session issues."""
+
+    def __init__(self, real):
+        self._real = real
+        self.calls = []
+        self.mpv_version = real.mpv_version
+
+    def preload(self, path, *, skip_s=0.0):
+        self.calls.append(("preload", path, skip_s))
+        self._real.preload(path, skip_s=skip_s)
+
+    def start(self, speed):
+        self.calls.append(("start", speed))
+        self._real.start(speed)
+
+    def set_pause(self, paused):
+        self.calls.append(("set_pause", paused))
+        self._real.set_pause(paused)
+
+    def stop(self):
+        self.calls.append(("stop",))
+        self._real.stop()
+
+    def set_volume(self, value):
+        self.calls.append(("set_volume", value))
+        self._real.set_volume(value)
+
+    def set_speed(self, x):
+        self.calls.append(("set_speed", x))
+        self._real.set_speed(x)
+
+    def terminate(self, t):
+        return self._real.terminate(t)
+
+
+@unittest.skipUnless(os.environ.get("VTAI_RUN_HEAVY_SMOKE"),
+                     "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1 (needs libmpv, edge-tts, audio)")
+class LiveDubHeavyTests(unittest.TestCase):
+    """Real P5 voice path: edge-tts synth + a real, video-less mpv (item 10).
+
+    Verified live on Linux (2026-09-26): a clip synthesizes, plays on the second
+    mpv, ends with the eof marker, and the session ducks the original audio.
+    """
+
+    def _av(self):
+        try:
+            import av
+            return av
+        except Exception:
+            return None
+
+    def test_real_voice_backend_plays_a_synthesized_clip(self):
+        from videotranslator import libmpv_runtime
+        with tempfile.TemporaryDirectory() as tmp:
+            synth = EdgeClipSynth("it-IT-ElsaNeural", tmp, breaker=CircuitBreaker(),
+                                  av_module=self._av())
+            synth.start()
+            self.assertTrue(synth.submit(1, 0, "Ciao, prova di doppiaggio.", 0,
+                                         time.monotonic() + 20))
+            _sid, _g, clip, reason = synth.results.get(timeout=20)
+            synth.stop(5.0)
+            self.assertIsNotNone(clip, f"no clip (reason={reason})")
+            self.assertTrue(Path(clip.path).exists() and Path(clip.path).stat().st_size)
+
+            module = libmpv_runtime.load_mpv()
+            bridge = pe.EventBridge()
+            voice = pe.create_voice_backend(bridge=bridge, mpv_module=module,
+                                            sys_platform="linux", log=None)
+            try:
+                voice.preload(clip.path, skip_s=getattr(clip, "voice_start_s", 0.0))
+                time.sleep(0.3)
+                voice.start(1.0)
+                deadline = time.monotonic() + max(6.0, clip.duration + 4.0)
+                played = 0.0
+                while time.monotonic() < deadline:
+                    pts = bridge.extra("voice-time-pos")
+                    if pts and pts[0]:
+                        played = pts[0]
+                    if bridge.extra("voice-eof") is not None:
+                        break
+                    time.sleep(0.05)
+                self.assertGreater(played, 0.0, "voice never advanced")
+                self.assertIsNotNone(bridge.extra("voice-eof"), "no eof marker")
+            finally:
+                self.assertTrue(voice.terminate(5.0))
+
+    def test_real_session_dub_flow_plays_and_ducks(self):
+        from videotranslator import libmpv_runtime
+        with tempfile.TemporaryDirectory() as tmp:
+            module = libmpv_runtime.load_mpv()
+            bridge = pe.EventBridge()
+            real = pe.create_voice_backend(bridge=bridge, mpv_module=module,
+                                           sys_platform="linux", log=None)
+            voice = _RecordingVoice(real)
+            av_mod = self._av()
+
+            def make_synth(*, out_dir, breaker, thread_factory, clock):
+                return EdgeClipSynth("it-IT-ElsaNeural", out_dir, breaker=breaker,
+                                     av_module=av_mod, thread_factory=thread_factory,
+                                     clock=clock)
+
+            factories = LiveFactories(
+                decoder=lambda *a, **k: None, vad=lambda *a, **k: None,
+                whisper=lambda *a, **k: None, translator=lambda *a, **k: None,
+                tts=make_synth, clock=time.monotonic)
+            settings = normalize_live_settings(
+                {"live_dub_enabled": True, "live_subs_enabled": True,
+                 "live_sync_mode": "delayed"})
+            cfg = build_live_config(
+                {"source": "/v.mp4", "lang_target": "it", "voice": "it-IT-ElsaNeural"},
+                settings=settings, cache_dir=Path(tmp), now=1.0)
+            video = SimpleNamespace(rt=_FakeRt(), mixer=pe.VolumeMixer(), bridge=bridge)
+            view = _FakeClockView(0.5)
+            sess = LiveSession(cfg, video=video, clock_view=view,
+                               factories=factories, voice=voice)
+            try:
+                sess._start_dub()
+                sess._last_pacer_mono = 1e9      # isolate from the file pacer
+                sess.submit_segment(LiveSegment(
+                    1, 0, 6.0, 9.0, "Hello everyone.",
+                    text_tgt="Ciao a tutti, benvenuti alla prova di doppiaggio.",
+                    dub_ok=True))
+                deadline = time.monotonic() + 40.0
+                started = False
+                while time.monotonic() < deadline:
+                    view.media = min(9.5, view.media + 0.05)
+                    sess._tick_once(time.monotonic())
+                    if "start" in [c[0] for c in voice.calls]:
+                        started = True
+                    if started and (bridge.extra("voice-eof") is not None
+                                    or sess._voice_state == "idle"):
+                        break
+                    time.sleep(0.05)
+                names = [c[0] for c in voice.calls]
+                self.assertIn("preload", names)
+                self.assertIn("start", names)
+                self.assertTrue(video.rt.ducks and min(video.rt.ducks) < 1.0,
+                                "original audio never ducked")
+                self.assertTrue(any(a for a in video.rt.overlays if a), "no caption")
+            finally:
+                if sess._synth is not None:
+                    sess._synth.stop(5.0)
+                self.assertTrue(real.terminate(5.0))
 
 
 if __name__ == "__main__":
