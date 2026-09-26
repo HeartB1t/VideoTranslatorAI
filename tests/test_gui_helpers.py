@@ -15,7 +15,8 @@ class LiveTransportRoutingTests(unittest.TestCase):
     def setUp(self):
         self.session = Mock()
         self.controller = Mock()
-        self.controller.state = SimpleNamespace(position=15.0, duration=22.0)
+        self.controller.state = SimpleNamespace(position=15.0, duration=22.0, volume=100,
+                                                item=SimpleNamespace(path="/v.mp4"))
         self.app = SimpleNamespace(
             _live_session=self.session, _player_controller=self.controller,
             _player_clock=Mock(), _stop_live_session=Mock())
@@ -44,6 +45,24 @@ class LiveTransportRoutingTests(unittest.TestCase):
         gui.App._on_player_command(self.app, "seek", {"seconds": 14})
         self.session.notify_user_seek.assert_called_once_with(14)
         self.controller.seek.assert_called_once_with(14, dragging=False)
+
+    def test_transport_without_media_explains_instead_of_doing_nothing(self):
+        self.app._live_session = None
+        self.controller.state.item = None
+        self.controller.has_playlist = False
+        self.app._player_log = Mock()
+        self.app._s = lambda key: key
+        for name in ("play_pause", "forward_10", "next"):
+            gui.App._on_player_command(self.app, name, {})
+        self.assertEqual([c.args[0] for c in self.app._player_log.call_args_list],
+                         ["player_no_media_hint"] * 3)
+        self.controller.play_pause.assert_not_called()
+        self.controller.next.assert_not_called()
+        self.controller.has_playlist = True           # next loads from the playlist
+        gui.App._on_player_command(self.app, "next", {})
+        self.controller.next.assert_called_once_with()
+        gui.App._on_player_command(self.app, "volume", {"value": 50})
+        self.controller.set_volume.assert_called_once_with(50)
 
     def test_player_stop_also_stops_live_outputs(self):
         gui.App._on_player_command(self.app, "stop", {})

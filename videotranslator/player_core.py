@@ -174,6 +174,10 @@ class PlayerController:
         else:
             raise IndexError("playlist index out of range")
 
+    @property
+    def has_playlist(self) -> bool:
+        return bool(self._playlist)
+
     def play_pause(self) -> None:
         if self.state.item is None or self._backend is None:
             return

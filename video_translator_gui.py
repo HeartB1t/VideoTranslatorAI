@@ -8550,6 +8550,15 @@ class App(tk.Tk):
             return
         controller = self._player_controller
         session = self._live_session
+        # Transport buttons do nothing without media: say why instead of
+        # staying silent (previous/next still load from a non-empty playlist).
+        needs_media = name in ("play_pause", "stop", "back_10", "forward_10", "seek",
+                               "snapshot", "toggle_audio", "toggle_subtitles")
+        if (session is None and controller.state.item is None
+                and (needs_media or (name in ("previous", "next")
+                                     and not controller.has_playlist))):
+            self._player_log(self._s("player_no_media_hint"))
+            return
         if name == "play_pause":
             if session is not None:
                 session.toggle_user_pause()
