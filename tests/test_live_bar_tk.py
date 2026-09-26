@@ -50,6 +50,20 @@ class LiveBarTests(unittest.TestCase):
         self.bar._start_button.invoke()
         self.assertIn(("start", {"source": "file"}), self.commands)
 
+    def test_mode_buttons_have_hover_tips_in_the_ui_language(self):
+        texts = {mode: tip._text_fn() for mode, tip in self.bar._mode_tips.items()}
+        self.assertEqual(set(texts), {"delayed", "live"})
+        self.assertEqual(texts["delayed"], _s("live_tip_mode_delayed"))
+        self.assertEqual(texts["live"], _s("live_tip_mode_live"))
+        self.assertNotIn("live_tip_", texts["delayed"] + texts["live"])  # real text
+
+    def test_mode_tip_opens_on_hover_and_closes_on_leave(self):
+        tip = self.bar._mode_tips["live"]
+        tip._show()
+        self.assertIsNotNone(tip._tip)
+        tip.hide()
+        self.assertIsNone(tip._tip)
+
     def test_mode_toggle_emits(self):
         self.bar._mode_buttons["live"].invoke()
         self.assertIn(("mode", {"mode": "live"}), self.commands)

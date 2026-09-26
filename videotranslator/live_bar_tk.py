@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from .live_health import ERROR_KEYS, STATUS_KEYS, WARN_KEYS
+from .player_panel_tk import HoverTip
 from .player_settings import LIVE_ENGINES
 from .ui_theme import resolve_palette
 
@@ -27,6 +28,7 @@ _MODES = ("delayed", "live")
 # Explicit full i18n keys (no f-string prefixes, so the literal-key scanner sees
 # real keys that exist in all 26 languages).
 _MODE_KEYS = {"delayed": "live_mode_delayed", "live": "live_mode_live"}
+_MODE_TIP_KEYS = {"delayed": "live_tip_mode_delayed", "live": "live_tip_mode_live"}
 _ENGINE_KEYS = {
     "marian": "live_engine_marian", "ollama": "live_engine_ollama",
     "google": "live_engine_google", "deepl": "live_engine_deepl",
@@ -99,6 +101,7 @@ class LiveBar(tk.Frame):
         row.pack(fill="x", padx=8, pady=(6, 2))
 
         self._mode_buttons: dict[str, tk.Radiobutton] = {}
+        self._mode_tips: dict[str, HoverTip] = {}
         for mode in _MODES:
             rb = tk.Radiobutton(
                 row, text=self._s(_MODE_KEYS[mode]), value=mode,
@@ -108,6 +111,10 @@ class LiveBar(tk.Frame):
                 font="VT.Small", takefocus=1)
             rb.pack(side="left", padx=(0, 6))
             self._mode_buttons[mode] = rb
+            # The text is read when the tip opens, so it follows language changes.
+            self._mode_tips[mode] = HoverTip(
+                rb, lambda key=_MODE_TIP_KEYS[mode]: self._s(key),
+                colors_fn=lambda: (self._palette.BTN, self._palette.FG))
 
         self._delay_label = tk.Label(row, text="", bg=pal.SURFACE, fg=pal.FG2,
                                      font="VT.Small")

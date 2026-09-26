@@ -3224,6 +3224,138 @@ _ORIGINAL_MUTE_LABELS = {
 for _mute_lang, _mute_label in _ORIGINAL_MUTE_LABELS.items():
     PLAYER_UI_STRINGS[_mute_lang]["live_opt_mute_original"] = _mute_label
 
+# Hover tips of the two sync-mode buttons: (delayed video, live video). They
+# describe the behaviour only, without recommending a mode.
+_LIVE_MODE_TIPS = {
+    "en": ("The video pauses by itself while the translation is not ready yet, then "
+           "resumes. Subtitles and voice stay aligned with the scene, but playback "
+           "may stop now and then.",
+           "The video never stops. Subtitles and voice appear as soon as they are "
+           "ready, sometimes a few seconds behind the scene."),
+    "it": ("Il video si mette in pausa da solo quando la traduzione non è ancora "
+           "pronta, poi riparte. Sottotitoli e voce restano allineati alla scena, ma "
+           "la riproduzione può fermarsi a tratti.",
+           "Il video scorre senza mai fermarsi. Sottotitoli e voce arrivano appena "
+           "sono pronti, a volte con qualche secondo di ritardo rispetto alla scena."),
+    "ar": ("يتوقف الفيديو تلقائيًا ما دامت الترجمة غير جاهزة، ثم يستأنف التشغيل. تبقى "
+           "الترجمة المرئية والصوت متزامنين مع المشهد، لكن التشغيل قد يتوقف من حين لآخر.",
+           "لا يتوقف الفيديو أبدًا. تظهر الترجمة المرئية والصوت بمجرد جاهزيتهما، "
+           "وأحيانًا بعد المشهد ببضع ثوانٍ."),
+    "zh": ("翻译尚未就绪时，视频会自动暂停，然后继续播放。字幕和语音与画面保持同步，"
+           "但播放可能会不时停顿。",
+           "视频从不暂停。字幕和语音一准备好就会出现，有时会比画面晚几秒。"),
+    "cs": ("Video se samo pozastaví, dokud není překlad připraven, a pak pokračuje. "
+           "Titulky a hlas zůstávají sladěné se scénou, ale přehrávání se může občas "
+           "zastavit.",
+           "Video se nikdy nezastaví. Titulky a hlas se objeví, jakmile jsou "
+           "připravené, někdy o několik sekund později než scéna."),
+    "da": ("Videoen sætter selv på pause, mens oversættelsen ikke er klar, og "
+           "fortsætter derefter. Undertekster og stemme følger scenen, men afspilningen "
+           "kan stoppe ind imellem.",
+           "Videoen stopper aldrig. Undertekster og stemme vises, så snart de er klar, "
+           "nogle gange et par sekunder efter scenen."),
+    "nl": ("De video pauzeert vanzelf zolang de vertaling nog niet klaar is en gaat "
+           "daarna verder. Ondertitels en stem blijven gelijk met de scène, maar het "
+           "afspelen kan af en toe stoppen.",
+           "De video stopt nooit. Ondertitels en stem verschijnen zodra ze klaar zijn, "
+           "soms een paar seconden na de scène."),
+    "fi": ("Video pysähtyy itsestään, kun käännös ei ole vielä valmis, ja jatkuu "
+           "sitten. Tekstitykset ja ääni pysyvät kohtauksen tahdissa, mutta toisto voi "
+           "välillä pysähtyä.",
+           "Video ei pysähdy koskaan. Tekstitykset ja ääni tulevat heti, kun ne ovat "
+           "valmiita, joskus muutaman sekunnin kohtauksen jäljessä."),
+    "fr": ("La vidéo se met en pause d'elle-même tant que la traduction n'est pas "
+           "prête, puis reprend. Les sous-titres et la voix restent alignés sur la "
+           "scène, mais la lecture peut s'interrompre par moments.",
+           "La vidéo ne s'arrête jamais. Les sous-titres et la voix apparaissent dès "
+           "qu'ils sont prêts, parfois avec quelques secondes de retard sur la scène."),
+    "de": ("Das Video pausiert von selbst, solange die Übersetzung noch nicht bereit "
+           "ist, und läuft dann weiter. Untertitel und Stimme bleiben synchron zur "
+           "Szene, aber die Wiedergabe kann zwischendurch anhalten.",
+           "Das Video hält nie an. Untertitel und Stimme erscheinen, sobald sie bereit "
+           "sind, manchmal einige Sekunden nach der Szene."),
+    "el": ("Το βίντεο σταματά μόνο του όσο η μετάφραση δεν είναι ακόμη έτοιμη και "
+           "μετά συνεχίζει. Οι υπότιτλοι και η φωνή μένουν συγχρονισμένοι με τη σκηνή, "
+           "αλλά η αναπαραγωγή μπορεί να σταματά κατά διαστήματα.",
+           "Το βίντεο δεν σταματά ποτέ. Οι υπότιτλοι και η φωνή εμφανίζονται μόλις "
+           "είναι έτοιμοι, μερικές φορές λίγα δευτερόλεπτα μετά τη σκηνή."),
+    "hi": ("जब तक अनुवाद तैयार नहीं होता, वीडियो अपने आप रुक जाता है, फिर चलने लगता है। "
+           "उपशीर्षक और आवाज़ दृश्य के साथ मेल में रहते हैं, लेकिन प्लेबैक बीच-बीच में रुक "
+           "सकता है।",
+           "वीडियो कभी नहीं रुकता। उपशीर्षक और आवाज़ तैयार होते ही दिखाई देते हैं, "
+           "कभी-कभी दृश्य से कुछ सेकंड बाद।"),
+    "hu": ("A videó magától megáll, amíg a fordítás nem készül el, majd folytatódik. "
+           "A felirat és a hang igazodik a jelenethez, de a lejátszás időnként "
+           "megállhat.",
+           "A videó soha nem áll meg. A felirat és a hang azonnal megjelenik, amint "
+           "elkészül, néha néhány másodperccel a jelenet után."),
+    "id": ("Video berhenti sendiri selama terjemahan belum siap, lalu berlanjut. "
+           "Subtitel dan suara tetap selaras dengan adegan, tetapi pemutaran bisa "
+           "sesekali terhenti.",
+           "Video tidak pernah berhenti. Subtitel dan suara muncul begitu siap, kadang "
+           "beberapa detik setelah adegan."),
+    "ja": ("翻訳の準備ができるまで動画は自動的に一時停止し、その後再生を再開します。"
+           "字幕と音声は場面と同期しますが、再生がときどき止まることがあります。",
+           "動画は停止しません。字幕と音声は準備ができ次第表示され、場面より数秒遅れる"
+           "ことがあります。"),
+    "ko": ("번역이 준비되지 않은 동안 영상이 자동으로 일시 정지된 뒤 다시 재생됩니다. "
+           "자막과 음성은 장면과 맞춰지지만 재생이 가끔 멈출 수 있습니다.",
+           "영상이 멈추지 않습니다. 자막과 음성은 준비되는 즉시 나타나며, 때로는 "
+           "장면보다 몇 초 늦을 수 있습니다."),
+    "no": ("Videoen setter seg selv på pause mens oversettelsen ikke er klar, og "
+           "fortsetter deretter. Undertekster og stemme følger scenen, men avspillingen "
+           "kan stoppe innimellom.",
+           "Videoen stopper aldri. Undertekster og stemme vises så snart de er klare, "
+           "noen ganger noen sekunder etter scenen."),
+    "pl": ("Wideo samo się zatrzymuje, gdy tłumaczenie nie jest jeszcze gotowe, a "
+           "potem wznawia odtwarzanie. Napisy i głos pozostają zgrane ze sceną, ale "
+           "odtwarzanie może się czasem zatrzymywać.",
+           "Wideo nigdy się nie zatrzymuje. Napisy i głos pojawiają się, gdy tylko są "
+           "gotowe, czasem kilka sekund po scenie."),
+    "pt": ("O vídeo pausa sozinho enquanto a tradução ainda não está pronta e depois "
+           "continua. As legendas e a voz ficam alinhadas com a cena, mas a reprodução "
+           "pode parar de vez em quando.",
+           "O vídeo nunca para. As legendas e a voz aparecem assim que ficam prontas, "
+           "às vezes com alguns segundos de atraso em relação à cena."),
+    "ro": ("Videoclipul se oprește singur cât timp traducerea nu este gata, apoi "
+           "continuă. Subtitrările și vocea rămân sincronizate cu scena, dar redarea "
+           "se poate opri din când în când.",
+           "Videoclipul nu se oprește niciodată. Subtitrările și vocea apar imediat ce "
+           "sunt gata, uneori cu câteva secunde după scenă."),
+    "ru": ("Видео само ставится на паузу, пока перевод не готов, а затем "
+           "продолжается. Субтитры и голос остаются синхронными со сценой, но "
+           "воспроизведение может время от времени останавливаться.",
+           "Видео никогда не останавливается. Субтитры и голос появляются сразу, как "
+           "только готовы, иногда на несколько секунд позже сцены."),
+    "es": ("El vídeo se pausa solo mientras la traducción aún no está lista y luego "
+           "se reanuda. Los subtítulos y la voz quedan alineados con la escena, pero "
+           "la reproducción puede detenerse a ratos.",
+           "El vídeo nunca se detiene. Los subtítulos y la voz aparecen en cuanto "
+           "están listos, a veces con unos segundos de retraso respecto a la escena."),
+    "sv": ("Videon pausar av sig själv medan översättningen inte är klar och "
+           "fortsätter sedan. Undertexter och röst hålls i takt med scenen, men "
+           "uppspelningen kan stanna ibland.",
+           "Videon stannar aldrig. Undertexter och röst visas så snart de är klara, "
+           "ibland några sekunder efter scenen."),
+    "tr": ("Çeviri henüz hazır değilken video kendiliğinden duraklar, sonra devam "
+           "eder. Altyazılar ve ses sahneyle uyumlu kalır, ancak oynatma zaman zaman "
+           "durabilir.",
+           "Video hiç durmaz. Altyazılar ve ses hazır olur olmaz görünür, bazen "
+           "sahneden birkaç saniye sonra."),
+    "uk": ("Відео саме ставиться на паузу, поки переклад не готовий, а потім "
+           "продовжується. Субтитри й голос залишаються синхронними зі сценою, але "
+           "відтворення може час від часу зупинятися.",
+           "Відео ніколи не зупиняється. Субтитри й голос з'являються щойно готові, "
+           "іноді на кілька секунд пізніше за сцену."),
+    "vi": ("Video tự tạm dừng khi bản dịch chưa sẵn sàng, rồi phát tiếp. Phụ đề và "
+           "giọng nói luôn khớp với cảnh, nhưng việc phát có thể thỉnh thoảng bị dừng.",
+           "Video không bao giờ dừng. Phụ đề và giọng nói xuất hiện ngay khi sẵn sàng, "
+           "đôi khi chậm vài giây so với cảnh."),
+}
+for _tip_lang, (_tip_delayed, _tip_live) in _LIVE_MODE_TIPS.items():
+    PLAYER_UI_STRINGS[_tip_lang]["live_tip_mode_delayed"] = _tip_delayed
+    PLAYER_UI_STRINGS[_tip_lang]["live_tip_mode_live"] = _tip_live
+
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 
 
