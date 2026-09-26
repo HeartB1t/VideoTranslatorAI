@@ -1,6 +1,82 @@
 import unittest
+from types import SimpleNamespace
 
 import video_translator_gui as gui
+
+
+class LiveVoiceForTests(unittest.TestCase):
+    def _call(self, current, tgt):
+        fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))
+        return gui.App._live_voice_for(fake, tgt)
+
+    def test_keeps_the_user_voice_when_it_fits_the_target(self):
+        voices = gui.LANGUAGES["it"]["voices"]
+        self.assertEqual(self._call(voices[1], "it"), voices[1])
+
+    def test_falls_back_to_the_first_catalog_voice(self):
+        # an English voice cannot be used for an Italian dub
+        self.assertEqual(self._call("en-US-JennyNeural", "it"),
+                         gui.LANGUAGES["it"]["voices"][0])
+
+    def test_unknown_target_returns_the_current_voice(self):
+        self.assertEqual(self._call("whatever", "zz"), "whatever")
+
+
+class EnsureVoiceBackendTests(unittest.TestCase):
+    def test_returns_the_existing_backend_without_rebuilding(self):
+        existing = object()
+        fake = SimpleNamespace(_voice_backend=existing, _player_backend=object())
+        self.assertIs(gui.App._ensure_voice_backend(fake), existing)
+
+    def test_none_when_the_player_is_not_ready(self):
+        fake = SimpleNamespace(_voice_backend=None, _player_backend=None)
+        self.assertIsNone(gui.App._ensure_voice_backend(fake))
+
+    def test_builds_once_and_shares_the_player_bridge(self):
+        bridge = object()
+        made = object()
+        calls = {}
+
+        def fake_create(*, bridge, mpv_module, sys_platform, log):
+            calls["bridge"] = bridge
+            calls["module"] = mpv_module
+            return made
+
+        orig_create = gui._player_engine.create_voice_backend
+        orig_load = gui._libmpv_runtime.load_mpv
+        gui._player_engine.create_voice_backend = fake_create
+        gui._libmpv_runtime.load_mpv = lambda: "MODULE"
+        try:
+            fake = SimpleNamespace(_voice_backend=None, _player_backend=object(),
+                                   _player_bridge=bridge,
+                                   _player_log=lambda *_a: None)
+            result = gui.App._ensure_voice_backend(fake)
+        finally:
+            gui._player_engine.create_voice_backend = orig_create
+            gui._libmpv_runtime.load_mpv = orig_load
+        self.assertIs(result, made)
+        self.assertIs(fake._voice_backend, made)
+        self.assertIs(calls["bridge"], bridge)
+        self.assertEqual(calls["module"], "MODULE")
+
+    def test_build_failure_degrades_to_none(self):
+        def boom(**_kw):
+            raise RuntimeError("no libmpv")
+
+        orig_create = gui._player_engine.create_voice_backend
+        orig_load = gui._libmpv_runtime.load_mpv
+        gui._player_engine.create_voice_backend = boom
+        gui._libmpv_runtime.load_mpv = lambda: "MODULE"
+        try:
+            logged = []
+            fake = SimpleNamespace(_voice_backend=None, _player_backend=object(),
+                                   _player_bridge=object(),
+                                   _player_log=logged.append)
+            self.assertIsNone(gui.App._ensure_voice_backend(fake))
+        finally:
+            gui._player_engine.create_voice_backend = orig_create
+            gui._libmpv_runtime.load_mpv = orig_load
+        self.assertTrue(logged)
 
 
 class NoisyX11LogTests(unittest.TestCase):

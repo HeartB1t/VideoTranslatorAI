@@ -6076,6 +6076,7 @@ class App(tk.Tk):
             muted=self._player_settings.muted)
         self._player_clock = _player_engine.PlaybackClock()
         self._player_backend = None
+        self._voice_backend = None            # second mpv for live dubbed voice (P5)
         self._player_controller = _player_core.PlayerController(
             None, self._player_settings, on_change=self._on_player_state,
             save=save_config)
@@ -8561,11 +8562,12 @@ class App(tk.Tk):
     def _launch_live_session(self, source: str, source_kind: str, *,
                              title: str | None) -> None:
         raw = self._live_bar.current_settings()
+        tgt = self._lang_tgt.get()
         values = {
             "source": source, "source_kind": source_kind,
             "lang_source": self._lang_src.get(),
-            "lang_target": self._lang_tgt.get(),
-            "voice": "",
+            "lang_target": tgt,
+            "voice": self._live_voice_for(tgt),
             "engine": raw["engine"],
             "deepl_key": self._deepl_key_var.get().strip(),
             "ollama_url": self._ollama_url_var.get().strip(),
@@ -8582,9 +8584,10 @@ class App(tk.Tk):
                 values, settings=settings, cache_dir=cache_dir, now=time.time())
             factories = _live_session_module.build_live_factories(
                 cfg, log=self._player_log)
+            voice_backend = self._ensure_voice_backend() if raw["dub"] else None
             self._live_session = _live_session_module.LiveSession(
                 cfg, video=self._player_backend, clock_view=self._player_clock,
-                factories=factories, log=self._player_log,
+                factories=factories, voice=voice_backend, log=self._player_log,
                 thread_factory=self._redirecting_thread_factory)
             self._live_session.start()
         except Exception as exc:                     # noqa: BLE001
@@ -8783,6 +8786,35 @@ class App(tk.Tk):
         self._player_vo_profile = profile
         self._player_controller.attach_backend(backend)
         self._start_player_poll()
+
+    def _live_voice_for(self, tgt: str) -> str:
+        """Pick the edge-tts voice for the live dub: the user's if it fits the
+        target language, otherwise the language's first catalog voice."""
+        voices = LANGUAGES.get(tgt, {}).get("voices", [])
+        current = self._voice.get()
+        if current in voices:
+            return current
+        return voices[0] if voices else current
+
+    def _ensure_voice_backend(self):
+        """Create the second, video-less mpv for the live dub, once per app run.
+
+        Shares the player bridge (it writes only namespaced values and voice-*
+        events, never the player state). Returns None if libmpv cannot build it;
+        the session then degrades to subtitles only.
+        """
+        if self._voice_backend is not None or self._player_backend is None:
+            return self._voice_backend
+        try:
+            module = _libmpv_runtime.load_mpv()
+            self._voice_backend = _player_engine.create_voice_backend(
+                bridge=self._player_bridge, mpv_module=module,
+                sys_platform="win32" if sys.platform == "win32" else "linux",
+                log=None)
+        except Exception as exc:                     # noqa: BLE001
+            self._player_log(f"[live] dubbed voice unavailable: {exc}")
+            self._voice_backend = None
+        return self._voice_backend
 
     def _start_player_poll(self) -> None:
         if self._destroying or self._player_poll_after is not None:
@@ -10022,9 +10054,12 @@ class App(tk.Tk):
         self._close_started_at = time.monotonic()
         self._close_done = threading.Event()
         backend = self._player_backend
+        voice_backend = self._voice_backend
+        self._voice_backend = None
         guard = self._player_guard
         init_thread = self._player_init_thread
-        if backend is None and (init_thread is None or not init_thread.is_alive()):
+        if (backend is None and voice_backend is None
+                and (init_thread is None or not init_thread.is_alive())):
             self._player_bridge.close()
             if guard is not None:
                 guard.restore()
@@ -10035,6 +10070,9 @@ class App(tk.Tk):
         def work():
             try:
                 self._player_bridge.close()
+                if voice_backend is not None:
+                    with contextlib.suppress(Exception):
+                        voice_backend.terminate(3.0)
                 if backend is not None:
                     backend.terminate(3.0)
                 if init_thread is not None and init_thread.is_alive():
