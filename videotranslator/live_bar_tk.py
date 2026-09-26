@@ -306,6 +306,10 @@ class LiveBar(tk.Frame):
             self.show_banner(WARN_KEYS.get(warning_key, warning_key),
                              getattr(status, "warning_params", {}) or {},
                              with_switch=(action == "live_btn_switch_marian"))
+        elif self._banner_key is not None and not self._banner_is_error:
+            # a transient warning (e.g. a slow engine) recovered: drop its banner
+            # instead of leaving it up until the user closes it by hand.
+            self.clear_banner()
 
     def show_banner(self, key: str, params: dict | None = None, *,
                     with_switch: bool = False, is_error: bool = False) -> None:

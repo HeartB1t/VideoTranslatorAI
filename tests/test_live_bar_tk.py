@@ -104,6 +104,27 @@ class LiveBarTests(unittest.TestCase):
         self.assertTrue(self.bar._switch_wrap.winfo_manager())
         self.assertIn("Google", self.bar._banner_label.cget("text"))
 
+    def test_recovered_warning_clears_the_banner_on_render(self):
+        self.bar.show_running()
+        warned = SimpleNamespace(
+            state="running", lag_s=None, error_key=None,
+            warning_key="rate_limited", warning_params={"engine": "Google"},
+            warning_action=None)
+        self.bar.render(warned)
+        self.assertTrue(self.bar._banner.winfo_manager())
+        recovered = SimpleNamespace(state="running", lag_s=None,
+                                    warning_key=None, error_key=None)
+        self.bar.render(recovered)
+        self.assertFalse(self.bar._banner.winfo_manager())
+
+    def test_error_banner_is_not_auto_cleared(self):
+        self.bar.show_running()
+        self.bar.render(SimpleNamespace(state="failed", lag_s=None, warning_key=None,
+                                        error_key="ingest", error_params={}))
+        self.bar.render(SimpleNamespace(state="running", lag_s=None,
+                                        warning_key=None, error_key=None))
+        self.assertTrue(self.bar._banner.winfo_manager())   # errors stay up
+
     def test_render_error_shows_error_banner(self):
         self.bar.show_running()
         status = SimpleNamespace(state="failed", lag_s=None, warning_key=None,
