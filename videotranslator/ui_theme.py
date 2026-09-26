@@ -262,6 +262,36 @@ def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
     return Palette(name=theme, dark=bool(base["dark"]), font_family=str(base["font"]), **colors)
 
 
+# -- Player action colours ------------------------------------------------
+
+# Stable action hues, separate from the user-selected accent: transport meaning
+# must stay recognizable when switching theme/accent. All colour literals stay
+# in the theme module, while the player draws using these resolved values.
+_PLAYER_ACTION_COLORS = {
+    True: {"play": "#62c98d", "pause": "#e9b55b", "stop": "#f27c82",
+           "navigation": "#73a9ed", "snapshot": "#b999ed", "open_folder": "#dfc06a"},
+    False: {"play": "#187647", "pause": "#8a570c", "stop": "#ba3541",
+            "navigation": "#235cab", "snapshot": "#7641ab", "open_folder": "#80630c"},
+}
+
+
+def player_icon_colors(palette: Palette, icon: str, *, enabled: bool = True,
+                       hovered: bool = False) -> tuple[str, str]:
+    """Return semantic icon/background colours with at least 3:1 icon contrast."""
+    if not enabled:
+        return palette.FG2, palette.SURFACE
+    role = "navigation" if icon in ("previous", "back", "forward", "next") else icon
+    if role == "muted":
+        role = "stop"
+    color = _PLAYER_ACTION_COLORS[palette.dark].get(role, palette.FG)
+    background = mix(color, palette.SURFACE, 0.15) if hovered else palette.SURFACE
+    for _ in range(20):
+        if contrast_ratio(color, background) >= 3.0:
+            break
+        color = mix(palette.FG, color, 0.15)
+    return color, background
+
+
 # -- Settings -------------------------------------------------------------
 
 def normalize_ui_settings(cfg: object, lang_codes: set[str] | None = None) -> dict:

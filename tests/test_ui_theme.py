@@ -36,6 +36,31 @@ class ContrastTests(unittest.TestCase):
         self.assertAlmostEqual(contrast_ratio("#808080", "#808080"), 1.0, places=6)
 
 
+class PlayerIconColorsTests(unittest.TestCase):
+    def test_action_colours_remain_distinct_and_legible_in_every_theme(self):
+        roles = ("play", "pause", "stop", "next", "snapshot", "open_folder")
+        for theme, accent, hovered in itertools.product(
+                CONCRETE_THEMES, ACCENT_CHOICES, (False, True)):
+            with self.subTest(theme=theme, accent=accent, hovered=hovered):
+                palette = resolve_palette(theme, accent)
+                pairs = [ui_theme.player_icon_colors(palette, role, hovered=hovered)
+                         for role in roles]
+                self.assertEqual(len({fg for fg, _ in pairs}), len(roles))
+                for fg, bg in pairs:
+                    self.assertGreaterEqual(contrast_ratio(fg, bg), 3.0)
+                for role in ("previous", "back", "forward"):
+                    self.assertEqual(ui_theme.player_icon_colors(palette, role, hovered=hovered),
+                                     pairs[3])
+
+    def test_disabled_controls_are_neutral_even_when_hovered(self):
+        for theme in CONCRETE_THEMES:
+            palette = resolve_palette(theme)
+            for hovered in (False, True):
+                self.assertEqual(ui_theme.player_icon_colors(
+                    palette, "play", enabled=False, hovered=hovered),
+                    (palette.FG2, palette.SURFACE))
+
+
 class DeriveAccentTests(unittest.TestCase):
     def test_returns_four_lower_hex_values(self):
         for value in derive_accent("#3574F0", "#2b2d30", dark=True):

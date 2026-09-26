@@ -33,7 +33,7 @@ from .player_core import (
     playlist_groups,
     x_to_seconds,
 )
-from .ui_theme import resolve_palette
+from .ui_theme import player_icon_colors, resolve_palette
 
 VIDEO_BG = "#000000"
 TEXT_FG = "#a3a3a3"
@@ -414,6 +414,7 @@ class PlayerPanel(_P1PlayerPanel):
         self.transport_row = tk.Frame(self.controls_frame, bg=palette.SURFACE)
         self.transport_row.pack(fill="x", padx=6, pady=(2, 6))
         self._icon_controls: dict[str, tk.Canvas] = {}
+        self._hovered_icon: str | None = None
         self._transport_widgets: dict[str, tk.Widget] = {}
         for name in ("previous", "back", "stop", "play_pause", "forward", "next",
                      "snapshot", "open_folder"):
@@ -442,9 +443,10 @@ class PlayerPanel(_P1PlayerPanel):
             highlightbackground=palette.SURFACE, highlightcolor=palette.ACC,
             takefocus=1, cursor="hand2",
         )
-        action = self._ACTIONS[name]
-        canvas.bind("<Button-1>", lambda _event, value=action: self._activate(value))
-        self._keyboard_operable(canvas, lambda value=action: self._activate(value))
+        canvas.bind("<Button-1>", lambda _event, value=name: self._activate_icon(value))
+        self._keyboard_operable(canvas, lambda value=name: self._activate_icon(value))
+        canvas.bind("<Enter>", lambda _event, value=name: self._hover_icon(value, True))
+        canvas.bind("<Leave>", lambda _event, value=name: self._hover_icon(value, False))
         self._icon_controls[name] = canvas
         self._tips.append(HoverTip(
             canvas, lambda value=name: self._tip_text(value), colors_fn=self._tip_colors,
@@ -480,8 +482,13 @@ class PlayerPanel(_P1PlayerPanel):
         size = max(14, round(16 * self._scale))
         canvas.configure(width=size + 8, height=size + 8)
         offset = 4.0
-        color = self._palette.FG
-        for kind, raw in icon_shapes(self._icon_name(control), size):
+        icon = self._icon_name(control)
+        enabled = self._icon_enabled(control)
+        color, background = player_icon_colors(
+            self._palette, icon, enabled=enabled, hovered=self._hovered_icon == control)
+        canvas.configure(bg=background, highlightbackground=background,
+                         cursor="hand2" if enabled else "arrow")
+        for kind, raw in icon_shapes(icon, size):
             coords = [value + offset for value in raw]
             if kind == "line":
                 canvas.create_line(*coords, fill=color, width=max(1, round(1.5 * self._scale)),
@@ -493,6 +500,20 @@ class PlayerPanel(_P1PlayerPanel):
                                    width=max(1, round(1.5 * self._scale)), tags="icon")
             else:
                 canvas.create_polygon(*coords, fill=color, outline=color, tags="icon")
+
+    def _icon_enabled(self, control: str) -> bool:
+        # Playlist navigation can load another item even after Stop clears it.
+        if control in ("volume", "fullscreen", "previous", "next"):
+            return True
+        return self._state is not None and self._state.item is not None
+
+    def _activate_icon(self, control: str) -> None:
+        if self._icon_enabled(control):
+            self._activate(self._ACTIONS[control])
+
+    def _hover_icon(self, control: str, entered: bool) -> None:
+        self._hovered_icon = control if entered else None
+        self._draw_icon(control)
 
     def _redraw_icons(self) -> None:
         for name in self._icon_controls:

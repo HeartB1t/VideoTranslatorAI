@@ -91,6 +91,38 @@ class PlayerPanelTests(unittest.TestCase):
         self.root.update_idletasks()
         return panel
 
+    def test_transport_colours_follow_playback_hover_and_theme(self):
+        from videotranslator.ui_theme import player_icon_colors
+
+        canvas = self.panel._icon_controls["play_pause"]
+        for theme in ("graphite", "light"):
+            self.theme.palette = resolve_palette(theme)
+            self.panel.apply_theme()
+            for status, icon in (("paused", "play"), ("playing", "pause")):
+                self.panel.render(self._state(status=status), position=12.0)
+                for hovered in (True, False):
+                    self.panel._hover_icon("play_pause", hovered)
+                    fg, bg = player_icon_colors(self.theme.palette, icon, hovered=hovered)
+                    self.assertEqual(canvas.cget("bg"), bg)
+                    for item in canvas.find_withtag("icon"):
+                        self.assertEqual(canvas.itemcget(item, "fill"), fg)
+
+    def test_empty_player_transport_is_neutral_and_does_not_dispatch(self):
+        self.panel.render(self._state(item=None, status="idle"), position=None)
+        canvas = self.panel._icon_controls["play_pause"]
+        self.panel._hover_icon("play_pause", True)
+        self.assertEqual(canvas.cget("bg"), self.theme.palette.SURFACE)
+        self.assertEqual(canvas.itemcget(canvas.find_withtag("icon")[0], "fill"),
+                         self.theme.palette.FG2)
+        self.panel._activate_icon("play_pause")
+        self.assertEqual(self.commands, [])
+        self.panel._activate_icon("volume")
+        self.assertEqual(self.commands, [("mute", {})])
+        # Stop clears the current item, but must not block playlist navigation.
+        self.panel._activate_icon("next")
+        self.panel._activate_icon("previous")
+        self.assertEqual(self.commands[-2:], [("next", {}), ("previous", {})])
+
     def test_before_any_status_only_the_logo_shows(self):
         self.assertEqual(self.panel.title_label.cget("text"), "")
         self.assertEqual(self.panel.message_label.cget("text"), "")
