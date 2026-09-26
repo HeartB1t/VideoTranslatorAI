@@ -319,5 +319,69 @@ class LiveSessionLifecycleTests(unittest.TestCase):
             self.assertEqual(sess.status().state, "stopped")
 
 
+class BuildLiveFactoriesTests(unittest.TestCase):
+    def test_returns_lazy_callables(self):
+        from videotranslator.live_session import build_live_factories
+        settings = normalize_live_settings({})
+        cfg = build_live_config({"source": "/v.mp4", "lang_target": "it"},
+                                settings=settings, cache_dir=Path("/c"), now=1.0)
+        fac = build_live_factories(cfg)
+        for f in (fac.decoder, fac.vad, fac.whisper, fac.translator, fac.tts):
+            self.assertTrue(callable(f))
+
+    def test_unbuilt_online_engine_raises(self):
+        from videotranslator.live_session import build_live_factories
+        from videotranslator.live_translate import LiveTranslateError
+        settings = normalize_live_settings({})
+        cfg = build_live_config({"source": "s", "lang_target": "it", "engine": "google"},
+                                settings=settings, cache_dir=Path("/c"), now=1.0)
+        fac = build_live_factories(cfg)
+        with self.assertRaises(LiveTranslateError):
+            fac.translator("google")
+
+
+@unittest.skipUnless(os.environ.get("VTAI_RUN_HEAVY_SMOKE"),
+                     "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
+class LiveSessionHeavyTests(unittest.TestCase):
+    def test_real_file_pipeline_produces_a_translated_caption(self):
+        import asyncio
+        import edge_tts
+        from videotranslator.live_session import build_live_factories
+        with tempfile.TemporaryDirectory() as tmp:
+            mp3 = os.path.join(tmp, "speech.mp3")
+
+            async def synth():
+                await edge_tts.Communicate(
+                    "Hello, this is a live translation test.",
+                    "en-US-AriaNeural").save(mp3)
+
+            asyncio.run(synth())
+            settings = normalize_live_settings(
+                {"live_dub_enabled": False, "live_subs_enabled": True,
+                 "live_sync_mode": "delayed"})
+            cfg = build_live_config(
+                {"source": mp3, "source_kind": "file", "lang_source": "en",
+                 "lang_target": "it", "engine": "marian"},
+                settings=settings, cache_dir=Path(tmp), now=1.0)
+            video = SimpleNamespace(rt=_FakeRt())
+            # a constant media position inside the clip's speech, so the scheduler
+            # shows whichever produced segment covers it, decoupled from the
+            # whisper model load time.
+            sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(1.0),
+                               factories=build_live_factories(cfg))
+            sess.start()
+            deadline = time.monotonic() + 180.0
+            while (time.monotonic() < deadline
+                   and sess.status().state == "running"
+                   and not any(a for a in video.rt.overlays if a)):
+                time.sleep(0.1)
+            sess.request_stop()
+            sess.join(15.0)
+            self.assertIsNone(sess.status().error_key,
+                              f"pipeline error: {sess.status().error_key}")
+            caps = [a for a in video.rt.overlays if a]
+            self.assertTrue(caps, "the real pipeline produced no translated caption")
+
+
 if __name__ == "__main__":
     unittest.main()

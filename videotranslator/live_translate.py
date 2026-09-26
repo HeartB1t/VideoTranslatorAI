@@ -127,6 +127,30 @@ def marian_is_cached(route: MarianRoute, *,
     return all(check(leg.model) for leg in route.legs)
 
 
+_HUB_SEEN: dict[str, bool] = {}
+
+
+def default_hub_has(model: str) -> bool:
+    """Best-effort: True when ``model`` exists on the Hugging Face Hub.
+
+    Used by :func:`marian_route` when online so an uncached leg can still be
+    selected (and downloaded at prepare). One network call per model, memoized;
+    any failure (offline, 404, no ``huggingface_hub``) counts as absent, so the
+    resolver falls back to cached-only routing.
+    """
+    hit = _HUB_SEEN.get(model)
+    if hit is not None:
+        return hit
+    try:
+        from huggingface_hub import HfApi
+        HfApi().model_info(model)
+        ok = True
+    except Exception:
+        ok = False
+    _HUB_SEEN[model] = ok
+    return ok
+
+
 # --- Concrete per-sentence translators (design 4.9). ------------------------
 
 import concurrent.futures

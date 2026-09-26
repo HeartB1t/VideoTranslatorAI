@@ -93,6 +93,43 @@ class LiveFactories:
     timeouts: Any | None = None
 
 
+def build_live_factories(cfg: LiveConfig,
+                         *, log: Callable[[str], None] = lambda _m: None) -> LiveFactories:
+    """Assemble the real heavy components for a live FILE session (design 4.7-4.9).
+
+    Lazily imports PyAV / faster-Whisper / MarianMT so a machine without them
+    still loads the module; the callables build one component each when the
+    producer threads start. The online engines (google/deepl/ollama) are not
+    wired yet, so ``translator`` currently supports MarianMT (offline, with a
+    Hub check so an uncached pair can still be downloaded); another engine
+    raises :class:`LiveTranslateError`, which the session surfaces as an error.
+    """
+
+    def make_decoder(source, **kw):
+        from .live_asr import AudioDecoder
+        return AudioDecoder(source, **kw)
+
+    def make_vad():
+        from .live_asr import StreamingVad
+        return StreamingVad()
+
+    def make_whisper(**kw):
+        from .live_asr import PersistentWhisper
+        return PersistentWhisper(log=log, **kw)
+
+    def make_translator_for(engine):
+        from .live_translate import _default_is_cached, default_hub_has, make_translator
+        if engine == "marian":
+            return make_translator("marian", is_cached=_default_is_cached,
+                                   hub_has=default_hub_has)
+        return make_translator(engine, **cfg.engine_opts)
+
+    return LiveFactories(
+        decoder=make_decoder, vad=make_vad, whisper=make_whisper,
+        translator=make_translator_for, tts=lambda *a, **k: None,
+        clock=time.monotonic)
+
+
 def build_live_config(values: dict, *, settings: LiveSettings, cache_dir: Path,
                       now: float) -> LiveConfig:
     """Assemble a :class:`LiveConfig` from GUI values. Pure.
