@@ -202,6 +202,16 @@ class LiveSessionTickTests(unittest.TestCase):
             snap.state = "mutated"
             self.assertNotEqual(sess.status().state, "mutated")
 
+    def test_sched_loop_clears_the_overlay_on_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp, media=1.5)
+            sess.submit_segment(_seg("ciao"))
+            sess._tick_once(0.0)
+            self.assertTrue(any(a for a in video.rt.overlays if a))
+            sess._stop.set()
+            sess._sched_loop()          # exits at once, runs the finally teardown
+            self.assertIsNone(video.rt.overlays[-1])
+
 
 class _FakeDecoder:
     def __init__(self, *a, **k):

@@ -479,9 +479,40 @@ class LiveSession:
             self._status.state = _assert_state(state)
 
     def _sched_loop(self) -> None:
-        while not self._stop.is_set():
-            self._tick_once(self._clock())
-            self._stop.wait(self._tick_interval)
+        try:
+            while not self._stop.is_set():
+                self._tick_once(self._clock())
+                self._stop.wait(self._tick_interval)
+        finally:
+            self._teardown_outputs()
+
+    def _teardown_outputs(self) -> None:
+        """Clear the caption, stop any voice clip and un-duck when the loop ends.
+
+        mpv's osd-overlay and the ducked volume persist across loadfile, so a
+        stopped or failed session must not leave the last subtitle on screen, a
+        clip still playing, or the original audio attenuated on the next video.
+        Safe after the backend is terminated (rt calls become no-ops).
+        """
+        rt = getattr(self._video, "rt", None)
+        if rt is not None:
+            try:
+                rt.set_overlay(None)
+            except Exception:
+                pass
+            if self._duck_applied != 1.0:
+                try:
+                    rt.set_duck(1.0)
+                except Exception:
+                    pass
+                self._duck_applied = 1.0
+        if self._voice is not None and self._voice_state != "idle":
+            try:
+                self._voice.stop()
+            except Exception:
+                pass
+            self._voice_state = "idle"
+        self._overlay = None
 
     def _tick_once(self, mono: float) -> list[object]:
         self._drain_control(mono)
