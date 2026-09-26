@@ -116,6 +116,7 @@ class _FakeRt:
     def __init__(self):
         self.overlays = []
         self.pauses = []
+        self.ducks = []
 
     def set_overlay(self, ass):
         self.overlays.append(ass)
@@ -126,8 +127,8 @@ class _FakeRt:
     def set_speed(self, _x):
         pass
 
-    def set_duck(self, _g):
-        pass
+    def set_duck(self, g):
+        self.ducks.append(g)
 
 
 class _FakeClockView:
@@ -387,6 +388,144 @@ class LiveSessionHeavyTests(unittest.TestCase):
                               f"pipeline error: {sess.status().error_key}")
             caps = [a for a in video.rt.overlays if a]
             self.assertTrue(caps, "the real pipeline produced no translated caption")
+
+
+import queue as _queue
+
+from videotranslator import player_engine as pe
+from videotranslator.live_tts import Clip, LiveTtsUnavailable
+
+
+class _FakeSynth:
+    def __init__(self, *, start_exc=None):
+        self.results = _queue.Queue()
+        self.submitted = []
+        self.started = False
+        self.stopped = False
+        self._start_exc = start_exc
+
+    def start(self):
+        if self._start_exc is not None:
+            raise self._start_exc
+        self.started = True
+
+    def submit(self, seg_id, gen, text, rate, deadline):
+        self.submitted.append((seg_id, gen, text, rate))
+        return True
+
+    def stop(self, _timeout):
+        self.stopped = True
+        return True
+
+    def push(self, seg_id, gen, clip, reason=None):
+        self.results.put((seg_id, gen, clip, reason))
+
+
+def _dub_session(tmp, *, media=1.8, synth=None, overrides=None):
+    settings = normalize_live_settings(
+        {"live_dub_enabled": True, "live_subs_enabled": True,
+         "live_sync_mode": "delayed", **(overrides or {})})
+    cfg = build_live_config({"source": "/v.mp4", "lang_target": "it", "voice": "it-IT-X"},
+                            settings=settings, cache_dir=Path(tmp), now=1.0)
+    made = synth if synth is not None else _FakeSynth()
+    factories = LiveFactories(
+        decoder=lambda *a, **k: None, vad=lambda *a, **k: None,
+        whisper=lambda *a, **k: None, translator=lambda *a, **k: None,
+        tts=lambda **k: made, clock=time.monotonic)
+    video = SimpleNamespace(rt=_FakeRt(), mixer=pe.VolumeMixer(), bridge=pe.EventBridge())
+    voice = pe.InMemoryVoice(mpv_version=(0, 41))
+    view = _FakeClockView(media)
+    sess = LiveSession(cfg, video=video, clock_view=view, factories=factories,
+                       voice=voice)
+    return sess, video, voice, made, view
+
+
+def _dub_seg(tgt="ciao", *, gen=0, start=2.0, end=3.0):
+    return LiveSegment(0, gen, start, end, "hello", text_tgt=tgt, dub_ok=True)
+
+
+class LiveSessionDubTests(unittest.TestCase):
+    def test_start_dub_creates_and_starts_the_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, synth, _ = _dub_session(tmp)
+            sess._start_dub()
+            self.assertTrue(synth.started)
+            # the scheduler now owns the mixer so the Tk volume defers to the duck
+            self.assertEqual(video.mixer.snapshot().owner, "sched")
+
+    def test_translated_segment_requests_tts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _v, _voice, synth, _ = _dub_session(tmp, media=1.8)
+            sess._start_dub()
+            sess.submit_segment(_dub_seg("ciao"))
+            sess._tick_once(0.0)
+            self.assertEqual(len(synth.submitted), 1)
+            self.assertEqual(synth.submitted[0][2], "ciao")
+
+    def test_full_preload_start_and_duck_flow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, voice, synth, _ = _dub_session(tmp, media=1.8)
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9                 # isolate from the file pacer
+            sess.submit_segment(_dub_seg("ciao", start=2.0, end=3.0))
+            sess._tick_once(0.0)                       # RequestTts
+            clip = Clip(0, 0, "/clip.mp3", 1.0, "+0%",
+                        voice_start_s=0.1, voice_end_s=1.0)
+            synth.push(0, 0, clip)
+            for i in range(1, 40):                     # clip_ready -> preload -> start + duck ramp
+                sess._tick_once(i * 0.02)
+            names = [c[0] for c in voice.calls]
+            self.assertIn("preload", names)
+            self.assertIn("start", names)
+            self.assertLess(names.index("preload"), names.index("start"))
+            self.assertTrue(video.rt.ducks, "the original audio never ducked")
+            self.assertLess(min(video.rt.ducks), 1.0)  # ramped down toward 0.3
+
+    def test_voice_end_marker_returns_state_to_idle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, _synth, _ = _dub_session(tmp)
+            sess._voice_state = "playing"
+            video.bridge.extra_latest("voice-eof", (1, "eof"), 5.0)
+            sess._sync_voice_state()
+            self.assertEqual(sess._voice_state, "idle")
+
+    def test_three_voice_errors_disable_the_dub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, _synth, _ = _dub_session(tmp)
+            sess._start_dub()
+            for n in range(1, 4):
+                sess._voice_state = "playing"
+                video.bridge.extra_latest("voice-eof", (n, "error"), float(n))
+                sess._sync_voice_state()
+            self.assertIsNone(sess._synth)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+
+    def test_tts_unavailable_disables_dub_with_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            synth = _FakeSynth(start_exc=LiveTtsUnavailable("no edge-tts"))
+            sess, _v, _voice, _s, _ = _dub_session(tmp, synth=synth)
+            sess._start_dub()
+            self.assertIsNone(sess._synth)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+
+    def test_missing_factory_result_disables_dub_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = normalize_live_settings(
+                {"live_dub_enabled": True, "live_subs_enabled": True,
+                 "live_sync_mode": "delayed"})
+            cfg = build_live_config({"source": "/v.mp4", "lang_target": "it"},
+                                    settings=settings, cache_dir=Path(tmp), now=1.0)
+            factories = LiveFactories(
+                decoder=lambda *a, **k: None, vad=lambda *a, **k: None,
+                whisper=lambda *a, **k: None, translator=lambda *a, **k: None,
+                tts=lambda **k: None, clock=time.monotonic)
+            video = SimpleNamespace(rt=_FakeRt(), mixer=pe.VolumeMixer(),
+                                    bridge=pe.EventBridge())
+            sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(1.0),
+                               factories=factories, voice=pe.InMemoryVoice())
+            sess._start_dub()
+            self.assertIsNone(sess._synth)
+            self.assertIsNone(sess.status().warning_key)
 
 
 if __name__ == "__main__":

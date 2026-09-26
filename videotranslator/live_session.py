@@ -129,9 +129,20 @@ def build_live_factories(cfg: LiveConfig,
                 model=cfg.engine_opts.get("ollama_model", "qwen3:8b"))
         return make_translator(engine, **cfg.engine_opts)
 
+    def make_synth(*, out_dir, breaker, thread_factory, clock):
+        from .live_tts import EdgeClipSynth
+        av_module = None
+        try:                                # optional: measure leading silence for skip_s
+            import av as av_module          # noqa: F811
+        except Exception:
+            av_module = None
+        return EdgeClipSynth(
+            cfg.voice, out_dir, breaker=breaker, av_module=av_module,
+            thread_factory=thread_factory, clock=clock)
+
     return LiveFactories(
         decoder=make_decoder, vad=make_vad, whisper=make_whisper,
-        translator=make_translator_for, tts=lambda *a, **k: None,
+        translator=make_translator_for, tts=make_synth,
         clock=time.monotonic)
 
 
@@ -242,9 +253,13 @@ import os
 import queue
 import threading
 
-from .live_scheduler import ClearSubtitle, DubScheduler, LiveSegment, ShowSubtitle
+from .live_scheduler import (
+    ClearSubtitle, ClipSpeed, Drop, DubScheduler, Duck, DuckEnvelope, LiveSegment,
+    PauseClip, PreloadClip, RequestTts, ResumeClip, ShowSubtitle, StartClip, StopClip,
+)
 from .live_sync import FilePacer, derive_live_timing
 from .live_translate import TIMEOUTS_S, LiveTranslateError
+from .live_tts import LiveTtsUnavailable
 
 
 class LiveSession:
@@ -300,6 +315,16 @@ class LiveSession:
         self._last_status_mono = -1e9
         self._overlay: str | None = None
 
+        # Dub/voice state (design 4.11). The voice backend and the TTS worker are
+        # created lazily on start(); the scheduler drives them through _execute.
+        self._synth: Any = None
+        self._voice_state = "idle"          # idle | preloaded | playing
+        self._bridge = getattr(video, "bridge", None)
+        self._last_eof_count = 0
+        self._voice_fail = 0
+        self._duck_env = DuckEnvelope(ramp_s=0.2)
+        self._duck_applied = 1.0
+
         self._status_lock = threading.Lock()
         self._status = LiveStatus(
             state="starting", engine=cfg.engine, device=device,
@@ -312,6 +337,7 @@ class LiveSession:
         pid = os.getpid()
         write_session_lock(self._cfg.session_dir / _LOCK_NAME, pid=pid,
                            start_token=process_start_token(pid))
+        self._start_dub()
         self._set_state("running")
         targets = [("live-sched", self._sched_loop)]
         # A file OR a resolved VOD stream URL is decoded the same way: PyAV opens
@@ -327,6 +353,52 @@ class LiveSession:
             self._threads.append(thread)
             thread.start()
 
+    def _start_dub(self) -> None:
+        """Start the TTS worker for the dub on start(), degrading if it is absent.
+
+        If the voice backend or edge-tts is missing, the dub is turned off for the
+        session and subtitles keep working (design row 21).
+        """
+        if self._cfg.settings.dub_enabled and self._voice is not None:
+            self._ensure_synth()
+
+    def _ensure_synth(self) -> bool:
+        """Create, start and register the TTS worker; return True on success."""
+        if self._synth is not None:
+            return True
+        if self._voice is None:
+            return False
+        try:
+            synth = self._factories.tts(
+                out_dir=self._cfg.session_dir / "clips", breaker=CircuitBreaker(),
+                thread_factory=self._thread_factory, clock=self._clock)
+            if synth is None:
+                self._disable_dub(None)
+                return False
+            synth.start()
+        except LiveTtsUnavailable:
+            self._disable_dub("tts_unavailable")
+            return False
+        except Exception as exc:            # noqa: BLE001 - never block the session
+            self._log(f"live: TTS worker unavailable ({exc}); dub off")
+            self._disable_dub(None)
+            return False
+        self._synth = synth
+        # The scheduler now owns the video volume so the Tk mixer defers to the duck.
+        mixer = getattr(self._video, "mixer", None)
+        if mixer is not None:
+            try:
+                mixer.set_owner("sched")
+            except Exception:
+                pass
+        return True
+
+    def _disable_dub(self, warn_code: str | None) -> None:
+        self._synth = None
+        self._execute(self._scheduler.set_dub(False))
+        if warn_code is not None:
+            self._set_warning(warn_code, "edge-tts")
+
     def request_stop(self) -> None:
         self._set_state("stopping")
         self._decode_cancel.set()
@@ -340,6 +412,18 @@ class LiveSession:
             thread.join(remaining)
             if thread.is_alive():
                 ok = False
+        if self._synth is not None:
+            try:
+                if not self._synth.stop(max(0.0, deadline - self._clock())):
+                    ok = False
+            except Exception:
+                ok = False
+        mixer = getattr(self._video, "mixer", None)
+        if mixer is not None:
+            try:
+                mixer.set_owner("cmd")
+            except Exception:
+                pass
         with self._status_lock:
             if self._status.state != "failed":
                 self._status.state = "stopped"
@@ -402,13 +486,18 @@ class LiveSession:
     def _tick_once(self, mono: float) -> list[object]:
         self._drain_control(mono)
         self._drain_sched_in()
+        self._drain_synth()
         now = self._clock_view.now(mono)
         epoch = getattr(self._clock_view, "epoch", 0)
-        main_running = not self._user_paused
+        # The voice freezes whenever the picture is paused, by the user or by the
+        # file pacer catching translation up.
+        main_running = not (self._user_paused or self._self_paused)
+        self._sync_voice_state()
         actions = self._scheduler.tick(now, mono, main_running=main_running,
-                                       main_speed=1.0, voice_state="idle",
+                                       main_speed=1.0, voice_state=self._voice_state,
                                        clock_epoch=epoch)
         self._execute(actions)
+        self._apply_duck(frozen=not main_running)
         if mono - self._last_pacer_mono >= 1.0:
             self._last_pacer_mono = mono
             self._run_pacer(now)
@@ -416,6 +505,41 @@ class LiveSession:
             self._last_status_mono = mono
             self._publish_status(now)
         return actions
+
+    def _drain_synth(self) -> None:
+        """Hand synthesized clips (or failures) to the scheduler."""
+        if self._synth is None:
+            return
+        while True:
+            try:
+                seg_id, gen, clip, reason = self._synth.results.get_nowait()
+            except queue.Empty:
+                return
+            except Exception:
+                return
+            self._scheduler.clip_ready(seg_id, gen, clip, reason)
+
+    def _sync_voice_state(self) -> None:
+        """Flip to idle when the voice clip ends (from the bridge end marker).
+
+        The scheduler keeps a clock-based safety net (expected_end + 1 s) for the
+        no-bridge test doubles; with a real backend this makes the transition
+        prompt and counts output failures for the dub-off rule (design row 21).
+        """
+        if self._voice_state != "playing" or self._bridge is None:
+            return
+        marker = self._bridge.extra("voice-eof")
+        if marker is None:
+            return
+        count, reason = marker[0]
+        if count <= self._last_eof_count:
+            return
+        self._last_eof_count = count
+        self._voice_state = "idle"
+        if reason == "error":
+            self._voice_fail += 1
+            if self._voice_fail >= 3:
+                self._disable_dub("tts_unavailable")
 
     def _drain_control(self, mono: float) -> None:
         while True:
@@ -436,7 +560,13 @@ class LiveSession:
             elif kind == "engine":
                 with self._status_lock:
                     self._status.engine = value
-            # "delay"/"dub" refine the scheduler/timing; applied by the pipeline.
+            elif kind == "dub":
+                if value:
+                    if self._ensure_synth():
+                        self._execute(self._scheduler.set_dub(True))
+                else:
+                    self._disable_dub(None)
+            # "delay" refines the timing; applied by the pipeline.
 
     def _drain_sched_in(self) -> None:
         while True:
@@ -459,7 +589,49 @@ class LiveSession:
                 self._overlay = None
                 if rt is not None:
                     rt.set_overlay(None)
-            # clip/duck actions are executed once the dub path is wired (P5).
+            elif isinstance(action, RequestTts):
+                if self._synth is not None:
+                    self._synth.submit(action.seg_id, action.gen, action.text,
+                                       action.rate_pct, action.deadline_mono)
+            elif isinstance(action, PreloadClip):
+                if self._voice is not None:
+                    self._voice.preload(action.path, skip_s=action.skip_s)
+                self._voice_state = "preloaded"
+            elif isinstance(action, StartClip):
+                if self._voice is not None:
+                    self._voice.start(action.speed)
+                self._voice_state = "playing"
+            elif isinstance(action, ClipSpeed):
+                if self._voice is not None:
+                    self._voice.set_speed(action.value)
+            elif isinstance(action, PauseClip):
+                if self._voice is not None:
+                    self._voice.set_pause(True)
+            elif isinstance(action, ResumeClip):
+                if self._voice is not None:
+                    self._voice.set_pause(False)
+            elif isinstance(action, StopClip):
+                if self._voice is not None:
+                    self._voice.stop()
+                self._voice_state = "idle"
+            elif isinstance(action, Duck):
+                self._duck_env.set_target(action.gain)
+            elif isinstance(action, Drop):
+                self._log(f"live: clip {action.seg_id} dropped ({action.reason})")
+
+    def _apply_duck(self, *, frozen: bool) -> None:
+        """Ramp the original audio toward the scheduler's duck target each tick.
+
+        The ramp lives here (not in the backend) so it is smooth on every platform
+        and on mpv < 0.37; the value is written only when it actually moves.
+        """
+        gain = self._duck_env.step(frozen=frozen)
+        if gain is None:
+            return
+        rt = getattr(self._video, "rt", None)
+        if rt is not None and abs(gain - self._duck_applied) >= 0.001:
+            self._duck_applied = gain
+            rt.set_duck(gain)
 
     def _run_pacer(self, now: float | None) -> None:
         action = self._pacer.step(

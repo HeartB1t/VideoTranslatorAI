@@ -880,6 +880,7 @@ class MpvVoiceBackend:
         self._terminate_done = threading.Event()
         self._terminate_helper: threading.Thread | None = None
         self._terminate_error: BaseException | None = None
+        self._eof_count = 0
         constructor_options = dict(options)
         constructor_options["log_handler"] = self._on_log
         self._player = mpv_module.MPV(**constructor_options)
@@ -925,7 +926,14 @@ class MpvVoiceBackend:
             if event_id is None:
                 return
             if event_id == self._event_id("END_FILE"):
-                self.bridge.post("voice-end-file")
+                reason = MpvBackend._end_reason(event)
+                self._eof_count += 1
+                # extra_latest, not post: the live session reads this end marker
+                # without competing for the drained event stream the Tk consumer
+                # owns. The reason lets it count output failures (design row 21).
+                self.bridge.extra_latest(
+                    "voice-eof", (self._eof_count, reason), time.monotonic())
+                self.bridge.post("voice-end-file", {"reason": reason})
         except Exception:
             pass
 

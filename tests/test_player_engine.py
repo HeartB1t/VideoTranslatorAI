@@ -570,6 +570,8 @@ class MpvVoiceBackendTests(unittest.TestCase):
         ))
         player.event_callback(SimpleNamespace(event_id=SimpleNamespace(value=999)))
         self.assertEqual(bridge.extra("voice-time-pos")[0], 0.75)
+        # the end marker lands in extra (count, reason) and as a drained event
+        self.assertEqual(bridge.extra("voice-eof")[0], (1, "eof"))
         self.assertIn("voice-end-file", [event.kind for event in bridge.drain().events])
         self.assertTrue(voice.terminate(1.0))
 
