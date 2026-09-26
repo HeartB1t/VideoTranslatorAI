@@ -233,6 +233,8 @@ class _FakeVad:
 
 
 class _FakeWhisper:
+    device = "cuda"       # the model reports the device it loaded on
+
     def __init__(self, **k):
         pass
 
@@ -292,6 +294,9 @@ class LiveSessionPipelineTests(unittest.TestCase):
             sess.join(4.0)
             self.assertTrue(any(a and "ciao" in a for a in video.rt.overlays),
                             "no translated caption reached the player")
+            # the badge reflects the device Whisper actually loaded on, not the
+            # "cpu" default (S3)
+            self.assertEqual(sess.status().device, "cuda")
             self.assertEqual(sess.status().state, "stopped")
             live = [t for t in threading.enumerate() if t.name.startswith("live-")]
             self.assertEqual([t.name for t in live if t.is_alive()], [])

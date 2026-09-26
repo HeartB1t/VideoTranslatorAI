@@ -763,6 +763,12 @@ class LiveSession:
         try:
             whisper = self._factories.whisper(
                 device_policy=self._cfg.device_policy, hotwords=self._cfg.hotwords)
+            # Report the device Whisper actually loaded on (the GUI defaults to
+            # "cpu"; on a GPU box the model picks "cuda"), so the badge is honest.
+            actual = getattr(whisper, "device", None)
+            if actual:
+                with self._status_lock:
+                    self._status.device = actual
             while not self._stop.is_set():
                 try:
                     utt = self._utt_q.get(timeout=0.2)
