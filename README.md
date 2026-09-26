@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml/badge.svg)](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml)
 
-AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages - 100% local, free, no API keys required by default. Optional features (DeepL, Speaker Diarization) may require a free API key.
+AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages, with local processing options and no API keys required by default. Whisper speech recognition runs locally; Edge-TTS, Google Translate and DeepL require an internet connection. Optional features (DeepL, Speaker Diarization) may require an API key or access token.
 
 > **v2.0** - modular package, local Ollama translation, quality-profile orchestration, installable Python metadata, and opt-in heavy smoke tests. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) and the commit history for the full list of changes.
 
@@ -23,7 +23,7 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🌍 **26 target languages** with multiple voices per language
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
-- ▶️ **Integrated video player** (libmpv/mpv) - playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
+- ▶️ **Integrated video player** (libmpv/mpv) - colour-coded transport controls, playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
 - ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama. Experimental voice dubbing uses Edge-TTS and a second mpv instance. Voice overlap handling and real audio/Windows acceptance remain in progress; growing live broadcasts are not supported yet. See the [live implementation status](docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - 🔇 **Mute original audio**, available before and during live translation, silences the video's soundtrack while keeping the translated voice audible. Toggle it off to restore the original audio; it resets when the live session ends.
@@ -246,7 +246,7 @@ check from the log panel's **Diagnostics** button. `--preflight-player` treats t
 python video_translator_gui.py
 ```
 
-**Layout:** every control lives in the column on the right, as a stack of
+**Layout:** batch translation settings live in the column on the right, as a stack of
 cards: **Input**, **Translation**, **Workflow profile**, **Start**, and the
 collapsible advanced sections (model, translation engine, audio, voice
 cloning, lip sync, diarization, options, hotwords). The large area on the
@@ -257,6 +257,22 @@ handle to move it up or down the column; the order is saved (`ui_panel_order`)
 and restored at the next start. The log panel at the bottom can be hidden with
 **Hide log**. On start the window opens centered on the current monitor (the one
 under the pointer) and maximized, so it behaves well on a multi-monitor setup.
+
+**Player controls:** icons use consistent functional colours in every theme,
+independent of the selected accent colour:
+
+| Control | Colour |
+|---------|--------|
+| Play | Green |
+| Pause (replaces Play while playing) | Amber |
+| Stop | Coral red |
+| Previous / back 10 s / forward 10 s / next | Blue |
+| Snapshot | Violet |
+| Open folder | Gold |
+
+Hovering adds a subtle tinted background. Unavailable controls are neutral;
+playlist navigation remains usable after Stop. Tooltips and keyboard focus
+indicators remain available, so colour is not the only way to identify actions.
 
 **From local files:**
 1. Click **Add** to select one or more video files
@@ -277,25 +293,42 @@ under the pointer) and maximized, so it behaves well on a multi-monitor setup.
 
 > ⚠️ **Fair use notice:** Downloading videos via yt-dlp is considered automated access by platforms like YouTube and may violate their Terms of Service. Heavy or repeated use from the same IP address can result in temporary blocks (HTTP 429 / sign-in required errors). Use a VPN or rotate your IP if you encounter download failures. This tool is intended for personal, non-commercial use only. Redistribution of translated content may infringe copyright - always respect the original creator's rights.
 
-### Real-time translation (live subtitles)
+### Real-time translation (subtitles and experimental dubbing)
 
-Watch a video and get translated subtitles on it as it plays, synced with a
-delay slider (YouTube-style). Use the bar under the player:
+Watch a local file or a resolved on-demand video link with translated subtitles
+and optional spoken translation. Use the bar under the player:
 
 **From a link:**
+
 1. Paste a link in the **URL** field
-2. Set source and target language and the **Delay** slider
-3. Click **Translate in real time** - the stream is resolved, played, and
-   subtitled live on the video overlay
+2. Set source and target language, choose a voice and adjust the **Delay** slider
+3. Select **Dubbed voice** and/or **Subtitles**
+4. To hear only the translated voice, select **Mute original audio** before
+   starting (in Italian: **Silenzia originale**, next to the subtitle checkbox)
+5. Click **Translate in real time** - the link is resolved and translation starts
 
 **From a loaded file:** load a video in the player (Input -> Add, then select
-it), leave the URL field empty, and click **Translate in real time**.
+it), leave the URL field empty, choose the same live settings, and click
+**Translate in real time**. A URL takes priority when the field is not empty.
 
 - **Engine:** MarianMT (offline, default), Google, DeepL, or Ollama. Speech
-  recognition (Whisper) always runs locally on your machine.
-- **Voice dubbing in real time is not available yet** (planned): live mode
-  currently produces subtitles only. For a fully dubbed file, use the batch
-  flow above (**Download & Translate** / **Start Translation**).
+  recognition (Whisper) runs locally. Offline models need an initial download.
+- **Voice dubbing:** experimental Edge-TTS speech playback through a second mpv
+  instance. It requires internet access and is separate from batch voice cloning.
+- **Mute original audio:** available both before starting and during translation.
+  It silences the entire original soundtrack, including music and effects, but
+  leaves the translated voice audible. It does not isolate the original speaker.
+  Toggle it off to restore the soundtrack; it resets when the live session ends.
+  The player's speaker button is the general mute, not this independent control.
+- **Pause and seek:** player controls are connected to the live session;
+  end-to-end audio synchronization still needs platform-specific acceptance tests.
+- **Current limits:** clip overlap/fade handling, audio timing calibration and
+  Windows acceptance remain open. Growing live broadcasts are not supported yet;
+  the live mode label does not imply support for ingesting a broadcast as it grows.
+  See the [implementation status and remaining work](docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+
+For a saved dubbed video, use **Download & Translate** / **Start Translation**
+instead of the real-time preview.
 
 ### Translation engine blocks and VPN
 
