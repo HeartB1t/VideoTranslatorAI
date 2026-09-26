@@ -1,13 +1,122 @@
+import os
+import time
 import unittest
 
 from videotranslator.live_translate import (
     EN_LEGS,
     TIMEOUTS_S,
+    LiveTranslateError,
     MarianLeg,
+    MarianLiveTranslator,
     MarianRoute,
+    Outcome,
+    make_translator,
     marian_is_cached,
     marian_route,
 )
+
+_HEAVY = os.environ.get("VTAI_RUN_HEAVY_SMOKE")
+HELS_ = "Helsinki-NLP/"
+
+
+class _Ret:
+    def __init__(self, value):
+        self.value = value
+
+    def to(self, _device):
+        return self.value
+
+
+class _FakeTok:
+    def __init__(self, model):
+        self.model = model
+        self.supported_language_codes = [">>pol<<"]
+
+    def __call__(self, texts, **kw):
+        return {"input_ids": _Ret(texts[0])}
+
+    def batch_decode(self, gen, **kw):
+        return [f"{self.model}:{gen}"]
+
+
+class _FakeModel:
+    def __init__(self, sleep=0.0):
+        self._sleep = sleep
+
+    def generate(self, **batch):
+        if self._sleep:
+            time.sleep(self._sleep)
+        return batch["input_ids"]
+
+
+def _cached(*models):
+    names = set(models)
+    return lambda m: m in names
+
+
+def _marian(is_cached, *, sleep=0.0, hub_has=None):
+    return MarianLiveTranslator(
+        is_cached=is_cached, hub_has=hub_has,
+        tokenizer_loader=lambda model: _FakeTok(model),
+        model_loader=lambda model: _FakeModel(sleep))
+
+
+class MarianLiveTranslatorTests(unittest.TestCase):
+    def test_direct_leg_runs(self):
+        tr = _marian(_cached(HELS_ + "opus-mt-en-it"))
+        tr.prepare("en", "it")
+        out = tr.translate("hello")
+        self.assertTrue(out.ok)
+        self.assertIn("opus-mt-en-it", out.text)
+
+    def test_pivot_runs_both_legs(self):
+        tr = _marian(_cached(HELS_ + "opus-mt-it-en", HELS_ + "opus-mt-tc-big-en-pt"))
+        tr.prepare("it", "pt")
+        out = tr.translate("ciao")
+        self.assertTrue(out.ok)
+        self.assertIn("opus-mt-it-en", out.text)
+        self.assertIn("opus-mt-tc-big-en-pt", out.text)
+
+    def test_group_target_token_is_prepended(self):
+        tr = _marian(_cached(HELS_ + "opus-mt-en-zlw"))
+        tr.prepare("en", "pl")
+        self.assertIn(">>pol<<", tr.translate("hello").text)
+
+    def test_no_route_raises(self):
+        tr = _marian(lambda m: False)
+        with self.assertRaises(LiveTranslateError) as ctx:
+            tr.prepare("it", "pt")
+        self.assertEqual(ctx.exception.key, "marian_pair")
+
+    def test_timeout_returns_failed_outcome(self):
+        tr = _marian(_cached(HELS_ + "opus-mt-en-it"), sleep=0.5)
+        tr.prepare("en", "it")
+        out = tr.translate("hello", timeout_s=0.05)
+        self.assertFalse(out.ok)
+        self.assertEqual(out.error, "timeout")
+
+    def test_make_translator_marian(self):
+        tr = make_translator("marian", is_cached=_cached(HELS_ + "opus-mt-en-it"),
+                             tokenizer_loader=lambda m: _FakeTok(m),
+                             model_loader=lambda m: _FakeModel())
+        self.assertIsInstance(tr, MarianLiveTranslator)
+
+    def test_make_translator_unknown_raises(self):
+        with self.assertRaises(LiveTranslateError):
+            make_translator("google")
+
+
+@unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
+class MarianLiveTranslatorHeavyTests(unittest.TestCase):
+    def test_real_en_to_it(self):
+        tr = MarianLiveTranslator(hub_has=lambda m: True, is_cached=lambda m: False)
+        tr.prepare("en", "it")
+        out = tr.translate("Hello, how are you today?", timeout_s=60.0)
+        tr.close()
+        self.assertTrue(out.ok, out.error)
+        self.assertTrue(out.text.strip())
+        self.assertNotEqual(out.text.strip().lower(), "hello, how are you today?")
+
 
 HELS = "Helsinki-NLP/"
 

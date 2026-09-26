@@ -125,3 +125,146 @@ def marian_is_cached(route: MarianRoute, *,
     """True when every leg of the route is already cached locally."""
     check = loader if loader is not None else _default_is_cached
     return all(check(leg.model) for leg in route.legs)
+
+
+# --- Concrete per-sentence translators (design 4.9). ------------------------
+
+import concurrent.futures
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass(frozen=True)
+class Outcome:
+    text: str
+    ok: bool
+    latency_s: float
+    error: str | None = None   # rate_limited | quota | timeout | unavailable | error
+
+
+class LiveTranslateError(Exception):
+    def __init__(self, key: str, params: dict | None = None) -> None:
+        super().__init__(key)
+        self.key = key
+        self.params = params or {}
+
+
+def _cuda_device(torch_module) -> str:
+    try:
+        return "cuda" if torch_module.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
+
+
+class MarianLiveTranslator:
+    """Offline MarianMT translator, one tokenizer+model per route leg (design 4.9).
+
+    Loads the leg(s) once on prepare (CUDA if available), runs greedy decoding
+    with max_length 512, and for a pivot route runs leg 1 then leg 2 inside the
+    same per-sentence timeout. Group target models get their ``>>xxx<<`` token.
+    """
+
+    name = "marian"
+    online = False
+
+    def __init__(self, *, hub_has=None, is_cached=None, tokenizer_loader=None,
+                 model_loader=None, torch_module=None,
+                 clock: Callable[[], float] | None = None) -> None:
+        self._hub_has = hub_has
+        self._is_cached = is_cached if is_cached is not None else (lambda m: True)
+        self._tokenizer_loader = tokenizer_loader
+        self._model_loader = model_loader
+        self._torch = torch_module
+        import time as _t
+        self._clock = clock or _t.monotonic
+        self._legs: list[tuple[Any, Any, str | None]] = []  # (tokenizer, model, token)
+        self._pivot = False
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    def _load(self):
+        if self._tokenizer_loader and self._model_loader:
+            return self._tokenizer_loader, self._model_loader, "cpu"
+        from transformers import MarianMTModel, MarianTokenizer
+        if self._torch is None:
+            import torch as torch_module
+        else:
+            torch_module = self._torch
+        device = _cuda_device(torch_module)
+
+        def tok_loader(model):
+            return MarianTokenizer.from_pretrained(model)
+
+        def mdl_loader(model):
+            return MarianMTModel.from_pretrained(model).to(device)
+
+        return tok_loader, mdl_loader, device
+
+    def prepare(self, src: str, tgt: str) -> None:
+        route = marian_route(src, tgt, hub_has=self._hub_has, is_cached=self._is_cached)
+        if route is None:
+            raise LiveTranslateError("marian_pair", {"src": src, "tgt": tgt})
+        self._pivot = route.pivot
+        tok_loader, mdl_loader, device = self._load()
+        self._device = device
+        self._legs = []
+        for leg in route.legs:
+            tokenizer = tok_loader(leg.model)
+            model = mdl_loader(leg.model)
+            token = self._pick_token(tokenizer, leg.target_token_candidates)
+            self._legs.append((tokenizer, model, token))
+
+    @staticmethod
+    def _pick_token(tokenizer, candidates: tuple[str, ...]) -> str | None:
+        if not candidates:
+            return None
+        supported = set(getattr(tokenizer, "supported_language_codes", []) or [])
+        for candidate in candidates:
+            if candidate in supported:
+                return candidate
+        return candidates[0]
+
+    def _run_leg(self, tokenizer, model, token: str | None, text: str) -> str:
+        source = f"{token} {text}" if token else text
+        batch = tokenizer([source], return_tensors="pt", truncation=True, max_length=512)
+        batch = {k: v.to(getattr(self, "_device", "cpu")) for k, v in batch.items()}
+        generated = model.generate(**batch, num_beams=1, max_length=512)
+        return tokenizer.batch_decode(generated, skip_special_tokens=True)[0].strip()
+
+    def _translate_sync(self, text: str) -> str:
+        current = text
+        for tokenizer, model, token in self._legs:
+            current = self._run_leg(tokenizer, model, token, current)
+        return current
+
+    def translate(self, text: str, *, context=(), timeout_s: float = 5.0) -> Outcome:
+        start = self._clock()
+        try:
+            future = self._executor.submit(self._translate_sync, text)
+            result = future.result(timeout=timeout_s)
+            return Outcome(result, True, self._clock() - start)
+        except concurrent.futures.TimeoutError:
+            return Outcome(text, False, self._clock() - start, error="timeout")
+        except Exception:
+            return Outcome(text, False, self._clock() - start, error="error")
+
+    def close(self) -> None:
+        self._legs = []
+        self._executor.shutdown(wait=False)
+        if self._torch is not None:
+            try:
+                self._torch.cuda.empty_cache()
+            except Exception:
+                pass
+
+
+def make_translator(engine: str, **deps) -> Any:
+    """Build the per-sentence translator for ``engine`` (design 4.9).
+
+    MarianMT is fully offline. The online engines are thin wrappers to be filled
+    in with their real clients; unknown engines raise.
+    """
+    if engine == "marian":
+        return MarianLiveTranslator(**{k: deps[k] for k in (
+            "hub_has", "is_cached", "tokenizer_loader", "model_loader",
+            "torch_module", "clock") if k in deps})
+    raise LiveTranslateError("ollama" if engine == "ollama" else "internal",
+                             {"engine": engine})
