@@ -8,6 +8,7 @@ keeps that contract explicit so the rest of the code can avoid scattered
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -610,3 +611,92 @@ def resolve_wav2lip_paths(
         pass
 
     return Wav2LipPaths(asset_dir=chosen, work_dir=work_dir)
+
+
+# --- Multi-monitor geometry (center a window on the screen it opens on) -------
+
+_XRANDR_MON_RE = re.compile(r"(\d+)/\d+x(\d+)/\d+\+(-?\d+)\+(-?\d+)")
+
+
+def parse_xrandr_monitors(text: str) -> list[tuple[int, int, int, int]]:
+    """Parse ``xrandr --listmonitors`` into ``(x, y, w, h)`` rectangles.
+
+    Each monitor line carries a token like ``1920/600x1080/340+1080+293``
+    (``w/mmw x h/mmh + x + y``); the physical millimetre parts are ignored.
+    """
+    rects: list[tuple[int, int, int, int]] = []
+    for line in text.splitlines():
+        match = _XRANDR_MON_RE.search(line)
+        if match:
+            w, h, x, y = (int(g) for g in match.groups())
+            if w > 0 and h > 0:
+                rects.append((x, y, w, h))
+    return rects
+
+
+def _rect_contains(rect: tuple[int, int, int, int], px: int, py: int) -> bool:
+    x, y, w, h = rect
+    return x <= px < x + w and y <= py < y + h
+
+
+def _x11_monitor_bounds(px: int, py: int, *, run=None):
+    """Bounds of the X11 monitor under ``(px, py)`` via ``xrandr``.
+
+    ``run`` (injectable for tests) returns the ``xrandr --listmonitors`` text.
+    Falls back to the first monitor when the point is outside all of them.
+    """
+    if run is None:
+        def run() -> str:
+            return subprocess.run(
+                ["xrandr", "--listmonitors"], capture_output=True, text=True,
+                timeout=3, stdin=subprocess.DEVNULL).stdout
+    rects = parse_xrandr_monitors(run())
+    for rect in rects:
+        if _rect_contains(rect, px, py):
+            return rect
+    return rects[0] if rects else None
+
+
+def _win_monitor_bounds(px: int, py: int):
+    """Work-area bounds of the Windows monitor under ``(px, py)`` (no taskbar)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class _RECT(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                    ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+    class _MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", _RECT),
+                    ("rcWork", _RECT), ("dwFlags", wintypes.DWORD)]
+
+    user32 = ctypes.windll.user32
+    point = wintypes.POINT(int(px), int(py))
+    hmon = user32.MonitorFromPoint(point, 2)  # MONITOR_DEFAULTTONEAREST
+    info = _MONITORINFO()
+    info.cbSize = ctypes.sizeof(_MONITORINFO)
+    if not user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
+        return None
+    work = info.rcWork
+    return (work.left, work.top, work.right - work.left, work.bottom - work.top)
+
+
+def monitor_bounds_at(px: int, py: int, *, fallback: tuple[int, int, int, int],
+                      sys_platform: str = sys.platform, run=None
+                      ) -> tuple[int, int, int, int]:
+    """``(x, y, w, h)`` of the monitor containing ``(px, py)``.
+
+    Lets the app center itself on the screen it opens on instead of the middle
+    of the whole virtual desktop (which straddles monitors). Returns
+    ``fallback`` (the whole screen) when detection fails or there is one screen.
+    """
+    try:
+        if sys_platform.startswith("win"):
+            bounds = _win_monitor_bounds(px, py)
+        elif sys_platform == "darwin":
+            bounds = None  # Tk reports one logical screen on macOS
+        else:
+            bounds = _x11_monitor_bounds(px, py, run=run)
+    except Exception:  # noqa: BLE001 - detection is best effort
+        bounds = None
+    return bounds if bounds is not None else fallback

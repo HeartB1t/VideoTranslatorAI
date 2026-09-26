@@ -6153,22 +6153,46 @@ class App(tk.Tk):
 
     def _fit_to_screen(self):
         self.update_idletasks()
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        # Clamp to screen but enforce a usable minimum (matches `self.minsize`
-        # set in __init__). When the form is taller than the screen, the
-        # Canvas + Scrollbar in `_build_ui` lets the user reach every row.
+        # Center on the monitor the window opens on (the one under the pointer),
+        # not the middle of the whole virtual desktop, which on a multi-monitor
+        # setup straddles two screens or lands on the wrong one.
+        full = (0, 0, self.winfo_screenwidth(), self.winfo_screenheight())
+        try:
+            px, py = self.winfo_pointerxy()
+        except tk.TclError:
+            px, py = full[2] // 2, full[3] // 2
+        mx, my, mw, mh = _platforms.monitor_bounds_at(px, py, fallback=full)
         # Prefer the explicit geometry hint (1100x780) over reqsize, because the
         # form lives inside a Canvas-wrapped frame and reqwidth from the Canvas
-        # under-reports the form's actual width.
-        win_w = max(1100, min(self.winfo_reqwidth(),  screen_w - 40))
-        win_h = max(780,  min(self.winfo_reqheight(), screen_h - 80))
-        # But never exceed a strict minimum that defeats the purpose on small screens.
-        win_w = max(win_w, 900)
-        win_h = max(win_h, 600)
-        x = (screen_w - win_w) // 2
-        y = max(0, (screen_h - win_h) // 2 - 20)
+        # under-reports the form's actual width. Clamp to this monitor, floor at
+        # a usable minimum (matches `self.minsize`) unless the monitor is smaller.
+        win_w = min(max(1100, self.winfo_reqwidth()), mw - 40)
+        win_w = max(win_w, min(900, mw - 40))
+        win_h = min(max(780, self.winfo_reqheight()), mh - 80)
+        win_h = max(win_h, min(600, mh - 80))
+        x = mx + max(0, (mw - win_w) // 2)
+        y = my + max(0, (mh - win_h) // 2 - 20)
+        # Center first so the window sits on the right monitor, keeping this as
+        # the restore size, then maximize to fill THAT screen.
         self.geometry(f"{win_w}x{win_h}+{x}+{y}")
+        self.update_idletasks()
+        self._maximize_window((mx, my, mw, mh))
+
+    def _maximize_window(self, bounds) -> None:
+        """Expand to fill the current monitor, cross-platform.
+
+        On Windows ``state("zoomed")`` maximizes and keeps the taskbar visible.
+        On X11 the ``-zoomed`` hint is unreliable (xfwm4 accepts it silently
+        without maximizing), so the window is sized to the monitor explicitly,
+        which always works and stays on the screen it was centered on.
+        """
+        try:
+            self.state("zoomed")
+            return
+        except tk.TclError:
+            pass
+        mx, my, mw, mh = bounds
+        self.geometry(f"{mw}x{mh}+{mx}+{my}")
 
     def _s(self, key: str) -> str:
         # Fallback chain: current UI lang → it → en → key (literal)

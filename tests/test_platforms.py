@@ -9,6 +9,8 @@ import os
 from videotranslator.platforms import (
     APP_OUTPUT_DIR_NAME,
     Wav2LipPaths,
+    monitor_bounds_at,
+    parse_xrandr_monitors,
     default_output_dir,
     default_videos_dir,
     linux_xdg_videos_dir,
@@ -553,6 +555,59 @@ class Wav2LipPathResolverTests(unittest.TestCase):
                 raise PermissionError("denied")
 
         self.assertFalse(_wav2lip_assets_present(DeniedPath()))
+
+
+_XRANDR_3MON = (
+    "Monitors: 3\n"
+    " 0: +DP-0 1920/600x1080/340+1080+293  DP-0\n"
+    " 1: +*DP-4 1080/600x1920/340+0+0  DP-4\n"
+    " 2: +HDMI-0 1920/527x1080/296+3000+293  HDMI-0\n"
+)
+
+
+class MonitorGeometryTests(unittest.TestCase):
+    def test_parse_xrandr_three_monitors(self):
+        rects = parse_xrandr_monitors(_XRANDR_3MON)
+        self.assertEqual(rects, [
+            (1080, 293, 1920, 1080),   # DP-0 centre
+            (0, 0, 1080, 1920),        # DP-4 portrait, left
+            (3000, 293, 1920, 1080),   # HDMI-0 right
+        ])
+
+    def test_parse_xrandr_empty(self):
+        self.assertEqual(parse_xrandr_monitors("Monitors: 0\n"), [])
+
+    def test_bounds_picks_monitor_under_point(self):
+        run = lambda: _XRANDR_3MON
+        full = (0, 0, 4920, 1920)
+        # a point on the right (HDMI-0) monitor
+        self.assertEqual(
+            monitor_bounds_at(3500, 800, fallback=full, sys_platform="linux", run=run),
+            (3000, 293, 1920, 1080))
+        # a point on the portrait left monitor
+        self.assertEqual(
+            monitor_bounds_at(200, 1500, fallback=full, sys_platform="linux", run=run),
+            (0, 0, 1080, 1920))
+
+    def test_bounds_falls_back_to_first_monitor_when_outside_all(self):
+        run = lambda: _XRANDR_3MON
+        full = (0, 0, 4920, 1920)
+        self.assertEqual(
+            monitor_bounds_at(9999, 9999, fallback=full, sys_platform="linux", run=run),
+            (1080, 293, 1920, 1080))
+
+    def test_bounds_uses_fallback_when_detection_raises(self):
+        def boom():
+            raise OSError("xrandr missing")
+        full = (0, 0, 1920, 1080)
+        self.assertEqual(
+            monitor_bounds_at(10, 10, fallback=full, sys_platform="linux", run=boom),
+            full)
+
+    def test_bounds_uses_fallback_on_macos(self):
+        full = (0, 0, 1440, 900)
+        self.assertEqual(
+            monitor_bounds_at(10, 10, fallback=full, sys_platform="darwin"), full)
 
 
 if __name__ == "__main__":
