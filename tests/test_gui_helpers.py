@@ -173,6 +173,144 @@ class RequestVoiceBackendTests(unittest.TestCase):
         self.assertIsNone(fake._voice_build_token)
 
 
+class VoFallbackLiveOutputsTests(unittest.TestCase):
+    """A VO fallback replaces the player backend and its bridge: the live session
+    and the voice mpv bound to them must be retired first, never reused."""
+
+    def _events(self):
+        events = []
+        live = Mock()
+        live.join.side_effect = lambda *_a: events.append("live.join")
+        live.request_stop.side_effect = lambda: events.append("live.request_stop")
+        voice = Mock()
+        voice.terminate.side_effect = lambda *_a: events.append("voice.terminate")
+        built = Mock()
+        built.terminate.side_effect = lambda *_a: events.append("built.terminate")
+        backend = Mock()
+        backend.terminate.side_effect = lambda *_a: events.append("backend.terminate")
+        bridge = Mock()
+        bridge.close.side_effect = lambda: events.append("bridge.close")
+        return events, live, voice, built, backend, bridge
+
+    def _fake(self, live, voice, built, bridge):
+        fake = SimpleNamespace(
+            _live_session=live, _live_stopping=True, _live_startup_pending=True,
+            _live_poll_after=None, _voice_backend=voice, _voice_lock=threading.Lock(),
+            _voice_build_token=object(), _voice_built=(bridge, object(), built),
+            _live_bar=Mock(), _player_log=lambda *_a: None, _player_bridge=bridge,
+            _player_guard=None, _player_init_thread=None)
+        fake._refresh_live_bar_enabled = lambda: None
+        fake._take_voice_build = lambda: gui.App._take_voice_build(fake)
+        fake._fallback_lock = threading.Lock()
+        fake._fallback_ready = None
+        fake._take_fallback_ready = lambda: gui.App._take_fallback_ready(fake)
+        fake._adopt_fallback_player = lambda: gui.App._adopt_fallback_player(fake)
+        fake._retire_live_outputs = gui.App._retire_live_outputs
+        fake._redirecting_thread_factory = (
+            lambda target, name=None: SimpleNamespace(start=target))
+        fake._post_if_alive = lambda fn: fn()
+        return fake
+
+    def test_detach_stops_the_session_and_takes_every_voice(self):
+        events, live, voice, built, _backend, bridge = self._events()
+        fake = self._fake(live, voice, built, bridge)
+        got_live, voices = gui.App._detach_live_outputs(fake)
+        self.assertIs(got_live, live)
+        self.assertEqual(events, ["live.request_stop"])  # no blocking join on Tk
+        self.assertEqual(voices, [voice, built])
+        self.assertIsNone(fake._live_session)
+        self.assertIsNone(fake._voice_backend)             # never reused afterwards
+        self.assertIsNone(fake._voice_build_token)         # a running build is void
+        fake._live_bar.set_active.assert_called_with(False)
+
+    def test_failed_player_retires_live_outputs_before_its_backend(self):
+        events, live, voice, built, backend, bridge = self._events()
+        fake = self._fake(live, voice, built, bridge)
+        done = []
+        gui.App._terminate_failed_player(fake, backend, lambda: done.append(True),
+                                         live=live, voices=[voice, built])
+        self.assertEqual(events, ["live.join", "voice.terminate", "built.terminate",
+                                  "backend.terminate", "bridge.close"])
+        self.assertEqual(done, [True])
+
+    def _run_replacement(self, fake, backend, events, *, post=None,
+                         destroy_before_handoff=False):
+        fake.__dict__.update(
+            _player_backend=backend, _player_status=SimpleNamespace(vo_profiles_ok=("a",)),
+            _player_vo_profile="x", _player_controller=Mock(), _player_init_running=False,
+            _player_vo_retries=0, _player_guard=SimpleNamespace(
+                captured=True, restore=lambda: events.append("guard.restore")),
+            _player_panel=SimpleNamespace(host_wid=lambda: 1), _player_mixer=object(),
+            _destroying=False)
+        fake._detach_live_outputs = lambda: gui.App._detach_live_outputs(fake)
+        fake._on_player_fallback_ready = lambda *a: events.append("fallback.ready")
+        fake._on_player_init_failed = lambda exc: events.append(f"failed:{exc}")
+        if post is not None:
+            fake._post_if_alive = post
+        replacement = Mock()
+        replacement.terminate.side_effect = (
+            lambda *_a: events.append("replacement.terminate"))
+
+        def create(**_kw):
+            if destroy_before_handoff:
+                fake._destroying = True          # a close starts meanwhile
+            return replacement
+        with mock.patch.object(gui._player_engine, "next_vo_profile", return_value="b"), \
+                mock.patch.object(gui._libmpv_runtime, "load_mpv", return_value="M"), \
+                mock.patch.object(gui._player_engine, "EventBridge", return_value=Mock()), \
+                mock.patch.object(gui._player_engine, "create_video_backend", create), \
+                mock.patch.object(gui.sys, "platform", "linux"):
+            gui.App._begin_player_vo_fallback(fake)
+        return replacement
+
+    def test_close_before_handoff_terminates_the_replacement_in_the_worker(self):
+        events, live, voice, built, backend, bridge = self._events()
+        fake = self._fake(live, voice, built, bridge)
+        self._run_replacement(fake, backend, events, destroy_before_handoff=True)
+        self.assertIn("replacement.terminate", events)
+        self.assertNotIn("fallback.ready", events)
+        # the guard is restored only after the replacement mpv is gone
+        self.assertGreater(len(events) - events[::-1].index("guard.restore"),
+                           events.index("replacement.terminate"))
+        self.assertIsNone(gui.App._take_fallback_ready(fake))
+
+    def test_close_after_handoff_can_take_the_replacement(self):
+        # The Tk callback is dropped once closing: the replacement waits in the
+        # slot, where the close takes it (and terminates it) instead of leaking.
+        events, live, voice, built, backend, bridge = self._events()
+        fake = self._fake(live, voice, built, bridge)
+        replacement = self._run_replacement(fake, backend, events,
+                                            post=lambda fn: None)
+        taken = gui.App._take_fallback_ready(fake)
+        self.assertIs(taken[0], replacement)
+        self.assertNotIn("fallback.ready", events)
+
+    def test_replacement_branch_retires_live_outputs_before_its_backend(self):
+        events, live, voice, built, backend, bridge = self._events()
+        fake = self._fake(live, voice, built, bridge)
+        fake.__dict__.update(
+            _player_backend=backend, _player_status=SimpleNamespace(vo_profiles_ok=("a",)),
+            _player_vo_profile="x", _player_controller=Mock(), _player_init_running=False,
+            _player_vo_retries=0, _player_guard=SimpleNamespace(captured=True,
+                                                               restore=lambda: None),
+            _player_panel=SimpleNamespace(host_wid=lambda: 1), _player_mixer=object(),
+            _destroying=False)
+        fake._detach_live_outputs = lambda: gui.App._detach_live_outputs(fake)
+        fake._on_player_fallback_ready = lambda *a: events.append("fallback.ready")
+        fake._on_player_init_failed = lambda exc: events.append(f"failed:{exc}")
+        replacement = Mock()
+        with mock.patch.object(gui._player_engine, "next_vo_profile", return_value="b"), \
+                mock.patch.object(gui._libmpv_runtime, "load_mpv", return_value="M"), \
+                mock.patch.object(gui._player_engine, "EventBridge", return_value=Mock()), \
+                mock.patch.object(gui._player_engine, "create_video_backend",
+                                  return_value=replacement), \
+                mock.patch.object(gui.sys, "platform", "linux"):
+            gui.App._begin_player_vo_fallback(fake)
+        self.assertEqual(events, ["live.request_stop", "live.join", "voice.terminate",
+                                  "built.terminate", "backend.terminate",
+                                  "bridge.close", "fallback.ready"])
+
+
 class OnPlayerStateLiveTests(unittest.TestCase):
     def _fake(self, session):
         stopped = []

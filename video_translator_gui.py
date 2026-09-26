@@ -6088,6 +6088,11 @@ class App(tk.Tk):
         self._voice_build_token = None
         self._voice_built = None
         self._voice_init_thread = None
+        # A VO fallback hands its replacement player to Tk through this slot, for
+        # the same reason: a close that starts meanwhile must be able to take and
+        # terminate it (a dropped Tk callback would orphan a live mpv).
+        self._fallback_lock = threading.Lock()
+        self._fallback_ready = None
         self._player_controller = _player_core.PlayerController(
             None, self._player_settings, on_change=self._on_player_state,
             save=save_config)
@@ -9084,6 +9089,10 @@ class App(tk.Tk):
         platform_key = "win32" if sys.platform == "win32" else "linux"
         next_profile = _player_engine.next_vo_profile(
             platform_key, self._player_vo_profile or "", accepted)
+        # Every branch below retires these on its worker before terminating the
+        # old backend and closing its bridge; a voice bound to that bridge is
+        # never reused (its end-of-clip markers would be lost).
+        live, voices = self._detach_live_outputs()
         self._player_controller.detach_backend()
         self._player_backend = None
         self._player_init_running = True
@@ -9094,19 +9103,22 @@ class App(tk.Tk):
         # restores after terminate (_terminate_failed_player, work()).
         if next_profile is None or self._player_vo_retries >= 2:
             self._terminate_failed_player(
-                backend, lambda: self._finish_player_vo_failure("video-output-error"))
+                backend, lambda: self._finish_player_vo_failure("video-output-error"),
+                live=live, voices=voices)
             return
         if (platform_key == "linux"
                 and (self._player_guard is None or not self._player_guard.captured)):
             save_config({"player_vo_profile": next_profile})
             self._terminate_failed_player(
-                backend, lambda: self._finish_player_vo_restart_required(next_profile))
+                backend, lambda: self._finish_player_vo_restart_required(next_profile),
+                live=live, voices=voices)
             return
         self._player_vo_retries += 1
         wid = self._player_panel.host_wid()
 
         def work():
             try:
+                self._retire_live_outputs(live, voices)
                 backend.terminate(3.0)
                 self._player_bridge.close()
                 if self._player_guard is not None:
@@ -9121,22 +9133,78 @@ class App(tk.Tk):
                 self._post_if_alive(
                     lambda error=exc: self._on_player_init_failed(error))
                 return
-            if self._destroying:
+            # Hand over under the lock: either a close already started (terminate
+            # here, then restore the guard), or the slot holds the replacement
+            # until Tk adopts it or a close takes and terminates it.
+            with self._fallback_lock:
+                adopt = not self._destroying
+                if adopt:
+                    self._fallback_ready = (replacement, replacement_bridge,
+                                            next_profile)
+            if not adopt:
                 replacement.terminate(3.0)
                 if self._player_guard is not None:
                     self._player_guard.restore()
                 return
-            self._post_if_alive(
-                lambda: self._on_player_fallback_ready(
-                    replacement, replacement_bridge, next_profile))
+            self._post_if_alive(self._adopt_fallback_player)
 
         self._player_init_thread = self._redirecting_thread_factory(
             work, name="player-init")
         self._player_init_thread.start()
 
-    def _terminate_failed_player(self, backend, on_done) -> None:
+    def _take_fallback_ready(self):
+        with self._fallback_lock:
+            ready, self._fallback_ready = self._fallback_ready, None
+        return ready
+
+    def _adopt_fallback_player(self) -> None:
+        ready = self._take_fallback_ready()
+        if ready is not None:                    # else a close already took it
+            self._on_player_fallback_ready(*ready)
+
+    def _detach_live_outputs(self):
+        """Tk side of a VO fallback: detach what is bound to the old player.
+
+        The live session writes to the old backend and reads the old bridge, and
+        the voice mpv posts its end markers on that bridge, which is about to be
+        closed and replaced: stop the session (no blocking join on Tk) and take
+        every voice backend, adopted or still being built, so none is reused.
+        Returns ``(live, voices)`` for _retire_live_outputs on the worker.
+        """
+        live = self._live_session
+        if live is not None:
+            self._live_session = None
+            self._live_stopping = False
+            self._live_startup_pending = False
+            if self._live_poll_after is not None:
+                with contextlib.suppress(tk.TclError):
+                    self.after_cancel(self._live_poll_after)
+                self._live_poll_after = None
+            with contextlib.suppress(Exception):
+                live.request_stop()
+            self._live_bar.set_active(False)
+            self._refresh_live_bar_enabled()
+            self._player_log("[live] stopped: the video output was replaced")
+        voices = [v for v in (self._voice_backend, self._take_voice_build())
+                  if v is not None]
+        self._voice_backend = None
+        return live, voices
+
+    @staticmethod
+    def _retire_live_outputs(live, voices) -> None:
+        """Worker side: the session's threads and the voices go before the backend."""
+        if live is not None:
+            with contextlib.suppress(Exception):
+                live.join(4.0)
+        for voice in voices:
+            with contextlib.suppress(Exception):
+                voice.terminate(3.0)
+
+    def _terminate_failed_player(self, backend, on_done, *, live=None,
+                                 voices=()) -> None:
         def work():
             try:
+                self._retire_live_outputs(live, voices)
                 backend.terminate(3.0)
             finally:
                 self._player_bridge.close()
@@ -10227,9 +10295,13 @@ class App(tk.Tk):
                           if v is not None]
         self._voice_backend = None
         voice_init = self._voice_init_thread
+        # A VO fallback replacement built but not adopted yet (its Tk callback is
+        # dropped once closing): take it so it is terminated before the guard.
+        fallback = self._take_fallback_ready()
         guard = self._player_guard
         init_thread = self._player_init_thread
         if (backend is None and not voice_backends and live is None
+                and fallback is None
                 and (init_thread is None or not init_thread.is_alive())
                 and (voice_init is None or not voice_init.is_alive())):
             self._player_bridge.close()
@@ -10255,6 +10327,10 @@ class App(tk.Tk):
                         voice_backend.terminate(3.0)
                 if backend is not None:
                     backend.terminate(3.0)
+                if fallback is not None:
+                    with contextlib.suppress(Exception):
+                        fallback[1].close()
+                        fallback[0].terminate(3.0)
                 if init_thread is not None and init_thread.is_alive():
                     init_thread.join(6.0)
             finally:
