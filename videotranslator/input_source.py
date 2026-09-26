@@ -120,6 +120,73 @@ def download_url(
     return filename
 
 
+def _pick_stream_url(info: dict[str, Any], max_height: int) -> str | None:
+    """Best progressive (audio+video) stream URL in ``info``, or None.
+
+    Prefers the format yt-dlp already selected; otherwise scans every format for
+    the tallest muxed one at or below ``max_height`` so both mpv (video+audio)
+    and PyAV (audio) read a single stream.
+    """
+    if (info.get("url") and info.get("acodec", "none") != "none"
+            and info.get("vcodec", "none") != "none"):
+        return info["url"]
+    best = None
+    for fmt in info.get("formats", []):
+        if (fmt.get("url") and fmt.get("acodec", "none") != "none"
+                and fmt.get("vcodec", "none") != "none"):
+            height = fmt.get("height") or 0
+            if height <= max_height and (best is None
+                                         or height > (best.get("height") or 0)):
+                best = fmt
+    if best is not None:
+        return best["url"]
+    return info.get("url")
+
+
+def resolve_stream_url(
+    url: str,
+    *,
+    ytdlp_cls: Callable[[dict[str, Any]], _YoutubeDLLike] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+    max_height: int = 720,
+) -> tuple[str, str]:
+    """Resolve a video URL to a direct progressive stream URL (design 4.7, P6 VOD).
+
+    Returns ``(stream_url, title)``. Picks a single muxed format so the player
+    and the live decoder can both open one URL and stream progressively; a true
+    live broadcast (a growing stream) is out of scope here. ``ytdlp_cls`` is
+    injectable so tests exercise the contract without yt-dlp or the network.
+    """
+    if ytdlp_cls is None:
+        import yt_dlp
+
+        ytdlp_cls = yt_dlp.YoutubeDL
+
+    from videotranslator.js_runtime import ensure_js_runtime
+
+    emit_download_warnings(log_cb)
+    js_runtimes = ensure_js_runtime(log_cb=log_cb)
+    opts = build_ytdlp_options(".", js_runtimes=js_runtimes)
+    opts["format"] = (
+        f"best[acodec!=none][vcodec!=none][height<={max_height}]"
+        "/best[acodec!=none][vcodec!=none]/best"
+    )
+    with ytdlp_cls(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if info.get("entries"):
+        entries = [e for e in info["entries"] if e]
+        if not entries:
+            raise RuntimeError("the URL resolved to an empty playlist")
+        info = entries[0]
+    stream_url = _pick_stream_url(info, max_height)
+    if not stream_url:
+        raise RuntimeError("no playable progressive stream found for this URL")
+    title = info.get("title") or url
+    if log_cb is not None:
+        log_cb(f"[+] Live source resolved: {title}")
+    return stream_url, title
+
+
 def is_probable_url(value: str) -> bool:
     """Small URL classifier used by future CLI/GUI input handling."""
     text = (value or "").strip().lower()

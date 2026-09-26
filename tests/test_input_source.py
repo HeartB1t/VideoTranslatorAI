@@ -10,6 +10,7 @@ from videotranslator.input_source import (
     is_probable_url,
     normalize_input_path,
     resolve_downloaded_filename,
+    resolve_stream_url,
 )
 
 
@@ -101,6 +102,75 @@ class InputSourceTests(unittest.TestCase):
         # Final download line is the contract; advisory warnings precede it.
         self.assertEqual(logs[-1], f"[+] Downloaded: {final}")
         self.assertTrue(any("anti-bot" in line for line in logs))
+
+    def _fake_ydl(self, info):
+        captured = {}
+
+        class FakeYoutubeDL:
+            def __init__(self, opts):
+                captured["opts"] = opts
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def extract_info(self, url, download):
+                captured["url"] = url
+                captured["download"] = download
+                return info
+
+        return FakeYoutubeDL, captured
+
+    def _resolve(self, info, **kw):
+        cls, captured = self._fake_ydl(info)
+        with mock.patch(
+            "videotranslator.js_runtime.ensure_js_runtime", return_value=None
+        ):
+            result = resolve_stream_url("https://youtu.be/x", ytdlp_cls=cls, **kw)
+        return result, captured
+
+    def test_resolve_stream_url_uses_selected_progressive_format(self):
+        info = {"title": "Song", "url": "https://cdn/prog.mp4",
+                "acodec": "mp4a", "vcodec": "avc1"}
+        (url, title), captured = self._resolve(info)
+        self.assertEqual(url, "https://cdn/prog.mp4")
+        self.assertEqual(title, "Song")
+        self.assertFalse(captured["download"])           # never downloads
+        self.assertIn("acodec!=none", captured["opts"]["format"])
+
+    def test_resolve_stream_url_scans_formats_for_tallest_muxed(self):
+        info = {"title": "Clip", "formats": [
+            {"url": "a", "acodec": "aac", "vcodec": "none", "height": 0},     # audio only
+            {"url": "v", "acodec": "none", "vcodec": "avc1", "height": 1080},  # video only
+            {"url": "sd", "acodec": "aac", "vcodec": "avc1", "height": 360},
+            {"url": "hd", "acodec": "aac", "vcodec": "avc1", "height": 720},
+        ]}
+        (url, _title), _ = self._resolve(info, max_height=720)
+        self.assertEqual(url, "hd")
+
+    def test_resolve_stream_url_respects_max_height(self):
+        info = {"title": "Clip", "formats": [
+            {"url": "sd", "acodec": "aac", "vcodec": "avc1", "height": 360},
+            {"url": "hd", "acodec": "aac", "vcodec": "avc1", "height": 1080},
+        ]}
+        (url, _title), _ = self._resolve(info, max_height=480)
+        self.assertEqual(url, "sd")
+
+    def test_resolve_stream_url_uses_first_playlist_entry(self):
+        info = {"entries": [
+            None,
+            {"title": "First", "url": "https://cdn/first.mp4",
+             "acodec": "aac", "vcodec": "avc1"},
+        ]}
+        (url, title), _ = self._resolve(info)
+        self.assertEqual(url, "https://cdn/first.mp4")
+        self.assertEqual(title, "First")
+
+    def test_resolve_stream_url_raises_without_a_stream(self):
+        with self.assertRaises(RuntimeError):
+            self._resolve({"title": "x", "formats": []})
 
     def test_emit_download_warnings_is_noop_without_callback(self):
         # Must not raise when there is no log sink.

@@ -6081,6 +6081,7 @@ class App(tk.Tk):
         self._live_session = None
         self._live_poll_after = None
         self._live_stopping = False
+        self._live_resolving = False
         self._close_started_at = None
         self._close_done = None
 
@@ -8383,13 +8384,14 @@ class App(tk.Tk):
         return item.path
 
     def _refresh_live_bar_enabled(self) -> None:
-        """Start is available only with a local media loaded and no batch job."""
+        """Start is available with a local media loaded OR a URL, and no batch job."""
         bar = getattr(self, "_live_bar", None)
         if bar is None:
             return
-        if self._live_session is not None:
-            return  # a session is running; the bar shows its Stop row
-        ready = self._live_media_path() is not None and not self._running
+        if self._live_session is not None or self._live_resolving:
+            return  # a session is running/starting; the bar shows its Stop row
+        ready = ((self._live_media_path() is not None or bool(self._get_urls()))
+                 and not self._running)
         bar.set_start_enabled(ready)
 
     def _block_if_live_active(self) -> bool:
@@ -8429,7 +8431,7 @@ class App(tk.Tk):
             session.set_subs_enabled(bool(params.get("enabled", True)))
 
     def _start_live_session(self) -> None:
-        if self._live_session is not None:
+        if self._live_session is not None or self._live_resolving:
             return
         if self._running:
             self._live_bar.show_banner("live_err_busy_job", is_error=True)
@@ -8437,12 +8439,58 @@ class App(tk.Tk):
         if self._editor_open:
             self._live_bar.show_banner("live_err_editor_open", is_error=True)
             return
-        source = self._live_media_path()
-        if source is None or self._player_backend is None:
+        if self._player_backend is None:
             return
+        urls = self._get_urls()
+        if urls:                       # a link takes priority over a loaded file
+            self._start_live_from_url(urls[0])
+            return
+        source = self._live_media_path()
+        if source is not None:
+            self._launch_live_session(source, "file", title=None)
+
+    def _start_live_from_url(self, url: str) -> None:
+        """Resolve a link to a progressive stream, play it, then translate it live."""
+        self._live_resolving = True
+        self._live_bar.clear_banner()
+        self._live_bar.set_start_enabled(False)
+        self._player_log(self._s("live_status_connecting"))
+
+        def work():
+            try:
+                from videotranslator import input_source
+                stream_url, title = input_source.resolve_stream_url(
+                    url, log_cb=self._player_log)
+            except Exception as exc:                 # noqa: BLE001
+                self.after(0, self._on_live_resolve_failed, str(exc))
+                return
+            self.after(0, self._on_live_resolved, stream_url, title)
+
+        self._redirecting_thread_factory(work, name="live-resolve").start()
+
+    def _on_live_resolve_failed(self, detail: str) -> None:
+        self._live_resolving = False
+        self._player_log(f"[live] resolve failed: {detail}")
+        self._live_bar.show_banner("live_err_resolve", {"detail": detail},
+                                   is_error=True)
+        self._refresh_live_bar_enabled()
+
+    def _on_live_resolved(self, stream_url: str, title: str) -> None:
+        self._live_resolving = False
+        if self._destroying or self._player_backend is None:
+            return
+        # Play the resolved stream in the player while the same URL is translated.
+        item = _player_core.MediaItem(path=stream_url, kind="source", title=title)
+        self._player_controller.set_playlist([item], index=0)
+        self._player_controller.load(item, paused=False)
+        self._ensure_or_show_player_status()
+        self._launch_live_session(stream_url, "url", title=title)
+
+    def _launch_live_session(self, source: str, source_kind: str, *,
+                             title: str | None) -> None:
         raw = self._live_bar.current_settings()
         values = {
-            "source": source, "source_kind": "file",
+            "source": source, "source_kind": source_kind,
             "lang_source": self._lang_src.get(),
             "lang_target": self._lang_tgt.get(),
             "voice": "",
@@ -8472,6 +8520,7 @@ class App(tk.Tk):
             self._live_session = None
             self._live_bar.show_banner("live_err_internal",
                                        {"detail": str(exc)}, is_error=True)
+            self._refresh_live_bar_enabled()
             return
         self._live_bar.clear_banner()
         self._live_bar.set_active(True)

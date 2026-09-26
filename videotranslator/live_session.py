@@ -314,7 +314,10 @@ class LiveSession:
                            start_token=process_start_token(pid))
         self._set_state("running")
         targets = [("live-sched", self._sched_loop)]
-        if self._cfg.source_kind == "file":
+        # A file OR a resolved VOD stream URL is decoded the same way: PyAV opens
+        # a local path or an HTTP URL. (A growing live broadcast, P6, would need a
+        # dedicated ingest instead.)
+        if self._cfg.source_kind in ("file", "url"):
             targets = [("live-decode", self._decode_loop),
                        ("live-asr", self._asr_loop),
                        ("live-mt", self._mt_loop),
