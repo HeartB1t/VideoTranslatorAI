@@ -232,7 +232,7 @@ class DelayController:
                 return _NONE
             distance = live_distance_s(edge.max_gap_s)
             if lag > distance + self._live_extra:
-                return self._banded("live_seek", mono,
+                return self._banded("distance_seek", mono,
                                     SyncAction("seek", edge.effective - distance))
             return _NONE
         err = lag - self._delay
