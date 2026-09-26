@@ -49,6 +49,8 @@ class TranslationJobConfig:
     hotwords: list[str] | None = field(default=None)
     ollama_use_cove: bool = True
     keep_original_audio: bool = True
+    voicebox_url: str = "http://127.0.0.1:17493"
+    voicebox_engine: str = "chatterbox"
 
     def to_translate_video_kwargs(self) -> dict[str, Any]:
         """Return kwargs compatible with legacy ``translate_video``."""

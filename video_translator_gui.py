@@ -5525,6 +5525,8 @@ def translate_video(
     ollama_use_cove: bool = True,
     keep_original_audio: bool = True,
     output_dir: str | None = None,
+    voicebox_url: str = "http://127.0.0.1:17493",
+    voicebox_engine: str = "chatterbox",
 ) -> dict:
     """Compatibility wrapper for the modular pipeline runner."""
     return _translate_video_impl(
@@ -5561,6 +5563,8 @@ def translate_video(
         ollama_use_cove=ollama_use_cove,
         keep_original_audio=keep_original_audio,
         output_dir=output_dir,
+        voicebox_url=voicebox_url,
+        voicebox_engine=voicebox_engine,
         runtime=_build_pipeline_runtime(),
     )
 
@@ -6065,6 +6069,12 @@ class App(tk.Tk):
         self._no_demucs = tk.BooleanVar(value=False)
         self._edit_subs = tk.BooleanVar(value=False)
         self._use_xtts  = tk.BooleanVar(value=False)
+        # Voicebox: voice cloning by a separate local server (off by default).
+        self._use_voicebox = tk.BooleanVar(value=False)
+        self._voicebox_url_var = tk.StringVar(
+            value=_ocfg.get("voicebox_url", "http://127.0.0.1:17493"))
+        self._voicebox_engine_var = tk.StringVar(
+            value=_ocfg.get("voicebox_engine", "chatterbox"))
         self._use_lipsync = tk.BooleanVar(value=False)
         # Translation engine: "google" | "deepl" | "marian" | "llm_ollama"
         self._translation_engine = tk.StringVar(value="google")
@@ -6901,6 +6911,7 @@ class App(tk.Tk):
     def _apply_profile(self, name):
         """Apply a quality preset by setting existing Tk vars."""
         self._active_profile.set(name)
+        self._use_voicebox.set(False)        # presets choose Edge-TTS or XTTS
         # A preset is the newest explicit choice: the models chosen in the
         # 'Models for this PC' window no longer apply at the next launch.
         if getattr(self, "_models_choice_restored", False) or load_config().get(
@@ -6973,7 +6984,8 @@ class App(tk.Tk):
                 "marian":     "MarianMT",
                 "llm_ollama": "Ollama LLM",
             }.get(eng, eng)
-            tts     = "XTTS v2" if self._use_xtts.get() else "Edge-TTS"
+            tts     = ("Voicebox" if self._use_voicebox.get()
+                       else "XTTS v2" if self._use_xtts.get() else "Edge-TTS")
             profile = self._active_profile.get().capitalize()
             self._summary_var.set(
                 f"{src_name} → {tgt_name}  ·  {eng_label}"
@@ -7332,8 +7344,47 @@ class App(tk.Tk):
         sect4, body4, _, self._lbl_section_voice_cloning = self._make_accordion_section(
             adv, self._s("section_voice_cloning"))
         sect4.pack(fill="x")
-        self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts)
+        self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts,
+                            cmd=lambda: self._on_voice_clone_toggle("xtts"))
         self._chk_xtts.pack(anchor="w", pady=4)
+        # Voicebox (separate local server): exclusive with XTTS.
+        self._chk_voicebox = cb(body4, "vb_use", self._use_voicebox,
+                                cmd=lambda: self._on_voice_clone_toggle("voicebox"))
+        self._chk_voicebox.pack(anchor="w", pady=(2, 0))
+        # Compact rows: the settings column is 460 px wide (P0 layout).
+        vb_row = tk.Frame(body4, bg=SURFACE)
+        vb_row.pack(anchor="w", padx=(22, 0), pady=(2, 0))
+        self._lbl_vb_url = tk.Label(vb_row, text=self._s("vb_url"), bg=SURFACE, fg=FG2,
+                                    font="VT.Small")
+        self._lbl_vb_url.pack(side="left")
+        self._voicebox_url_entry = tk.Entry(
+            vb_row, textvariable=self._voicebox_url_var, width=22,
+            bg=FIELD, fg=FG, **_field_colors(), relief="flat",
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+            font="VT.Mono")
+        self._voicebox_url_entry.pack(side="left", padx=(4, 0))
+        vb_row_engine = tk.Frame(body4, bg=SURFACE)
+        vb_row_engine.pack(anchor="w", padx=(22, 0), pady=(2, 0))
+        self._lbl_vb_engine = tk.Label(vb_row_engine, text=self._s("vb_engine"),
+                                       bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_vb_engine.pack(side="left")
+        from videotranslator.voicebox_engine import ENGINES as _VB_ENGINES
+        ttk.Combobox(vb_row_engine, textvariable=self._voicebox_engine_var,
+                     values=_VB_ENGINES, state="readonly",
+                     width=16).pack(side="left", padx=(4, 0))
+        vb_row2 = tk.Frame(body4, bg=SURFACE)
+        vb_row2.pack(anchor="w", fill="x", padx=(22, 0), pady=(4, 0))
+        vb_wrap, self._btn_vb_check = self._flat_btn(
+            vb_row2, text=self._s("vb_check"), command=self._check_voicebox)
+        vb_wrap.pack(side="left")
+        self._lbl_vb_status = tk.Label(body4, text="", bg=SURFACE, fg=FG2,
+                                       font="VT.Small", wraplength=_HINT_WRAP - 30,
+                                       justify="left")
+        self._lbl_vb_status.pack(anchor="w", padx=(22, 0))
+        self._lbl_vb_note = tk.Label(body4, text=self._s("vb_note"), bg=SURFACE, fg=FG2,
+                                     font="VT.Small", wraplength=_HINT_WRAP - 30,
+                                     justify="left")
+        self._lbl_vb_note.pack(anchor="w", padx=(22, 0), pady=(2, 4))
         # Optional ElevenLabs voice for the live dub (online, paid, own key).
         el_wrap, self._btn_elevenlabs = self._flat_btn(
             body4, text=self._s("el_button"), command=self._open_elevenlabs_dialog)
@@ -8180,6 +8231,11 @@ class App(tk.Tk):
         self._lbl_section_voice_cloning.configure(text=self._s("section_voice_cloning"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
         self._btn_elevenlabs.configure(text=self._s("el_button"))
+        self._chk_voicebox.configure(text=self._s("vb_use"))
+        self._lbl_vb_url.configure(text=self._s("vb_url"))
+        self._lbl_vb_engine.configure(text=self._s("vb_engine"))
+        self._btn_vb_check.configure(text=self._s("vb_check"))
+        self._lbl_vb_note.configure(text=self._s("vb_note"))
         self._lbl_section_lip_sync.configure(text=self._s("section_lip_sync"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_section_engine.configure(text=self._s("section_engine"))
@@ -8628,8 +8684,9 @@ class App(tk.Tk):
         live = _player_settings_module.normalize_live_settings(load_config()).asr_model
         if live == "auto":                  # PersistentWhisper's own default
             live = "large-v3-turbo" if shutil.which("nvidia-smi") else "small"
-        return {"asr": self._model.get(), "asr_live": live, "mt": mt,
-                "tts": "xtts" if self._use_xtts.get() else "edge"}
+        tts = ("voicebox" if self._use_voicebox.get()
+               else "xtts" if self._use_xtts.get() else "edge")
+        return {"asr": self._model.get(), "asr_live": live, "mt": mt, "tts": tts}
 
     def _set_model_choices(self, choices: dict) -> None:
         """Put per-stage choices into the GUI variables and the live settings."""
@@ -8644,8 +8701,9 @@ class App(tk.Tk):
             self._translation_engine.set("llm_ollama")
             self._ollama_model_var.set(mt)
             live_engine = "ollama"
-        if choices.get("tts") in ("edge", "xtts"):
+        if choices.get("tts") in ("edge", "xtts", "voicebox"):
             self._use_xtts.set(choices["tts"] == "xtts")
+            self._use_voicebox.set(choices["tts"] == "voicebox")
         update = {}
         if choices.get("asr_live") in _player_settings_module.LIVE_ASR_MODELS:
             update["live_asr_model"] = choices["asr_live"]
@@ -8702,6 +8760,48 @@ class App(tk.Tk):
             if Path(candidate).is_file():
                 return candidate
         return None
+
+    # -- Voicebox (voice cloning by a separate local server) ---------------------
+
+    def _on_voice_clone_toggle(self, which: str) -> None:
+        """XTTS and Voicebox both clone the voice: only one can be on."""
+        if which == "voicebox" and self._use_voicebox.get():
+            self._use_xtts.set(False)
+            self._save_voicebox_settings()
+        elif which == "xtts" and self._use_xtts.get():
+            self._use_voicebox.set(False)
+        self._update_start_summary()
+
+    def _save_voicebox_settings(self) -> None:
+        save_config({"voicebox_url": self._voicebox_url_var.get().strip(),
+                     "voicebox_engine": self._voicebox_engine_var.get()})
+
+    def _check_voicebox(self) -> None:
+        """Ask the Voicebox server for its health, off the Tk thread."""
+        from videotranslator import voicebox_engine as vbe
+        url = self._voicebox_url_var.get().strip() or vbe.DEFAULT_URL
+        if not vbe.is_local_url(url):
+            self._lbl_vb_status.configure(text=self._s("vb_not_local"))
+            return
+        self._save_voicebox_settings()
+        self._lbl_vb_status.configure(text=self._s("vb_checking"))
+        self._btn_vb_check.configure(state="disabled")
+
+        def work() -> None:
+            try:
+                device = vbe.describe_health(vbe.VoiceboxClient(url).health())
+                text = self._s("vb_ok").format(device=device)
+            except Exception:                         # noqa: BLE001
+                text = self._s("vb_unreachable").format(url=url)
+            self.after(0, self._show_voicebox_check, text)
+
+        threading.Thread(target=work, name="voicebox-check", daemon=True).start()
+
+    def _show_voicebox_check(self, text: str) -> None:
+        if self._destroying:
+            return
+        self._lbl_vb_status.configure(text=text)
+        self._btn_vb_check.configure(state="normal")
 
     # -- ElevenLabs live voice ---------------------------------------------------
 
@@ -10120,7 +10220,10 @@ class App(tk.Tk):
             subs_only=self._subs_only.get(),
             no_subs=self._no_subs.get(),
             no_demucs=self._no_demucs.get(),
-            tts_engine="xtts" if self._use_xtts.get() else "edge",
+            tts_engine=("voicebox" if self._use_voicebox.get()
+                        else "xtts" if self._use_xtts.get() else "edge"),
+            voicebox_url=self._voicebox_url_var.get().strip() or "http://127.0.0.1:17493",
+            voicebox_engine=self._voicebox_engine_var.get() or "chatterbox",
             translation_engine=translation_engine,
             deepl_key=self._deepl_key_var.get().strip(),
             use_diarization=use_diarization,

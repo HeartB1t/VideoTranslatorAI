@@ -49,6 +49,7 @@ class PipelineRuntime:
     build_dubbed_track: Any
     has_enough_faces: Any
     apply_lipsync: Any
+    generate_tts_voicebox: Any = None     # None: videotranslator.voicebox_engine
 
 
 def translate_video(
@@ -65,7 +66,7 @@ def translate_video(
     translation_engine: str = "google",
     deepl_key: str = "",
     segments_override: list[dict] | None = None,
-    tts_engine: str = "edge",   # "edge" | "xtts"
+    tts_engine: str = "edge",   # "edge" | "xtts" | "voicebox"
     use_diarization: bool = False,
     hf_token: str = "",
     use_lipsync: bool = False,
@@ -85,6 +86,8 @@ def translate_video(
     ollama_use_cove: bool = True,
     keep_original_audio: bool = True,
     output_dir: str | None = None,
+    voicebox_url: str = "http://127.0.0.1:17493",
+    voicebox_engine: str = "chatterbox",
     *,
     runtime: PipelineRuntime,
 ) -> dict:
@@ -452,10 +455,23 @@ def translate_video(
                 )
             effective_xtts_speed = _capped
 
-        # TTS generation - Edge-TTS or Coqui XTTS v2.
-        # Fallback cascade: xtts → edge. If the user chose voice cloning
-        # and it fails, we gracefully degrade to Edge-TTS.
+        # TTS generation - Edge-TTS, Coqui XTTS v2 or Voicebox (separate local
+        # server). Fallback cascade: xtts/voicebox → edge. If the user chose
+        # voice cloning and it fails, we gracefully degrade to Edge-TTS.
         tts_files = None
+        if tts_engine == "voicebox":
+            generate_voicebox = runtime.generate_tts_voicebox
+            if generate_voicebox is None:
+                from .voicebox_engine import generate_tts_voicebox as generate_voicebox
+            try:
+                tts_files = generate_voicebox(
+                    segments, vocals_path, lang_target, tmp_dir,
+                    diar_segments=diar_segments, base_url=voicebox_url,
+                    engine=voicebox_engine,
+                )
+            except Exception as e:
+                print(f"     ! Voicebox failed ({e}), falling back to Edge-TTS.", flush=True)
+                tts_files = None
         if tts_engine == "xtts":
             try:
                 tts_files = generate_tts_xtts(

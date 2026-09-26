@@ -78,6 +78,10 @@ TTS = {
     "edge": ModelOption("tts", "edge", "Edge-TTS", False, quality=3),
     "xtts": ModelOption("tts", "xtts", "Coqui XTTS v2", True, 1870, 4.0, 6.0, 5,
                         licence="CPML (non-commercial)"),
+    # Separate local program (its own models and memory): never recommended
+    # automatically, since it must be installed and started apart.
+    "voicebox": ModelOption("tts", "voicebox", "Voicebox (local server)", True, quality=5,
+                            licence="MIT"),
 }
 
 STAGE_OPTIONS = {"asr": WHISPER, "asr_live": WHISPER, "mt": MT, "tts": TTS}

@@ -131,6 +131,15 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
     # TTS engine choice via CLI.
     parser.add_argument("--xtts", action="store_true",
                         help="Use Coqui XTTS v2 voice cloning (~1.8GB first run)")
+    parser.add_argument("--voicebox", action="store_true",
+                        help="Use a local Voicebox server for voice cloning "
+                             "(install and start Voicebox separately)")
+    parser.add_argument("--voicebox-url", default=None,
+                        help="Voicebox address (default http://127.0.0.1:17493)")
+    parser.add_argument("--voicebox-engine", default=None,
+                        choices=("chatterbox", "qwen", "chatterbox_turbo", "tada",
+                                 "luxtts", "kokoro"),
+                        help="Voicebox engine (default chatterbox)")
     parser.add_argument(
         "--hotwords", type=str, default=None,
         help="Comma-separated hotwords to bias Whisper decoding "
@@ -210,8 +219,8 @@ def _cli(argv: Sequence[str] | None = None) -> None:
             xtts_speed_cli = None
     else:
         xtts_speed_cli = None
-    # TTS engine selection: --xtts flag or default Edge-TTS.
-    tts_engine_cli = "xtts" if args.xtts else "edge"
+    # TTS engine selection: --voicebox, --xtts or default Edge-TTS.
+    tts_engine_cli = "voicebox" if args.voicebox else ("xtts" if args.xtts else "edge")
     ollama_slot_aware_cli = (
         False
         if args.ollama_no_slot_aware is True
@@ -285,6 +294,10 @@ def _cli(argv: Sequence[str] | None = None) -> None:
             difficulty_override=args.difficulty_override,
             hotwords=hotwords_cli,
             ollama_use_cove=not args.no_cove,
+            voicebox_url=(args.voicebox_url or cfg_cli.get("voicebox_url")
+                          or "http://127.0.0.1:17493"),
+            voicebox_engine=(args.voicebox_engine or cfg_cli.get("voicebox_engine")
+                             or "chatterbox"),
         )
         try:
             run_translation_job(job, runner=legacy.translate_video)

@@ -122,6 +122,7 @@ class ModelChoicesTests(unittest.TestCase):
         self.app = SimpleNamespace(
             _model=_Var("small"), _translation_engine=_Var("google"),
             _ollama_model_var=_Var("qwen3:8b"), _use_xtts=_Var(False),
+            _use_voicebox=_Var(False),
             _active_profile=_Var("balanced"), _live_bar=Mock(), _destroying=False,
             _on_engine_change=Mock(), _update_profile_buttons=Mock(),
             _update_start_summary=Mock(), _models_choice_restored=False)
@@ -148,6 +149,15 @@ class ModelChoicesTests(unittest.TestCase):
         self.app._live_bar.set_config_values.assert_called_once()
         self.assertEqual(self.app._active_profile.get(), "custom")
         self.app._on_engine_change.assert_called_once_with()
+
+    def test_voicebox_choice_turns_xtts_off(self):
+        self.app._use_xtts.set(True)
+        gui.App._set_model_choices(self.app, {"tts": "voicebox"})
+        self.assertEqual((self.app._use_voicebox.get(), self.app._use_xtts.get()),
+                         (True, False))
+        self.assertEqual(self.app._current_model_choices()["tts"], "voicebox")
+        gui.App._set_model_choices(self.app, {"tts": "edge"})
+        self.assertFalse(self.app._use_voicebox.get())
 
     def test_unknown_values_are_ignored(self):
         gui.App._set_model_choices(self.app, {"asr": "huge", "mt": "bing", "tts": "robot",

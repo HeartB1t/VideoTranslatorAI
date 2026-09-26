@@ -63,6 +63,8 @@ def option_text(opt: ModelOption, hw: HardwareInfo, cached: set[str],
                      else ui_s("mdl_status_download").format(mb=opt.download_mb))
     elif opt.key.startswith("qwen3"):
         parts.append(ui_s("mdl_status_ollama"))
+    elif opt.key == "voicebox":
+        parts.append(ui_s("mdl_status_voicebox"))
     elif opt.local:
         parts.append(ui_s("mdl_status_first_use"))
     return " · ".join(parts)

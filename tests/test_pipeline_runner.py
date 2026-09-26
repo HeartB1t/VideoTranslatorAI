@@ -287,3 +287,52 @@ class PipelineRunnerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VoiceboxBranchTests(unittest.TestCase):
+    """tts_engine="voicebox": Voicebox files, or Edge-TTS when it returns None."""
+
+    def _run(self, voicebox_result):
+        import dataclasses
+        from videotranslator import pipeline_runner
+        calls = {}
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            video_path = os.path.join(tmp_dir, "input.mp4")
+            Path(video_path).write_bytes(b"fake")
+
+            def voicebox(segments, vocals, lang, tmp, **kw):
+                calls["voicebox"] = (lang, kw["base_url"], kw["engine"])
+                return voicebox_result
+
+            def edge(segments, voice, tmp, rate="+0%"):
+                calls["edge"] = voice
+                return ["edge.wav"]
+
+            def build_track(segments, files, *a, **kw):
+                calls["files"] = files
+                return "track.wav"
+
+            runtime = dataclasses.replace(
+                _subs_only_runtime(tmp_dir), generate_tts_voicebox=voicebox,
+                generate_tts=edge, build_dubbed_track=build_track)
+            with mock.patch.object(pipeline_runner, "get_duration", return_value=5.0), \
+                    mock.patch.object(pipeline_runner, "mux_video"):
+                translate_video(
+                    video_path, output=os.path.join(tmp_dir, "out.mp4"), lang_target="it",
+                    no_demucs=True, no_subs=True, tts_engine="voicebox",
+                    voicebox_url="http://127.0.0.1:17600", voicebox_engine="qwen",
+                    segments_override=[{"start": 0.0, "end": 1.0, "text_src": "hi",
+                                        "text_tgt": "ciao"}],
+                    difficulty_profile_enabled=False, runtime=runtime)
+        return calls
+
+    def test_voicebox_files_are_used(self):
+        calls = self._run(["vb_0000.wav"])
+        self.assertEqual(calls["voicebox"], ("it", "http://127.0.0.1:17600", "qwen"))
+        self.assertEqual(calls["files"], ["vb_0000.wav"])
+        self.assertNotIn("edge", calls)
+
+    def test_voicebox_failure_falls_back_to_edge(self):
+        calls = self._run(None)
+        self.assertEqual(calls["files"], ["edge.wav"])
+        self.assertEqual(calls["edge"], "it-IT-TestNeural")
