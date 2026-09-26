@@ -5367,6 +5367,23 @@ def load_hf_token() -> str:
     )
 
 
+def load_elevenlabs_key() -> str:
+    """The ElevenLabs API key: system keyring first, JSON config as fallback."""
+    from videotranslator import elevenlabs_tts as _el
+    return _load_secret_token(
+        keyring_backend=_keyring_available(), config_path=CONFIG_PATH,
+        service_name=KEYRING_SERVICE, username=_el.KEYRING_USERNAME,
+        config_key=_el.CONFIG_KEY)
+
+
+def save_elevenlabs_key(key: str) -> None:
+    from videotranslator import elevenlabs_tts as _el
+    _save_secret_token(
+        key, keyring_backend=_keyring_available(), config_path=CONFIG_PATH,
+        service_name=KEYRING_SERVICE, username=_el.KEYRING_USERNAME,
+        config_key=_el.CONFIG_KEY)
+
+
 def save_hf_token(token: str) -> None:
     """Save the HF token to the system keyring. Falls back to JSON if keyring is unavailable."""
     token = (token or "").strip()
@@ -7317,6 +7334,10 @@ class App(tk.Tk):
         sect4.pack(fill="x")
         self._chk_xtts = cb(body4, "opt_xtts", self._use_xtts)
         self._chk_xtts.pack(anchor="w", pady=4)
+        # Optional ElevenLabs voice for the live dub (online, paid, own key).
+        el_wrap, self._btn_elevenlabs = self._flat_btn(
+            body4, text=self._s("el_button"), command=self._open_elevenlabs_dialog)
+        el_wrap.pack(anchor="w", pady=(2, 6))
 
         # ── 5. LIP SYNC ───────────────────────────────────────────────────
         sect5, body5, _, self._lbl_section_lip_sync = self._make_accordion_section(
@@ -8158,6 +8179,7 @@ class App(tk.Tk):
         self._chk_edit_subs.configure(text=self._s("opt_edit_subs"))
         self._lbl_section_voice_cloning.configure(text=self._s("section_voice_cloning"))
         self._chk_xtts.configure(text=self._s("opt_xtts"))
+        self._btn_elevenlabs.configure(text=self._s("el_button"))
         self._lbl_section_lip_sync.configure(text=self._s("section_lip_sync"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_section_engine.configure(text=self._s("section_engine"))
@@ -8681,6 +8703,43 @@ class App(tk.Tk):
                 return candidate
         return None
 
+    # -- ElevenLabs live voice ---------------------------------------------------
+
+    _ELEVENLABS_KEY = "elevenlabs"          # config: settings + catalogue, no secret
+
+    def _elevenlabs_settings(self) -> dict:
+        value = load_config().get(self._ELEVENLABS_KEY)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _save_elevenlabs_settings(self, settings: dict, api_key: str) -> None:
+        save_config({self._ELEVENLABS_KEY: dict(settings)})
+        if api_key:
+            save_elevenlabs_key(api_key)
+
+    def _live_tts_opts(self) -> dict | None:
+        """ElevenLabs options for a live session, or None for Edge-TTS."""
+        settings = self._elevenlabs_settings()
+        if not settings.get("enabled"):
+            return None
+        key = load_elevenlabs_key()
+        if not (key and settings.get("voice_id") and settings.get("model_id")):
+            self._player_log("live: ElevenLabs is not fully configured; using Edge-TTS")
+            return None
+        return {"engine": "elevenlabs", "api_key": key,
+                "voice_id": settings["voice_id"], "model_id": settings["model_id"],
+                "fallback": bool(settings.get("fallback", True))}
+
+    def _open_elevenlabs_dialog(self) -> None:
+        dialog = getattr(self, "_elevenlabs_dialog", None)
+        if dialog is not None and not dialog.closed:
+            dialog.win.lift()
+            return
+        from videotranslator.elevenlabs_dialog_tk import ElevenLabsDialog
+        self._elevenlabs_dialog = ElevenLabsDialog(
+            self, ui_s=self._s, theme=self._theme, make_button=self._flat_btn,
+            settings=self._elevenlabs_settings(), api_key=load_elevenlabs_key(),
+            target_lang=self._lang_tgt.get(), on_save=self._save_elevenlabs_settings)
+
     def _open_models_dialog(self) -> None:
         dialog = self._models_dialog
         if dialog is not None and not dialog.closed:
@@ -8829,11 +8888,14 @@ class App(tk.Tk):
             "deepl_key": self._deepl_key_var.get().strip(),
             "ollama_url": self._ollama_url_var.get().strip(),
             "ollama_model": self._ollama_model_var.get().strip(),
+            "tts_opts": self._live_tts_opts(),
         }
         settings = _player_settings_module.normalize_live_settings({
             "live_sync_mode": raw["mode"], "live_delay_s": raw["delay"],
             "live_engine": raw["engine"], "live_dub_enabled": raw["dub"],
             "live_subs_enabled": raw["subs"],
+            # Chosen in the 'Models for this PC' window (not on the bar).
+            "live_asr_model": load_config().get("live_asr_model", "auto"),
         })
         cache_dir = Path(tempfile.gettempdir()) / "VideoTranslatorAI" / "live"
         # Sweep leftover session dirs from crashed or killed runs so they do not

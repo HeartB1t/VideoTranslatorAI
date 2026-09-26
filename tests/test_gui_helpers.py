@@ -186,6 +186,52 @@ class ModelChoicesTests(unittest.TestCase):
         self.assertEqual(app._model.get(), "small")
 
 
+class LaunchLiveSessionConfigTests(unittest.TestCase):
+    """What the window settings put into a live session's configuration."""
+
+    def _launch(self, config, *, el_key=""):
+        bar = Mock()
+        bar.current_settings.return_value = {
+            "mode": "delayed", "delay": 8.0, "engine": "marian", "dub": False,
+            "subs": True, "original_mute": False}
+        app = SimpleNamespace(
+            _live_bar=bar, _lang_tgt=_Var("it"), _lang_src=_Var("en"),
+            _player_controller=Mock(state=SimpleNamespace(position=0.0), paused=False),
+            _live_voice_for=lambda tgt: "it-IT-X", _deepl_key_var=_Var(""),
+            _ollama_url_var=_Var(""), _ollama_model_var=_Var(""),
+            _voice_backend=None, _player_backend=Mock(), _player_clock=Mock(),
+            _player_log=Mock(), _redirecting_thread_factory=None,
+            _schedule_live_poll=Mock(), _request_voice_backend=Mock(),
+            _refresh_live_bar_enabled=Mock(), _live_resolving=True)
+        app._elevenlabs_settings = lambda: dict(config.get("elevenlabs") or {})
+        app._live_tts_opts = gui.App._live_tts_opts.__get__(app)
+        captured = {}
+
+        def session(cfg, **kw):
+            captured["cfg"] = cfg
+            return Mock()
+        with mock.patch.object(gui, "load_config", return_value=config), \
+                mock.patch.object(gui, "load_elevenlabs_key", return_value=el_key), \
+                mock.patch.object(gui._live_session_module, "LiveSession", side_effect=session):
+            gui.App._launch_live_session(app, "/v.mp4", "file", title=None)
+        return captured["cfg"]
+
+    def test_live_asr_model_from_the_models_window_reaches_the_session(self):
+        self.assertEqual(self._launch({"live_asr_model": "base"}).settings.asr_model, "base")
+        self.assertEqual(self._launch({}).settings.asr_model, "auto")
+
+    def test_elevenlabs_options_reach_the_session_only_when_complete(self):
+        el = {"enabled": True, "voice_id": "v", "model_id": "eleven_flash_v2_5",
+              "fallback": False}
+        cfg = self._launch({"elevenlabs": el}, el_key="sk")
+        self.assertEqual(cfg.tts_opts, {"engine": "elevenlabs", "api_key": "sk",
+                                        "voice_id": "v", "model_id": "eleven_flash_v2_5",
+                                        "fallback": False})
+        self.assertEqual(self._launch({"elevenlabs": el}, el_key="").tts_opts, {})
+        self.assertEqual(self._launch({"elevenlabs": {**el, "enabled": False}},
+                                      el_key="sk").tts_opts, {})
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))

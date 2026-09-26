@@ -34,8 +34,10 @@ _LOCK_NAME = "session.lock"
 class LiveConfig:
     """Immutable options for one live session.
 
-    ``engine_opts`` (which carries the DeepL key) is excluded from ``repr`` so a
-    traceback or a log line never leaks the key ([CC] G25).
+    ``engine_opts`` (which carries the DeepL key) and ``tts_opts`` (the
+    ElevenLabs key) are excluded from ``repr`` so a traceback or a log line
+    never leaks a key ([CC] G25). ``tts_opts`` is kept apart because the
+    translators receive every ``engine_opts`` entry.
     """
 
     source: str
@@ -50,6 +52,12 @@ class LiveConfig:
     device_policy: str = "auto"   # "auto" | "cpu"
     hotwords: str | None = None
     engine_opts: dict = field(default_factory=dict, repr=False)
+    tts_opts: dict = field(default_factory=dict, repr=False)
+
+    @property
+    def tts_name(self) -> str:
+        """The live voice service, for warnings and logs."""
+        return "ElevenLabs" if self.tts_opts.get("engine") == "elevenlabs" else "edge-tts"
 
 
 @dataclass
@@ -139,9 +147,28 @@ def build_live_factories(cfg: LiveConfig,
             import av as av_module          # noqa: F811
         except Exception:
             av_module = None
-        return EdgeClipSynth(
-            cfg.voice, out_dir, breaker=breaker, av_module=av_module,
-            thread_factory=thread_factory, clock=clock)
+
+        def make_edge():
+            from .live_health import CircuitBreaker
+            return EdgeClipSynth(
+                cfg.voice, out_dir, breaker=breaker if not opts else CircuitBreaker(),
+                av_module=av_module, thread_factory=thread_factory, clock=clock)
+
+        opts = cfg.tts_opts if cfg.tts_opts.get("engine") == "elevenlabs" else {}
+        if not opts:
+            return make_edge()
+        from .elevenlabs_tts import ElevenLabsClipSynth, FallbackClipSynth
+        primary = ElevenLabsClipSynth(
+            opts.get("api_key", ""), opts.get("voice_id", ""), opts.get("model_id", ""),
+            out_dir, breaker=breaker, language=cfg.lang_target, av_module=av_module,
+            clock=clock, thread_factory=thread_factory)
+        if not opts.get("fallback", True):
+            return primary
+
+        def on_switch(reason):
+            log(f"live: ElevenLabs unavailable ({reason}); the voice continues with "
+                f"Edge-TTS for this session")
+        return FallbackClipSynth(primary, make_edge, on_switch=on_switch)
 
     return LiveFactories(
         decoder=make_decoder, vad=make_vad, whisper=make_whisper,
@@ -177,6 +204,7 @@ def build_live_config(values: dict, *, settings: LiveSettings, cache_dir: Path,
         device_policy=values.get("device_policy", "auto"),
         hotwords=values.get("hotwords") or None,
         engine_opts=engine_opts,
+        tts_opts=dict(values.get("tts_opts") or {}),
     )
 
 
@@ -464,7 +492,7 @@ class LiveSession:
         # every runtime dub toggle (review finding 7).
         self._execute(self._scheduler.set_dub(False))
         if warn_code is not None:
-            self._set_warning(warn_code, "edge-tts")
+            self._set_warning(warn_code, self._cfg.tts_name)
 
     def request_stop(self) -> None:
         self._set_state("stopping")
@@ -695,7 +723,8 @@ class LiveSession:
             if clip is None:
                 detail = str(reason or "TTS synthesis failed")
                 self._log(f"live: voice line {seg_id} lost (tts_failed: {detail})")
-                self._set_warning("tts_unavailable", "edge-tts")
+                self._set_warning("tts_unavailable",
+                                  getattr(self._synth, "name", self._cfg.tts_name))
             if accepted:
                 seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
                 if seg is not None:

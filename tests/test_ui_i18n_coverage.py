@@ -183,6 +183,9 @@ class UIStringsDynamicKeyFamiliesTests(unittest.TestCase):
                 "rec_reason_fits", "rec_reason_disk", "rec_reason_fallback",
                 "rec_reason_online_fast", "rec_reason_offline", "rec_reason_ollama",
                 "rec_reason_licence", "rec_reason_needs_gpu", "rec_reason_online_free"],
+            # ElevenLabs window: error messages built from the error kind.
+            "el_err_{kind}": [f"el_err_{kind}" for kind in (
+                "auth", "quota", "rate_limited", "unavailable", "timeout", "invalid")],
         }
 
     def test_every_fstring_family_in_source_is_known(self):

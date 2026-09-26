@@ -532,6 +532,29 @@ class BuildLiveFactoriesTests(unittest.TestCase):
             build_live_factories(cfg).translator("bing")
 
 
+    def test_tts_factory_picks_edge_or_elevenlabs(self):
+        from videotranslator.elevenlabs_tts import ElevenLabsClipSynth, FallbackClipSynth
+        from videotranslator.live_health import CircuitBreaker
+        from videotranslator.live_session import build_live_factories
+        from videotranslator.live_tts import EdgeClipSynth
+        settings = normalize_live_settings({})
+        el_opts = {"engine": "elevenlabs", "api_key": "sk_secret", "voice_id": "v",
+                   "model_id": "eleven_flash_v2_5"}
+        cases = ((None, EdgeClipSynth, "edge-tts"),
+                 (el_opts, FallbackClipSynth, "ElevenLabs"),
+                 ({**el_opts, "fallback": False}, ElevenLabsClipSynth, "ElevenLabs"))
+        for opts, expected, name in cases:
+            cfg = build_live_config({"source": "s", "lang_target": "it", "tts_opts": opts},
+                                    settings=settings, cache_dir=Path("/c"), now=1.0)
+            synth = build_live_factories(cfg).tts(
+                out_dir=Path("/c/clips"), breaker=CircuitBreaker(),
+                thread_factory=threading.Thread, clock=time.monotonic)
+            self.assertIsInstance(synth, expected)
+            self.assertEqual(cfg.tts_name, name)
+            self.assertNotIn("sk_secret", repr(cfg))
+            self.assertNotIn("api_key", cfg.engine_opts)     # never reaches translators
+
+
 @unittest.skipUnless(os.environ.get("VTAI_RUN_HEAVY_SMOKE"),
                      "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
 class LiveSessionHeavyTests(unittest.TestCase):
