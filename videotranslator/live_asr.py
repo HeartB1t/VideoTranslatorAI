@@ -198,6 +198,9 @@ class AudioDecoder:
         self._time_domain = time_domain
         self._seek_index = seek_index
         self._container = av_module.open(source, format=container_format)
+        if not self._container.streams.audio:
+            self._container.close()
+            raise RuntimeError("the source has no audio track to transcribe")
         self._stream = self._container.streams.audio[0]
         start = getattr(self._container, "start_time", None)
         self._container_start_us = start if start is not None else None

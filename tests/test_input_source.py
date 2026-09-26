@@ -172,6 +172,20 @@ class InputSourceTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self._resolve({"title": "x", "formats": []})
 
+    def test_resolve_stream_url_rejects_a_video_only_top_url(self):
+        # A known video-only top URL must not pass (it would play muted and make
+        # the live audio decoder fail with a cryptic IndexError).
+        info = {"title": "x", "url": "https://cdn/videoonly.m4s",
+                "acodec": "none", "vcodec": "avc1"}
+        with self.assertRaises(RuntimeError):
+            self._resolve(info)
+
+    def test_resolve_stream_url_passes_a_direct_url_without_codec_metadata(self):
+        # A direct media link often carries no codec info; it must still pass.
+        info = {"title": "Direct", "url": "https://cdn/clip.mp4"}
+        (url, _title), _ = self._resolve(info)
+        self.assertEqual(url, "https://cdn/clip.mp4")
+
     def test_emit_download_warnings_is_noop_without_callback(self):
         # Must not raise when there is no log sink.
         emit_download_warnings(None)

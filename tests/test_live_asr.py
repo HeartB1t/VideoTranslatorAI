@@ -134,6 +134,26 @@ class LiveAsrHeavySmokeTests(unittest.TestCase):
             self.assertAlmostEqual(times[0], 0.0, places=2)
             self.assertAlmostEqual(times[1] - times[0], 0.25, places=3)
 
+    def test_audio_decoder_rejects_a_source_without_audio(self):
+        closed = []
+
+        class _Container:
+            streams = type("S", (), {"audio": []})()
+
+            def close(self):
+                closed.append(True)
+
+        class _Av:
+            @staticmethod
+            def open(source, format=None):
+                return _Container()
+
+            AudioResampler = staticmethod(lambda **k: object())
+
+        with self.assertRaises(RuntimeError):
+            AudioDecoder("x.m4s", av_module=_Av())
+        self.assertEqual(closed, [True])       # the container is closed on the error
+
     def test_persistent_whisper_transcribes_real_speech(self):
         import asyncio
         import threading

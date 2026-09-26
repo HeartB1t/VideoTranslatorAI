@@ -140,7 +140,16 @@ def _pick_stream_url(info: dict[str, Any], max_height: int) -> str | None:
                 best = fmt
     if best is not None:
         return best["url"]
-    return info.get("url")
+    # No muxed format. Fall back to the top-level URL only when it is not known
+    # to be video-only: a direct media link often carries no codec metadata and
+    # must still pass, but a known video-only stream would play muted and make
+    # the live audio decoder fail with a cryptic IndexError, so reject it and let
+    # resolve_stream_url raise a clear "no playable stream" message.
+    top = info.get("url")
+    if (top and info.get("vcodec", "none") != "none"
+            and info.get("acodec", "none") == "none"):
+        return None
+    return top
 
 
 def resolve_stream_url(
