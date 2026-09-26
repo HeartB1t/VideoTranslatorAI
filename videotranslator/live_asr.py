@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections import Counter, deque
 from collections.abc import Sequence
 
+import numpy as np
+
 
 def decoder_time(pts: int, time_base: float, *, container_start_us: int | None,
                  domain: str) -> float:
@@ -117,3 +119,136 @@ class LanguageLock:
         if count / len(self._detections) >= self._majority:
             return lang
         return None
+
+
+# --- Real ML/IO components (design 4.7). Heavy deps imported lazily. ---------
+
+class StreamingVad:
+    """Stateful Silero VAD (faster-whisper asset) over a live audio stream.
+
+    Mirrors ``faster_whisper.vad.SileroVADModel.__call__`` frame by frame,
+    carrying the recurrent state ``h``/``c`` and the 64-sample context across
+    calls, plus a remainder buffer because a 0.25 s block (4000 samples) is not a
+    multiple of 512 ([CT] C37). Returns one probability per complete 512 frame.
+    """
+
+    def __init__(self, *, session_factory=None, frame: int = 512,
+                 context_size: int = 64) -> None:
+        self._session_factory = session_factory
+        self._session = None
+        self._frame = frame
+        self._ctx_n = context_size
+        self._h = np.zeros((1, 1, 128), dtype=np.float32)
+        self._c = np.zeros((1, 1, 128), dtype=np.float32)
+        self._context = np.zeros(context_size, dtype=np.float32)
+        self._remainder = np.zeros(0, dtype=np.float32)
+
+    def _ensure_session(self):
+        if self._session is None:
+            if self._session_factory is not None:
+                self._session = self._session_factory()
+            else:
+                from faster_whisper.vad import get_vad_model
+                self._session = get_vad_model().session
+        return self._session
+
+    def probs(self, samples) -> list[float]:
+        session = self._ensure_session()
+        buf = np.concatenate([self._remainder, np.asarray(samples, dtype=np.float32)])
+        n_frames = len(buf) // self._frame
+        out: list[float] = []
+        for i in range(n_frames):
+            frame = buf[i * self._frame:(i + 1) * self._frame]
+            inp = np.concatenate([self._context, frame]).reshape(
+                1, self._frame + self._ctx_n).astype(np.float32)
+            prob, self._h, self._c = session.run(
+                None, {"input": inp, "h": self._h, "c": self._c})
+            out.append(float(np.asarray(prob).reshape(-1)[0]))
+            self._context = frame[-self._ctx_n:].copy()
+        self._remainder = buf[n_frames * self._frame:].copy()
+        return out
+
+    def reset(self) -> None:
+        self._h = np.zeros((1, 1, 128), dtype=np.float32)
+        self._c = np.zeros((1, 1, 128), dtype=np.float32)
+        self._context = np.zeros(self._ctx_n, dtype=np.float32)
+        self._remainder = np.zeros(0, dtype=np.float32)
+
+
+class AudioDecoder:
+    """Decode an audio/video source into 0.25 s float32 mono 16 kHz blocks.
+
+    ``import av`` happens in ``__init__`` only (design 2.2). Block start times are
+    anchored to decoded-frame timestamps via :func:`decoder_time`, re-anchored
+    whenever the buffer drains, so gaps never skew later times.
+    """
+
+    _RATE = 16000
+    _BLOCK = 4000  # 0.25 s at 16 kHz
+
+    def __init__(self, source, *, container_format: str | None = None,
+                 start_at: float = 0.0, time_domain: str = "rebased",
+                 av_module=None, seek_index=None) -> None:
+        if av_module is None:
+            import av
+            av_module = av
+        self._av = av_module
+        self._source = source
+        self._start_at = start_at
+        self._time_domain = time_domain
+        self._seek_index = seek_index
+        self._container = av_module.open(source, format=container_format)
+        self._stream = self._container.streams.audio[0]
+        start = getattr(self._container, "start_time", None)
+        self._container_start_us = start if start is not None else None
+        self._resampler = av_module.AudioResampler(
+            format="s16", layout="mono", rate=self._RATE)
+        self.first_pts: float | None = None
+
+    def _frame_time(self, frame) -> float:
+        if frame.pts is None:
+            return 0.0
+        return decoder_time(frame.pts, float(frame.time_base),
+                            container_start_us=self._container_start_us,
+                            domain=self._time_domain)
+
+    def blocks(self, cancel):
+        if self._start_at and self._start_at > 0:
+            try:
+                self._container.seek(int(self._start_at / float(self._stream.time_base)),
+                                     stream=self._stream)
+            except Exception:
+                pass
+        buf = np.zeros(0, dtype=np.float32)
+        buf_start: float | None = None
+        for frame in self._container.decode(self._stream):
+            if cancel is not None and cancel.is_set():
+                return
+            t = self._frame_time(frame)
+            if self.first_pts is None:
+                self.first_pts = t
+            samples = self._resample(frame)
+            if samples.size == 0:
+                continue
+            if buf.size == 0:
+                buf_start = t
+            buf = np.concatenate([buf, samples])
+            while buf.size >= self._BLOCK:
+                yield (buf_start, buf[:self._BLOCK].copy())
+                buf = buf[self._BLOCK:]
+                buf_start = (buf_start or 0.0) + self._BLOCK / self._RATE
+        if buf.size:
+            yield (buf_start or 0.0, buf.copy())
+
+    def _resample(self, frame) -> np.ndarray:
+        out = np.zeros(0, dtype=np.float32)
+        for resampled in self._resampler.resample(frame):
+            arr = resampled.to_ndarray().reshape(-1).astype(np.float32) / 32768.0
+            out = np.concatenate([out, arr])
+        return out
+
+    def close(self) -> None:
+        try:
+            self._container.close()
+        except Exception:
+            pass
