@@ -425,6 +425,63 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertEqual(len(starts), 1)
         self.assertGreater(starts[0].speed, 1.0)              # catch-up speed
 
+    def test_live_early_clip_waits_for_its_sentence(self):
+        # On a file the pipeline runs faster than playback, so a clip is often
+        # ready before its sentence. Live mode must not play it early: it preloads
+        # within preload_s of the start and starts at start - lead, like delayed.
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip(audible=1.8))
+        self.assertNotIn("PreloadClip", _types(s.tick(1.0, mono=100.1,
+                                                      voice_state="idle")))
+        self.assertNotIn("PreloadClip", _types(s.tick(3.4, mono=102.5,
+                                                      voice_state="idle")))
+        self.assertIn("PreloadClip", _types(s.tick(3.6, mono=102.7,
+                                                   voice_state="idle")))
+        self.assertNotIn("StartClip", _types(s.tick(4.7, mono=103.8,
+                                                    voice_state="preloaded")))
+        starts = [a for a in s.tick(4.76, mono=103.86, voice_state="preloaded")
+                  if isinstance(a, StartClip)]
+        self.assertEqual(len(starts), 1)
+        self.assertAlmostEqual(starts[0].speed, 1.0, places=6)  # on time: no catch-up
+
+    def test_live_early_clip_ducks_just_before_the_voice(self):
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        acts = s.tick(3.6, mono=102.7, voice_state="idle")     # preload, too early
+        self.assertIn("PreloadClip", _types(acts))
+        self.assertNotIn("Duck", _types(acts))
+        self.assertNotIn("Duck", _types(s.tick(4.3, mono=103.4,
+                                               voice_state="preloaded")))
+        # duck ramp starts at start - duck_latency - duck_ramp (5.0-0.4-0.2)
+        acts = s.tick(4.4, mono=103.5, voice_state="preloaded")
+        self.assertIn(0.3, [a.gain for a in acts if isinstance(a, Duck)])
+
+    def test_live_back_to_back_clips_keep_their_own_timing(self):
+        # Two early clips with a pause between them: the second must not start
+        # right after the first one ends, but at its own sentence.
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(LiveSegment(1, 0, 2.0, 3.0, "a", text_tgt="uno", dub_ok=True))
+        s.upsert(LiveSegment(2, 0, 8.0, 9.0, "b", text_tgt="due", dub_ok=True))
+        s.tick(0.0, mono=100.0)
+        s.clip_ready(1, 0, _clip(audible=1.0))
+        s.clip_ready(2, 0, _clip(audible=1.0))
+        vs, t, started = "idle", 0.5, {}
+        while t < 10.0:
+            for a in s.tick(t, mono=100.0 + t, voice_state=vs):
+                if isinstance(a, PreloadClip):
+                    vs = "preloaded"
+                elif isinstance(a, StartClip):
+                    vs, started[a.seg_id], end = "playing", t, t + 1.0
+            if vs == "playing" and t >= end:
+                vs = "idle"
+            t = round(t + 0.02, 2)
+        self.assertAlmostEqual(started[1], 1.76, delta=0.03)   # 2.0 - lead
+        self.assertAlmostEqual(started[2], 7.76, delta=0.03)   # 8.0 - lead
+
     def test_live_mode_drops_segments_too_far_behind(self):
         s = _dub_sched(mode="live", max_live_lag_s=4.0)
         s.upsert(self._seg(start=5.0, end=7.0))

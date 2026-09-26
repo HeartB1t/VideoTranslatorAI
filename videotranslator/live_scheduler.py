@@ -533,7 +533,13 @@ class DubScheduler:
             cand = self._next_ready(now, pacer_paused)
             if cand is not None:
                 if live:
-                    ready_to_preload = now - cand.start <= self._max_live_lag
+                    # On a file the pipeline runs ahead of playback, so a clip is
+                    # often ready before its sentence. It waits for it (preload
+                    # within preload_s) instead of playing as soon as the device is
+                    # free, which drifted the voice seconds ahead of the picture.
+                    # Late clips keep the FIFO catch-up up to the lag bound.
+                    ready_to_preload = (cand.start - self._preload_s <= now
+                                        and now - cand.start <= self._max_live_lag)
                 else:
                     ready_to_preload = (cand.start - self._preload_s <= now
                                         < cand.start - self._lead + self._late_tol
@@ -545,11 +551,9 @@ class DubScheduler:
                                                getattr(clip, "voice_start_s", 0.0)))
                     self._dub_state[cand.seg_id] = "preloaded"
                     self._preloaded = cand.seg_id
-                    if live and self._duck_target != self._duck_gain:
-                        self._duck_target = self._duck_gain  # duck with the preload
-                        actions.append(Duck(self._duck_gain))
-        # Duck ahead of the preloaded clip (delayed mode only; live ducks above).
-        if not live and self._preloaded is not None:
+        # Duck ahead of the preloaded clip so the attenuation is complete when the
+        # voice becomes audible; a clip that is already late ducks at once.
+        if self._preloaded is not None:
             seg = self._segments[self._preloaded]
             if (now >= seg.start - self._duck_latency - self._duck_ramp
                     and self._duck_target != self._duck_gain):
@@ -562,7 +566,7 @@ class DubScheduler:
             slot_len = self._slot_len(seg)
             audible = getattr(clip, "audible_s", slot_len) or slot_len
             if live:
-                start_now = True
+                start_now = now >= seg.start - self._lead   # never ahead of its sentence
                 fit = min(self._max_speed, max(1.0, 1.0 + (now - seg.start) / 8.0))
                 base = now
             else:
