@@ -3,6 +3,8 @@ import unittest
 from videotranslator.live_scheduler import (
     ClearSubtitle,
     DubScheduler,
+    DuckEnvelope,
+    FadeRamp,
     LiveSegment,
     ShowSubtitle,
     ass_escape,
@@ -147,6 +149,65 @@ class DubSchedulerCaptionTests(unittest.TestCase):
         self.assertEqual([type(a).__name__ for a in sch.on_seek(0.0, 1)], ["ClearSubtitle"])
         acts = sch.tick(1.0)                        # shows again after the seek
         self.assertEqual([type(a).__name__ for a in acts], ["ShowSubtitle"])
+
+
+class DuckEnvelopeTests(unittest.TestCase):
+    def test_ramps_to_target_in_about_ten_small_steps(self):
+        env = DuckEnvelope(ramp_s=0.2, tick_s=0.02)
+        env.set_target(0.3)
+        vals = []
+        for _ in range(30):
+            v = env.step()
+            if v is None:
+                break
+            vals.append(v)
+        self.assertAlmostEqual(vals[-1], 0.3, places=6)
+        self.assertLessEqual(len(vals), 12)            # ~10 steps
+        deltas = [abs(b - a) for a, b in zip([1.0, *vals], vals)]
+        self.assertLessEqual(max(deltas), 0.07 + 1e-9)  # each step small
+
+    def test_step_returns_none_at_target_and_when_frozen(self):
+        env = DuckEnvelope()
+        self.assertIsNone(env.step())                  # already at 1.0
+        env.set_target(0.3)
+        self.assertIsNone(env.step(frozen=True))       # frozen: no write
+        self.assertEqual(env.current, 1.0)
+
+    def test_snap_jumps_immediately(self):
+        env = DuckEnvelope()
+        env.set_target(0.3)
+        env.step()
+        self.assertEqual(env.snap(1.0), 1.0)
+        self.assertIsNone(env.step())                  # nothing more to write
+
+    def test_retarget_midramp_reaches_new_target(self):
+        env = DuckEnvelope(ramp_s=0.2, tick_s=0.02)
+        env.set_target(0.3)
+        env.step()
+        env.set_target(1.0)                            # unduck mid-ramp
+        last = None
+        for _ in range(30):
+            v = env.step()
+            if v is None:
+                break
+            last = v
+        self.assertAlmostEqual(last, 1.0, places=6)
+
+
+class FadeRampTests(unittest.TestCase):
+    def test_fades_to_zero_over_steps(self):
+        ramp = FadeRamp(1.0, fade_s=0.1, tick_s=0.02)   # ~5 steps
+        vals = []
+        while not ramp.done:
+            vals.append(ramp.step())
+        self.assertEqual(vals[-1], 0.0)
+        self.assertLessEqual(len(vals), 6)
+        self.assertTrue(all(b <= a for a, b in zip([1.0, *vals], vals)))
+
+    def test_zero_fade_is_immediate(self):
+        ramp = FadeRamp(0.8, fade_s=0.0)
+        self.assertTrue(ramp.done)
+        self.assertEqual(ramp.step(), 0.0)
 
 
 if __name__ == "__main__":

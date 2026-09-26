@@ -8,6 +8,7 @@ duck actions) lands with the live session.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -116,6 +117,130 @@ class ClearSubtitle:
 class Drop:
     seg_id: int
     reason: str
+
+
+# --- Dub/voice/duck actions (design 2.2, P5) --------------------------------
+# Emitted by DubScheduler on the dub path and applied by LiveSession._execute on
+# the injected voice backend and video.rt. Pure data; no behaviour here.
+
+@dataclass(frozen=True)
+class RequestTts:
+    """Ask the TTS worker to synthesize ``text`` to fit its slot by ``deadline``."""
+    seg_id: int
+    gen: int
+    text: str
+    rate_pct: int
+    deadline_mono: float
+
+
+@dataclass(frozen=True)
+class PreloadClip:
+    """Load a synthesized clip paused, skipping its leading silence."""
+    seg_id: int
+    path: str
+    skip_s: float
+
+
+@dataclass(frozen=True)
+class StartClip:
+    seg_id: int
+    speed: float
+
+
+@dataclass(frozen=True)
+class PauseClip:
+    pass
+
+
+@dataclass(frozen=True)
+class ResumeClip:
+    pass
+
+
+@dataclass(frozen=True)
+class StopClip:
+    fade_s: float = 0.0
+
+
+@dataclass(frozen=True)
+class ClipSpeed:
+    value: float
+
+
+@dataclass(frozen=True)
+class Duck:
+    """Target duck gain for the original audio (1.0 = no duck)."""
+    gain: float
+
+
+class DuckEnvelope:
+    """Linear ramp of the duck gain toward a target, one step per ~20 ms tick.
+
+    A full transition takes about ``ramp_s`` (``round(ramp_s/tick_s)`` steps), so
+    each step moves ``delta / n_steps`` toward the target (0.07 for the default
+    1.0 -> 0.3 duck). ``step`` returns the gain to write, or ``None`` when there
+    is nothing to write (already at target, or frozen while the player is paused).
+    """
+
+    def __init__(self, *, ramp_s: float = 0.2, tick_s: float = 0.02,
+                 min_delta: float = 0.02) -> None:
+        self._n_steps = max(1, round(ramp_s / tick_s)) if tick_s > 0 else 1
+        self._min_delta = min_delta
+        self._current = 1.0
+        self._target = 1.0
+        self._step = 0.0
+
+    @property
+    def current(self) -> float:
+        return self._current
+
+    def set_target(self, gain: float) -> None:
+        self._target = min(1.0, max(0.0, float(gain)))
+        remaining = abs(self._target - self._current)
+        self._step = remaining / self._n_steps if remaining else 0.0
+
+    def step(self, *, frozen: bool = False) -> float | None:
+        if frozen or self._current == self._target:
+            return None
+        delta = self._target - self._current
+        move = min(abs(delta), max(self._step, self._min_delta))
+        self._current += move if delta > 0 else -move
+        if abs(self._target - self._current) < 1e-6:
+            self._current = self._target
+        return self._current
+
+    def snap(self, gain: float) -> float:
+        """Jump immediately to ``gain`` (used on stop/seek). Returns it."""
+        self._current = self._target = min(1.0, max(0.0, float(gain)))
+        self._step = 0.0
+        return self._current
+
+
+class FadeRamp:
+    """Linear fade of a value to zero over ``fade_s``, one step per ``tick_s``.
+
+    Used for ``StopClip(fade_s)``: the voice volume goes from its current value
+    to 0 before the clip is stopped, so a cut is not audible.
+    """
+
+    def __init__(self, start: float, *, fade_s: float, tick_s: float = 0.02) -> None:
+        self._value = max(0.0, float(start))
+        steps = max(1, math.ceil(fade_s / tick_s)) if fade_s > 0 else 1
+        self._step = self._value / steps
+        self._done = fade_s <= 0 or self._value <= 0.0
+
+    @property
+    def done(self) -> bool:
+        return self._done
+
+    def step(self) -> float:
+        if self._done:
+            return 0.0
+        self._value = max(0.0, self._value - self._step)
+        if self._value <= 1e-6:
+            self._value = 0.0
+            self._done = True
+        return self._value
 
 
 _GRACE = {"delayed": 1.5, "live": 6.0}
