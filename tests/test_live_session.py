@@ -102,5 +102,122 @@ class CleanupStaleSessionsTests(unittest.TestCase):
             Path("/no/such/root"), owner_alive=lambda p, t: True, now=0.0), [])
 
 
+import threading
+import time
+from types import SimpleNamespace
+
+from videotranslator.live_session import LiveFactories, LiveSession
+from videotranslator.live_scheduler import LiveSegment
+
+
+class _FakeRt:
+    def __init__(self):
+        self.overlays = []
+        self.pauses = []
+
+    def set_overlay(self, ass):
+        self.overlays.append(ass)
+
+    def set_pause(self, paused):
+        self.pauses.append(paused)
+
+    def set_speed(self, _x):
+        pass
+
+    def set_duck(self, _g):
+        pass
+
+
+class _FakeClockView:
+    def __init__(self, media=0.0):
+        self.media = media
+        self.epoch = 0
+
+    def now(self, _mono):
+        return self.media
+
+
+def _factories():
+    noop = lambda *a, **k: None
+    return LiveFactories(decoder=noop, vad=noop, whisper=noop, translator=noop,
+                         tts=noop, clock=time.monotonic)
+
+
+def _session(tmp, *, media=1.5, overrides=None):
+    settings = normalize_live_settings(
+        {"live_dub_enabled": False, "live_subs_enabled": True,
+         "live_sync_mode": "delayed", **(overrides or {})})
+    cfg = build_live_config({"source": "/v.mp4", "lang_target": "it"},
+                            settings=settings, cache_dir=Path(tmp), now=1.0)
+    video = SimpleNamespace(rt=_FakeRt())
+    sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(media),
+                       factories=_factories())
+    return sess, video, cfg
+
+
+def _seg(tgt="ciao", *, gen=0, start=1.0, end=3.0):
+    return LiveSegment(0, gen, start, end, "hello", text_tgt=tgt)
+
+
+class LiveSessionTickTests(unittest.TestCase):
+    def test_translated_segment_becomes_a_caption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp, media=1.5)
+            sess.submit_segment(_seg("ciao"))
+            sess._tick_once(0.0)
+            self.assertTrue(any("ciao" in (a or "") for a in video.rt.overlays))
+
+    def test_stale_generation_segment_is_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp, media=1.5)
+            sess.notify_user_seek(9.0)          # gen -> 1
+            sess._tick_once(0.0)
+            sess.submit_segment(_seg("old", gen=0))  # stale
+            sess._tick_once(0.02)
+            self.assertFalse(any("old" in (a or "") for a in video.rt.overlays))
+
+    def test_subtitles_off_clears_overlay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp, media=1.5)
+            sess.submit_segment(_seg("ciao"))
+            sess._tick_once(0.0)
+            sess.set_subs_enabled(False)
+            sess._tick_once(0.02)
+            self.assertIsNone(video.rt.overlays[-1])   # last action cleared it
+
+    def test_pacer_pauses_when_coverage_nearly_caught_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp, media=2.9)
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)               # pacer runs (first time)
+            self.assertIn(True, video.rt.pauses)
+
+    def test_status_copy_is_independent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            snap = sess.status()
+            snap.state = "mutated"
+            self.assertNotEqual(sess.status().state, "mutated")
+
+
+class LiveSessionLifecycleTests(unittest.TestCase):
+    def test_start_run_stop_is_clean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, cfg = _session(tmp, media=1.5)
+            sess.start()
+            self.assertEqual(sess.status().state, "running")
+            sess.submit_segment(_seg("ciao"))
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline and not video.rt.overlays:
+                time.sleep(0.02)
+            self.assertTrue(any("ciao" in (a or "") for a in video.rt.overlays))
+            sess.request_stop()
+            self.assertTrue(sess.join(3.0))
+            self.assertEqual(sess.status().state, "stopped")
+            self.assertFalse(any(t.name == "live-sched" and t.is_alive()
+                                 for t in threading.enumerate()))
+            self.assertTrue((cfg.session_dir / "session.lock").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
