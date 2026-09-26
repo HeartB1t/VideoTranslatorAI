@@ -246,8 +246,20 @@ class LanguageLockTests(unittest.TestCase):
     def test_auto_fast_lock_on_confident_detection(self):
         lock = LanguageLock("auto")
         self.assertEqual(lock.observe("it", 0.9, 3.0), "detecting")  # < 5 s speech
+        early = [{"start": 0.0, "end": 1.0, "text": "inizio", "flags": ()}]
+        lock.buffer_segments(early)
+        self.assertEqual(lock.take_buffered_segments(), [])
         self.assertEqual(lock.observe("it", 0.9, 3.0), "locked")     # 6 s, prob high
         self.assertEqual(lock.locked, "it")
+        self.assertEqual(lock.take_buffered_segments(), early)
+        self.assertEqual(lock.take_buffered_segments(), [])
+
+    def test_prelock_buffer_can_be_discarded_on_seek(self):
+        lock = LanguageLock("auto")
+        lock.buffer_segments([{"text": "old generation"}])
+        lock.clear_buffered_segments()
+        lock.observe("it", 0.9, 6.0)
+        self.assertEqual(lock.take_buffered_segments(), [])
 
     def test_auto_majority_vote_locks(self):
         lock = LanguageLock("auto", min_speech_lock_s=5.0, vote_window_s=10.0)

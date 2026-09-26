@@ -8536,7 +8536,11 @@ class App(tk.Tk):
             return
         source = self._live_media_path()
         if source is not None:
-            self._launch_live_session(source, "file", title=None)
+            was_paused = self._player_controller.paused
+            if not was_paused:
+                self._player_controller.play_pause()
+            self._launch_live_session(source, "file", title=None,
+                                      initial_user_paused=was_paused)
             return
         # Nothing to translate: tell the user instead of doing nothing.
         self._live_bar.show_banner("live_err_no_source", is_error=True)
@@ -8576,12 +8580,14 @@ class App(tk.Tk):
         if self._destroying:
             self._live_resolving = False
             return
-        # Play the resolved stream in the player while the same URL is translated.
-        # The mpv backend is created lazily on first load, so start the session
-        # only once it exists (below), not synchronously here.
+        # Load the resolved stream paused while the same URL is translated. The
+        # mpv backend is created lazily on first load, so start the session only
+        # once it exists (below), not synchronously here.
         item = _player_core.MediaItem(path=stream_url, kind="source", title=title)
         self._player_controller.set_playlist([item], index=0)
-        self._player_controller.load(item, paused=False)
+        # Resolve and load first, but keep the playhead fixed while Whisper,
+        # translation and the first dubbed clip warm up.
+        self._player_controller.load(item, paused=True)
         self._ensure_or_show_player_status()
         self._pending_live_source = (stream_url, "url", title)
         self._await_backend_and_launch(time.monotonic() + 20.0)
@@ -8608,7 +8614,8 @@ class App(tk.Tk):
         self.after(150, lambda: self._await_backend_and_launch(deadline))
 
     def _launch_live_session(self, source: str, source_kind: str, *,
-                             title: str | None) -> None:
+                             title: str | None,
+                             initial_user_paused: bool = False) -> None:
         # The launch is the terminal step of a start: clear the resolving flag so
         # the bar reflects the session (or, on failure below, re-enables Start).
         self._live_resolving = False
@@ -8646,17 +8653,20 @@ class App(tk.Tk):
                 cfg, video=self._player_backend, clock_view=self._player_clock,
                 factories=factories, voice=voice_backend, log=self._player_log,
                 thread_factory=self._redirecting_thread_factory)
-            self._live_session.notify_user_pause(self._player_controller.paused)
+            self._live_session.notify_user_pause(initial_user_paused)
             self._live_session.set_original_muted(raw.get("original_mute", False))
-            self._live_session.start()
+            self._live_session.start(startup_hold=True)
         except Exception as exc:                     # noqa: BLE001
             self._player_log(f"[live] start failed: {exc}")
             self._live_session = None
+            if not initial_user_paused and self._player_controller.paused:
+                self._player_controller.play_pause()
             self._live_bar.show_banner("live_err_internal",
                                        {"detail": str(exc)}, is_error=True)
             self._refresh_live_bar_enabled()
             return
         self._live_bar.clear_banner()
+        self._live_startup_pending = True
         self._live_bar.set_active(True)
         self._live_bar.set_start_enabled(False)
         self._schedule_live_poll()
@@ -8673,6 +8683,9 @@ class App(tk.Tk):
             return
         status = session.status()
         self._live_bar.render(status)
+        if getattr(self, "_live_startup_pending", False) and status.startup_ready:
+            session.release_startup_hold()
+            self._live_startup_pending = False
         if status.state in ("stopped", "failed", "ended"):
             self._finish_live_session()
             return

@@ -80,6 +80,7 @@ class LanguageLock:
         self._failed = False
         self._speech_s = 0.0
         self._detections: list[str] = []
+        self._pending_segments: list[dict] = []
 
     @property
     def locked(self) -> str | None:
@@ -111,6 +112,20 @@ class LanguageLock:
             self._failed = True
             return "failed"
         return "detecting"
+
+    def buffer_segments(self, segments: list[dict]) -> None:
+        """Retain speech seen before auto language detection locks."""
+        self._pending_segments.extend(segments)
+
+    def take_buffered_segments(self) -> list[dict]:
+        """Release pre-lock speech in order, only after the language is known."""
+        if self._locked is None:
+            return []
+        segments, self._pending_segments = self._pending_segments, []
+        return segments
+
+    def clear_buffered_segments(self) -> None:
+        self._pending_segments.clear()
 
     def _majority_winner(self) -> str | None:
         if not self._detections:

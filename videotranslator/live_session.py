@@ -62,6 +62,7 @@ class LiveStatus:
     target_delay_s: float | None = None
     device: str = "cpu"
     engine: str = "marian"
+    startup_ready: bool = False
     voiced: int = 0
     dropped: int = 0
     skipped_s: float = 0.0
@@ -258,6 +259,12 @@ import threading
 class _PipelineEnd:
     gen: int
 
+
+@dataclass(frozen=True)
+class _PipelineSilence:
+    gen: int
+    end: float
+
 from .live_scheduler import (
     ClearSubtitle, ClipSpeed, Drop, DubScheduler, Duck, DuckEnvelope, LiveSegment,
     PauseClip, PreloadClip, RequestTts, ResumeClip, ShowSubtitle, StartClip, StopClip,
@@ -327,6 +334,10 @@ class LiveSession:
         self._threads: list[Any] = []
         self._gen = 0
         self._self_paused = False
+        self._startup_hold = False
+        self._asr_ready = threading.Event()
+        self._translator_ready = threading.Event()
+        self._startup_silence_ready = threading.Event()
         self._user_paused = False
         self._source_done = False
         self._last_pacer_mono = -1e9
@@ -351,7 +362,13 @@ class LiveSession:
 
     # -- public control surface (setters only enqueue) ----------------------
 
-    def start(self) -> None:
+    def start(self, *, startup_hold: bool = False) -> None:
+        self._startup_hold = bool(startup_hold)
+        self._self_paused = self._startup_hold
+        if self._startup_hold:
+            rt = getattr(self._video, "rt", None)
+            if rt is not None:
+                rt.set_pause(True)
         self._cfg.session_dir.mkdir(parents=True, exist_ok=True)
         pid = os.getpid()
         write_session_lock(self._cfg.session_dir / _LOCK_NAME, pid=pid,
@@ -363,7 +380,7 @@ class LiveSession:
         if self._bridge is not None:
             marker = self._bridge.extra("voice-eof")
             self._last_eof_count = marker[0][0] if marker else 0
-        self._set_state("running")
+        self._set_state("loading_models")
         targets = [("live-sched", self._sched_loop)]
         # A file OR a resolved VOD stream URL is decoded the same way: PyAV opens
         # a local path or an HTTP URL. (A growing live broadcast, P6, would need a
@@ -498,6 +515,10 @@ class LiveSession:
     def notify_user_pause(self, paused: bool) -> None:
         self._control.put(("pause", bool(paused)))
 
+    def release_startup_hold(self) -> None:
+        """Release the initial preparation pause without overriding user pause."""
+        self._control.put(("startup_release", None))
+
     def toggle_user_pause(self) -> None:
         """Toggle user intent on the scheduler thread, independent of pacer pauses."""
         self._control.put(("pause_toggle", None))
@@ -518,10 +539,16 @@ class LiveSession:
             return LiveStatus(
                 state=st.state, lag_s=st.lag_s, target_delay_s=st.target_delay_s,
                 device=st.device, engine=st.engine, voiced=st.voiced, dropped=st.dropped,
+                startup_ready=st.startup_ready,
                 skipped_s=st.skipped_s, status_params=dict(st.status_params),
                 warning_key=st.warning_key, warning_params=dict(st.warning_params),
                 warning_action=st.warning_action, error_key=st.error_key,
                 error_params=dict(st.error_params))
+
+    @property
+    def startup_ready(self) -> bool:
+        return (self._scheduler.startup_ready or self._startup_silence_ready.is_set()
+                or self._source_done)
 
     # -- internals ----------------------------------------------------------
 
@@ -587,7 +614,10 @@ class LiveSession:
         self._sync_voice_state()
         actions = self._scheduler.tick(now, mono, main_running=main_running,
                                        main_speed=1.0, voice_state=self._voice_state,
-                                       clock_epoch=epoch)
+                                       clock_epoch=epoch,
+                                       pacer_paused=(self._self_paused
+                                                     and not self._user_paused
+                                                     and not self._startup_hold))
         self._execute(actions)
         self._apply_duck(frozen=not main_running)
         if mono - self._last_status_mono >= 0.25:
@@ -628,12 +658,21 @@ class LiveSession:
             except Exception:
                 return
             accepted = self._scheduler.clip_ready(seg_id, gen, clip, reason)
+            if clip is None:
+                detail = str(reason or "TTS synthesis failed")
+                self._log(f"live: clip {seg_id} synthesis failed: {detail}")
+                self._set_warning("tts_unavailable", "edge-tts")
             if accepted:
                 seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
                 if seg is not None:
                     from .tts_text_sanitizer import sanitize_for_tts
                     self._dur_model.observe(sanitize_for_tts(seg.text_tgt),
                                             int(clip.rate.rstrip("%")), clip.audible_s)
+                with self._status_lock:
+                    if self._status.warning_key == WARN_KEYS.get("tts_unavailable"):
+                        self._status.warning_key = None
+                        self._status.warning_params = {}
+                        self._status.warning_action = None
 
     def _sync_voice_state(self) -> None:
         """Consume the voice end marker and flip to idle when a CLIP ends.
@@ -670,7 +709,14 @@ class LiveSession:
                 kind, value = self._control.get_nowait()
             except queue.Empty:
                 return
-            if kind == "mode":
+            if kind == "startup_release":
+                self._startup_hold = False
+                if not self._user_paused:
+                    self._self_paused = False
+                rt = getattr(self._video, "rt", None)
+                if rt is not None:
+                    rt.set_pause(self._user_paused or self._self_paused)
+            elif kind == "mode":
                 self._scheduler.set_mode(value)
                 self._pacer.set_mode(value)
             elif kind == "subs":
@@ -787,6 +833,8 @@ class LiveSession:
             rt.set_duck(gain)
 
     def _run_pacer(self, now: float | None) -> None:
+        if self._startup_hold or self._scheduler.pacer_recovery_pending:
+            return
         action = self._pacer.step(
             player=now, ready_until=self._scheduler.ready_until(now or 0.0),
             source_done=self._source_done, user_paused=self._user_paused,
@@ -803,10 +851,23 @@ class LiveSession:
 
     def _publish_status(self, now: float | None) -> None:
         metrics = self._scheduler.metrics()
+        if self._status.state not in ("failed", "stopping", "stopped", "ended"):
+            if not self._asr_ready.is_set():
+                state = "loading_models"
+            elif self._langlock.locked is None:
+                state = "detecting"
+            elif not self._translator_ready.is_set():
+                state = "loading_models"
+            elif self._startup_hold or not self.startup_ready:
+                state = "buffering"
+            else:
+                state = "running"
+            self._set_state(state)
         with self._status_lock:
             self._status.voiced = int(metrics.get("voiced", 0))
             self._status.dropped = int(metrics.get("dropped", 0))
             self._status.target_delay_s = self._timing_delay()
+            self._status.startup_ready = self.startup_ready
 
     # -- producer threads (design 4.7-4.9): decode -> asr -> mt -> sched_in ----
 
@@ -868,12 +929,25 @@ class LiveSession:
                 try:
                     decoder = self._factories.decoder(
                         self._cfg.source, start_at=start_at, time_domain="rebased")
+                    silent_since: float | None = None
+                    silence_sent = False
                     for block_start, samples in decoder.blocks(cancel):
                         if self._stop.is_set() or cancel.is_set():
                             break
                         probs = vad.probs(samples)
                         for utt in self._segmenter.push(block_start, samples, probs):
                             self._put_utt(utt)
+                        block_end = block_start + len(samples) / 16000.0
+                        if (probs and not self._segmenter.speech_active
+                                and all(prob < 0.35 for prob in probs)):
+                            if silent_since is None:
+                                silent_since = block_start
+                            if not silence_sent and block_end - silent_since >= 2.0:
+                                self._put_utt(_PipelineSilence(gen, block_end))
+                                silence_sent = True
+                        else:
+                            silent_since = None
+                            silence_sent = False
                     if not cancel.is_set():
                         for utt in self._segmenter.flush():
                             self._put_utt(utt)
@@ -913,6 +987,7 @@ class LiveSession:
             if actual:
                 with self._status_lock:
                     self._status.device = actual
+            self._asr_ready.set()
             while not self._stop.is_set():
                 try:
                     utt = self._utt_q.get(timeout=0.2)
@@ -926,11 +1001,16 @@ class LiveSession:
                     self._assembler.reset(utt.gen)
                     from .live_asr import HallucinationFilter
                     self._hallucination = HallucinationFilter()
+                    self._langlock.clear_buffered_segments()
                     media_edge = 0.0
                 if isinstance(utt, _PipelineEnd):
                     for sentence in self._assembler.edge(1e12):
                         self._put_sentence(sentence)
                     self._put_sentence(utt)
+                    continue
+                if isinstance(utt, _PipelineSilence):
+                    self._startup_silence_ready.set()
+                    media_edge = max(media_edge, utt.end)
                     continue
                 segs, lang, prob = whisper.transcribe(utt, language=self._langlock.locked)
                 if utt.gen != self._gen:
@@ -941,13 +1021,12 @@ class LiveSession:
                 if state == "failed":
                     self._fail("need_source_lang", "")
                     break
-                if self._langlock.locked is None:
-                    for seg in segs:            # pre-lock: source text, italic, no dub
-                        self._emit_segment(seg["start"], seg["end"], seg["text"], None,
-                                           italic=True, gen=utt.gen)
-                    continue
                 pieces = [{"start": s["start"], "end": s["end"], "text": s["text"],
                            "flags": ()} for s in segs]
+                if self._langlock.locked is None:
+                    self._langlock.buffer_segments(pieces)
+                    continue
+                pieces = self._langlock.take_buffered_segments() + pieces
                 for sentence in self._assembler.push(pieces, utt.gen):
                     self._put_sentence(sentence)
         except Exception as exc:            # noqa: BLE001
@@ -970,6 +1049,12 @@ class LiveSession:
         try:
             translator = self._factories.translator(self._cfg.engine)
             online = bool(getattr(translator, "online", False))
+            # Models that expose prepare() can be warmed as soon as language is
+            # explicit; auto mode waits until the detector locks a source.
+            if self._langlock.locked is not None:
+                translator.prepare(self._langlock.locked, self._cfg.lang_target)
+                prepared = True
+                self._translator_ready.set()
             while not self._stop.is_set():
                 try:
                     sentence = self._mt_q.get(timeout=0.2)
@@ -986,6 +1071,7 @@ class LiveSession:
                     src = self._langlock.locked or self._cfg.lang_source
                     translator.prepare(src, self._cfg.lang_target)
                     prepared = True
+                    self._translator_ready.set()
                 # An online engine whose breaker is open keeps the original text
                 # (shown in the source language) without spending a call.
                 if online and not breaker.allow():

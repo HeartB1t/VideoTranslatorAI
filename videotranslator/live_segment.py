@@ -74,6 +74,11 @@ class UtteranceSegmenter:
     def set_max_len(self, seconds: float) -> None:
         self._max_len = seconds
 
+    @property
+    def speech_active(self) -> bool:
+        """Whether the current VAD utterance still contains active speech."""
+        return self._active
+
     def _slice(self, samples, k: int):
         return np.asarray(samples[k * self._frame:(k + 1) * self._frame],
                           dtype=np.float32)

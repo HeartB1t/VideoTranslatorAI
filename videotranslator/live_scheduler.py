@@ -308,6 +308,7 @@ class DubScheduler:
         self._clip_cache: dict[tuple, object] = {}  # (rstart, rend, tgt) -> Clip
         self._preloaded: int | None = None
         self._playing: int | None = None
+        self._pacer_recovery_seg: int | None = None
         self._clip_paused = False
         self._expected_end: float = 0.0
         self._duck_target: float = 1.0
@@ -390,6 +391,7 @@ class DubScheduler:
             if self._playing is not None or self._preloaded is not None:
                 actions.append(StopClip(0.18))
             self._playing = self._preloaded = None
+            self._pacer_recovery_seg = None
             self._clip_paused = False
             if self._duck_target != 1.0:
                 self._duck_target = 1.0
@@ -403,13 +405,21 @@ class DubScheduler:
     def _finish_playing(self) -> None:
         if self._playing is not None:
             self._dub_state[self._playing] = "done"
+            if self._pacer_recovery_seg == self._playing:
+                self._pacer_recovery_seg = None
             self._playing = None
         self._clip_paused = False
 
-    def _next_ready(self, now: float) -> LiveSegment | None:
+    @property
+    def pacer_recovery_pending(self) -> bool:
+        return self._pacer_recovery_seg is not None
+
+    def _next_ready(self, now: float, pacer_paused: bool = False) -> LiveSegment | None:
         tol = self._max_live_lag if self._mode == "live" else self._late_tol
         cands = [s for s in self._segments.values()
-                 if self._dub_state.get(s.seg_id) == "ready" and s.start >= now - tol]
+                 if self._dub_state.get(s.seg_id) == "ready"
+                 and (s.start >= now - tol or
+                      (pacer_paused and now - s.start <= self._max_live_lag))]
         return min(cands, key=lambda s: s.start) if cands else None
 
     def _imminent_clip(self, now: float) -> bool:
@@ -422,6 +432,7 @@ class DubScheduler:
         if self._playing is not None or self._preloaded is not None:
             actions.append(StopClip(0.0))
         self._playing = self._preloaded = None
+        self._pacer_recovery_seg = None
         self._clip_paused = False
         if self._duck_target != 1.0:
             self._duck_target = 1.0
@@ -436,16 +447,21 @@ class DubScheduler:
         return []
 
     def _dub_actions(self, now: float, mono: float, main_running: bool,
-                     main_speed: float, voice_state: str) -> list[object]:
+                     main_speed: float, voice_state: str,
+                     pacer_paused: bool = False) -> list[object]:
         actions: list[object] = []
         live = self._mode == "live"
         # Pause/resume the playing clip with the main transport, then detect end.
         if self._playing is not None:
-            if not main_running:
+            recovery_playing = (self._playing == self._pacer_recovery_seg
+                                and pacer_paused)
+            if recovery_playing and voice_state == "idle":
+                self._finish_playing()
+            elif not main_running and not recovery_playing:
                 if not self._clip_paused:
                     self._clip_paused = True
                     actions.append(PauseClip())
-            elif self._clip_paused:
+            elif self._clip_paused and not recovery_playing:
                 if now < self._expected_end:
                     self._clip_paused = False
                     actions.append(ResumeClip())
@@ -496,7 +512,13 @@ class DubScheduler:
                 too_late, reason = now - seg.start > self._max_live_lag, "lag"
             else:
                 too_late, reason = now > seg.start - self._lead + self._late_tol, "late"
+            recover_late = (pacer_paused and not live
+                            and now - seg.start <= self._max_live_lag)
+            if recover_late and self._pacer_recovery_seg is None:
+                self._pacer_recovery_seg = seg.seg_id
             if too_late:
+                if recover_late:
+                    continue
                 if self._preloaded == seg.seg_id:
                     # The clip was loaded into the voice device: stop it so the
                     # device returns to idle, otherwise the session's voice_state
@@ -508,13 +530,15 @@ class DubScheduler:
                 self._dub_dropped += 1
         # Preload the next ready clip when the voice device is free.
         if voice_state == "idle" and self._preloaded is None and self._playing is None:
-            cand = self._next_ready(now)
+            cand = self._next_ready(now, pacer_paused)
             if cand is not None:
                 if live:
                     ready_to_preload = now - cand.start <= self._max_live_lag
                 else:
                     ready_to_preload = (cand.start - self._preload_s <= now
-                                        < cand.start - self._lead + self._late_tol)
+                                        < cand.start - self._lead + self._late_tol
+                                        or (pacer_paused
+                                            and now - cand.start <= self._max_live_lag))
                 if ready_to_preload:
                     clip = self._clips[cand.seg_id]
                     actions.append(PreloadClip(cand.seg_id, clip.path,
@@ -542,10 +566,12 @@ class DubScheduler:
                 fit = min(self._max_speed, max(1.0, 1.0 + (now - seg.start) / 8.0))
                 base = now
             else:
-                start_now = now >= seg.start - self._lead
+                start_now = (now >= seg.start - self._lead
+                             or (pacer_paused and seg.seg_id == self._pacer_recovery_seg))
                 fit = min(self._max_speed, max(1.0, audible / slot_len))
-                base = seg.start
-            if start_now and main_running:
+                base = now if seg.seg_id == self._pacer_recovery_seg else seg.start
+            if start_now and (main_running or (pacer_paused
+                                               and seg.seg_id == self._pacer_recovery_seg)):
                 actions.append(StartClip(seg.seg_id, fit * main_speed))
                 self._playing = seg.seg_id
                 self._preloaded = None
@@ -611,7 +637,7 @@ class DubScheduler:
 
     def tick(self, now: float | None, mono: float = 0.0, *, main_running: bool = True,
              main_speed: float = 1.0, voice_state: str = "idle",
-             clock_epoch: int = 0) -> list[object]:
+             clock_epoch: int = 0, pacer_paused: bool = False) -> list[object]:
         actions: list[object] = []
         if now is None:  # invalid clock (loading / seeking)
             if self._shown is not None:
@@ -650,7 +676,7 @@ class DubScheduler:
         # Dub path (independent of subtitles).
         if self._dub:
             actions.extend(self._dub_actions(now, mono, main_running, main_speed,
-                                             voice_state))
+                                             voice_state, pacer_paused))
         return actions
 
     def _coverage_ready(self, seg: LiveSegment) -> bool:
@@ -677,6 +703,19 @@ class DubScheduler:
             else:
                 break
         return coverage
+
+    @property
+    def startup_ready(self) -> bool:
+        """Whether at least one initial unit can be presented without a hole."""
+        resolved = {"ready", "preloaded", "playing", "done", "dropped"}
+        for seg in sorted(self._segments.values(), key=lambda item: item.start):
+            if not self._caption_ready(seg):
+                continue
+            if (self._dub and self._dub_eligible(seg)
+                    and self._dub_state.get(seg.seg_id) not in resolved):
+                continue
+            return True
+        return False
 
     def on_seek(self, now: float, gen: int) -> list[object]:
         self._last_now = now

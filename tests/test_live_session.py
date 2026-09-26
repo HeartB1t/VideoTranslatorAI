@@ -163,6 +163,20 @@ def _seg(tgt="ciao", *, gen=0, start=1.0, end=3.0):
 
 
 class LiveSessionTickTests(unittest.TestCase):
+    def test_startup_hold_keeps_pacer_from_resuming_before_first_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _ = _session(tmp)
+            sess._startup_hold = True
+            sess._self_paused = True
+            sess._run_pacer(1.0)
+            self.assertTrue(sess._self_paused)
+            self.assertEqual(video.rt.pauses, [])
+            sess._startup_hold = False
+            sess._control.put(("startup_release", None))
+            sess._drain_control(1.02)
+            self.assertFalse(sess._self_paused)
+            self.assertEqual(video.rt.pauses[-1], False)
+
     def test_user_pause_and_pacer_pause_have_independent_ownership(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, video, _ = _session(tmp)
@@ -451,14 +465,23 @@ class LiveSessionLifecycleTests(unittest.TestCase):
             video = SimpleNamespace(rt=_FakeRt())
             sess = LiveSession(cfg, video=video, clock_view=_FakeClockView(0.1),
                                factories=_pipeline_factories())
-            sess.start()
+            sess.start(startup_hold=True)
             try:
-                self.assertEqual(sess.status().state, "running")
+                self.assertTrue(video.rt.pauses[-1])
+                self.assertIn(sess.status().state,
+                              {"loading_models", "detecting", "buffering", "running"})
                 deadline = time.monotonic() + 3.0
                 while time.monotonic() < deadline and not any(
                         a and "ciao" in a for a in video.rt.overlays):
                     time.sleep(0.02)
                 self.assertTrue(any(a and "ciao" in a for a in video.rt.overlays))
+                deadline = time.monotonic() + 1.0
+                while time.monotonic() < deadline and not sess.startup_ready:
+                    time.sleep(0.01)
+                self.assertTrue(sess.startup_ready)
+                sess.release_startup_hold()
+                time.sleep(0.05)
+                self.assertFalse(video.rt.pauses[-1])
                 self.assertTrue((cfg.session_dir / "session.lock").exists())
             finally:
                 sess.request_stop()

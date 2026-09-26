@@ -265,6 +265,37 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertIn("Drop", _types(acts))
         self.assertEqual(s.metrics()["late"], 1.0)
 
+    def test_late_clip_is_recovered_while_the_pacer_holds_the_playhead(self):
+        s = _dub_sched(max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+
+        acts = s.tick(6.0, mono=105.0, main_running=False,
+                      voice_state="idle", pacer_paused=True)
+
+        self.assertNotIn("Drop", _types(acts))
+        self.assertIn("PreloadClip", _types(acts))
+        self.assertTrue(s.pacer_recovery_pending)
+
+        acts = s.tick(6.0, mono=105.02, main_running=False,
+                      voice_state="preloaded", pacer_paused=True)
+        self.assertIn("StartClip", _types(acts))
+        self.assertTrue(s.pacer_recovery_pending)
+
+        s.tick(6.0, mono=107.0, main_running=False,
+               voice_state="idle", pacer_paused=True)
+        self.assertFalse(s.pacer_recovery_pending)
+
+    def test_late_clip_is_still_dropped_if_buffer_pause_is_too_old(self):
+        s = _dub_sched(max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(1.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        acts = s.tick(10.0, mono=109.0, main_running=False,
+                      voice_state="idle", pacer_paused=True)
+        self.assertIn("Drop", _types(acts))
+
     def test_a_dropped_clip_does_not_block_ready_until(self):
         # P0 (review finding 1): a dropped segment between two ready ones must not
         # stop coverage, or the FilePacer stalls the video at that hole.

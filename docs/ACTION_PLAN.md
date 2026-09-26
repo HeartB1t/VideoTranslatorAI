@@ -51,26 +51,45 @@ recorded separately after publication.
 
 ### Remaining implementation work, in order
 
-1. Finding 10 overlap policy, spec 4.11: wait up to 0.6 s, speed the current clip
+1. [Implemented, unit-tested] Live startup gate and initial speech preservation.
+   URL playback now loads paused, and file playback is paused at its current media
+   position before the session starts. The gate releases after an initial translated
+   output (and synthesized clip when dubbing is enabled), two seconds of confirmed
+   VAD silence, or source EOF. Auto-detected language retains pre-lock utterances
+   and sends them through translation in order after `LanguageLock` decides.
+   Preparation state is shown through the existing loading/detecting/buffering
+   statuses; Stop cancels the session and model/pipeline errors use the existing
+   error path. Synthesis failures are logged and surface the existing TTS warning.
+   Silence can release playback before the first speech; the pacer and
+   late-clip recovery then keep the playhead coordinated. Real audio acceptance is
+   still pending.
+2. [Implemented, unit-tested] Late clip handling coordinated with the pacer. The
+   session now distinguishes a pacer-owned pause from a user pause. In delayed
+   mode, a ready clip that is late only because the pacer held the media clock can
+   be played as a recovery clip, while the picture remains held; clips older than
+   the configured media-time freshness bound still drop. Recovery remains ordered
+   and does not change the separate live-mode lag policy. Real audio acceptance is
+   still pending.
+3. Finding 10 overlap policy, spec 4.11: wait up to 0.6 s, speed the current clip
    when needed, fade for 0.18 s if the remaining wait would exceed 1 s. Wire
    `ClipSpeed` and `FadeRamp` into actual execution; `StopClip.fade_s` is still
    ignored. Test two adjacent clips, EOF during fade, pause during overlap,
    mute during fade, and stop/seek cancelling the fade.
-2. Voice backend creation on a worker, with completion on Tk. Capture the player
+4. Voice backend creation on a worker, with completion on Tk. Capture the player
    backend/bridge identity before starting; reject and terminate stale results
    after Stop, close, media change or VO fallback. Cover enabling dub after a
    session started with dub disabled (the voice backend may not exist yet).
-3. VO fallback: stop/join the session and terminate the old voice backend before
+5. VO fallback: stop/join the session and terminate the old voice backend before
    closing/replacing its bridge. Never reuse a voice backend bound to the old
    bridge. Test all fallback branches and closing during replacement.
-4. Bound active scheduler segments to the design's 2,000 entries and avoid
+6. Bound active scheduler segments to the design's 2,000 entries and avoid
    repeatedly scanning an unbounded history at 50 Hz. Preserve file clip cache
    replay, in-flight results and caption coverage. Add a long-video test.
-5. Audit dub-toggle state and dropped metrics, plus remaining dormant paths:
+7. Audit dub-toggle state and dropped metrics, plus remaining dormant paths:
    `duck_af`, `LeadCalibrator`, voice-time-pos observer. Wire required behavior or
    explicitly retire unused paths. Do not mark all P2 12-21 closed from this list;
    reconcile each item against the original Fable review.
-6. Persistent `falling_behind` delay adjustment remains open. Verify actual engine
+8. Persistent `falling_behind` delay adjustment remains open. Verify actual engine
    and delay changes during a running session (control/status updates alone are
    not evidence of a producer configuration change).
 
@@ -88,6 +107,117 @@ writing deterministic software tests; it still blocks calling P5 validated.
 - S1 maximize on the operator's real window manager.
 - P6 growing live broadcasts and S2 ingest acceptance; resolved VOD URLs are not
   the P6 live-stream implementation. P7 parity and ComponentInstaller remain.
+
+### Operator live-test bug checklist (2026-09-26)
+
+Keep these boxes open until the code change and its regression/acceptance checks
+are complete. The first two are confirmed by the inspected code paths above; the
+TLS entry is an observed stream error whose root cause still needs diagnosis.
+
+- [x] Prevent playback from advancing before live models and the initial dubbed
+  audio are ready; retain and process early speech while automatic language
+  detection locks. See remaining item 1. Unit tests pass; listen-test pending.
+- [x] Recover late dubbed clips when the player is waiting on the pacer, without
+  speaking them out of order or letting voice delay grow without bound. See item 2.
+  Unit tests pass; listen-test pending.
+
+Deferred diagnosis, outside the current fix scope: mpv reported TLS connection
+resets/reconnects, and the log contains repeated URL resolution messages. The
+first may be an upstream/network interruption; the second may be repeated user
+starts. Revisit after the startup and dubbed-clip synchronization fixes.
+
+## Future feature - Hardware-aware AI model selection
+
+User proposal (2026-09-26): let users discover, download and choose newer AI
+models, with recommendations and settings tailored to their PC hardware. This is
+a planned feature, not an implementation commitment to any specific model or
+provider. Research supported models, licences, platform support and current
+releases when implementation begins; do not hard-code claims that models are
+"latest" in this roadmap.
+
+### Goals
+
+- Detect available CPU, system RAM, GPU/backend, usable VRAM and disk space, then
+  recommend compatible options for speed, balanced use or quality.
+- Cover the actual pipeline stages separately: speech recognition, translation
+  for the selected language pair, and speech synthesis. Some current choices
+  (for example Google translation and Edge-TTS) are online services, not
+  downloadable local models; label their network and account requirements rather
+  than presenting them as hardware-selected downloads.
+- Let users compare measured first-result latency, sustained real-time factor,
+  memory use, language coverage, download size and whether an internet connection
+  is needed. Hardware detection alone is not a performance benchmark.
+- Keep a known-good configuration and allow users to switch back after testing a
+  new option. Installing or changing a model requires explicit user choice.
+
+### Proposed implementation order
+
+1. Fix live startup and synchronization first: hold playback while required
+   components prepare and the initial audio buffer is ready; preserve early
+   recognized speech while automatic source-language detection locks; make the
+   pacer and late-clip policy share the reason playback is paused. A faster model
+   must not be used to hide these timing/state bugs.
+2. Inventory the model interfaces already used by ASR, translation and TTS.
+   Identify interchangeable backends and define per-stage compatibility,
+   fallback and cache/version metadata without changing the defaults.
+3. Add read-only hardware discovery with graceful CPU-only and unsupported-GPU
+   paths. Show detected hardware and recommendations before downloading anything.
+4. Add a curated model catalogue with pinned versions, checksums, licence and
+   language metadata, disk/VRAM requirements, platform support and download
+   source. Use resumable downloads, temporary files plus atomic promotion, and
+   retain the previous working model until the new one passes validation.
+5. Add an opt-in short benchmark and report first-clip latency and sustained
+   throughput for the chosen pipeline. Benchmarking should be cancellable and
+   should not upload audio or hardware identifiers.
+6. Integrate choices into profiles such as Speed, Balanced and Quality, while
+   preserving manual per-stage selection and existing settings. Test Windows
+   and Linux, offline operation for local models, insufficient disk/VRAM, failed
+   downloads, checksum mismatch, rollback and model initialization failure.
+
+### Acceptance criteria
+
+- Recommendations explain their evidence and distinguish local models from
+  online services; users can ignore them and keep current settings.
+- The app never silently downloads, replaces or upgrades a model. Downloads are
+  verified, cancellable, resumable and recoverable without destroying the last
+  working configuration.
+- A selected model is loaded and warmed before live playback begins; startup
+  status reports preparation and the first speech buffer. Model choice is not
+  considered a fix for late-clip drops unless timing tests confirm that behavior.
+- Benchmarks measure real startup and sustained pipeline timing on the machine,
+  without transmitting user data.
+
+## Future feature - ElevenLabs voices for live dubbing
+
+Integrate ElevenLabs as an optional live TTS provider so users can choose more
+natural multilingual voices. Treat language support as model- and voice-specific:
+the current product language list must be intersected with the provider's current
+model capabilities, and voice/accent fit must be visible. ElevenLabs currently
+documents multilingual models with different language coverage and latency, and
+the TTS API accepts a voice ID, model ID and optional language code. Re-check the
+official catalog when implementation begins rather than hard-coding today's
+coverage. Sources: [models](https://elevenlabs.io/docs/overview/models), [TTS API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert), [language and accent guidance](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/how-do-i-select-the-language-and-accent).
+
+### Integration requirements
+
+- Add an optional `ElevenLabs` engine/provider alongside local and existing TTS
+  choices; retain existing providers as free/offline fallbacks.
+- Let users configure and validate their API key without committing or logging
+  it. Make network use, account/quota requirements, privacy implications and
+  per-character cost clear before sending translated text.
+- Load/select voices from the provider catalog, showing supported languages and
+  voice/accent metadata; do not imply every voice is equally native in every
+  language. Cache catalog data with an explicit refresh action.
+- Select a compatible multilingual model based on latency/quality preference;
+  expose model choice only when the account supports it. Return synthesized audio
+  through the current clip/scheduler interface, preserving deadlines, cancellation,
+  retry limits, audio format conversion and file cleanup.
+- Keep all provider I/O off the Tk thread. Handle rate limits, quota exhaustion,
+  authentication errors, network loss and model unavailability with localized
+  status and a user-selectable fallback provider.
+- Test API behavior with mocked responses, no-secret logging, supported/unsupported
+  language and voice combinations, timeout/cancel, format conversion, scheduler
+  deadlines and offline fallback. Never require a live paid API in CI.
 
 The baseline/action items below are historical; environment blocker statements
 must be rechecked before treating them as current machine state.

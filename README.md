@@ -1,5 +1,9 @@
 # 🎬 Video Translator AI
 
+[English](README.md) | [All translations](README_LANGUAGES.md)
+
+**Read this page in:** [العربية](README.ar.md) · [中文](README.zh.md) · [Čeština](README.cs.md) · [Dansk](README.da.md) · [Nederlands](README.nl.md) · [Suomi](README.fi.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Ελληνικά](README.el.md) · [हिन्दी](README.hi.md) · [Magyar](README.hu.md) · [Bahasa Indonesia](README.id.md) · [Italiano](README.it.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Norsk](README.no.md) · [Polski](README.pl.md) · [Português](README.pt.md) · [Română](README.ro.md) · [Русский](README.ru.md) · [Español](README.es.md) · [Svenska](README.sv.md) · [Türkçe](README.tr.md) · [Українська](README.uk.md) · [Tiếng Việt](README.vi.md)
+
 [![tests](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml/badge.svg)](https://github.com/HeartB1t/VideoTranslatorAI/actions/workflows/tests.yml)
 
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages, with local processing options and no API keys required by default. Whisper speech recognition runs locally; Edge-TTS, Google Translate and DeepL require an internet connection. Optional features (DeepL, Speaker Diarization) may require an API key or access token.
