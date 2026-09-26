@@ -28,7 +28,7 @@ AI-drevet videostemmeoverspilningsværktøj, der automatisk transskriberer, over
 - 🌐 **UI på 26 sprog** - selve grænsefladen tilpasser sig dit sprog
 - 🎬 **YouTube- og URL-understøttelse** - indsæt ethvert YouTube-link og oversæt direkte (drevet af yt-dlp)
 - ▶️ **Integreret videoafspiller** (libmpv/mpv) - farvekodede transportkontroller, afspilningsliste, A/B original vs dubbet lyd, undertekstskift, snapshot, fuldskærm, åben mappe
-- ⏱️ **Oversættelse i realtid** - se en lokal fil eller et løst on-demand videolink med oversatte undertekster og en forsinkelsesskyder i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Eksperimentel stemmedubbing bruger Edge-TTS og en anden mpv-instans. Stemmeoverlapningshåndtering og ægte lyd/Windows-accept er stadig i gang; voksende live-udsendelser understøttes ikke endnu. Se [live implementeringsstatus](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Oversættelse i realtid** - se en lokal fil eller et løst on-demand videolink med oversatte undertekster og en forsinkelsesskyder i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Eksperimentel stemmedubbing bruger Edge-TTS og en anden mpv-instans. Stemmeoverlapningshåndtering og ægte lyd/Windows-accept er stadig i gang; voksende live-udsendelser understøttes ikke endnu.
 - 🎵 Stemme-/musikadskillelse via Demucs (beholder baggrundsmusik)
 - 🔇 **Slå originallyd fra**, tilgængelig før og under liveoversættelse, dæmper videoens lydspor, mens den oversatte stemme holdes hørbar. Slå den fra for at gendanne den originale lyd; den nulstilles, når livesessionen slutter.
 - 🧠 **MarianMT** - fuldt lokal, offline neural oversættelse (Helsinki-NLP, ingen grænser for anmodningshastighed, ingen API-nøgle)
@@ -292,7 +292,7 @@ Se en lokal fil eller et løst on-demand videolink med oversatte undertekster og
 - **Stemmeoverspilning:** eksperimentel Edge-TTS-taleafspilning gennem en anden mpv-instans. Det kræver internetadgang og er adskilt fra batch-stemmekloning.
 - **Slå originallyd fra:** tilgængelig både før start og under oversættelse. Det dæmper hele det originale soundtrack, inklusive musik og effekter, men efterlader den oversatte stemme hørbar. Det isolerer ikke den person, der taler i den originale lyd. Slå det fra for at gendanne lydsporet; den nulstilles, når livesessionen slutter. Afspillerens højttalerknap er den generelle mute, ikke denne uafhængige kontrol.
 - **Pause og søg:** videoafspillerens kontroller er forbundet til livesessionen; ende-til-ende lydsynkronisering kræver stadig platformspecifikke accepttests.
-- **Nuværende grænser:** håndtering af klip overlap/fade, kalibrering af lydtiming og Windows-accept forbliver åbne. Voksende live-udsendelser understøttes ikke endnu; etiketten for livetilstand indebærer ikke understøttelse af indtagelse af en udsendelse, efterhånden som den vokser. Se [implementeringsstatus og resterende arbejde](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Nuværende grænser:** håndtering af klip overlap/fade, kalibrering af lydtiming og Windows-accept forbliver åbne. Voksende live-udsendelser understøttes ikke endnu; etiketten for livetilstand indebærer ikke understøttelse af indtagelse af en udsendelse, efterhånden som den vokser.
 
 For en gemt dubbet video skal du bruge **Download & Oversæt** / **Start oversættelse** i stedet for forhåndsvisningen i realtid.
 

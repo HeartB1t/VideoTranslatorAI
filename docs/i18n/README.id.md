@@ -28,7 +28,7 @@ Alat sulih suara video bertenaga AI yang secara otomatis mentranskripsikan, mene
 - 🌐 **UI dalam 26 bahasa** - antarmukanya sendiri menyesuaikan dengan bahasa Anda
 - 🎬 **Dukungan YouTube & URL** - tempel tautan YouTube apa pun dan terjemahkan secara langsung (didukung oleh yt-dlp)
 - ▶️ **Pemutar video terintegrasi** (libmpv/mpv) - kontrol transportasi berkode warna, daftar putar, audio asli A/B vs audio yang di-dubbing, pengalihan subtitle, snapshot, layar penuh, folder terbuka
-- ⏱️ **Terjemahan waktu nyata** - tonton file lokal atau tautan video sesuai permintaan yang telah diselesaikan dengan subtitle terjemahan dan penggeser penundaan gaya YouTube; mesin MarianMT / Google / DeepL / Ollama. Sulih suara suara eksperimental menggunakan Edge-TTS dan instance mpv kedua. Penanganan suara yang tumpang tindih dan penerimaan audio/Windows sebenarnya masih dalam proses; siaran langsung yang berkembang belum didukung. Lihat [status implementasi langsung](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Terjemahan waktu nyata** - tonton file lokal atau tautan video sesuai permintaan yang telah diselesaikan dengan subtitle terjemahan dan penggeser penundaan gaya YouTube; mesin MarianMT / Google / DeepL / Ollama. Sulih suara suara eksperimental menggunakan Edge-TTS dan instance mpv kedua. Penanganan suara yang tumpang tindih dan penerimaan audio/Windows sebenarnya masih dalam proses; siaran langsung yang berkembang belum didukung.
 - 🎵 Pemisahan suara/musik melalui Demucs (menyimpan musik latar)
 - 🔇 **Mute audio asli**, tersedia sebelum dan selama terjemahan langsung, mengheningkan soundtrack video sekaligus menjaga suara terjemahan tetap terdengar. Matikan untuk mengembalikan audio asli; itu diatur ulang ketika sesi langsung berakhir.
 - 🧠 **MarianMT** - terjemahan neural offline yang sepenuhnya lokal (Helsinki-NLP, tanpa batas kecepatan permintaan, tanpa kunci API)
@@ -292,7 +292,7 @@ Tonton file lokal atau tautan video sesuai permintaan yang telah diselesaikan de
 - **Dubbing suara:** pemutaran ucapan Edge-TTS eksperimental melalui instance mpv kedua. Ini memerlukan akses internet dan terpisah dari kloning suara batch.
 - **Bungkam audio asli:** tersedia sebelum memulai dan selama penerjemahan. Ini membungkam seluruh soundtrack asli, termasuk musik dan efek, namun membiarkan suara terjemahan tetap terdengar. Itu tidak mengisolasi orang yang berbicara dalam audio asli. Matikan untuk memulihkan soundtrack; itu diatur ulang ketika sesi langsung berakhir. Tombol speaker pemutar adalah tombol mute umum, bukan kontrol independen ini.
 - **Jeda dan cari:** kontrol pemutar video terhubung ke sesi langsung; sinkronisasi audio ujung ke ujung masih memerlukan uji penerimaan khusus platform.
-- **Batas saat ini:** penanganan klip yang tumpang tindih/pudar, kalibrasi pengaturan waktu audio, dan penerimaan Windows tetap terbuka. Siaran langsung yang terus berkembang belum didukung; label mode langsung tidak menyiratkan dukungan untuk menyerap siaran seiring pertumbuhannya. Lihat [status implementasi dan sisa pekerjaan](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Batas saat ini:** penanganan klip yang tumpang tindih/pudar, kalibrasi pengaturan waktu audio, dan penerimaan Windows tetap terbuka. Siaran langsung yang terus berkembang belum didukung; label mode langsung tidak menyiratkan dukungan untuk menyerap siaran seiring pertumbuhannya.
 
 Untuk video sulih suara yang disimpan, gunakan **Unduh & Terjemahkan** / **Mulai Terjemahan** alih-alih pratinjau waktu nyata.
 

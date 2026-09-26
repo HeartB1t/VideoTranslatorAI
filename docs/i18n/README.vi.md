@@ -28,7 +28,7 @@ Công cụ lồng tiếng video được hỗ trợ bởi AI tự động phiên
 - 🌐 **Giao diện người dùng bằng 26 ngôn ngữ** - giao diện tự điều chỉnh theo ngôn ngữ của bạn
 - 🎬 **Hỗ trợ YouTube và URL** - dán bất kỳ liên kết YouTube nào và dịch trực tiếp (được cung cấp bởi yt-dlp)
 - ►️ **Trình phát video tích hợp** (libmpv/mpv) - điều khiển truyền tải được mã hóa màu, danh sách phát, âm thanh gốc A/B và âm thanh lồng tiếng, chuyển đổi phụ đề, ảnh chụp nhanh, toàn màn hình, mở thư mục
-- ⏱️ **Dịch thời gian thực** - xem tệp cục bộ hoặc liên kết video theo yêu cầu đã được giải quyết với phụ đề đã dịch và thanh trượt độ trễ kiểu YouTube; động cơ MarianMT / Google / DeepL / Ollama. Lồng tiếng thử nghiệm sử dụng Edge-TTS và phiên bản mpv thứ hai. Việc xử lý chồng chéo giọng nói và chấp nhận âm thanh thực/Windows vẫn đang được tiến hành; chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ. Xem [trạng thái triển khai trực tiếp](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Dịch thời gian thực** - xem tệp cục bộ hoặc liên kết video theo yêu cầu đã được giải quyết với phụ đề đã dịch và thanh trượt độ trễ kiểu YouTube; động cơ MarianMT / Google / DeepL / Ollama. Lồng tiếng thử nghiệm sử dụng Edge-TTS và phiên bản mpv thứ hai. Việc xử lý chồng chéo giọng nói và chấp nhận âm thanh thực/Windows vẫn đang được tiến hành; chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ.
 - 🎵 Tách giọng/nhạc qua Demucs (giữ nhạc nền)
 - 🔇 **Tắt tiếng âm thanh gốc**, khả dụng trước và trong khi dịch trực tiếp, tắt tiếng nhạc nền của video trong khi vẫn nghe được giọng đã dịch. Tắt nó đi để khôi phục âm thanh gốc; nó đặt lại khi phiên trực tiếp kết thúc.
 - 🧠 **MarianMT** - bản dịch thần kinh ngoại tuyến, cục bộ hoàn toàn (Helsinki-NLP, không giới hạn tốc độ yêu cầu, không có khóa API)
@@ -292,7 +292,7 @@ Xem tệp cục bộ hoặc liên kết video theo yêu cầu đã được gi�
 - **Lồng tiếng:** thử nghiệm phát lại giọng nói Edge-TTS thông qua phiên bản mpv thứ hai. Nó yêu cầu truy cập internet và tách biệt với việc nhân bản giọng nói hàng loạt.
 - **Tắt âm thanh gốc:** khả dụng cả trước khi bắt đầu và trong khi dịch. Nó làm im lặng toàn bộ nhạc nền gốc, bao gồm cả nhạc và hiệu ứng, nhưng vẫn để lại giọng nói được dịch. Nó không cô lập người nói trong âm thanh gốc. Tắt nó đi để khôi phục nhạc nền; nó đặt lại khi phiên trực tiếp kết thúc. Nút loa của máy nghe nhạc là nút tắt tiếng chung chứ không phải nút điều khiển độc lập này.
 - **Tạm dừng và tìm kiếm:** các nút điều khiển trình phát video được kết nối với phiên trực tiếp; Đồng bộ hóa âm thanh từ đầu đến cuối vẫn cần các thử nghiệm chấp nhận dành riêng cho nền tảng.
-- **Giới hạn hiện tại:** xử lý chồng chéo/làm mờ clip, hiệu chỉnh thời gian âm thanh và chấp nhận Windows vẫn mở. Các chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ; nhãn chế độ trực tiếp không ngụ ý hỗ trợ việc nhập chương trình phát sóng khi nó phát triển. Xem [trạng thái triển khai và công việc còn lại](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Giới hạn hiện tại:** xử lý chồng chéo/làm mờ clip, hiệu chỉnh thời gian âm thanh và chấp nhận Windows vẫn mở. Các chương trình phát sóng trực tiếp đang phát triển chưa được hỗ trợ; nhãn chế độ trực tiếp không ngụ ý hỗ trợ việc nhập chương trình phát sóng khi nó phát triển.
 
 Đối với video lồng tiếng đã lưu, hãy sử dụng **Tải xuống & Dịch** / **Bắt đầu dịch** thay vì xem trước trong thời gian thực.
 

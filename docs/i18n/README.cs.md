@@ -28,7 +28,7 @@ Nástroj pro dabování videí pomocí umělé inteligence, který automaticky p
 - 🌐 **UI ve 26 jazycích** - samotné rozhraní se přizpůsobí vašemu jazyku
 - 🎬 **Podpora YouTube a URL** - vložte jakýkoli odkaz na YouTube a překládejte přímo (využívá yt-dlp)
 - ▶️ **Integrovaný přehrávač videa** (libmpv/mpv) - barevně odlišené ovládání přehrávání, seznam skladeb, porovnání původního a dabovaného zvuku A/B, přepínání titulků, snímek obrazovky, celá obrazovka a otevření složky
-- ⏱️ **Překlad v reálném čase** - sledujte místní soubor nebo video na vyžádání z vyřešeného odkazu s přeloženými titulky a posuvníkem zpoždění ve stylu YouTube; překladače MarianMT / Google / DeepL / Ollama. Experimentální dabing využívá Edge-TTS a druhou instanci mpv. Zpracování překrývajících se hlasů a ověření se skutečným zvukem a ve Windows stále probíhají; průběžně přibývající živé vysílání zatím není podporováno. Viz [stav implementace živého překladu](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Překlad v reálném čase** - sledujte místní soubor nebo video na vyžádání z vyřešeného odkazu s přeloženými titulky a posuvníkem zpoždění ve stylu YouTube; překladače MarianMT / Google / DeepL / Ollama. Experimentální dabing využívá Edge-TTS a druhou instanci mpv. Zpracování překrývajících se hlasů a ověření se skutečným zvukem a ve Windows stále probíhají; průběžně přibývající živé vysílání zatím není podporováno.
 - 🎵 Oddělení hlasu a hudby pomocí Demucs (zachovává hudbu na pozadí)
 - 🔇 **Vypnout původní zvuk**, které je k dispozici před a během živého překladu, ztiší zvukovou stopu videa a zároveň zachová přeložený hlas slyšitelný. Vypnutím obnovíte původní zvuk; po skončení živé relace se resetuje.
 - 🧠 **MarianMT** - plně místní, offline neurální překlad (Helsinki-NLP, žádné limity počtu požadavků, žádný klíč API)
@@ -292,7 +292,7 @@ Sledujte místní soubor nebo vyřešený odkaz na video na vyžádání s přel
 - **Dabování hlasu:** experimentální přehrávání řeči Edge-TTS prostřednictvím druhé instance mpv. Vyžaduje přístup k internetu a je oddělený od dávkového klonování hlasu.
 - **Vypnout původní zvuk:** k dispozici před zahájením i během překladu. Ztiší celý původní soundtrack včetně hudby a efektů, ale přeložený hlas ponechá slyšitelný. Neizoluje osobu, která mluví v původním zvuku. Vypnutím obnovíte zvukovou stopu; po skončení živé relace se resetuje. Tlačítko reproduktoru přehrávače je obecné ztlumení, nikoli toto nezávislé ovládání.
 - **Pozastavit a vyhledat:** ovládací prvky přehrávače videa jsou připojeny k živé relaci; end-to-end audio synchronizace stále vyžaduje testy akceptace specifické pro platformu.
-- **Aktuální limity:** Zpracování překrývání/zatmívání klipů, kalibrace časování zvuku a akceptace Windows zůstávají otevřené. Rostoucí živé vysílání zatím není podporováno; označení živého režimu neznamená podporu pro přijímání vysílání, jak roste. Viz [stav implementace a zbývající práce](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Aktuální limity:** Zpracování překrývání/zatmívání klipů, kalibrace časování zvuku a akceptace Windows zůstávají otevřené. Rostoucí živé vysílání zatím není podporováno; označení živého režimu neznamená podporu pro přijímání vysílání, jak roste.
 
 Pro uložené dabované video použijte místo náhledu v reálném čase **Stáhnout a přeložit** / **Zahájit překlad**.
 

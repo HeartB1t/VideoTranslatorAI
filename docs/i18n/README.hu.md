@@ -28,7 +28,7 @@ A mesterséges intelligencia által vezérelt videó hangszinkronizálási eszk�
 - 🌐 **UI 26 nyelven** - maga a felület igazodik az Ön nyelvéhez
 - 🎬 **YouTube és URL-támogatás** - illesszen be bármilyen YouTube-linket, és fordítsa le közvetlenül (az yt-dlp segítségével)
 - ▶️ **Integrált videolejátszó** (libmpv/mpv) - színkódolt átviteli vezérlők, lejátszási lista, A/B eredeti vs szinkronhang, feliratok váltása, pillanatfelvétel, teljes képernyő, mappa megnyitása
-- ⏱️ **Valós idejű fordítás** - nézzen meg egy helyi fájlt vagy egy megoldott igény szerinti videólinket lefordított feliratokkal és egy YouTube-stílusú késleltetési csúszkával; motorok MarianMT / Google / DeepL / Ollama. A kísérleti hangszinkronizálás Edge-TTS-t és egy második mpv-példányt használ. A hangátfedés kezelése és a valódi hang/Windows elfogadás folyamatban van; a növekvő élő adások még nem támogatottak. Lásd az [élő megvalósítási állapot](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Valós idejű fordítás** - nézzen meg egy helyi fájlt vagy egy megoldott igény szerinti videólinket lefordított feliratokkal és egy YouTube-stílusú késleltetési csúszkával; motorok MarianMT / Google / DeepL / Ollama. A kísérleti hangszinkronizálás Edge-TTS-t és egy második mpv-példányt használ. A hangátfedés kezelése és a valódi hang/Windows elfogadás folyamatban van; a növekvő élő adások még nem támogatottak.
 - 🎵 Hang/zene elválasztás a Demucs segítségével (megtartja a háttérzenét)
 - 🔇 Az élő fordítás előtt és közben elérhető **Eredeti hang némítása** elnémítja a videó hangsávját, miközben a lefordított hang hallható marad. Kapcsolja ki az eredeti hang visszaállításához; az élő munkamenet végén visszaáll.
 - 🧠 **MarianMT** - teljesen lokális, offline neurális fordítás (Helsinki-NLP, nincs kérési sebességkorlát, nincs API kulcs)
@@ -292,7 +292,7 @@ Nézzen meg egy helyi fájlt vagy egy megoldott igény szerinti videólinket lef
 - **Hangszinkronizálás:** kísérleti Edge-TTS beszédlejátszás egy második mpv-példányon keresztül. Internet-hozzáférést igényel, és különálló a kötegelt hangklónozástól.
 - **Eredeti hang némítása:** A fordítás megkezdése előtt és közben is elérhető. Elnémítja a teljes eredeti hangsávot, beleértve a zenét és az effektusokat is, de hallhatóvá teszi a lefordított hangot. Nem izolálja az eredeti hanganyagban beszélő személyt. Kapcsolja ki a hangsáv visszaállításához; az élő munkamenet végén visszaáll. A lejátszó hangszóró gombja az általános némítás, nem ez a független vezérlő.
 - **Szünet és keresés:** A videolejátszó vezérlői az élő munkamenethez csatlakoznak; A végpontok közötti hangszinkronizáláshoz továbbra is platform-specifikus elfogadási tesztekre van szükség.
-- **Jelenlegi korlátok:** A klipek átfedésének/elhalványításának kezelése, a hangidőzítés kalibrálása és a Windows elfogadása nyitva marad. A növekvő élő adások még nem támogatottak; az élő mód címke nem jelenti azt, hogy támogatja a közvetítés növekedését. Lásd a [megvalósítás állapota és hátralévő munka](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Jelenlegi korlátok:** A klipek átfedésének/elhalványításának kezelése, a hangidőzítés kalibrálása és a Windows elfogadása nyitva marad. A növekvő élő adások még nem támogatottak; az élő mód címke nem jelenti azt, hogy támogatja a közvetítés növekedését.
 
 Mentett szinkronizált videóhoz használja a **Letöltés és fordítás** / **Fordítás indítása** lehetőséget a valós idejű előnézet helyett.
 

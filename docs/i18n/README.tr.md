@@ -28,7 +28,7 @@ Yerel işleme seçenekleriyle ve varsayılan olarak hiçbir API anahtarı gerekt
 - 🌐 **26 dilde kullanıcı arayüzü** - arayüzün kendisi dilinize uyum sağlar
 - 🎬 **YouTube ve URL desteği** - herhangi bir YouTube bağlantısını yapıştırın ve doğrudan çevirin (yt-dlp tarafından desteklenmektedir)
 - ▶️ **Entegre video oynatıcı** (libmpv/mpv) - renk kodlu aktarım kontrolleri, çalma listesi, A/B orijinal ve dublajlı ses, altyazı geçişi, anlık görüntü, tam ekran, klasörü açma
-- ⏱️ **Gerçek zamanlı çeviri** - yerel bir dosyayı veya çevrilmiş altyazılı ve YouTube tarzı gecikme kaydırıcılı çözümlenmiş isteğe bağlı video bağlantısını izleyin; motorlar MarianMT / Google / DeepL / Ollama. Deneysel ses dublajı Edge-TTS'yi ve ikinci bir mpv örneğini kullanır. Ses çakışması yönetimi ve gerçek ses/Windows kabulü devam ediyor; Büyüyen canlı yayınlar henüz desteklenmiyor. [Canlı uygulama durumuna](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26) bakın.
+- ⏱️ **Gerçek zamanlı çeviri** - yerel bir dosyayı veya çevrilmiş altyazılı ve YouTube tarzı gecikme kaydırıcılı çözümlenmiş isteğe bağlı video bağlantısını izleyin; motorlar MarianMT / Google / DeepL / Ollama. Deneysel ses dublajı Edge-TTS'yi ve ikinci bir mpv örneğini kullanır. Ses çakışması yönetimi ve gerçek ses/Windows kabulü devam ediyor; Büyüyen canlı yayınlar henüz desteklenmiyor.
 - 🎵Demucs ile ses/müzik ayrımı (arka plan müziğini korur)
 - 🔇 Canlı çeviri öncesinde ve sırasında kullanılabilen **Orijinal sesi kapat**, çevrilen sesin duyulabilir kalmasını sağlarken videonun müziğini susturur. Orijinal sesi geri yüklemek için bunu kapatın; canlı oturum sona erdiğinde sıfırlanır.
 - 🧠 **MarianMT** - tamamen yerel, çevrimdışı sinirsel çeviri (Helsinki-NLP, istek hızı sınırı yok, API anahtarı yok)
@@ -292,7 +292,7 @@ Yerel bir dosyayı veya çevrilmiş altyazılar ve isteğe bağlı sözlü çevi
 - **Ses dublajı:** ikinci bir mpv örneği aracılığıyla deneysel Edge-TTS konuşma oynatma. İnternet erişimi gerektirir ve toplu ses klonlamadan farklıdır.
 - **Orijinal sesi kapat:** hem başlamadan önce hem de çeviri sırasında kullanılabilir. Müzik ve efektler de dahil olmak üzere orijinal film müziğinin tamamını susturur ancak çevrilen sesi duyulabilir halde bırakır. Orijinal seste konuşan kişiyi izole etmez. Film müziğini geri yüklemek için onu kapatın; canlı oturum sona erdiğinde sıfırlanır. Müzikçaların hoparlör düğmesi, bu bağımsız kontrol değil, genel sessizdir.
 - **Duraklat ve ara:** video oynatıcı kontrolleri canlı oturuma bağlıdır; uçtan uca ses senkronizasyonu hâlâ platforma özel kabul testlerine ihtiyaç duyuyor.
-- **Mevcut sınırlar:** klip örtüşme/solma işlemleri, ses zamanlaması kalibrasyonu ve Windows kabulü açık kalır. Büyüyen canlı yayınlar henüz desteklenmiyor; canlı mod etiketi, bir yayın büyüdükçe alınmasının desteklendiği anlamına gelmez. [Uygulama durumu ve kalan çalışma](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26) konusuna bakın.
+- **Mevcut sınırlar:** klip örtüşme/solma işlemleri, ses zamanlaması kalibrasyonu ve Windows kabulü açık kalır. Büyüyen canlı yayınlar henüz desteklenmiyor; canlı mod etiketi, bir yayın büyüdükçe alınmasının desteklendiği anlamına gelmez.
 
 Kaydedilmiş dublajlı bir video için gerçek zamanlı önizleme yerine **İndir ve Çevir** / **Çeviriyi Başlat** seçeneğini kullanın.
 

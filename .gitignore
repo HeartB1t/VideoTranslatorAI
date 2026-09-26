@@ -47,6 +47,12 @@ _dev/
 # Claude Code SDD scratch workspace
 .superpowers/
 
+# Internal development documents: design specs, implementation plans, handoff
+# notes and the action plan. Kept on the developer machine, not published.
+docs/superpowers/
+docs/ACTION_PLAN.md
+docs/ARCHITECTURE_PREVIEW.md
+
 # Integrated player runtime: DLLs and archives fetched by
 # `python -m videotranslator.libmpv_runtime install` must never be committed.
 mpv-runtime/

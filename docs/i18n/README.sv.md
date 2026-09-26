@@ -28,7 +28,7 @@ AI-drivet videoröstdubbningsverktyg som automatiskt transkriberar, översätter
 - 🌐 **UI på 26 språk** - själva gränssnittet anpassar sig efter ditt språk
 - 🎬 **YouTube- och URL-stöd** - klistra in valfri YouTube-länk och översätt direkt (driven av yt-dlp)
 - ▶️ **Integrerad videospelare** (libmpv/mpv) - färgkodade transportkontroller, spellista, A/B-original kontra dubbat ljud, växla mellan undertexter, ögonblicksbild, helskärm, öppen mapp
-- ⏱️ **Översättning i realtid** - titta på en lokal fil eller en löst videolänk på begäran med översatta undertexter och en fördröjningsreglage i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Experimentell röstdubbning använder Edge-TTS och en andra mpv-instans. Hantering av röstöverlappning och äkta ljud/Windows-acceptans fortsätter; växande livesändningar stöds inte ännu. Se [live implementeringsstatus](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Översättning i realtid** - titta på en lokal fil eller en löst videolänk på begäran med översatta undertexter och en fördröjningsreglage i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Experimentell röstdubbning använder Edge-TTS och en andra mpv-instans. Hantering av röstöverlappning och äkta ljud/Windows-acceptans fortsätter; växande livesändningar stöds inte ännu.
 - 🎵 Röst-/musikseparation via Demucs (behåller bakgrundsmusik)
 - 🔇 **Stäng av originalljud**, tillgängligt före och under liveöversättning, tystar videons ljudspår samtidigt som den översatta rösten hålls hörbar. Stäng av den för att återställa originalljudet; den återställs när livesessionen slutar.
 - 🧠 **MarianMT** - helt lokal, offline neural översättning (Helsingfors-NLP, inga gränser för begäranden, ingen API-nyckel)
@@ -292,7 +292,7 @@ Titta på en lokal fil eller en löst videolänk på begäran med översatta und
 - **Röstdubbning:** experimentell Edge-TTS-taluppspelning genom en andra mpv-instans. Det kräver internetåtkomst och är separat från batch-röstkloning.
 - **Stäng av originalljud:** tillgängligt både före start och under översättning. Den tystar hela originalsoundtracket, inklusive musik och effekter, men låter den översatta rösten höras. Det isolerar inte personen som talar i originalljudet. Stäng av den för att återställa ljudspåret; den återställs när livesessionen slutar. Spelarens högtalarknapp är den allmänna tysta kontrollen, inte denna oberoende kontroll.
 - **Paus och sök:** videospelarens kontroller är anslutna till livesessionen; end-to-end ljudsynkronisering kräver fortfarande plattformsspecifika acceptanstest.
-- **Nuvarande gränser:** hantering av klippöverlappning/tonning, kalibrering av ljudtiming och Windows-acceptans förblir öppna. Växande livesändningar stöds inte ännu; etiketten för liveläge innebär inte stöd för att ta in en sändning när den växer. Se [implementeringsstatus och återstående arbete](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Nuvarande gränser:** hantering av klippöverlappning/tonning, kalibrering av ljudtiming och Windows-acceptans förblir öppna. Växande livesändningar stöds inte ännu; etiketten för liveläge innebär inte stöd för att ta in en sändning när den växer.
 
 För en sparad dubbad video, använd **Ladda ner och översätt** / **Starta översättning** istället för förhandsgranskningen i realtid.
 

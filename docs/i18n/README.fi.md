@@ -28,7 +28,7 @@ Tekoälyllä toimiva videoäänen jälkiäänitystyökalu, joka litteroi, kään
 - 🌐 **Käyttöliittymä 26 kielellä** - käyttöliittymä itse mukautuu kielellesi
 - 🎬 **YouTube- ja URL-tuki** - liitä mikä tahansa YouTube-linkki ja käännä suoraan (yt-dlp:n avulla)
 - ▶️ **Integroitu videosoitin** (libmpv/mpv) - värikoodatut siirtosäätimet, soittolista, alkuperäinen A/B vs. jälkiäänitetty ääni, tekstityksen vaihto, tilannekuva, koko näyttö, avoin kansio
-- ⏱️ **Reaaliaikainen käännös** - katso paikallinen tiedosto tai ratkaistu on-demand -videolinkki käännetyillä tekstityksillä ja YouTube-tyylisellä viive-liukusäätimellä; moottorit MarianMT / Google / DeepL / Ollama. Kokeellinen äänikopiointi käyttää Edge-TTS:ää ja toista mpv-instanssia. Äänen päällekkäisyyden käsittely ja todellinen äänen/Windowsin hyväksyntä jatkuvat; kasvavia suoria lähetyksiä ei vielä tueta. Katso [live-toteutuksen tila](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Reaaliaikainen käännös** - katso paikallinen tiedosto tai ratkaistu on-demand -videolinkki käännetyillä tekstityksillä ja YouTube-tyylisellä viive-liukusäätimellä; moottorit MarianMT / Google / DeepL / Ollama. Kokeellinen äänikopiointi käyttää Edge-TTS:ää ja toista mpv-instanssia. Äänen päällekkäisyyden käsittely ja todellinen äänen/Windowsin hyväksyntä jatkuvat; kasvavia suoria lähetyksiä ei vielä tueta.
 - 🎵 Äänen/musiikin erotus Demucsilla (säilyttää taustamusiikin)
 - 🔇 **Mykistä alkuperäinen ääni**, joka on käytettävissä ennen suoraa käännöstä ja sen aikana, hiljentää videon ääniraidan ja pitää käännetyn äänen kuultavana. Kytke se pois päältä palauttaaksesi alkuperäisen äänen; se nollautuu, kun live-istunto päättyy.
 - 🧠 **MarianMT** - täysin paikallinen, offline-hermokäännös (Helsinki-NLP, ei pyyntöjen määrärajoja, ei API-avainta)
@@ -292,7 +292,7 @@ Katso paikallinen tiedosto tai ratkaistu on-demand-videolinkki käännetyillä t
 - **Ääneen jälkiäänitys:** kokeellinen Edge-TTS-puheen toisto toisen mpv-instanssin kautta. Se vaatii Internet-yhteyden ja on erillään erääänen kloonauksesta.
 - **Mykistä alkuperäinen ääni:** käytettävissä sekä ennen käännöksen aloittamista että sen aikana. Se hiljentää koko alkuperäisen ääniraidan, mukaan lukien musiikin ja tehosteet, mutta jättää käännetyn äänen kuuluviin. Se ei eristä alkuperäisessä äänessä puhuvaa henkilöä. Kytke se pois päältä palauttaaksesi ääniraidan; se nollautuu, kun live-istunto päättyy. Soittimen kaiutinpainike on yleinen mykistys, ei tämä itsenäinen säädin.
 - **Keskeytä ja etsi:** videosoittimen säätimet on yhdistetty live-istuntoon; päästä päähän -äänen synkronointi vaatii edelleen alustakohtaisia ​​hyväksyntätestejä.
-- **Nykyiset rajat:** Leikkeiden päällekkäisyyden/häivytyksen käsittely, äänen ajoituksen kalibrointi ja Windowsin hyväksyntä pysyvät avoinna. Kasvavia suoria lähetyksiä ei vielä tueta; Live-tilan tunniste ei tarkoita tukea lähetyksen vastaanottamiselle sen kasvaessa. Katso [toteutustila ja jäljellä oleva työ](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Nykyiset rajat:** Leikkeiden päällekkäisyyden/häivytyksen käsittely, äänen ajoituksen kalibrointi ja Windowsin hyväksyntä pysyvät avoinna. Kasvavia suoria lähetyksiä ei vielä tueta; Live-tilan tunniste ei tarkoita tukea lähetyksen vastaanottamiselle sen kasvaessa.
 
 Jos haluat tallentaa jälkiäänitetyn videon, käytä **Lataa ja käännä** / **Aloita käännös** reaaliaikaisen esikatselun sijaan.
 

@@ -28,7 +28,7 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
 - ▶️ **Integrated video player** (libmpv/mpv) - colour-coded transport controls, playlist, A/B original vs dubbed audio, subtitles toggle, snapshot, fullscreen, open folder
-- ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama. Experimental voice dubbing uses Edge-TTS and a second mpv instance. Voice overlap handling and real audio/Windows acceptance remain in progress; growing live broadcasts are not supported yet. See the [live implementation status](docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Real-time translation** - watch a local file or a resolved on-demand video link with translated subtitles and a YouTube-style delay slider; engines MarianMT / Google / DeepL / Ollama. Experimental voice dubbing uses Edge-TTS and a second mpv instance. Voice overlap handling and real audio/Windows acceptance remain in progress; growing live broadcasts are not supported yet.
 - 🎵 Voice/music separation via Demucs (keeps background music)
 - 🔇 **Mute original audio**, available before and during live translation, silences the video's soundtrack while keeping the translated voice audible. Toggle it off to restore the original audio; it resets when the live session ends.
 - 🧠 **MarianMT** - fully local, offline neural translation (Helsinki-NLP, no rate limits, no API key)
@@ -329,7 +329,6 @@ it), leave the URL field empty, choose the same live settings, and click
 - **Current limits:** clip overlap/fade handling, audio timing calibration and
   Windows acceptance remain open. Growing live broadcasts are not supported yet;
   the live mode label does not imply support for ingesting a broadcast as it grows.
-  See the [implementation status and remaining work](docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
 
 For a saved dubbed video, use **Download & Translate** / **Start Translation**
 instead of the real-time preview.

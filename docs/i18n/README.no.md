@@ -28,7 +28,7 @@ AI-drevet videostemmedubbingsverktøy som automatisk transkriberer, oversetter o
 - 🌐 **UI på 26 språk** - selve grensesnittet tilpasser seg språket ditt
 - 🎬 **YouTube- og URL-støtte** - lim inn en hvilken som helst YouTube-kobling og oversett direkte (drevet av yt-dlp)
 - ▶️ **Integrert videospiller** (libmpv/mpv) - fargekodede transportkontroller, spilleliste, A/B-original vs dubbet lyd, undertekstveksling, øyeblikksbilde, fullskjerm, åpen mappe
-- ⏱️ **Sanntidsoversettelse** - se en lokal fil eller en løst videolink på forespørsel med oversatte undertekster og en skyveknapp for forsinkelser i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Eksperimentell stemmedubbing bruker Edge-TTS og en andre mpv-forekomst. Stemmeoverlappingshåndtering og ekte lyd/Windows-godkjenning fortsetter; voksende direktesendinger støttes ikke ennå. Se [live implementeringsstatus](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Sanntidsoversettelse** - se en lokal fil eller en løst videolink på forespørsel med oversatte undertekster og en skyveknapp for forsinkelser i YouTube-stil; motorer MarianMT / Google / DeepL / Ollama. Eksperimentell stemmedubbing bruker Edge-TTS og en andre mpv-forekomst. Stemmeoverlappingshåndtering og ekte lyd/Windows-godkjenning fortsetter; voksende direktesendinger støttes ikke ennå.
 - 🎵 Stemme-/musikkseparasjon via Demucs (beholder bakgrunnsmusikk)
 - 🔇 **Demp originallyd**, tilgjengelig før og under direkteoversettelse, demper videoens lydspor mens den oversatte stemmen holdes hørbar. Slå den av for å gjenopprette den originale lyden; den tilbakestilles når live-økten avsluttes.
 - 🧠 **MarianMT** - fullstendig lokal, offline nevral oversettelse (Helsinki-NLP, ingen grenser for forespørselshastighet, ingen API-nøkkel)
@@ -292,7 +292,7 @@ Se en lokal fil eller en løst videolenke på forespørsel med oversatte underte
 - **Stemmedubbing:** eksperimentell Edge-TTS-taleavspilling gjennom en andre mpv-forekomst. Den krever internettilgang og er atskilt fra batch-stemmekloning.
 - **Demp originallyd:** tilgjengelig både før start og under oversettelsen. Den demper hele det originale lydsporet, inkludert musikk og effekter, men lar den oversatte stemmen være hørbar. Det isolerer ikke personen som snakker i den originale lyden. Slå den av for å gjenopprette lydsporet; den tilbakestilles når live-økten avsluttes. Spillerens høyttalerknapp er den generelle dempingen, ikke denne uavhengige kontrollen.
 - **Pause og søk:** videospillerkontroller er koblet til live-økten; ende-til-ende lydsynkronisering trenger fortsatt plattformspesifikke aksepttester.
-- **Gjeldende grenser:** håndtering av klippoverlapping/fade, kalibrering av lydtiming og Windows-godkjenning forblir åpne. Økende direktesendinger støttes ikke ennå; etiketten for live-modus antyder ikke støtte for inntak av en sending mens den vokser. Se [implementeringsstatus og gjenstående arbeid](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Gjeldende grenser:** håndtering av klippoverlapping/fade, kalibrering av lydtiming og Windows-godkjenning forblir åpne. Økende direktesendinger støttes ikke ennå; etiketten for live-modus antyder ikke støtte for inntak av en sending mens den vokser.
 
 For en lagret dubbet video, bruk **Last ned og oversett** / **Start oversettelse** i stedet for forhåndsvisningen i sanntid.
 

@@ -28,7 +28,7 @@ Instrument de dublare a vocii video bazat pe inteligență artificială, care tr
 - 🌐 **UI în 26 de limbi** - interfața în sine se adaptează limbii dvs
 - 🎬 **Suport YouTube și URL** - inserați orice link YouTube și traduceți direct (produs de yt-dlp)
 - ▶️ **Player video integrat** (libmpv/mpv) - comenzi de transport cu coduri de culoare, playlist, audio original A/B vs dublat, comutare subtitrări, instantaneu, ecran complet, dosar deschis
-- ⏱️ **Traducere în timp real** - urmăriți un fișier local sau un link video la cerere rezolvat cu subtitrări traduse și un glisor de întârziere în stil YouTube; motoare MarianMT / Google / DeepL / Ollama. Dublarea vocală experimentală utilizează Edge-TTS și oa doua instanță mpv. Gestionarea suprapunerii vocale și acceptarea audio reală/Windows rămân în desfășurare; transmisiunile live în creștere nu sunt încă acceptate. Vedeți [starea implementării live](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- ⏱️ **Traducere în timp real** - urmăriți un fișier local sau un link video la cerere rezolvat cu subtitrări traduse și un glisor de întârziere în stil YouTube; motoare MarianMT / Google / DeepL / Ollama. Dublarea vocală experimentală utilizează Edge-TTS și oa doua instanță mpv. Gestionarea suprapunerii vocale și acceptarea audio reală/Windows rămân în desfășurare; transmisiunile live în creștere nu sunt încă acceptate.
 - 🎵 Separare voce/muzică prin Demucs (păstrează muzica de fundal)
 - 🔇 **Dezactivați sunetul original**, disponibil înainte și în timpul traducerii live, reduce la tăcere coloana sonoră a videoclipului, păstrând vocea tradusă audibilă. Dezactivați-l pentru a restabili sunetul original; se resetează când se termină sesiunea live.
 - 🧠 **MarianMT** - traducere neuronală complet locală, offline (Helsinki-NLP, fără limite de rată de solicitare, fără cheie API)
@@ -292,7 +292,7 @@ Vizionați un fișier local sau un link video la cerere rezolvat cu subtitrări 
 - **Dublare vocală:** redare experimentală a vorbirii Edge-TTS printr-o a doua instanță mpv. Necesită acces la internet și este separat de clonarea vocală în lot.
 - **Dezactivați sunetul original:** disponibil atât înainte de începere, cât și în timpul traducerii. Opreste la tăcere întreaga coloană sonoră originală, inclusiv muzica și efectele, dar lasă vocea tradusă audibilă. Nu izolează persoana care vorbește în audio original. Dezactivați-l pentru a restabili coloana sonoră; se resetează când se termină sesiunea live. Butonul difuzorului jucătorului este sunetul general, nu acest control independent.
 - **Pauză și caută:** comenzile playerului video sunt conectate la sesiunea live; sincronizarea audio end-to-end necesită încă teste de acceptare specifice platformei.
-- **Limite curente:** gestionarea suprapunerii/decolorării clipurilor, calibrarea temporizării audio și acceptarea Windows rămân deschise. Transmisiunile live în creștere nu sunt încă acceptate; eticheta mod live nu implică suport pentru ingerarea unei emisiuni pe măsură ce crește. Consultați [starea implementării și lucrările rămase](../../docs/ACTION_PLAN.md#live-p5-handoff-to-claude-code-2026-09-26).
+- **Limite curente:** gestionarea suprapunerii/decolorării clipurilor, calibrarea temporizării audio și acceptarea Windows rămân deschise. Transmisiunile live în creștere nu sunt încă acceptate; eticheta mod live nu implică suport pentru ingerarea unei emisiuni pe măsură ce crește.
 
 Pentru un videoclip dublat salvat, utilizați **Descărcați și traduceți** / **Începeți traducerea** în loc de previzualizarea în timp real.
 
