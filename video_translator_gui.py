@@ -6210,6 +6210,13 @@ class App(tk.Tk):
         On X11 the ``-zoomed`` hint is unreliable (xfwm4 accepts it silently
         without maximizing), so the window is sized to the monitor explicitly,
         which always works and stays on the screen it was centered on.
+
+        Note (review S1): the explicit geometry uses the full xrandr rect, so on
+        X11 the window can sit under the desktop panel. Letting the WM maximize
+        via ``-zoomed`` after the window is mapped would respect the panel, but
+        that needs verification on a real WM (Xvfb reports -zoomed applied while
+        not resizing), so it is deferred to an operator check to avoid regressing
+        the accepted fill behavior.
         """
         try:
             self.state("zoomed")
