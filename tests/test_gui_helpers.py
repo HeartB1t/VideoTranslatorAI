@@ -79,6 +79,39 @@ class EnsureVoiceBackendTests(unittest.TestCase):
         self.assertTrue(logged)
 
 
+class OnPlayerStateLiveTests(unittest.TestCase):
+    def _fake(self, session):
+        stopped = []
+        fake = SimpleNamespace(
+            _live_session=session,
+            stopped=stopped,
+            _stop_live_session=lambda: stopped.append(True),
+            _player_clock=SimpleNamespace(expect_restart=lambda: None),
+            _player_loaded_at=1.0,
+            _player_video_params_seen=True,
+            _player_log_lines=[1, 2],
+            _player_panel=None,
+            _player_backend=None,
+            _refresh_live_bar_enabled=lambda: None,
+        )
+        return fake
+
+    def test_loading_a_new_media_stops_a_running_session(self):
+        fake = self._fake(object())
+        gui.App._on_player_state(fake, SimpleNamespace(status="loading", item=None))
+        self.assertEqual(fake.stopped, [True])
+
+    def test_loading_does_nothing_without_a_session(self):
+        fake = self._fake(None)
+        gui.App._on_player_state(fake, SimpleNamespace(status="loading", item=None))
+        self.assertEqual(fake.stopped, [])
+
+    def test_non_loading_status_never_stops_the_session(self):
+        fake = self._fake(object())
+        gui.App._on_player_state(fake, SimpleNamespace(status="playing", item=None))
+        self.assertEqual(fake.stopped, [])
+
+
 class NoisyX11LogTests(unittest.TestCase):
     def test_matches_the_x11_badwindow_block(self):
         for line in (

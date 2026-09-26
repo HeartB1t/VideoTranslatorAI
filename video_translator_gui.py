@@ -8407,6 +8407,12 @@ class App(tk.Tk):
 
     def _on_player_state(self, state) -> None:
         if state.status == "loading":
+            # A new media load ends a running live session: otherwise it keeps
+            # decoding the old source and paints its captions on the new video.
+            # (At URL-session start the load happens before the session exists,
+            # so _live_session is still None here and nothing is stopped.)
+            if self._live_session is not None:
+                self._stop_live_session()
             self._player_clock.expect_restart()
             self._player_loaded_at = None
             self._player_video_params_seen = False
