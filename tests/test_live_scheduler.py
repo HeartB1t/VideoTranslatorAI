@@ -277,6 +277,28 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         acts = s.tick(4.0, mono=110.0, voice_state="idle")
         self.assertFalse([a for a in acts if isinstance(a, RequestTts)])  # cached
 
+    def test_live_mode_starts_asap_with_catchup_speed(self):
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(6.0, mono=100.0, voice_state="idle")           # 1 s behind -> request
+        s.clip_ready(0, 0, _clip(audible=2.0))
+        acts = s.tick(6.1, mono=100.1, voice_state="idle")    # preload + duck together
+        self.assertIn("PreloadClip", _types(acts))
+        self.assertIn(0.3, [a.gain for a in acts if isinstance(a, Duck)])
+        acts = s.tick(6.2, mono=100.2, voice_state="preloaded")
+        starts = [a for a in acts if isinstance(a, StartClip)]
+        self.assertEqual(len(starts), 1)
+        self.assertGreater(starts[0].speed, 1.0)              # catch-up speed
+
+    def test_live_mode_drops_segments_too_far_behind(self):
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=5.0, end=7.0))
+        s.tick(5.5, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        acts = s.tick(10.0, mono=104.5, voice_state="idle")   # 5 s behind > 4 s lag
+        drops = [a for a in acts if isinstance(a, Drop)]
+        self.assertTrue(drops and drops[0].reason == "lag")
+
 
 class DuckEnvelopeTests(unittest.TestCase):
     def test_ramps_to_target_in_about_ten_small_steps(self):

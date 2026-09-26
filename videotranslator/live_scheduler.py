@@ -399,9 +399,9 @@ class DubScheduler:
         self._clip_paused = False
 
     def _next_ready(self, now: float) -> LiveSegment | None:
+        tol = self._max_live_lag if self._mode == "live" else self._late_tol
         cands = [s for s in self._segments.values()
-                 if self._dub_state.get(s.seg_id) == "ready"
-                 and s.start >= now - self._late_tol]
+                 if self._dub_state.get(s.seg_id) == "ready" and s.start >= now - tol]
         return min(cands, key=lambda s: s.start) if cands else None
 
     def _imminent_clip(self, now: float) -> bool:
@@ -430,6 +430,7 @@ class DubScheduler:
     def _dub_actions(self, now: float, mono: float, main_running: bool,
                      main_speed: float, voice_state: str) -> list[object]:
         actions: list[object] = []
+        live = self._mode == "live"
         # Pause/resume the playing clip with the main transport, then detect end.
         if self._playing is not None:
             if not main_running:
@@ -453,59 +454,84 @@ class DubScheduler:
         for seg in sorted(self._segments.values(), key=lambda s: s.start):
             if self._dub_state.get(seg.seg_id) != "translated":
                 continue
-            if now >= self._slot_end(seg):
+            expired = (now - seg.start > self._max_live_lag) if live else (now >= self._slot_end(seg))
+            if expired:
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
                 continue
             if in_flight >= self._max_in_flight:
                 continue
             rate = int(self._rate_for(seg.text_tgt, self._slot_len(seg)))
-            deadline = mono + max(0.5, (seg.start - self._lead - now) / max(main_speed, 0.1))
+            if live:
+                deadline = mono + max(0.5, seg.start + self._max_live_lag - now)
+            else:
+                deadline = mono + max(0.5, (seg.start - self._lead - now) / max(main_speed, 0.1))
             actions.append(RequestTts(seg.seg_id, seg.gen, seg.text_tgt, rate, deadline))
             self._dub_state[seg.seg_id] = "synth"
             in_flight += 1
-        # Late-drop clips that missed their start window.
+        # Drop clips that missed their window (late in delayed, too far behind in live).
         for seg in list(self._segments.values()):
-            st = self._dub_state.get(seg.seg_id)
-            if st in ("ready", "preloaded") and now > seg.start - self._lead + self._late_tol:
+            if self._dub_state.get(seg.seg_id) not in ("ready", "preloaded"):
+                continue
+            if live:
+                too_late, reason = now - seg.start > self._max_live_lag, "lag"
+            else:
+                too_late, reason = now > seg.start - self._lead + self._late_tol, "late"
+            if too_late:
                 if self._preloaded == seg.seg_id:
                     self._preloaded = None
-                actions.append(Drop(seg.seg_id, "late"))
+                actions.append(Drop(seg.seg_id, reason))
                 self._dub_state[seg.seg_id] = "dropped"
                 self._dub_dropped += 1
         # Preload the next ready clip when the voice device is free.
         if voice_state == "idle" and self._preloaded is None and self._playing is None:
             cand = self._next_ready(now)
-            if (cand is not None
-                    and cand.start - self._preload_s <= now < cand.start - self._lead + self._late_tol):
-                clip = self._clips[cand.seg_id]
-                actions.append(PreloadClip(cand.seg_id, clip.path,
-                                           getattr(clip, "voice_start_s", 0.0)))
-                self._dub_state[cand.seg_id] = "preloaded"
-                self._preloaded = cand.seg_id
-        # Duck ahead of the preloaded clip.
-        if self._preloaded is not None:
+            if cand is not None:
+                if live:
+                    ready_to_preload = now - cand.start <= self._max_live_lag
+                else:
+                    ready_to_preload = (cand.start - self._preload_s <= now
+                                        < cand.start - self._lead + self._late_tol)
+                if ready_to_preload:
+                    clip = self._clips[cand.seg_id]
+                    actions.append(PreloadClip(cand.seg_id, clip.path,
+                                               getattr(clip, "voice_start_s", 0.0)))
+                    self._dub_state[cand.seg_id] = "preloaded"
+                    self._preloaded = cand.seg_id
+                    if live and self._duck_target != self._duck_gain:
+                        self._duck_target = self._duck_gain  # duck with the preload
+                        actions.append(Duck(self._duck_gain))
+        # Duck ahead of the preloaded clip (delayed mode only; live ducks above).
+        if not live and self._preloaded is not None:
             seg = self._segments[self._preloaded]
-            if now >= seg.start - self._duck_latency - self._duck_ramp and self._duck_target != self._duck_gain:
+            if (now >= seg.start - self._duck_latency - self._duck_ramp
+                    and self._duck_target != self._duck_gain):
                 self._duck_target = self._duck_gain
                 actions.append(Duck(self._duck_gain))
-        # Start the preloaded clip at its lead time.
-        if (self._preloaded is not None and voice_state == "preloaded"
-                and now >= self._segments[self._preloaded].start - self._lead):
+        # Start the preloaded clip (at its lead time in delayed, at once in live).
+        if self._preloaded is not None and voice_state == "preloaded":
             seg = self._segments[self._preloaded]
             clip = self._clips[seg.seg_id]
             slot_len = self._slot_len(seg)
             audible = getattr(clip, "audible_s", slot_len) or slot_len
-            fit = min(self._max_speed, max(1.0, audible / slot_len))
-            actions.append(StartClip(seg.seg_id, fit * main_speed))
-            self._playing = seg.seg_id
-            self._preloaded = None
-            self._clip_paused = False
-            self._dub_state[seg.seg_id] = "playing"
-            self._expected_end = seg.start + audible / max(fit, 0.1)
-            self._voiced += 1
-            self._margins.append(seg.start - self._lead - now)
-            self._margins = self._margins[-32:]
+            if live:
+                start_now = True
+                fit = min(self._max_speed, max(1.0, 1.0 + (now - seg.start) / 8.0))
+                base = now
+            else:
+                start_now = now >= seg.start - self._lead
+                fit = min(self._max_speed, max(1.0, audible / slot_len))
+                base = seg.start
+            if start_now:
+                actions.append(StartClip(seg.seg_id, fit * main_speed))
+                self._playing = seg.seg_id
+                self._preloaded = None
+                self._clip_paused = False
+                self._dub_state[seg.seg_id] = "playing"
+                self._expected_end = base + audible / max(fit, 0.1)
+                self._voiced += 1
+                self._margins.append(seg.start - self._lead - now)
+                self._margins = self._margins[-32:]
         # Unduck after the clip ends, unless another clip is imminent.
         if self._playing is None and self._duck_target != 1.0 and not self._imminent_clip(now):
             if now >= self._expected_end + self._unduck_tail - self._duck_latency:
