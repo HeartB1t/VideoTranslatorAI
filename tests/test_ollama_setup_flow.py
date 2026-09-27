@@ -14,9 +14,7 @@ import video_translator_gui as gui
 from videotranslator import ollama_runtime as rt
 
 URL = "http://localhost:11434"
-TEXTS = {key: gui.UI_STRINGS["en"][key] for key in (
-    "ollama_install_ask", "ollama_pull_ask", "ollama_pull_size",
-    "ollama_pull_else_model", "ollama_pull_else_google")}
+TEXTS = {key: gui.UI_STRINGS["en"][key] for key in gui.App._OLLAMA_QUESTION_KEYS}
 
 
 class SizeAndQuestionTests(unittest.TestCase):
@@ -43,11 +41,14 @@ class SizeAndQuestionTests(unittest.TestCase):
 
 class SetupWorkerTests(unittest.TestCase):
     def setUp(self):
-        self.logged, self.questions, self.answers = [], [], []
+        self.logged, self.questions, self.answers, self.posted = [], [], [], []
+        self.fit = None
         self.app = SimpleNamespace(
             _destroying=False, _ollama_pull_declined=set(),
             _log_async=self.logged.append,
-            _ask_yes_no_sync=self._ask)
+            _ask_yes_no_sync=self._ask,
+            _ollama_pull_fit=lambda model: self.fit,
+            _post_if_alive=self.posted.append)
 
     def _ask(self, title, message):
         self.questions.append(message)
@@ -108,6 +109,34 @@ class SetupWorkerTests(unittest.TestCase):
         text = "".join(self.logged)
         self.assertIn("network down", text)
         self.assertIn("qwen3:8b", self.logged[-1])
+
+    def test_no_room_on_the_disk_is_said_and_nothing_is_downloaded(self):
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("no_disk", 20000 / 1024, 18.0, 32.0, 12.4, False)
+        ok, pull = self._run("qwen3:32b", [(True, "using qwen3:8b", "qwen3:8b")])
+        self.assertTrue(ok)                                   # the installed model is used
+        self.assertEqual(self.questions, [])
+        pull.assert_not_called()
+        self.assertEqual(len(self.posted), 1)                 # a warning box, not a question
+        warning = TEXTS["ollama_pull_no_disk"].format(model="qwen3:32b", need="19.5", free="18.0")
+        self.assertIn(warning, "".join(self.logged))
+        self.assertNotIn("qwen3:32b", self.app._ollama_pull_declined)   # checked again next time
+
+    def test_a_model_too_big_for_the_memory_is_asked_with_a_warning(self):
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("too_big", 20000 / 1024, 100.0, 32.0, 12.4, False)
+        self.answers = [False]
+        self._run("qwen3:32b", [(True, "using qwen3:8b", "qwen3:8b")])
+        self.assertIn(TEXTS["ollama_pull_heavy"].format(model="qwen3:32b", need="32", have="12.4"),
+                      self.questions[0])
+
+    def test_a_tight_fit_is_mentioned_too(self):
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("tight", 9300 / 1024, 100.0, 16.0, 16.0, False)
+        self.answers = [False]
+        self._run("qwen3:14b", [(True, "using qwen3:8b", "qwen3:8b")])
+        self.assertIn(TEXTS["ollama_pull_tight"].format(model="qwen3:14b", need="16", have="16.0"),
+                      self.questions[0])
 
     def test_an_unreachable_daemon_is_not_a_missing_model(self):
         ok, pull = self._run("qwen3:8b", [(False, "Ollama daemon not reachable at x", "")])
@@ -179,6 +208,21 @@ class AppFlowTests(unittest.TestCase):
             self.assertEqual(seen, ["qwen3:8b", "qwen3:14b"])
             self.assertEqual(results, [True, True])
             self.assertFalse(app._ollama_setup_running)
+
+
+
+class AnswerLogTests(unittest.TestCase):
+    def test_a_yes_no_question_and_its_answer_reach_the_log(self):
+        # A native dialog leaves no trace: the VM log could not tell whether
+        # the 20 GB download had been asked.
+        logged = []
+        app = SimpleNamespace(_log_line=lambda area, text, level="info": logged.append((area, text)))
+        for answer, mark in ((True, "✓"), (False, "✗")):
+            with self.subTest(answer=answer), \
+                    mock.patch.object(gui.messagebox, "askyesno", return_value=answer):
+                self.assertIs(gui.App._ask_yes_no_now(app, "Ollama", "Download it now?\n\nSize: 20 GB."),
+                              answer)
+                self.assertEqual(logged[-1], ("ui", f"Ollama: Download it now? → {mark}"))
 
 
 if __name__ == "__main__":

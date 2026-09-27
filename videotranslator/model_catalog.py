@@ -241,3 +241,34 @@ def assess(opt: ModelOption, hw: HardwareInfo, *,
     if have - headroom >= need:
         return "ok"
     return "tight" if have >= need else "too_big"
+
+
+@dataclass(frozen=True)
+class PullFit:
+    """How pulling an Ollama model fits this PC (``ollama_pull_fit``)."""
+
+    verdict: str                # an ``assess`` answer: ok, tight, too_big, no_disk
+    download_gb: float
+    disk_free_gb: float | None
+    need_gb: float              # memory it asks for: VRAM on a usable GPU, else RAM
+    have_gb: float | None       # the memory it would get
+    gpu: bool
+
+
+def ollama_pull_fit(model: str, hw: HardwareInfo, *,
+                    size_gb: float | None = None) -> PullFit | None:
+    """Disk and memory check before offering to pull Ollama ``model``.
+
+    Catalogue models are judged like the models window judges them
+    (``assess``); another model of known ``size_gb`` on disk space only.
+    None when neither the model nor its size is known.
+    """
+    opt = MT.get(model)
+    if opt is None:
+        if not size_gb:
+            return None
+        opt = ModelOption("mt", model, model, True, round(size_gb * 1024))
+    gpu = hw.vram_gb is not None and opt.vram_gb > 0
+    return PullFit(assess(opt, hw), opt.download_mb / 1024, hw.disk_free_gb,
+                   opt.vram_gb if gpu else opt.ram_gb,
+                   hw.vram_gb if gpu else hw.ram_gb, gpu)

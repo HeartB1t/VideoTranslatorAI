@@ -2159,6 +2159,90 @@ _OLP_T: dict[str, tuple[str, ...]] = {
            "Nếu không, Google Translate sẽ được dùng để dịch."),
 }
 
+# --- Ollama pull vs this PC: no room on the disk, not enough memory -----------
+_OLF_KEYS = ('ollama_pull_no_disk', 'ollama_pull_heavy', 'ollama_pull_tight')
+
+_OLF_T: dict[str, tuple[str, ...]] = {
+    'en': ("There is no room to download {model}: it needs about {need} GB and {free} GB are left on the disk.",
+           "Warning: {model} asks for about {need} GB of memory and this PC has {have} GB: translating would be very slow and the system could freeze.",
+           "{model} asks for about {need} GB of memory and this PC has {have} GB: with other programs open it may be slow."),
+    'it': ("Non c'è spazio per scaricare {model}: servono circa {need} GB e sul disco ne restano {free} GB.",
+           "Attenzione: {model} chiede circa {need} GB di memoria e questo PC ne ha {have} GB: la traduzione sarebbe lentissima e il sistema potrebbe bloccarsi.",
+           "{model} chiede circa {need} GB di memoria e questo PC ne ha {have} GB: con altri programmi aperti potrebbe essere lento."),
+    'ar': ("لا توجد مساحة لتنزيل {model}: يحتاج إلى نحو {need} GB ولم يتبقَّ على القرص سوى {free} GB.",
+           "تنبيه: يطلب {model} نحو {need} GB من الذاكرة وفي هذا الحاسوب {have} GB: ستكون الترجمة بطيئة جدًا وقد يتجمّد النظام.",
+           "يطلب {model} نحو {need} GB من الذاكرة وفي هذا الحاسوب {have} GB: قد يكون بطيئًا مع برامج أخرى مفتوحة."),
+    'zh': ("没有空间下载 {model}：需要约 {need} GB，磁盘只剩 {free} GB。",
+           "注意：{model} 需要约 {need} GB 内存，而这台电脑只有 {have} GB：翻译会非常慢，系统也可能卡死。",
+           "{model} 需要约 {need} GB 内存，这台电脑有 {have} GB：同时打开其他程序时可能会变慢。"),
+    'cs': ("Na stažení {model} není místo: potřebuje asi {need} GB a na disku zbývá {free} GB.",
+           "Pozor: {model} potřebuje asi {need} GB paměti a tento počítač má {have} GB: překlad by byl velmi pomalý a systém by mohl zamrznout.",
+           "{model} potřebuje asi {need} GB paměti a tento počítač má {have} GB: s dalšími otevřenými programy může být pomalý."),
+    'da': ("Der er ikke plads til at downloade {model}: den kræver ca. {need} GB, og der er {free} GB tilbage på disken.",
+           "Advarsel: {model} kræver ca. {need} GB hukommelse, og denne pc har {have} GB: oversættelsen ville blive meget langsom, og systemet kunne fryse.",
+           "{model} kræver ca. {need} GB hukommelse, og denne pc har {have} GB: med andre programmer åbne kan den være langsom."),
+    'nl': ("Er is geen ruimte om {model} te downloaden: het vraagt ongeveer {need} GB en er is nog {free} GB vrij op de schijf.",
+           "Let op: {model} vraagt ongeveer {need} GB geheugen en deze pc heeft {have} GB: vertalen zou erg traag zijn en het systeem kan vastlopen.",
+           "{model} vraagt ongeveer {need} GB geheugen en deze pc heeft {have} GB: met andere programma's open kan het traag zijn."),
+    'fi': ("Mallille {model} ei ole tilaa: se vaatii noin {need} Gt ja levyllä on jäljellä {free} Gt.",
+           "Varoitus: {model} vaatii noin {need} Gt muistia ja tässä tietokoneessa on {have} Gt: kääntäminen olisi hyvin hidasta ja järjestelmä voisi jumiutua.",
+           "{model} vaatii noin {need} Gt muistia ja tässä tietokoneessa on {have} Gt: muiden ohjelmien ollessa auki se voi olla hidas."),
+    'fr': ("Pas assez de place pour télécharger {model} : il faut environ {need} Go et il reste {free} Go sur le disque.",
+           "Attention : {model} demande environ {need} Go de mémoire et ce PC en a {have} Go : la traduction serait très lente et le système pourrait se bloquer.",
+           "{model} demande environ {need} Go de mémoire et ce PC en a {have} Go : avec d'autres programmes ouverts, il peut être lent."),
+    'de': ("Kein Platz für den Download von {model}: es braucht etwa {need} GB, auf dem Datenträger sind noch {free} GB frei.",
+           "Achtung: {model} braucht etwa {need} GB Speicher, dieser PC hat {have} GB: die Übersetzung wäre sehr langsam und das System könnte einfrieren.",
+           "{model} braucht etwa {need} GB Speicher, dieser PC hat {have} GB: mit anderen offenen Programmen kann es langsam sein."),
+    'el': ("Δεν υπάρχει χώρος για τη λήψη του {model}: χρειάζεται περίπου {need} GB και στον δίσκο απομένουν {free} GB.",
+           "Προσοχή: το {model} ζητά περίπου {need} GB μνήμης και αυτός ο υπολογιστής έχει {have} GB: η μετάφραση θα ήταν πολύ αργή και το σύστημα θα μπορούσε να παγώσει.",
+           "Το {model} ζητά περίπου {need} GB μνήμης και αυτός ο υπολογιστής έχει {have} GB: με άλλα προγράμματα ανοιχτά μπορεί να είναι αργό."),
+    'hi': ("{model} डाउनलोड करने के लिए जगह नहीं है: इसे लगभग {need} GB चाहिए और डिस्क पर {free} GB बचे हैं।",
+           "सावधान: {model} को लगभग {need} GB मेमोरी चाहिए और इस पीसी में {have} GB है: अनुवाद बहुत धीमा होगा और सिस्टम अटक सकता है।",
+           "{model} को लगभग {need} GB मेमोरी चाहिए और इस पीसी में {have} GB है: दूसरे प्रोग्राम खुले होने पर यह धीमा हो सकता है।"),
+    'hu': ("Nincs hely a(z) {model} letöltéséhez: kb. {need} GB kell hozzá, a lemezen {free} GB maradt.",
+           "Figyelem: a(z) {model} kb. {need} GB memóriát kér, ebben a gépben {have} GB van: a fordítás nagyon lassú lenne, és a rendszer lefagyhat.",
+           "A(z) {model} kb. {need} GB memóriát kér, ebben a gépben {have} GB van: más megnyitott programokkal lassú lehet."),
+    'id': ("Tidak ada ruang untuk mengunduh {model}: perlu sekitar {need} GB dan di disk tersisa {free} GB.",
+           "Perhatian: {model} memerlukan sekitar {need} GB memori dan PC ini punya {have} GB: penerjemahan akan sangat lambat dan sistem bisa macet.",
+           "{model} memerlukan sekitar {need} GB memori dan PC ini punya {have} GB: bisa lambat jika program lain terbuka."),
+    'ja': ("{model} をダウンロードする空きがありません。約 {need} GB 必要ですが、ディスクの空きは {free} GB です。",
+           "注意：{model} には約 {need} GB のメモリが必要ですが、この PC には {have} GB しかありません。翻訳は非常に遅くなり、システムが固まるおそれがあります。",
+           "{model} には約 {need} GB のメモリが必要で、この PC には {have} GB あります。ほかのプログラムを開いていると遅くなることがあります。"),
+    'ko': ("{model}을(를) 다운로드할 공간이 없습니다. 약 {need}GB가 필요하지만 디스크에 {free}GB만 남아 있습니다.",
+           "주의: {model}은(는) 약 {need}GB의 메모리가 필요하지만 이 PC에는 {have}GB가 있습니다. 번역이 매우 느리고 시스템이 멈출 수 있습니다.",
+           "{model}은(는) 약 {need}GB의 메모리가 필요하고 이 PC에는 {have}GB가 있습니다. 다른 프로그램이 열려 있으면 느릴 수 있습니다."),
+    'no': ("Det er ikke plass til å laste ned {model}: den trenger omtrent {need} GB, og det er {free} GB igjen på disken.",
+           "Advarsel: {model} trenger omtrent {need} GB minne, og denne PC-en har {have} GB: oversettelsen blir svært treg, og systemet kan fryse.",
+           "{model} trenger omtrent {need} GB minne, og denne PC-en har {have} GB: med andre programmer åpne kan den bli treg."),
+    'pl': ("Brak miejsca na pobranie {model}: potrzeba około {need} GB, a na dysku zostało {free} GB.",
+           "Uwaga: {model} wymaga około {need} GB pamięci, a ten komputer ma {have} GB: tłumaczenie byłoby bardzo wolne, a system mógłby się zawiesić.",
+           "{model} wymaga około {need} GB pamięci, a ten komputer ma {have} GB: przy innych otwartych programach może działać wolno."),
+    'pt': ("Não há espaço para transferir {model}: precisa de cerca de {need} GB e restam {free} GB no disco.",
+           "Atenção: {model} pede cerca de {need} GB de memória e este PC tem {have} GB: a tradução seria muito lenta e o sistema poderia bloquear.",
+           "{model} pede cerca de {need} GB de memória e este PC tem {have} GB: com outros programas abertos pode ficar lento."),
+    'ro': ("Nu există spațiu pentru a descărca {model}: are nevoie de aproximativ {need} GB, iar pe disc au rămas {free} GB.",
+           "Atenție: {model} cere aproximativ {need} GB de memorie, iar acest PC are {have} GB: traducerea ar fi foarte lentă și sistemul s-ar putea bloca.",
+           "{model} cere aproximativ {need} GB de memorie, iar acest PC are {have} GB: cu alte programe deschise poate fi lent."),
+    'ru': ("Нет места для загрузки {model}: нужно около {need} ГБ, а на диске осталось {free} ГБ.",
+           "Внимание: {model} требует около {need} ГБ памяти, а на этом компьютере {have} ГБ: перевод будет очень медленным, и система может зависнуть.",
+           "{model} требует около {need} ГБ памяти, а на этом компьютере {have} ГБ: при других открытых программах может работать медленно."),
+    'es': ("No hay espacio para descargar {model}: necesita unos {need} GB y en el disco quedan {free} GB.",
+           "Atención: {model} pide unos {need} GB de memoria y este PC tiene {have} GB: la traducción sería muy lenta y el sistema podría bloquearse.",
+           "{model} pide unos {need} GB de memoria y este PC tiene {have} GB: con otros programas abiertos puede ir lento."),
+    'sv': ("Det finns inte plats att ladda ned {model}: den behöver cirka {need} GB och det finns {free} GB kvar på disken.",
+           "Varning: {model} behöver cirka {need} GB minne och den här datorn har {have} GB: översättningen blir mycket långsam och systemet kan frysa.",
+           "{model} behöver cirka {need} GB minne och den här datorn har {have} GB: med andra program öppna kan den bli långsam."),
+    'tr': ("{model} indirmek için yer yok: yaklaşık {need} GB gerekiyor ve diskte {free} GB kaldı.",
+           "Dikkat: {model} yaklaşık {need} GB bellek istiyor ve bu bilgisayarda {have} GB var: çeviri çok yavaş olur ve sistem donabilir.",
+           "{model} yaklaşık {need} GB bellek istiyor ve bu bilgisayarda {have} GB var: başka programlar açıkken yavaş olabilir."),
+    'uk': ("Немає місця, щоб завантажити {model}: потрібно близько {need} ГБ, а на диску залишилося {free} ГБ.",
+           "Увага: {model} потребує близько {need} ГБ пам'яті, а цей комп'ютер має {have} ГБ: переклад був би дуже повільним, і система може зависнути.",
+           "{model} потребує близько {need} ГБ пам'яті, а цей комп'ютер має {have} ГБ: з іншими відкритими програмами може працювати повільно."),
+    'vi': ("Không đủ chỗ để tải {model}: cần khoảng {need} GB và ổ đĩa chỉ còn {free} GB.",
+           "Chú ý: {model} cần khoảng {need} GB bộ nhớ và máy này có {have} GB: việc dịch sẽ rất chậm và hệ thống có thể bị treo.",
+           "{model} cần khoảng {need} GB bộ nhớ và máy này có {have} GB: có thể chậm khi mở các chương trình khác."),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
            **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
@@ -2171,7 +2255,8 @@ MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
            **dict(zip(_ELP_KEYS, _ELP_T.get(lang, ()))),
            **dict(zip(_ELR_KEYS, _ELR_T.get(lang, ()))),
            **dict(zip(_OL_KEYS, _OL_T.get(lang, ()))),
-           **dict(zip(_OLP_KEYS, _OLP_T.get(lang, ())))}
+           **dict(zip(_OLP_KEYS, _OLP_T.get(lang, ()))),
+           **dict(zip(_OLF_KEYS, _OLF_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 # The real-time bar shows the same ElevenLabs refusals as the settings window.
@@ -2197,7 +2282,7 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
                         (_SK_KEYS, _SK_T), (_BM_KEYS, _BM_T),
                         (_VC_KEYS, _VC_T), (_ELS_KEYS, _ELS_T),
                         (_ELP_KEYS, _ELP_T), (_ELR_KEYS, _ELR_T), (_OL_KEYS, _OL_T),
-                        (_OLP_KEYS, _OLP_T)):
+                        (_OLP_KEYS, _OLP_T), (_OLF_KEYS, _OLF_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

@@ -112,3 +112,38 @@ class RecommendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OllamaPullFitTests(unittest.TestCase):
+    """Before offering to pull an Ollama model: does it fit the disk and memory?
+
+    A Windows VM (12.4 GB RAM, no GPU, 18 GB free) was offered qwen3:32b
+    (20 GB download, about 32 GB of RAM to run) with no word about either."""
+
+    def test_the_vm_case_has_no_room_for_qwen3_32b(self):
+        from videotranslator.model_catalog import ollama_pull_fit
+        fit = ollama_pull_fit("qwen3:32b", _hw(ram=12.4, disk=18.0))
+        self.assertEqual(fit.verdict, "no_disk")
+        self.assertAlmostEqual(fit.download_gb, 20000 / 1024, places=3)
+        self.assertEqual(fit.disk_free_gb, 18.0)
+
+    def test_with_room_it_is_still_too_big_for_the_memory(self):
+        from videotranslator.model_catalog import ollama_pull_fit
+        fit = ollama_pull_fit("qwen3:32b", _hw(ram=12.4, disk=100.0))
+        self.assertEqual((fit.verdict, fit.need_gb, fit.have_gb, fit.gpu),
+                         ("too_big", 32.0, 12.4, False))
+        self.assertEqual(ollama_pull_fit("qwen3:14b", _hw(ram=12.4)).verdict, "too_big")
+        self.assertEqual(ollama_pull_fit("qwen3:8b", _hw(ram=12.4)).verdict, "ok")
+
+    def test_a_usable_gpu_is_judged_on_its_memory(self):
+        from videotranslator.model_catalog import ollama_pull_fit
+        fit = ollama_pull_fit("qwen3:32b", _hw(vram=24.0, ram=31.0))
+        self.assertEqual((fit.verdict, fit.need_gb, fit.have_gb, fit.gpu),
+                         ("ok", 22.0, 24.0, True))
+
+    def test_models_outside_the_catalogue_are_judged_on_disk_only(self):
+        from videotranslator.model_catalog import ollama_pull_fit
+        self.assertEqual(ollama_pull_fit("qwen3:4b", _hw(ram=4.0), size_gb=2.5).verdict, "ok")
+        self.assertEqual(ollama_pull_fit("qwen3:4b", _hw(disk=2.0), size_gb=2.5).verdict,
+                         "no_disk")
+        self.assertIsNone(ollama_pull_fit("somebody/custom:1b", _hw()))

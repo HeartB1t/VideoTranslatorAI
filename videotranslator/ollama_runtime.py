@@ -922,6 +922,12 @@ def ollama_model_size_gb(model: str) -> float | None:
     return OLLAMA_MODEL_SIZES_GB.get((model or "").strip())
 
 
+def ollama_models_dir() -> Path:
+    """Where Ollama keeps its models: ``$OLLAMA_MODELS`` or ``~/.ollama/models``."""
+    configured = os.environ.get("OLLAMA_MODELS")
+    return Path(configured) if configured else Path.home() / ".ollama" / "models"
+
+
 # -- Verify button -------------------------------------------------------------
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})

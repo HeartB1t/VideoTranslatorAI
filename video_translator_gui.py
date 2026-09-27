@@ -4274,6 +4274,7 @@ from videotranslator.ollama_runtime import (  # noqa: E402
     set_subprocess_hooks as _set_ollama_subprocess_hooks,
     check_ollama as _check_ollama_status,
     ollama_model_size_gb as _ollama_model_size_gb,
+    ollama_models_dir as _ollama_models_dir,
     _ollama_find_binary,
     _ollama_health_check,
     _ollama_install,
@@ -4290,17 +4291,34 @@ from videotranslator.ollama_runtime import (  # noqa: E402
 )
 
 
-def _ollama_pull_question(texts: dict, model: str, fallback: str) -> str:
-    """The question before pulling ``model``: its size when known, and what a
-    translation uses otherwise (the installed ``fallback``, or Google).
-    ``texts`` holds the UI strings, read on the Tk thread."""
+def _ollama_else_text(texts: dict, fallback: str) -> str:
+    return (texts["ollama_pull_else_model"].format(other=fallback) if fallback
+            else texts["ollama_pull_else_google"])
+
+
+def _ollama_pull_question(texts: dict, model: str, fallback: str, fit=None) -> str:
+    """The question before pulling ``model``: its size when known, a warning
+    when it does not fit the memory (``fit``, a model_catalog.PullFit), and
+    what a translation uses otherwise (the installed ``fallback``, or
+    Google). ``texts`` holds the UI strings, read on the Tk thread."""
     parts = [texts["ollama_pull_ask"].format(model=model)]
     size = _ollama_model_size_gb(model)
     if size:
         parts.append(texts["ollama_pull_size"].format(gb=f"{size:g}"))
-    parts.append(texts["ollama_pull_else_model"].format(other=fallback) if fallback
-                 else texts["ollama_pull_else_google"])
+    if fit is not None and fit.verdict in ("too_big", "tight"):
+        key = "ollama_pull_heavy" if fit.verdict == "too_big" else "ollama_pull_tight"
+        have = "?" if fit.have_gb is None else f"{fit.have_gb:.1f}"
+        parts.append(texts[key].format(model=model, need=f"{fit.need_gb:g}", have=have))
+    parts.append(_ollama_else_text(texts, fallback))
     return "\n\n".join(parts)
+
+
+def _ollama_no_disk_text(texts: dict, model: str, fallback: str, fit) -> str:
+    """Why ``model`` is not offered: it does not fit the disk."""
+    free = "?" if fit.disk_free_gb is None else f"{fit.disk_free_gb:.1f}"
+    return "\n\n".join((texts["ollama_pull_no_disk"].format(
+        model=model, need=f"{fit.download_gb:.1f}", free=free),
+        _ollama_else_text(texts, fallback)))
 
 
 def translate_with_ollama(
@@ -8661,7 +8679,20 @@ class App(tk.Tk):
         threading.Thread(target=_setup, daemon=True).start()
 
     _OLLAMA_QUESTION_KEYS = ("ollama_install_ask", "ollama_pull_ask", "ollama_pull_size",
-                             "ollama_pull_else_model", "ollama_pull_else_google")
+                             "ollama_pull_else_model", "ollama_pull_else_google",
+                             "ollama_pull_no_disk", "ollama_pull_heavy", "ollama_pull_tight")
+
+    def _ollama_pull_fit(self, model: str):
+        """Disk (where Ollama keeps its models) and memory check before
+        offering ``model``: a model_catalog.PullFit, or None when it cannot
+        tell. Worker thread."""
+        try:
+            from videotranslator.hardware_profile import detect_hardware
+            from videotranslator.model_catalog import ollama_pull_fit
+            hw = detect_hardware(model_dir=_ollama_models_dir())
+            return ollama_pull_fit(model, hw, size_gb=_ollama_model_size_gb(model))
+        except Exception:                          # noqa: BLE001 - advice, never a failure
+            return None
 
     def _ollama_setup_done(self, ok: bool, on_ready) -> None:
         """Tk thread: the preparation ended; run the one that waited, if any."""
@@ -10225,8 +10256,18 @@ class App(tk.Tk):
         if not (health_ok and resolved_model == model):
             fallback = resolved_model if health_ok else ""
             ask = auto_install and model not in self._ollama_pull_declined
+            # Checked like the models window checks it: a model that does not
+            # fit the disk is not offered (it would fill it), one too big for
+            # the memory is offered with a warning (it could freeze the PC).
+            fit = self._ollama_pull_fit(model) if ask else None
+            if fit is not None and fit.verdict == "no_disk":
+                warning = _ollama_no_disk_text(texts, model, fallback, fit)
+                self._log_async(f"[!] {warning.splitlines()[0]}\n")
+                self._post_if_alive(
+                    lambda: messagebox.showwarning("Ollama", warning, parent=self))
+                ask = False
             if ask and self._ask_yes_no_sync("Ollama",
-                                             _ollama_pull_question(texts, model, fallback)):
+                                             _ollama_pull_question(texts, model, fallback, fit)):
                 ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async,
                                              api_url=url)
                 if ok:
@@ -10248,6 +10289,14 @@ class App(tk.Tk):
         self._log_async(f"[+] Ollama pronto: {resolved_model or model} @ {url}\n")
         return True
 
+    def _ask_yes_no_now(self, title: str, message: str) -> bool:
+        """Tk thread: the Yes/No box, with the question's first line and the
+        answer logged (a native dialog leaves no other trace in the log)."""
+        answer = bool(messagebox.askyesno(title, message, parent=self))
+        first = message.strip().splitlines()[0] if message.strip() else ""
+        self._log_line("ui", f"{title}: {first} → {'✓' if answer else '✗'}")
+        return answer
+
     def _ask_yes_no_sync(self, title: str, message: str) -> bool:
         """Call messagebox.askyesno on the main thread and block the worker
         until the user responds. Uses an Event for the rendezvous.
@@ -10259,7 +10308,7 @@ class App(tk.Tk):
 
         def _prompt():
             try:
-                result["v"] = bool(messagebox.askyesno(title, message, parent=self))
+                result["v"] = self._ask_yes_no_now(title, message)
             finally:
                 done.set()
 
