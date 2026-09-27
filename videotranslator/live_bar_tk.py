@@ -159,6 +159,20 @@ class LiveBar(tk.Frame):
             font="VT.Small", takefocus=1)
         self._chk_original_mute_idle.pack(side="left", padx=(0, 4))
 
+        # Which voice the dub will use, and the ElevenLabs settings next to it.
+        row_voice = tk.Frame(self._idle, bg=pal.SURFACE)
+        row_voice.pack(fill="x", padx=8, pady=(0, 2))
+        self._voice_label = tk.Label(
+            row_voice, text="", bg=pal.SURFACE, fg=pal.FG2, font="VT.Small",
+            justify="left", wraplength=380, anchor="w")
+        self._voice_label.pack(side="left", fill="x", expand=True)
+        self._el_wrap, self._el_button = self._make_button(
+            row_voice, text=self._s("live_btn_elevenlabs"), font="VT.Small",
+            padx=6, pady=1, command=lambda: self._emit("elevenlabs"))
+        self._el_wrap.pack(side="right", padx=(6, 0))
+        self._el_tip = HoverTip(self._el_button, lambda: self._s("el_caption"),
+                                colors_fn=lambda: (self._palette.BTN, self._palette.FG))
+
         row3 = tk.Frame(self._idle, bg=pal.SURFACE)
         row3.pack(fill="x", padx=8, pady=(0, 6))
         self._privacy_label = tk.Label(
@@ -387,6 +401,10 @@ class LiveBar(tk.Frame):
         if self._banner.winfo_manager():
             self._banner.pack_forget()
 
+    def set_voice_info(self, text: str) -> None:
+        """The line that says which voice the live dub will use."""
+        self._voice_label.configure(text=text)
+
     def relabel(self) -> None:
         for mode, rb in self._mode_buttons.items():
             rb.configure(text=self._s(_MODE_KEYS[mode]))
@@ -399,6 +417,7 @@ class LiveBar(tk.Frame):
         self._chk_original_mute.configure(text=self._s("live_opt_mute_original"))
         self._chk_original_mute_idle.configure(text=self._s("live_opt_mute_original"))
         self._privacy_label.configure(text=self._s("live_tip_privacy"))
+        self._el_button.configure(text=self._s("live_btn_elevenlabs"))
         self._start_button.configure(text=self._s("player_btn_live"))
         self._badge.configure(text=self._s("live_badge"))
         self._stop_button.configure(text=self._s("live_btn_stop"))

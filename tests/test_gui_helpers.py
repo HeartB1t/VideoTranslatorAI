@@ -81,7 +81,7 @@ class LiveChoicesPersistenceTests(unittest.TestCase):
     def test_choice_changes_schedule_a_save_even_without_a_session(self):
         for intent in ("mode", "delay", "engine", "dub", "subs"):
             app = SimpleNamespace(_live_session=None, _schedule_live_save=Mock(),
-                                  _log_event=Mock())
+                                  _log_event=Mock(), _refresh_live_voice_info=Mock())
             gui.App._on_live_command(app, intent, {})
             app._schedule_live_save.assert_called_once_with()
 
@@ -233,7 +233,8 @@ class LaunchLiveSessionConfigTests(unittest.TestCase):
             _live_voice_for=lambda tgt: "it-IT-X", _deepl_key_var=_Var(""),
             _ollama_url_var=_Var(""), _ollama_model_var=_Var(""),
             _voice_backend=None, _player_backend=Mock(), _player_clock=Mock(),
-            _player_log=Mock(), _redirecting_thread_factory=None,
+            _player_log=Mock(), _log_line=Mock(), _s=lambda key: key,
+            _redirecting_thread_factory=None,
             _schedule_live_poll=Mock(), _request_voice_backend=Mock(),
             _refresh_live_bar_enabled=Mock(), _live_resolving=True)
         app._elevenlabs_settings = lambda: dict(config.get("elevenlabs") or {})
@@ -685,6 +686,30 @@ class InputStartDirTests(unittest.TestCase):
             with mock.patch.object(gui._platforms, "default_videos_dir",
                                    return_value=Path(missing)):
                 self.assertEqual(gui.App._input_start_dir(app), str(Path.home()))
+
+class LiveVoiceInfoTests(unittest.TestCase):
+    def _app(self, settings, key="sk", dub=True):
+        strings = gui.UI_STRINGS["en"]
+        app = SimpleNamespace(
+            _s=lambda k: strings[k], _lang_tgt=_Var("it"),
+            _live_bar=Mock(current_settings=Mock(return_value={"dub": dub})),
+            _elevenlabs_settings=lambda: settings, _live_voice_for=lambda tgt: "it-IT-Elsa")
+        return app, strings
+
+    def test_the_live_bar_says_which_voice_the_dub_uses(self):
+        full = {"enabled": True, "voice_id": "v1", "model_id": "m", "voice_name": "Carmelo"}
+        with mock.patch.object(gui, "load_elevenlabs_key", return_value="sk"):
+            app, st = self._app({})
+            self.assertEqual(gui.App._live_voice_info_text(app),
+                             st["live_voice_edge"].format(voice="it-IT-Elsa"))
+            app, st = self._app(full)
+            self.assertEqual(gui.App._live_voice_info_text(app),
+                             st["live_voice_el"].format(voice="Carmelo"))
+            app, st = self._app(full, dub=False)
+            self.assertEqual(gui.App._live_voice_info_text(app), st["live_voice_off"])
+        with mock.patch.object(gui, "load_elevenlabs_key", return_value=""):
+            app, st = self._app(full)
+            self.assertEqual(gui.App._live_voice_info_text(app), st["live_voice_el_nokey"])
 
 
 if __name__ == "__main__":

@@ -7441,6 +7441,10 @@ class App(tk.Tk):
         self._chk_voicebox = cb(body4, "vb_use", self._use_voicebox,
                                 cmd=lambda: self._on_voice_clone_toggle("voicebox"))
         self._chk_voicebox.pack(anchor="w", pady=(2, 0))
+        self._lbl_vb_scope = tk.Label(body4, text=self._s("vb_scope"), bg=SURFACE, fg=FG2,
+                                      font="VT.Small", wraplength=_HINT_WRAP - 30,
+                                      justify="left")
+        self._lbl_vb_scope.pack(anchor="w", padx=(22, 0))
         # Compact rows: the settings column is 460 px wide (P0 layout).
         vb_row = tk.Frame(body4, bg=SURFACE)
         vb_row.pack(anchor="w", padx=(22, 0), pady=(2, 0))
@@ -7478,7 +7482,11 @@ class App(tk.Tk):
         # Optional ElevenLabs voice for the live dub (online, paid, own key).
         el_wrap, self._btn_elevenlabs = self._flat_btn(
             body4, text=self._s("el_button"), command=self._open_elevenlabs_dialog)
-        el_wrap.pack(anchor="w", pady=(2, 6))
+        el_wrap.pack(anchor="w", pady=(2, 0))
+        self._lbl_el_caption = tk.Label(body4, text=self._s("el_caption"), bg=SURFACE, fg=FG2,
+                                        font="VT.Small", wraplength=_HINT_WRAP - 30,
+                                        justify="left")
+        self._lbl_el_caption.pack(anchor="w", pady=(2, 6))
 
         # ── 5. LIP SYNC ───────────────────────────────────────────────────
         sect5, body5, _, self._lbl_section_lip_sync = self._make_accordion_section(
@@ -7767,6 +7775,7 @@ class App(tk.Tk):
                 _player_settings_module.normalize_live_settings(load_config()))
         self._player_panel.pack(side="top", fill="both", expand=True)
         self._refresh_live_bar_enabled()
+        self._refresh_live_voice_info()
 
         # Right column: input, translation, profile, start, then the settings
         # accordion, in a canvas that scrolls only this column. The canvas
@@ -8325,6 +8334,7 @@ class App(tk.Tk):
         self._player_badge_label.configure(text=self._s("player_badge"))
         self._player_panel.relabel()
         self._live_bar.relabel()
+        self._refresh_live_voice_info()
         lang = self._ui_lang.get()
         self._lbl_panel_input.configure(text=self._title_upper(self._s("panel_input"), lang))
         self._lbl_panel_translation.configure(text=self._title_upper(self._s("panel_translation"), lang))
@@ -8370,6 +8380,8 @@ class App(tk.Tk):
         self._lbl_vb_engine.configure(text=self._s("vb_engine"))
         self._btn_vb_check.configure(text=self._s("vb_check"))
         self._lbl_vb_note.configure(text=self._s("vb_note"))
+        self._lbl_vb_scope.configure(text=self._s("vb_scope"))
+        self._lbl_el_caption.configure(text=self._s("el_caption"))
         self._lbl_section_lip_sync.configure(text=self._s("section_lip_sync"))
         self._chk_lipsync.configure(text=self._s("opt_lipsync"))
         self._lbl_section_engine.configure(text=self._s("section_engine"))
@@ -8432,6 +8444,7 @@ class App(tk.Tk):
             """Re-color all pill buttons to reflect selection."""
             cur = self._voice.get()
             self._voice_preview_hub.stop_if("edge:")
+            self._refresh_live_voice_info()
             for btn_v, btn_w in _pill_map.items():
                 if btn_v == cur:
                     btn_w.configure(bg=ACC_SOFT, fg=FG, highlightbackground=ACC)
@@ -8811,6 +8824,11 @@ class App(tk.Tk):
         """Route LiveBar intents on the Tk thread (mirrors _on_player_command)."""
         self._log_event("log_live", command=intent,
                         value=" ".join(f"{k}={v}" for k, v in (params or {}).items()))
+        if intent == "elevenlabs":
+            self._open_elevenlabs_dialog()
+            return
+        if intent == "dub":
+            self._refresh_live_voice_info()
         if intent == "start":
             self._start_live_session()
             return
@@ -8984,6 +9002,20 @@ class App(tk.Tk):
         self._vb_status(text)
         self._btn_vb_check.configure(state="normal")
 
+    def _warn_if_voicebox_down(self) -> None:
+        """At job start, say at once (not at step 5) if Voicebox is not answering."""
+        from videotranslator import voicebox_engine as vbe
+        url = self._voicebox_url_var.get().strip() or vbe.DEFAULT_URL
+        text = self._s("vb_fallback_warn").format(url=url)   # built on the Tk thread
+
+        def work() -> None:
+            try:
+                vbe.VoiceboxClient(url).health()
+            except Exception:                          # noqa: BLE001
+                self._post_if_alive(lambda: self._vb_status(text))
+
+        threading.Thread(target=work, name="voicebox-precheck", daemon=True).start()
+
     def _vb_status(self, text: str) -> None:
         self._lbl_vb_status.configure(text=text)
         self._log_line("voicebox", text)
@@ -9000,6 +9032,7 @@ class App(tk.Tk):
         save_config({self._ELEVENLABS_KEY: dict(settings)})
         if api_key:
             save_elevenlabs_key(api_key)
+        self._refresh_live_voice_info()
 
     def _live_tts_opts(self) -> dict | None:
         """ElevenLabs options for a live session, or None for Edge-TTS."""
@@ -9008,11 +9041,32 @@ class App(tk.Tk):
             return None
         key = load_elevenlabs_key()
         if not (key and settings.get("voice_id") and settings.get("model_id")):
-            self._player_log("live: ElevenLabs is not fully configured; using Edge-TTS")
+            self._log_line("elevenlabs", self._s("live_voice_el_nokey"))
             return None
         return {"engine": "elevenlabs", "api_key": key,
                 "voice_id": settings["voice_id"], "model_id": settings["model_id"],
                 "fallback": bool(settings.get("fallback", True))}
+
+    def _live_voice_info_text(self) -> str:
+        """Which voice the live dub will use, in the UI language."""
+        bar = getattr(self, "_live_bar", None)
+        if bar is not None and not bar.current_settings().get("dub", True):
+            return self._s("live_voice_off")
+        settings = self._elevenlabs_settings()
+        if settings.get("enabled"):
+            if load_elevenlabs_key() and settings.get("voice_id") and settings.get("model_id"):
+                return self._s("live_voice_el").format(
+                    voice=settings.get("voice_name") or settings["voice_id"])
+            return self._s("live_voice_el_nokey")
+        return self._s("live_voice_edge").format(
+            voice=self._live_voice_for(self._lang_tgt.get()))
+
+    def _refresh_live_voice_info(self) -> None:
+        bar = getattr(self, "_live_bar", None)
+        if bar is None:
+            return
+        with contextlib.suppress(Exception):
+            bar.set_voice_info(self._live_voice_info_text())
 
     def _open_elevenlabs_dialog(self) -> None:
         dialog = getattr(self, "_elevenlabs_dialog", None)
@@ -10432,6 +10486,7 @@ class App(tk.Tk):
         # has selected this engine - so the fields are pre-filled on next launch.
         if self._use_voicebox.get():
             self._save_voicebox_settings()      # the address/engine used last
+            self._warn_if_voicebox_down()
         if translation_engine == "llm_ollama":
             try:
                 save_config({

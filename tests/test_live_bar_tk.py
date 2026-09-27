@@ -46,6 +46,13 @@ class LiveBarTests(unittest.TestCase):
         self.assertTrue(self.bar._idle.winfo_manager())
         self.assertFalse(self.bar._running.winfo_manager())
 
+    def test_voice_line_and_elevenlabs_button(self):
+        self.bar.set_voice_info("Dubbed voice: Edge-TTS")
+        self.assertEqual(self.bar._voice_label.cget("text"), "Dubbed voice: Edge-TTS")
+        self.bar._el_button.invoke()
+        self.assertEqual(self.commands[-1], ("elevenlabs", {}))
+        self.assertEqual(self.bar._el_button.cget("text"), _s("live_btn_elevenlabs"))
+
     def test_start_button_emits_source(self):
         self.bar._start_button.invoke()
         self.assertIn(("start", {"source": "file"}), self.commands)
