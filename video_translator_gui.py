@@ -10075,27 +10075,12 @@ class App(tk.Tk):
                 ok, msg = _ollama_start_daemon(
                     binary, api_url=url, wait_seconds=15.0, log_cb=self._log_async
                 )
+                # A port already held by a running daemon (Ollama Desktop) is
+                # recognised inside _ollama_start_daemon, which then returns ok:
+                # this message only carries the log path, never the error text.
                 if not ok:
-                    # Port-conflict fallback: if `ollama serve` failed because
-                    # something else (Ollama Desktop, prior daemon) bound 11434,
-                    # the existing daemon is fine - verify and use it.
-                    msg_lower = (msg or "").lower()
-                    port_conflict = any(s in msg_lower for s in (
-                        "address already in use",
-                        "bind:",
-                        "in use",
-                        "consentito un solo utilizzo",   # Italian Windows
-                        "una sola utilizzazione",
-                        "only one usage of each socket",  # English Windows
-                    ))
-                    if port_conflict and _ollama_is_daemon_running(url, timeout=3.0):
-                        self._log_async(
-                            f"[+] Port 11434 occupata da un altro daemon Ollama gia' attivo - "
-                            f"riutilizzo quello.\n"
-                        )
-                    else:
-                        self._log_async(f"[x] Daemon non avviato: {msg}\n")
-                        return False
+                    self._log_async(f"[x] Daemon non avviato: {msg}\n")
+                    return False
 
         # Step 3: model available?
         # TASK 2J: health check now returns (ok, msg, resolved_model). When

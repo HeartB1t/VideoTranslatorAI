@@ -374,17 +374,39 @@ def _ollama_wait_for_daemon(api_url: str, wait_seconds: float = 12.0,
     return False
 
 
+# How `ollama serve` reports a port another process already holds (usually
+# Ollama Desktop's own daemon): Linux / macOS, English and Italian Windows.
+_PORT_CONFLICT_MARKERS = (
+    "address already in use",
+    "only one usage of each socket",
+    "consentito un solo utilizzo",
+    "una sola utilizzazione",
+)
+
+
+def _is_port_conflict(text: str) -> bool:
+    """True when `ollama serve` output says its port is already taken."""
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _PORT_CONFLICT_MARKERS)
+
+
 def _ollama_start_daemon(
     binary: str,
     api_url: str = "http://localhost:11434",
     wait_seconds: float = 15.0,
     log_cb=None,
+    conflict_wait: float = 15.0,
 ) -> tuple[bool, str]:
     """Start `ollama serve` detached and wait for `/api/tags` to respond.
 
     Returns (ok, message). `message` is the path to the log tempfile on
     failure, empty string on success. The subprocess is registered in
     `_active_subprocesses` so `_on_close` can terminate it.
+
+    When `ollama serve` exits because its port is already taken, another
+    daemon holds it (Ollama Desktop starts its own a few seconds after the
+    install, and binds the port a moment before it answers): that daemon
+    is waited for up to `conflict_wait` seconds and used when it answers.
     """
     log = log_cb or (lambda s: None)
 
@@ -434,6 +456,11 @@ def _ollama_start_daemon(
                 tail = Path(log_path).read_text(encoding="utf-8", errors="replace")[-500:]
             except Exception:
                 tail = "(log unreadable)"
+            if _is_port_conflict(tail) and _ollama_wait_for_daemon(
+                    api_url, wait_seconds=conflict_wait):
+                log(f"     [+] Porta di {api_url} gia' occupata da un daemon Ollama "
+                    f"attivo (di solito Ollama Desktop): uso quello\n")
+                return True, ""
             log(f"     ! ollama serve exited early (rc={proc.returncode}): {tail}\n")
             return False, f"ollama serve exited (rc={proc.returncode}). Log: {log_path}"
         if _ollama_is_daemon_running(api_url, timeout=1.5):
