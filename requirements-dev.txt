@@ -15,3 +15,5 @@ wheel
 opencv-python-headless
 numpy>=2.0,<2.4
 soundfile
+# The Ollama pull and Verify tests patch requests (a runtime dependency).
+requests
