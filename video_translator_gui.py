@@ -355,6 +355,8 @@ from videotranslator.ui_theme import (  # noqa: E402
     SCALES as _SCALES,
     SYSTEM_DARK_KEY as _SYSTEM_DARK_KEY,
     BASE_THEMES as _BASE_THEMES,
+    SKIN_CHOICES as _SKIN_CHOICES,
+    contrast_ratio as _contrast_ratio,
     cached_system_dark as _cached_system_dark,
 )
 
@@ -369,6 +371,7 @@ CARD = globals()["CARD"]; BORDER = globals()["BORDER"]; PILL = globals()["PILL"]
 SURFACE = globals()["SURFACE"]; FIELD = globals()["FIELD"]; BTN = globals()["BTN"]
 ACC_HOVER = globals()["ACC_HOVER"]; ACC_SOFT = globals()["ACC_SOFT"]; ACC_FG = globals()["ACC_FG"]
 OK = globals()["OK"]; WARN = globals()["WARN"]; ERR = globals()["ERR"]
+BORDER_PX = _DEFAULT_PALETTE.border_px     # card frame thickness, set per theme
 
 
 # Pixel width at which hints and long checkbox texts wrap inside the settings
@@ -6052,6 +6055,7 @@ class App(tk.Tk):
         # Movable panels of the settings column: id -> (outer frame, pack
         # options), current order, and the state of a drag in progress.
         self._panels = {}
+        self._card_frames = []                 # outer frames, for BORDER_PX
         self._panel_order = _normalize_panel_order(_ocfg.get("ui_panel_order"))
         self._drag = None
         self._drag_indicator = None
@@ -6717,7 +6721,8 @@ class App(tk.Tk):
 
         def _enter(_e, b=btn, p=primary):
             if str(b.cget("state")) != "disabled":
-                b.configure(bg=ACC_HOVER if p else BORDER)
+                hover = ACC_HOVER if p else self._hover_bg()
+                b.configure(bg=hover, activebackground=hover)
 
         def _leave(_e, b=btn, p=primary):
             b.configure(bg=ACC if p else BTN)
@@ -6745,6 +6750,12 @@ class App(tk.Tk):
         return wrap, btn
 
     @staticmethod
+    def _hover_bg():
+        """Hover colour of a flat button: the border colour, unless the text
+        would be hard to read on it (the red frames of the "dex" skin)."""
+        return BORDER if _contrast_ratio(FG, BORDER) >= 4.5 else SEL
+
+    @staticmethod
     def _keyboard_operable(widget, action):
         """Let a clickable Label take Tab focus and run ``action`` on Return, KP_Enter or space.
 
@@ -6761,10 +6772,12 @@ class App(tk.Tk):
             widget.bind(sequence, activate)
 
     def _card(self, parent, **pack):
-        """Surface card with a 1 px border; returns the inner padded frame."""
-        outer = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
+        """Surface card with a BORDER_PX border (1 px, 3 on the chunky skins);
+        returns the inner padded frame."""
+        outer = tk.Frame(parent, bg=SURFACE, highlightthickness=BORDER_PX,
                          highlightbackground=BORDER, highlightcolor=BORDER)
         outer.pack(fill="x", **pack)
+        self._card_frames.append(outer)
         inner = tk.Frame(outer, bg=SURFACE)
         inner.pack(fill="both", expand=True, padx=12, pady=10)
         return inner
@@ -7987,6 +8000,13 @@ class App(tk.Tk):
         labels = {"auto": self._s("theme_auto"), "light": self._s("theme_light")}
         return [(k, labels.get(k, k.capitalize())) for k in _BASE_THEMES]
 
+    @staticmethod
+    def _skin_options():
+        """(value, label) pairs for the skin row: names, not translated."""
+        labels = {"dex": "Dex", "handheld": "Handheld", "crt": "CRT",
+                  "crt_amber": "CRT Amber"}
+        return [(k, labels.get(k, k)) for k in _SKIN_CHOICES]
+
     def _scale_options(self):
         return [(k, self._s(f"size_{k}")) for k in _SCALES]
 
@@ -8039,6 +8059,13 @@ class App(tk.Tk):
         self._seg_theme = self._segmented(card, self._theme_options(),
                                           self._ui_theme_var, self._apply_ui_settings)
         self._seg_theme.pack(anchor="w", pady=(4, 12))
+
+        self._lbl_settings_skin = tk.Label(card, text=self._s("settings_skin"),
+                                           bg=SURFACE, fg=FG2, font="VT.Small")
+        self._lbl_settings_skin.pack(anchor="w")
+        self._seg_skin = self._segmented(card, self._skin_options(),
+                                         self._ui_theme_var, self._apply_ui_settings)
+        self._seg_skin.pack(anchor="w", pady=(4, 12))
 
         self._lbl_settings_accent = tk.Label(card, text=self._s("settings_accent"),
                                              bg=SURFACE, fg=FG2, font="VT.Small")
@@ -8171,7 +8198,7 @@ class App(tk.Tk):
         cannot tell a selected dot from one that merely shares the old accent.
         """
         if self._settings_win is not None and self._settings_win.winfo_exists():
-            for row in (self._seg_theme, self._seg_scale):
+            for row in (self._seg_theme, self._seg_skin, self._seg_scale):
                 row._refresh()
             self._refresh_accent_dots()
         self._update_profile_buttons()
@@ -8181,6 +8208,12 @@ class App(tk.Tk):
         live_bar = getattr(self, "_live_bar", None)
         if live_bar is not None:
             live_bar.apply_theme()
+        alive = []
+        for frame in self._card_frames:
+            with contextlib.suppress(tk.TclError):
+                frame.configure(highlightthickness=BORDER_PX)
+                alive.append(frame)
+        self._card_frames = alive
         speaker = getattr(self, "_voice_speaker", None)
         if speaker is not None:
             speaker.apply_palette(self._theme.palette, self._theme.scale)
@@ -8226,6 +8259,7 @@ class App(tk.Tk):
         self._settings_win.title(self._s("settings_title"))
         self._lbl_settings_appearance.configure(text=self._s("settings_appearance").upper())
         self._lbl_settings_theme.configure(text=self._s("settings_theme"))
+        self._lbl_settings_skin.configure(text=self._s("settings_skin"))
         self._lbl_settings_accent.configure(text=self._s("settings_accent"))
         self._lbl_accent_default.configure(text=self._s("accent_default"))
         self._lbl_settings_size.configure(text=self._s("settings_text_size"))

@@ -298,6 +298,7 @@ class ThemeManager:
 
     def _apply_globals(self, p: Palette) -> None:
         self._globals.update({name: getattr(p, field) for name, field in GLOBAL_ALIASES.items()})
+        self._globals["BORDER_PX"] = p.border_px
 
     def _apply_fonts(self, p: Palette, scale: float) -> None:
         ui_family = self.ui_family(p.font_family)

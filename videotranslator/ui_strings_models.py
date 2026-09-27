@@ -1659,11 +1659,44 @@ _VP_T: dict[str, tuple[str, ...]] = {
     'vi': ('Nghe giọng này', 'Nghe mẫu miễn phí của giọng này (bằng ngôn ngữ đích nếu có, nếu không thường là tiếng Anh)', 'Dừng nghe', 'Đang chuẩn bị mẫu…', 'Không phát được mẫu: hãy kiểm tra kết nối internet.', 'Giọng này không có mẫu để nghe.', 'Không có trình phát âm thanh: hãy cài trình phát video (libmpv) hoặc ffmpeg kèm ffplay.', 'Không phát được mẫu.'),
 }
 
+# --- skin row of the settings window ---------------------------------------------
+_SK_KEYS = ('settings_skin',)
+
+_SK_T: dict[str, tuple[str, ...]] = {
+    'en': ('Skin (playful looks)',),
+    'it': ('Skin (stili giocosi)',),
+    'ar': ('السمات المرحة',),
+    'zh': ('趣味外观',),
+    'cs': ('Vzhledy (hravé styly)',),
+    'da': ('Skins (legende stilarter)',),
+    'nl': ('Skins (speelse stijlen)',),
+    'fi': ('Teemat (leikkisät tyylit)',),
+    'fr': ('Habillages (styles ludiques)',),
+    'de': ('Skins (verspielte Looks)',),
+    'el': ('Εμφανίσεις (παιχνιδιάρικα στυλ)',),
+    'hi': ('स्किन (मज़ेदार रूप)',),
+    'hu': ('Skinek (játékos stílusok)',),
+    'id': ('Skin (gaya ceria)',),
+    'ja': ('スキン（遊び心のあるデザイン）',),
+    'ko': ('스킨(재미있는 스타일)',),
+    'no': ('Skins (lekne stiler)',),
+    'pl': ('Skórki (zabawne style)',),
+    'pt': ('Temas divertidos',),
+    'ro': ('Skinuri (stiluri jucăușe)',),
+    'ru': ('Скины (игровые стили)',),
+    'es': ('Skins (estilos divertidos)',),
+    'sv': ('Skins (lekfulla stilar)',),
+    'tr': ('Görünümler (eğlenceli stiller)',),
+    'uk': ('Скіни (ігрові стилі)',),
+    'vi': ('Giao diện vui nhộn',),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
            **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
            **dict(zip(_GEN_KEYS, _GEN_T.get(lang, ()))),
-           **dict(zip(_VP_KEYS, _VP_T.get(lang, ())))}
+           **dict(zip(_VP_KEYS, _VP_T.get(lang, ()))),
+           **dict(zip(_SK_KEYS, _SK_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 
@@ -1676,7 +1709,8 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
     """
     problems: list[str] = []
     for keys, table in ((_KEYS, _T), (_EL_KEYS, _EL_T), (_VB_KEYS, _VB_T),
-                        (_GEN_KEYS, _GEN_T), (_VP_KEYS, _VP_T)):
+                        (_GEN_KEYS, _GEN_T), (_VP_KEYS, _VP_T),
+                        (_SK_KEYS, _SK_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

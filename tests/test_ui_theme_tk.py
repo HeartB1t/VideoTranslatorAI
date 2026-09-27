@@ -812,6 +812,7 @@ class KeyboardAccessTests(unittest.TestCase):
 
             def expected():
                 return (list(app._seg_theme.winfo_children())
+                        + list(app._seg_skin.winfo_children())
                         + [app._accent_dots[v] for v in gui._ACCENT_CHOICES]
                         + list(app._seg_scale.winfo_children())
                         + [app._ui_lang_combo, app._chk_player_autoload,
@@ -828,6 +829,39 @@ class KeyboardAccessTests(unittest.TestCase):
             app.update()
             order = expected()
             self.assertEqual(self._tab_walk(order[0], len(order)), order + [order[0]])
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class SkinTests(unittest.TestCase):
+    def test_skin_row_switches_theme_frames_and_hover(self):
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            app._open_settings()
+            labels = [b.cget("text") for b in app._seg_skin.winfo_children()]
+            self.assertEqual(labels, ["Dex", "Handheld", "CRT", "CRT Amber"])
+            self.assertEqual(len(app._seg_theme.winfo_children()), len(gui._BASE_THEMES))
+            self.assertEqual(app._lbl_settings_skin.cget("text"),
+                             gui.UI_STRINGS["en"]["settings_skin"])
+            cards = [f for f in app._card_frames if f.winfo_exists()]
+            self.assertGreaterEqual(len(cards), 5)
+            self.assertTrue(all(int(f.cget("highlightthickness")) == 1 for f in cards))
+            app._seg_skin.winfo_children()[0].invoke()          # Dex
+            p = app._theme.palette
+            self.assertEqual((p.name, gui.BORDER_PX), ("dex", 3))
+            self.assertTrue(all(int(f.cget("highlightthickness")) == 3 for f in cards))
+            selected = app._seg_skin.winfo_children()[0]
+            self.assertEqual(selected.cget("bg"), p.ACC_SOFT)
+            self.assertEqual(app._hover_bg(), p.SEL)      # dark text on red is hard to read
+            wrap, button = app._flat_btn(app._settings_win, text="x")
+            wrap.pack()
+            app._settings_win.deiconify()
+            app.update()
+            button.event_generate("<Enter>")
+            app.update()
+            self.assertEqual(button.cget("bg"), p.SEL)
+            app._seg_theme.winfo_children()[1].invoke()         # back to Graphite
+            self.assertEqual((app._theme.palette.name, gui.BORDER_PX), ("graphite", 1))
+            self.assertTrue(all(int(f.cget("highlightthickness")) == 1 for f in cards))
+            self.assertEqual(app._hover_bg(), app._theme.palette.BORDER)
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
