@@ -354,7 +354,7 @@ from videotranslator.ui_theme import (  # noqa: E402
     DEFAULT_THEME as _DEFAULT_THEME,
     SCALES as _SCALES,
     SYSTEM_DARK_KEY as _SYSTEM_DARK_KEY,
-    THEME_CHOICES as _THEME_CHOICES,
+    BASE_THEMES as _BASE_THEMES,
     cached_system_dark as _cached_system_dark,
 )
 
@@ -7985,7 +7985,7 @@ class App(tk.Tk):
     def _theme_options(self):
         """(value, label) pairs for the theme row; Graphite/Slate/Neon are proper nouns."""
         labels = {"auto": self._s("theme_auto"), "light": self._s("theme_light")}
-        return [(k, labels.get(k, k.capitalize())) for k in _THEME_CHOICES]
+        return [(k, labels.get(k, k.capitalize())) for k in _BASE_THEMES]
 
     def _scale_options(self):
         return [(k, self._s(f"size_{k}")) for k in _SCALES]

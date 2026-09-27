@@ -128,6 +128,16 @@ class ResolvePaletteTests(unittest.TestCase):
         self.assertEqual(resolve_palette("graphite", ["blue"]).ACC, resolve_palette("graphite").ACC)
         self.assertEqual(resolve_palette(None).name, DEFAULT_THEME)
 
+    def test_skins_are_themes_with_their_own_font_and_frame(self):
+        self.assertEqual(ui_theme.THEME_CHOICES, ui_theme.BASE_THEMES + ui_theme.SKIN_CHOICES)
+        self.assertEqual(ui_theme.SKIN_CHOICES, ("dex", "handheld", "crt", "crt_amber"))
+        self.assertEqual((resolve_palette("dex").font_family, resolve_palette("dex").border_px,
+                          resolve_palette("dex").dark), ("pixel", 3, False))
+        self.assertEqual((resolve_palette("crt_amber").font_family,
+                          resolve_palette("crt_amber").border_px), ("crt", 1))
+        self.assertEqual(resolve_palette("graphite").border_px, 1)
+        self.assertEqual(normalize_ui_settings({"ui_theme": "crt"})["ui_theme"], "crt")
+
     def test_font_family_role(self):
         self.assertEqual(resolve_palette("neon").font_family, "mono")
         self.assertEqual(resolve_palette("graphite").font_family, "sans")

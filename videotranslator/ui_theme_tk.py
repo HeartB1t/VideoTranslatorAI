@@ -283,7 +283,9 @@ class ThemeManager:
         self._globals.update({name: getattr(p, field) for name, field in GLOBAL_ALIASES.items()})
 
     def _apply_fonts(self, p: Palette, scale: float) -> None:
-        ui_family = self._mono if p.font_family == "mono" else self._sans
+        # The skins' own families arrive with their bundled fonts; until then
+        # "crt" reads as the monospace and "pixel" as the sans-serif.
+        ui_family = self._mono if p.font_family in ("mono", "crt") else self._sans
         existing = set(tkfont.names(self.root))
         for name, (role, size, weight, slant) in FONT_ROLES.items():
             family = self._mono if role == "mono" else ui_family

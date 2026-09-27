@@ -16,7 +16,12 @@ from dataclasses import dataclass
 
 # -- Choices and defaults ---------------------------------------------
 
-THEME_CHOICES: tuple[str, ...] = ("auto", "graphite", "slate", "light", "neon")
+BASE_THEMES: tuple[str, ...] = ("auto", "graphite", "slate", "light", "neon")
+# Playful looks, opt-in from their own row in the settings. "dex" and
+# "handheld" recall a pocket console (colours only: no names, logos or
+# sprites of any brand), "crt" and "crt_amber" an 80s phosphor monitor.
+SKIN_CHOICES: tuple[str, ...] = ("dex", "handheld", "crt", "crt_amber")
+THEME_CHOICES: tuple[str, ...] = BASE_THEMES + SKIN_CHOICES
 DEFAULT_THEME = "graphite"
 
 ACCENTS: dict[str, str] = {
@@ -57,7 +62,7 @@ class Palette:
 
     name: str
     dark: bool
-    font_family: str  # "sans" | "mono"
+    font_family: str  # "sans" | "mono" | "pixel" | "crt"
     BG: str
     SURFACE: str
     FIELD: str
@@ -73,6 +78,7 @@ class Palette:
     OK: str
     WARN: str
     ERR: str
+    border_px: int = 1  # card frame thickness: 3 gives the "chunky" skins
 
     COLOR_FIELDS = (
         "BG", "SURFACE", "FIELD", "BORDER", "FG", "FG2", "SEL", "BTN",
@@ -115,6 +121,35 @@ THEMES: dict[str, dict[str, object]] = {
         "BG": "#060612", "SURFACE": "#0d0d1f", "FIELD": "#11111b", "BORDER": "#1a1a3a",
         "FG": "#e0e0ff", "FG2": "#7878b8", "SEL": "#0d0d2a", "BTN": "#15152e",
         "ACC": "#00ff88", "OK": "#33ff99", "WARN": "#ff00aa", "ERR": "#ff4466",
+    },
+    # Pocket console: cream shell, white cards with thick red frames, LCD
+    # green fields, yellow buttons, red call to action.
+    "dex": {
+        "dark": False, "font": "pixel", "border_px": 3,
+        "BG": "#f3ead8", "SURFACE": "#fffaf0", "FIELD": "#9bbc0f", "BORDER": "#c8323a",
+        "FG": "#1c1c2e", "FG2": "#5b5b7a", "SEL": "#bfe0ff", "BTN": "#ffe9a8",
+        "ACC": "#dc0a2d", "OK": "#2f9e44", "WARN": "#c47f00", "ERR": "#8f0f1c",
+    },
+    # The same console as a four-green monochrome LCD.
+    "handheld": {
+        "dark": False, "font": "pixel", "border_px": 3,
+        "BG": "#8bac0f", "SURFACE": "#9bbc0f", "FIELD": "#b1cf2a", "BORDER": "#6f9a1e",
+        "FG": "#0f380f", "FG2": "#2f5e2f", "SEL": "#c7de5a", "BTN": "#a9c920",
+        "ACC": "#0f3810", "OK": "#1f5f1f", "WARN": "#7a5a00", "ERR": "#7a1f1f",
+    },
+    # 80s monitor, green P1 phosphor: black with a green veil, glowing text.
+    "crt": {
+        "dark": True, "font": "crt",
+        "BG": "#050805", "SURFACE": "#0b120b", "FIELD": "#020402", "BORDER": "#1c4a1c",
+        "FG": "#33ff33", "FG2": "#1fae1f", "SEL": "#124012", "BTN": "#0f200f",
+        "ACC": "#2fe62f", "OK": "#8aff8a", "WARN": "#ffb000", "ERR": "#ff4a4a",
+    },
+    # The same monitor with amber P3 phosphor.
+    "crt_amber": {
+        "dark": True, "font": "crt",
+        "BG": "#0a0700", "SURFACE": "#151000", "FIELD": "#060400", "BORDER": "#4a3800",
+        "FG": "#ffb000", "FG2": "#b37c00", "SEL": "#3d2e00", "BTN": "#221a00",
+        "ACC": "#ffc23d", "OK": "#8aff8a", "WARN": "#ff7a1a", "ERR": "#ff4a4a",
     },
 }
 
@@ -259,7 +294,8 @@ def resolve_palette(theme: str, accent: str = DEFAULT_ACCENT,
     raw.update({"ACC": acc, "ACC_HOVER": hover, "ACC_SOFT": soft, "ACC_FG": fg})
     ordered = {f: raw[f] for f in Palette.COLOR_FIELDS}
     colors = _ensure_distinct(ordered, TK_DEFAULT_COLORS)
-    return Palette(name=theme, dark=bool(base["dark"]), font_family=str(base["font"]), **colors)
+    return Palette(name=theme, dark=bool(base["dark"]), font_family=str(base["font"]),
+                   border_px=int(base.get("border_px", 1)), **colors)
 
 
 # -- Player action colours ------------------------------------------------
