@@ -161,6 +161,20 @@ class BevelTests(unittest.TestCase):
                     self.assertEqual((sunk.top_left, sunk.bottom_right),
                                      (raised.bottom_right, raised.top_left))
 
+    def test_the_upper_edge_stands_out_on_every_face_even_a_mid_tone_accent(self):
+        # On a Windows VM the teal accent keys (Avvia Traduzione, Scarica e
+        # Traduci) looked flat: a fixed 28% tint gave a lit edge of 1.35:1.
+        for theme, accent in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES):
+            palette = resolve_palette(theme, accent)
+            for role in self.ROLES + ("ACC_HOVER",):
+                face = getattr(palette, role)
+                with self.subTest(theme=theme, accent=accent, role=role):
+                    upper = ui_theme.bevel_colors(face).top_left
+                    if ui_theme.relative_luminance(face) < 0.5:
+                        self.assertGreaterEqual(contrast_ratio(upper, face), 1.6)
+                    else:
+                        self.assertGreaterEqual(contrast_ratio(upper, face), 1.25)
+
     def test_dark_faces_get_a_lit_upper_edge_and_light_faces_an_outline(self):
         lum = ui_theme.relative_luminance
         for face in ("#15152e", "#393b40", "#0f3810"):

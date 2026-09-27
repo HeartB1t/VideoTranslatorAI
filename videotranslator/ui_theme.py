@@ -318,8 +318,10 @@ def _player_action_color(palette: Palette, icon: str) -> str:
     return _PLAYER_ACTION_COLORS[palette.dark].get(role, palette.FG)
 
 
-# Relative luminance from which a key face counts as light (bevel_colors).
-_LIGHT_FACE = 0.35
+# Relative luminance from which a key face counts as light (bevel_colors),
+# and the least contrast of the lit upper edge over a darker face.
+_LIGHT_FACE = 0.5
+_MIN_LIT_EDGE = 1.6
 
 
 @dataclass(frozen=True)
@@ -334,17 +336,25 @@ class ChipColors:
 def bevel_colors(face: str, *, enabled: bool = True, pressed: bool = False) -> ChipColors:
     """The edge that makes a flat ``face`` read as a raised key.
 
-    Chosen from the face, not from the theme: a dark face (most dark themes,
-    an accent key on a light theme) gets a lit upper edge and a deep shadow
-    below; a light face (light themes, a bright accent on a dark theme)
-    would lose a lighter edge, so its upper edge is a soft darker outline
-    and the shadow below is darker still. Either way the upper edge is
-    lighter than the lower one, and pressing (or a selected key) swaps them:
-    the key looks sunk. A disabled key keeps its shape with the edge faded
-    half way to the face, so it still reads as a button.
+    Chosen from the face, not from the theme: a dark or mid-tone face (most
+    dark themes, an accent key) gets a lit upper edge and a deep shadow
+    below. The lit edge is tinted until it clears ``_MIN_LIT_EDGE`` over the
+    face: a fixed tint read well on grey keys but vanished on a mid-tone
+    accent (the teal keys looked flat on Windows). A light face (light
+    themes, a bright neon accent) would lose a lighter edge, so its upper
+    edge is a soft darker outline and the shadow below is darker still.
+    Either way the upper edge is lighter than the lower one, and pressing
+    (or a selected key) swaps them: the key looks sunk. A disabled key keeps
+    its shape with the edge faded half way to the face, so it still reads
+    as a button.
     """
     if relative_luminance(face) < _LIGHT_FACE:
-        upper, lower = lighten(face, 0.28), darken(face, 0.65)
+        amount = 0.28
+        upper = lighten(face, amount)
+        while contrast_ratio(upper, face) < _MIN_LIT_EDGE and amount < 0.9:
+            amount += 0.04
+            upper = lighten(face, amount)
+        lower = darken(face, 0.65)
     else:
         upper, lower = darken(face, 0.14), darken(face, 0.42)
     if not enabled:
