@@ -798,6 +798,10 @@ if exist "%SCRIPT_DIR%assets" (
     copy /Y "%SCRIPT_DIR%assets\icon.ico" "%INSTALL_DIR%\assets\icon.ico" >nul 2>&1
     copy /Y "%SCRIPT_DIR%assets\icon.png" "%INSTALL_DIR%\assets\icon.png" >nul 2>&1
     copy /Y "%SCRIPT_DIR%assets\icon_256.png" "%INSTALL_DIR%\assets\icon_256.png" >nul 2>&1
+    if exist "%SCRIPT_DIR%assets\fonts" (
+        if not exist "%INSTALL_DIR%\assets\fonts" mkdir "%INSTALL_DIR%\assets\fonts"
+        copy /Y "%SCRIPT_DIR%assets\fonts\*.*" "%INSTALL_DIR%\assets\fonts\" >nul 2>&1
+    )
     echo  [+] Assets copied.
 )
 exit /b 0

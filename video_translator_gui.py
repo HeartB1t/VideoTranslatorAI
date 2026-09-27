@@ -10843,4 +10843,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         _cli()
     else:
+        # Before the Tk root: Tk only sees fonts registered before it starts.
+        from videotranslator.ui_fonts import register_bundled_fonts
+        register_bundled_fonts()
         App().mainloop()

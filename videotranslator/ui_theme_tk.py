@@ -45,6 +45,12 @@ FONT_ROLES: dict[str, tuple[str, int, str, str]] = {
 
 SANS_CANDIDATES = ("Segoe UI", "Inter", "Noto Sans", "Cantarell", "DejaVu Sans", "Helvetica")
 MONO_CANDIDATES = ("Cascadia Mono", "JetBrains Mono", "Consolas", "DejaVu Sans Mono", "Menlo", "Courier")
+# The skins' bundled fonts (videotranslator.ui_fonts registers them before Tk
+# starts). Missing ones fall back to the sans-serif (pixel) or monospace (crt).
+SKIN_FAMILIES: dict[str, tuple[str, ...]] = {"pixel": ("Pixelify Sans",), "crt": ("VT323",)}
+# Families that draw small for their point size (VT323) or large: the UI
+# roles are multiplied so that every skin keeps about the same text width.
+SIZE_FACTOR: dict[str, float] = {"VT323": 1.45, "Pixelify Sans": 1.15}
 
 # GUI module global -> Palette field. Old aliases are kept on purpose so the
 # ~300 existing call sites in video_translator_gui.py need no edit.
@@ -185,6 +191,17 @@ class ThemeManager:
         self._fonts: dict[str, tkfont.Font] = {}
         self._sans = pick_family(root, SANS_CANDIDATES, "TkDefaultFont")
         self._mono = pick_family(root, MONO_CANDIDATES, "TkFixedFont")
+        installed = set(tkfont.families(root))
+        self._skin_family: dict[str, str | None] = {
+            role: next((fam for fam in names if fam in installed), None)
+            for role, names in SKIN_FAMILIES.items()}
+
+    def ui_family(self, font_family: str) -> str:
+        """The Tk family for a palette's ``font_family`` role."""
+        skin = self._skin_family.get(font_family)
+        if skin:
+            return skin
+        return self._mono if font_family in ("mono", "crt") else self._sans
 
     # -- public ------------------------------------------------------
 
@@ -283,13 +300,12 @@ class ThemeManager:
         self._globals.update({name: getattr(p, field) for name, field in GLOBAL_ALIASES.items()})
 
     def _apply_fonts(self, p: Palette, scale: float) -> None:
-        # The skins' own families arrive with their bundled fonts; until then
-        # "crt" reads as the monospace and "pixel" as the sans-serif.
-        ui_family = self._mono if p.font_family in ("mono", "crt") else self._sans
+        ui_family = self.ui_family(p.font_family)
+        factor = SIZE_FACTOR.get(ui_family, 1.0)
         existing = set(tkfont.names(self.root))
         for name, (role, size, weight, slant) in FONT_ROLES.items():
             family = self._mono if role == "mono" else ui_family
-            px = _scaled(size, scale)
+            px = _scaled(size, scale * (1.0 if role == "mono" else factor))
             if name in existing:
                 tkfont.Font(root=self.root, name=name, exists=True).configure(
                     family=family, size=px, weight=weight, slant=slant)
@@ -302,7 +318,7 @@ class ThemeManager:
                     weight=weight, slant=slant)
         # ttk Entry/Combobox text and dropdown lists use Tk's standard fonts,
         # so they follow the text size only if these are scaled too.
-        std_px = _scaled(FONT_ROLES["VT.Base"][1], scale)
+        std_px = _scaled(FONT_ROLES["VT.Base"][1], scale * factor)
         for name in ("TkDefaultFont", "TkTextFont"):
             tkfont.nametofont(name, root=self.root).configure(
                 family=ui_family, size=std_px, weight="normal")

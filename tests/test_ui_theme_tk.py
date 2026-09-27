@@ -67,6 +67,36 @@ class ThemeManagerTkTests(unittest.TestCase):
         self.assertEqual(tkfont.nametofont("VT.Mono").actual("family"), mono_family)
         self.assertNotEqual(sans_family, mono_family)
 
+    def test_skin_fonts_use_their_family_and_size_factor(self):
+        from videotranslator import ui_theme_tk
+        self.tm.apply({"ui_theme": "graphite"}, recolor=False)
+        mono_family = tkfont.nametofont("VT.Mono", root=self.root).actual("family")
+        self.tm._skin_family = {"pixel": None, "crt": mono_family}
+        factor = {mono_family: 1.5}
+        original = ui_theme_tk.SIZE_FACTOR
+        ui_theme_tk.SIZE_FACTOR = factor
+        self.addCleanup(setattr, ui_theme_tk, "SIZE_FACTOR", original)
+        self.tm.apply({"ui_theme": "crt", "ui_scale": "normal"}, recolor=False)
+        base = tkfont.nametofont("VT.Base", root=self.root)
+        self.assertEqual(base.actual("family"), mono_family)
+        self.assertEqual(base.cget("size"), round(9 * 1.5))
+        self.assertEqual(tkfont.nametofont("VT.Mono", root=self.root).cget("size"), 9)
+        self.assertEqual(tkfont.nametofont("TkDefaultFont", root=self.root).cget("size"),
+                         round(9 * 1.5))
+        # Without its bundled font the pixel skin reads as the sans-serif.
+        self.tm.apply({"ui_theme": "dex"}, recolor=False)
+        self.assertEqual(self.tm.ui_family("pixel"), self.tm._sans)
+        self.assertEqual(tkfont.nametofont("VT.Base", root=self.root).cget("size"), 9)
+
+    def test_bundled_fonts_are_seen_by_tk_when_registered_first(self):
+        # This process registered them in the test runner only if a GUI test
+        # did; check the mapping when the families are installed.
+        from videotranslator import ui_theme_tk
+        installed = set(tkfont.families(self.root))
+        for role, names in ui_theme_tk.SKIN_FAMILIES.items():
+            if names[0] in installed:
+                self.assertEqual(self.tm.ui_family(role), names[0])
+
     def test_recolor_maps_every_role_and_leaves_foreign_colours(self):
         old = self.tm.apply({"ui_theme": "graphite"}, recolor=False)
         f = tk.Frame(self.root, bg=old.BG)
