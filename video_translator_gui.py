@@ -4273,6 +4273,7 @@ from videotranslator.quality_flags import (  # noqa: E402
 from videotranslator.ollama_runtime import (  # noqa: E402
     set_subprocess_hooks as _set_ollama_subprocess_hooks,
     check_ollama as _check_ollama_status,
+    ollama_model_size_gb as _ollama_model_size_gb,
     _ollama_find_binary,
     _ollama_health_check,
     _ollama_install,
@@ -4287,6 +4288,19 @@ from videotranslator.ollama_runtime import (  # noqa: E402
     _ollama_strip_preamble,
     _ollama_wait_for_daemon,
 )
+
+
+def _ollama_pull_question(texts: dict, model: str, fallback: str) -> str:
+    """The question before pulling ``model``: its size when known, and what a
+    translation uses otherwise (the installed ``fallback``, or Google).
+    ``texts`` holds the UI strings, read on the Tk thread."""
+    parts = [texts["ollama_pull_ask"].format(model=model)]
+    size = _ollama_model_size_gb(model)
+    if size:
+        parts.append(texts["ollama_pull_size"].format(gb=f"{size:g}"))
+    parts.append(texts["ollama_pull_else_model"].format(other=fallback) if fallback
+                 else texts["ollama_pull_else_google"])
+    return "\n\n".join(parts)
 
 
 def translate_with_ollama(
@@ -6152,6 +6166,9 @@ class App(tk.Tk):
         self._ollama_url_var     = tk.StringVar(
             value=_ocfg.get("ollama_url", "http://localhost:11434")
         )
+        self._ollama_setup_running = False     # _ensure_ollama_ready_async, one at a time
+        self._ollama_setup_pending = []        # its callers that arrived meanwhile
+        self._ollama_pull_declined = set()     # models refused this session: not asked again
         self._ollama_slot_aware  = tk.BooleanVar(
             value=_ocfg.get("ollama_slot_aware", True)
         )
@@ -7394,6 +7411,8 @@ class App(tk.Tk):
             font="VT.Mono",
         )
         self._ollama_model_combo.pack(side="left", padx=(4, 0))
+        self._ollama_model_combo.bind("<<ComboboxSelected>>",
+                                      lambda _e: self._on_ollama_model_chosen(), add="+")
         self._lbl_ollama_url = tk.Label(
             _ol_line2, text=self._s("label_ollama_url"),
             bg=SURFACE, fg=FG2, font="VT.Small")
@@ -8600,7 +8619,8 @@ class App(tk.Tk):
     # Flow (all off-thread, UI always responsive):
     #   1. Binary → if missing: popup [Yes/No] → _ollama_install
     #   2. Daemon → if down: start in background, wait up to 15 s
-    #   3. Model → if missing: popup [Yes/No/Change model] → ollama pull
+    #   3. Model → the chosen one missing: popup [Yes/No] → ollama pull
+    #      (No: an installed compatible model, else Google; not asked again)
     #   4. Ready
     # Edge: if config `ollama_auto_install=false`, skip install/pull and
     # fall back to Google without a popup.
@@ -8616,17 +8636,50 @@ class App(tk.Tk):
         ready (daemon up + model available), False otherwise. If None,
         the function is used only to "warm up" Ollama (radio select case).
         """
+        # One preparation at a time: a second one (the model box changed while
+        # a download runs) would ask twice or pull twice. It runs again, with
+        # the box's model at that moment, when the current one ends.
+        if self._ollama_setup_running:
+            self._ollama_setup_pending.append(on_ready)
+            return
+        self._ollama_setup_running = True
         model = self._ollama_model_var.get().strip() or "qwen3:8b"
         url = self._ollama_url_var.get().strip() or "http://localhost:11434"
         cfg = load_config()
         auto_install = cfg.get("ollama_auto_install", True)
+        # The questions in the UI language, read here on the Tk thread.
+        texts = {key: self._s(key) for key in self._OLLAMA_QUESTION_KEYS}
 
         def _setup():
-            ok = self._ollama_setup_worker(model, url, auto_install)
-            if on_ready is not None and not self._destroying:
-                self.after(0, on_ready, ok)
+            ok = False
+            try:
+                ok = self._ollama_setup_worker(model, url, auto_install, texts)
+            finally:
+                if not self._destroying:
+                    self.after(0, self._ollama_setup_done, ok, on_ready)
 
         threading.Thread(target=_setup, daemon=True).start()
+
+    _OLLAMA_QUESTION_KEYS = ("ollama_install_ask", "ollama_pull_ask", "ollama_pull_size",
+                             "ollama_pull_else_model", "ollama_pull_else_google")
+
+    def _ollama_setup_done(self, ok: bool, on_ready) -> None:
+        """Tk thread: the preparation ended; run the one that waited, if any."""
+        self._ollama_setup_running = False
+        if on_ready is not None:
+            on_ready(ok)
+        pending, self._ollama_setup_pending = self._ollama_setup_pending, []
+        callbacks = [callback for callback in pending if callback is not None]
+        if pending:
+            self._ensure_ollama_ready_async(
+                on_ready=(lambda ready: [callback(ready) for callback in callbacks])
+                if callbacks else None)
+
+    def _on_ollama_model_chosen(self) -> None:
+        """A model picked in the box is prepared at once (offered for download
+        when missing), when Ollama is the translation engine."""
+        if self._translation_engine.get() == "llm_ollama":
+            self._ensure_ollama_ready_async()
 
     def _log_async(self, text: str) -> None:
         """Thread-safe helper: schedula log_write sul main thread."""
@@ -10097,7 +10150,8 @@ class App(tk.Tk):
             self._on_player_status(status, _system_packages.PlayerInstallRequest())
             return
         self._refresh_player_status(force_probe=True)
-    def _ollama_setup_worker(self, model: str, url: str, auto_install: bool) -> bool:
+    def _ollama_setup_worker(self, model: str, url: str, auto_install: bool,
+                             texts: dict) -> bool:
         """Worker thread: runs steps 1-4. Returns True if Ollama is ready.
 
         This is the heart of the flow - each step has a precise early-exit
@@ -10114,11 +10168,7 @@ class App(tk.Tk):
                     "[i] ollama_auto_install=false → fallback Google se userai llm_ollama.\n"
                 )
                 return False
-            if not self._ask_yes_no_sync(
-                "Ollama",
-                "Ollama non è installato. Installare automaticamente?\n\n"
-                "Download ~1 GB. Su Linux servirà la password sudo.",
-            ):
+            if not self._ask_yes_no_sync("Ollama", texts["ollama_install_ask"]):
                 self._log_async("[i] Install rifiutato. Fallback Google attivo.\n")
                 return False
             self._log_async("[*] Installazione Ollama in corso...\n")
@@ -10163,46 +10213,37 @@ class App(tk.Tk):
                     self._log_async(f"[x] Daemon non avviato: {msg}\n")
                     return False
 
-        # Step 3: model available?
-        # TASK 2J: health check now returns (ok, msg, resolved_model). When
-        # the requested tag is missing but the daemon has compatible models
-        # the selector picks a fallback and returns ok=True with a warning.
-        # We surface the warning to the user but DO NOT prompt for pull -
-        # the pipeline will run on `resolved_model` automatically.
+        # Step 3: the model. The one in the box is the user's choice: when it
+        # is not downloaded, offer it (once a session per model), even when
+        # another compatible model is installed. A "No" keeps that model, or
+        # Google when there is none.
         health_ok, health_msg, resolved_model = _ollama_health_check(url, model, timeout=5.0)
-        if health_ok and health_msg and resolved_model and resolved_model != model:
-            self._log_async(f"[!] {health_msg}\n")
-        elif not health_ok:
-            # Heuristic: is this a "missing model", "daemon down",
-            # or "no model installed" problem?
-            msg_lower = (health_msg or "").lower()
-            if "not reachable" in msg_lower or "invalid json" in msg_lower:
-                self._log_async(f"[x] Ollama non raggiungibile: {health_msg}\n")
+        msg_lower = (health_msg or "").lower()
+        if not health_ok and ("not reachable" in msg_lower or "invalid json" in msg_lower):
+            self._log_async(f"[x] Ollama non raggiungibile: {health_msg}\n")
+            return False
+        if not (health_ok and resolved_model == model):
+            fallback = resolved_model if health_ok else ""
+            ask = auto_install and model not in self._ollama_pull_declined
+            if ask and self._ask_yes_no_sync("Ollama",
+                                             _ollama_pull_question(texts, model, fallback)):
+                ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async,
+                                             api_url=url)
+                if ok:
+                    health_ok, health_msg, resolved_model = _ollama_health_check(
+                        url, model, timeout=5.0)
+                    if not health_ok:
+                        self._log_async(f"[x] Verifica post-pull fallita: {health_msg}\n")
+                        return False
+                else:
+                    self._log_async(f"[x] ollama pull fallito: {msg}\n")
+            elif ask:
+                self._ollama_pull_declined.add(model)
+            if not (health_ok and resolved_model):
+                self._log_async(f"[i] {model} non scaricato: fallback Google.\n")
                 return False
-            # Modello mancante (zero modelli installati nel daemon) → chiedi pull
-            if not auto_install:
-                self._log_async(
-                    f"[i] Modello '{model}' mancante e ollama_auto_install=false.\n"
-                )
-                return False
-            if not self._ask_yes_no_sync(
-                "Ollama",
-                f"Il modello '{model}' non e' stato scaricato.\n\n"
-                f"Dimensione tipica: 4-5 GB. Scaricarlo ora?\n\n"
-                f"(Scegli No per usare il fallback Google)",
-            ):
-                self._log_async(f"[i] Pull rifiutato per {model}. Fallback Google.\n")
-                return False
-            ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async,
-                                         api_url=url)
-            if not ok:
-                self._log_async(f"[x] ollama pull fallito: {msg}\n")
-                return False
-            # Verifica finale
-            health_ok, health_msg, resolved_model = _ollama_health_check(url, model, timeout=5.0)
-            if not health_ok:
-                self._log_async(f"[x] Verifica post-pull fallita: {health_msg}\n")
-                return False
+            if resolved_model != model:
+                self._log_async(f"[!] {health_msg}\n")
 
         self._log_async(f"[+] Ollama pronto: {resolved_model or model} @ {url}\n")
         return True

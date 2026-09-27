@@ -908,6 +908,20 @@ def _ollama_pull_model(
     return True, ""
 
 
+
+# Download size of the models the model box offers (Ollama library, rounded):
+# shown when asking whether to pull one.
+OLLAMA_MODEL_SIZES_GB: dict[str, float] = {
+    "qwen3:4b": 2.5, "qwen3:8b": 5.2, "qwen3:14b": 9.3, "qwen3:32b": 20.0,
+    "qwen2.5:7b-instruct": 4.7,
+}
+
+
+def ollama_model_size_gb(model: str) -> float | None:
+    """Download size of ``model`` in GB, or None when it is not a known one."""
+    return OLLAMA_MODEL_SIZES_GB.get((model or "").strip())
+
+
 # -- Verify button -------------------------------------------------------------
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
