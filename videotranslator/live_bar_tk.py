@@ -51,7 +51,7 @@ class LiveBar(tk.Frame):
                  make_button: Callable[..., tuple[tk.Widget, tk.Button]],
                  on_command: Callable[[str, dict], None], theme: Any = None,
                  keyboard_operable: Callable[[tk.Widget, Callable], None] | None = None,
-                 log: Callable[[str], None] | None = None) -> None:
+                 log: Callable[..., None] | None = None) -> None:
         self._theme = theme or SimpleNamespace(
             palette=resolve_palette("graphite", "default"), scale=1.0)
         super().__init__(parent, bg=self._palette.SURFACE, bd=0, highlightthickness=0)
@@ -59,7 +59,7 @@ class LiveBar(tk.Frame):
         self._make_button = make_button
         self._on_command = on_command
         self._keyboard_operable = keyboard_operable or (lambda w, a: None)
-        self._log = log or (lambda _m: None)
+        self._log = log or (lambda *_a: None)
         self._active = False
         self._source_kind = "file"
         self._banner_key: str | None = None
@@ -387,7 +387,8 @@ class LiveBar(tk.Frame):
                     with_switch: bool = False, is_error: bool = False) -> None:
         if (key, dict(params or {})) != (self._banner_key, self._banner_params):
             # A new warning or error: also to the log (the bar repaints at 4 Hz).
-            self._log(self._s(key).format_map(_SafeDict(dict(params or {}))))
+            self._log(self._s(key).format_map(_SafeDict(dict(params or {}))),
+                      "error" if is_error else "warn")
         self._banner_key = key
         self._banner_params = dict(params or {})
         self._banner_is_error = is_error

@@ -2,6 +2,7 @@ import contextlib
 import threading
 import time
 import tkinter as tk
+import re
 import unittest
 from tkinter import font as tkfont, ttk
 from unittest import mock
@@ -923,6 +924,10 @@ class TalkingLogTests(unittest.TestCase):
                 app.update()
                 w.event_generate("<Key-space>")
             text = self._panel(app)
+            # every line: time, level, area, message
+            self.assertRegex(text, r"\d{2}:\d{2}:\d{2} INFO +\[ui\] " + re.escape(
+                it["log_click"].format(name="Voicebox > Verifica")))
+            self.assertRegex(text, r"\[app\] Video Translator AI \d")
             self.assertIn(it["log_click"].format(name="Voicebox > Verifica"), text)
             # the click comes before its result
             self.assertTrue(check_var.get())
@@ -939,6 +944,17 @@ class TalkingLogTests(unittest.TestCase):
             app.report_callback_exception(ValueError, ValueError("boom"), None)
             text = self._panel(app)
             self.assertIn("ValueError: boom", text)
+            self.assertRegex(text, it["log_level_error"] + r" +\[app\] ")
+            self.assertTrue(app._log.tag_ranges("lvl_error"))
+            self.assertEqual(app._log.tag_cget("lvl_error", "foreground"), app._theme.palette.ERR)
+            # a command echoed right after its click is not written twice
+            count = text.count(it["log_live"].split(":")[0])
+            app._last_click_at = __import__("time").monotonic()
+            app._log_event("log_live", command="start", value="source=file")
+            self.assertEqual(self._panel(app).count(it["log_live"].split(":")[0]), count)
+            # raw pipeline lines get their level too
+            print("[!] Voicebox not available")
+            self.assertRegex(self._panel(app), it["log_level_warn"] + r" +\[app\] Voicebox not")
             # an uncaught error in a worker thread too (the hook is called here on
             # the Tk thread: without a running mainloop a worker cannot reach Tk)
             self.assertEqual(threading.excepthook, app._log_thread_exception)

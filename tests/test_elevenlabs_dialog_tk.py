@@ -102,9 +102,14 @@ class DialogTests(unittest.TestCase):
         self.root.withdraw()
         self.saved = []
         self.logged = []
+        self.levels = []
 
     def tearDown(self):
         self.root.destroy()
+
+    def _log_cb(self, text, level="info"):
+        self.logged.append(text)
+        self.levels.append(level)
 
     def _dialog(self, settings=None, key="sk", fail=None, lang="it", hub=None,
                 client=None):
@@ -113,7 +118,7 @@ class DialogTests(unittest.TestCase):
             settings=settings or {}, api_key=key, target_lang=lang,
             on_save=lambda st, k: self.saved.append((st, k)),
             client_factory=client or (lambda k: _Client(k, fail)), preview_hub=hub,
-            sample_loader=lambda url: f"audio:{url}".encode(), log=self.logged.append)
+            sample_loader=lambda url: f"audio:{url}".encode(), log=self._log_cb)
         self.addCleanup(dlg.close)
         return dlg
 
@@ -152,6 +157,7 @@ class DialogTests(unittest.TestCase):
         self._verify(dlg)
         self.assertEqual(dlg._status.cget("text"), _s("el_err_auth"))
         self.assertIn("ElevenLabs: auth: HTTP 401: Invalid API key", self.logged)
+        self.assertEqual(self.levels[self.logged.index(_s("el_err_auth"))], "warn")
 
     def test_model_without_the_target_language_is_flagged(self):
         dlg = self._dialog()

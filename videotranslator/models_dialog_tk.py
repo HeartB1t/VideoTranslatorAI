@@ -252,7 +252,7 @@ class ModelsDialog:
                 self._set_status("")
         elif kind == "bench_error":
             self._bench_cancel = None
-            self._set_status(self._s("mdl_bench_failed").format(error=value))
+            self._set_status(self._s("mdl_bench_failed").format(error=value), level="warn")
         self._set_buttons()
 
     # -- choices -------------------------------------------------------------
@@ -339,11 +339,11 @@ class ModelsDialog:
         self._last_busy = busy
         current = self._status.cget("text")
         if ready and busy and not working and not current:
-            self._set_status(self._s("mdl_busy"))
+            self._set_status(self._s("mdl_busy"), level="warn")
         elif not busy and current == self._s("mdl_busy"):
             self._set_status("")
 
-    def _set_status(self, text: str, *, progress: bool = False) -> None:
+    def _set_status(self, text: str, *, progress: bool = False, level: str = "info") -> None:
         self._status.configure(text=text)
         # Every message goes to the app log (again if a new click repeats it);
         # download progress only when it changes, at most every 5 s.
@@ -355,7 +355,7 @@ class ModelsDialog:
         self._last_progress_log = now if progress else 0.0
         self._last_logged = text
         try:
-            self._log(text)
+            self._log(text, level)
         except Exception:                      # noqa: BLE001
             pass
 
@@ -390,21 +390,21 @@ class ModelsDialog:
         elif dl.state == "cancelled":
             self._set_status(self._s("mdl_dl_cancelled"))
         else:
-            self._set_status(self._s("mdl_dl_failed").format(model=label, error=dl.error))
+            self._set_status(self._s("mdl_dl_failed").format(model=label, error=dl.error), level="warn")
         self._set_buttons()
 
     def _start_benchmark(self) -> None:
         if self._working() or self._hw is None:
             return
         if self._busy():
-            self._set_status(self._s("mdl_busy"))
+            self._set_status(self._s("mdl_busy"), level="warn")
             return
         media = self._media_path()
         if not media:
             # Nothing loaded in the player: let the user pick a file instead.
             media = self._ask_media(self.win, self._s("mdl_bench_pick"))
             if not media:
-                self._set_status(self._s("mdl_bench_no_file"))
+                self._set_status(self._s("mdl_bench_no_file"), level="warn")
                 return
         key = self.choices().get("asr", "small")
         cancel = threading.Event()
@@ -430,7 +430,7 @@ class ModelsDialog:
 
     def _apply(self) -> None:
         if self._busy():
-            self._set_status(self._s("mdl_busy"))
+            self._set_status(self._s("mdl_busy"), level="warn")
             return
         picked = self.choices()
         if not picked:
@@ -443,7 +443,7 @@ class ModelsDialog:
 
     def _revert(self) -> None:
         if self._busy():
-            self._set_status(self._s("mdl_busy"))
+            self._set_status(self._s("mdl_busy"), level="warn")
             return
         restored = self._on_revert()
         if not restored:

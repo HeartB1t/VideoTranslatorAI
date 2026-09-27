@@ -69,6 +69,7 @@ class DialogTests(unittest.TestCase):
         self.root.withdraw()
         self.applied = []
         self.logged = []
+        self.levels = []
         self.asked = []
         self.picked = ""
         self.busy = False
@@ -78,6 +79,10 @@ class DialogTests(unittest.TestCase):
     def tearDown(self):
         self.root.destroy()
 
+    def _log_cb(self, text, level="info"):
+        self.logged.append(text)
+        self.levels.append(level)
+
     def _dialog(self, current=None, hw=None):
         dlg = md.ModelsDialog(
             self.root, ui_s=_s, theme=_Theme(), make_button=_make_button,
@@ -86,7 +91,7 @@ class DialogTests(unittest.TestCase):
             on_apply=self.applied.append, on_revert=lambda: self.previous,
             media_path=lambda: self.media, busy=lambda: self.busy,
             detect=lambda: hw or _hw(), cached=lambda: {"small", "medium"},
-            log=self.logged.append,
+            log=self._log_cb,
             ask_media=lambda parent, title: (self.asked.append(title), self.picked)[1])
         self.addCleanup(dlg.close)
         for _ in range(100):

@@ -293,13 +293,13 @@ class VoiceboxCheckTests(unittest.TestCase):
                               _btn_vb_check=Mock(), _log_line=Mock(),
                               _s=lambda key: {"vb_ok": "ok {device}",
                                               "vb_unreachable": "down {url}"}[key])
-        app._vb_status = lambda text: gui.App._vb_status(app, text)
+        app._vb_status = lambda text, level="info": gui.App._vb_status(app, text, level)
         gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", "CUDA")
         app._lbl_vb_status.configure.assert_called_with(text="ok CUDA")
         gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", None)
         app._lbl_vb_status.configure.assert_called_with(text="down http://127.0.0.1:17493")
         app._btn_vb_check.configure.assert_called_with(state="normal")
-        app._log_line.assert_called_with("voicebox", "down http://127.0.0.1:17493")
+        app._log_line.assert_called_with("voicebox", "down http://127.0.0.1:17493", "warn")
 
 
 class LiveVoiceForTests(unittest.TestCase):

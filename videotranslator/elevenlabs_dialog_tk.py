@@ -77,7 +77,8 @@ class ElevenLabsDialog:
     """``settings`` keys: enabled, voice_id, model_id, fallback, catalog.
     ``on_save(settings, api_key)`` persists them (the key goes to the keyring).
     ``preview_hub`` (a ``PreviewHub``) adds the speaker icon that plays the
-    voice's free sample."""
+    voice's free sample. ``log(text, level)`` receives every result shown,
+    level "info" or "warn"."""
 
     def __init__(self, parent: tk.Misc, *, ui_s: Callable[[str], str], theme: Any,
                  make_button: Callable[..., tuple[tk.Widget, tk.Button]],
@@ -191,12 +192,12 @@ class ElevenLabsDialog:
         if api_key and not self._tier:
             self.verify()
 
-    def _set_status(self, text: str) -> None:
+    def _set_status(self, text: str, level: str = "info") -> None:
         """Show a result under the buttons and write it to the app log."""
         self._status.configure(text=text)
         if self._log is not None and text:
             try:
-                self._log(text)
+                self._log(text, level)
             except Exception:                  # noqa: BLE001
                 pass
 
@@ -244,11 +245,11 @@ class ElevenLabsDialog:
         model = self.selected_model()
         voice = self.selected_voice()
         if model is not None and not model.supports(self._lang):
-            self._set_status(self._s("el_model_no_lang").format(lang=self._lang))
+            self._set_status(self._s("el_model_no_lang").format(lang=self._lang), "warn")
         elif voice is not None and self._paid_only(voice):
-            self._set_status(self._s("el_err_paid_voice"))
+            self._set_status(self._s("el_err_paid_voice"), "warn")
         elif model is not None and model.model_id not in LOW_LATENCY_MODELS:
-            self._set_status(self._s("el_slow_model").format(model=model.name))
+            self._set_status(self._s("el_slow_model").format(model=model.name), "warn")
         elif self._status.cget("text") in self._model_hints():
             self._set_status("")
 
@@ -289,7 +290,7 @@ class ElevenLabsDialog:
                 return
             if self.speaker is not None:
                 self.speaker.set_state("error", self._s("vp_err_no_sample"))
-            self._set_status(self._s("vp_err_no_sample"))
+            self._set_status(self._s("vp_err_no_sample"), "warn")
             return
         loader = self._sample_loader
         self._hub.toggle(self._sample_key(voice, url), lambda: loader(url), label=voice.name)
@@ -312,7 +313,7 @@ class ElevenLabsDialog:
         if state == "error":
             text = self._s(error_key(kind))
             self.speaker.set_state("error", text)
-            self._set_status(text)
+            self._set_status(text, "warn")
         else:
             self.speaker.set_state(state)
 
@@ -323,7 +324,7 @@ class ElevenLabsDialog:
             return
         key = self._key_var.get().strip()
         if not key:
-            self._set_status(self._s("el_err_auth"))
+            self._set_status(self._s("el_err_auth"), "warn")
             return
         self._checking = True
         self._verify_btn.configure(state="disabled")
@@ -382,10 +383,10 @@ class ElevenLabsDialog:
         else:
             self._pending_preview = False
             kind, detail = value if isinstance(value, tuple) else (value, "")
-            self._set_status(self._s(_ERROR_KEYS.get(kind, "el_err_unavailable")))
+            self._set_status(self._s(_ERROR_KEYS.get(kind, "el_err_unavailable")), "warn")
             if self._log is not None and detail and detail != kind:
                 try:                        # ElevenLabs' own words, for bug reports
-                    self._log(f"ElevenLabs: {kind}: {detail}")
+                    self._log(f"ElevenLabs: {kind}: {detail}", "warn")
                 except Exception:           # noqa: BLE001
                     pass
 
@@ -406,7 +407,7 @@ class ElevenLabsDialog:
         current = self.settings()
         key = self._key_var.get().strip()
         if current["enabled"] and not (key and current["model_id"] and current["voice_id"]):
-            self._set_status(self._s("el_missing"))
+            self._set_status(self._s("el_missing"), "warn")
             return False
         self._on_save(current, key)
         self._set_status(self._s("el_saved"))

@@ -56,5 +56,43 @@ class FileSinkTests(unittest.TestCase):
         self.assertEqual(len(app_log.short("x" * 100, 10)), 10)
 
 
+
+class LineFormatTests(unittest.TestCase):
+    def test_classify_reads_level_and_area_from_the_line_start(self):
+        c = app_log.classify
+        self.assertEqual(c("[!] Voicebox not available"), ("warn", "app", "Voicebox not available"))
+        self.assertEqual(c("[+] Ollama trovato"), ("info", "app", "Ollama trovato"))
+        self.assertEqual(c("[3/6] Translating EN->IT"), ("info", "job", "[3/6] Translating EN->IT"))
+        self.assertEqual(c("live: 3.6s You -> Tu (1.1 s)"), ("info", "live", "3.6s You -> Tu (1.1 s)"))
+        self.assertEqual(c("live: voice line 4 lost (rejected)")[0], "warn")
+        self.assertEqual(c("live: 36.1s kept original (timeout, 5.0 s): long")[0], "warn")
+        self.assertEqual(c("[live] start failed: boom"), ("error", "live", "start failed: boom"))
+        self.assertEqual(c("[mpv] X11 error: BadWindow"), ("info", "mpv", "X11 error: BadWindow"))
+        self.assertEqual(c("Traceback (most recent call last):")[0], "error")
+        self.assertEqual(c("ZeroDivisionError: division by zero")[0], "error")
+        self.assertEqual(c('  File "x.py", line 3')[0], None)        # traceback frame
+        self.assertEqual(c("Connessione allo stream..."), ("info", "app", "Connessione allo stream..."))
+
+    def test_level_words_are_padded_and_prefix_is_complete(self):
+        words = app_log.level_words({"info": "INFO", "warn": "AVVISO", "error": "ERRORE"})
+        self.assertEqual({len(w) for w in words.values()}, {6})
+        line = app_log.prefix("warn", "live", words)
+        self.assertRegex(line, r"^\d{2}:\d{2}:\d{2} AVVISO \[live\] $")
+
+    def test_git_commit_reads_the_checkout(self):
+        with TemporaryDirectory() as tmp:
+            git = Path(tmp) / ".git"
+            (git / "refs" / "heads").mkdir(parents=True)
+            (git / "HEAD").write_text("ref: refs/heads/main\n")
+            (git / "refs" / "heads" / "main").write_text("1dabb3581510c3ec\n")
+            self.assertEqual(app_log.git_commit(Path(tmp)), "1dabb35")
+            (git / "refs" / "heads" / "main").unlink()
+            (git / "packed-refs").write_text("# pack\nabcdef0123 refs/heads/main\n")
+            self.assertEqual(app_log.git_commit(Path(tmp)), "abcdef0")
+            (git / "HEAD").write_text("0123456789abcdef\n")      # detached
+            self.assertEqual(app_log.git_commit(Path(tmp)), "0123456")
+            self.assertEqual(app_log.git_commit(Path(tmp) / "none"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

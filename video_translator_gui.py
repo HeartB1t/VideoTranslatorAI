@@ -21,6 +21,7 @@ import io
 import locale
 import logging
 import platform
+import re
 import traceback
 import math
 import os
@@ -5650,8 +5651,9 @@ class _LogPanelHandler(logging.Handler):
 
     def emit(self, record):
         try:
-            line = _app_log.stamp(f"[{record.name}] {record.levelname}: {record.getMessage()}")
-            self._app._log_async(line + "\n")
+            level = "error" if record.levelno >= logging.ERROR else "warn"
+            area = (record.name or "lib").split(".")[0][:15]
+            self._app._log_emit(" ".join(record.getMessage().split()), area, level)
         except Exception:                        # noqa: BLE001
             pass
 
@@ -6078,6 +6080,9 @@ class App(tk.Tk):
         # Everything the Log panel shows also goes to a daily log file (7 days).
         self._log_file = _app_log.FileSink(_app_log.log_dir_for(CONFIG_PATH))
         self._log_hooks_installed = False
+        self._log_bol = True                   # the next log text starts a line
+        self._log_level_now = "info"           # level of the line being written
+        self._last_click_at = 0.0              # to drop the echo of a clicked command
         _ocfg = load_config()
         self._ui_settings = _normalize_ui_settings(_ocfg, lang_codes=UI_LANG_CODES)
         # Movable panels of the settings column: id -> (outer frame, pack
@@ -7766,7 +7771,7 @@ class App(tk.Tk):
         self._live_bar = _LiveBar(
             self._player_area, ui_s=self._s, make_button=self._flat_btn,
             on_command=self._on_live_command, theme=self._theme,
-            keyboard_operable=self._keyboard_operable, log=self._player_log)
+            keyboard_operable=self._keyboard_operable, log=self._live_bar_log)
         self._live_bar.pack(side="bottom", fill="x")
         # Restore the choices of the previous launch (mode, engine, voice,
         # subtitles, delay), saved by _save_live_choices.
@@ -7854,6 +7859,10 @@ class App(tk.Tk):
             bg=FIELD, fg=FG, font="VT.Mono", **_field_colors(), relief="flat",
             highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
             state="disabled", wrap="word")
+        # Only the level word is coloured, so every line stays readable in
+        # every theme; the theme recolour maps these tag colours too.
+        self._log.tag_configure("lvl_warn", foreground=WARN)
+        self._log.tag_configure("lvl_error", foreground=ERR)
         vsb = ttk.Scrollbar(self._log_container, command=self._log.yview)
         self._log.configure(yscrollcommand=vsb.set)
         self._log.grid(row=0, column=0, sticky="nsew")
@@ -8607,6 +8616,10 @@ class App(tk.Tk):
 
     # -- Integrated player: availability and install (spec 9 P1) ------------
 
+    def _live_bar_log(self, text: str, level: str = "info") -> None:
+        """Messages of the real-time bar (warnings and errors with their level)."""
+        self._log_line("live", text, level)
+
     def _player_log(self, *parts) -> None:
         """Log callback of the player modules: one English line without newline."""
         line = str(parts[-1]) if parts else ""
@@ -8978,7 +8991,7 @@ class App(tk.Tk):
         from videotranslator import voicebox_engine as vbe
         url = self._voicebox_url_var.get().strip() or vbe.DEFAULT_URL
         if not vbe.is_local_url(url):
-            self._vb_status(self._s("vb_not_local"))
+            self._vb_status(self._s("vb_not_local"), "warn")
             return
         self._save_voicebox_settings()
         self._vb_status(self._s("vb_checking") + f" ({url}, {self._voicebox_engine_var.get()})")
@@ -9000,7 +9013,7 @@ class App(tk.Tk):
             return
         text = (self._s("vb_ok").format(device=device) if device is not None
                 else self._s("vb_unreachable").format(url=url))
-        self._vb_status(text)
+        self._vb_status(text, "info" if device is not None else "warn")
         self._btn_vb_check.configure(state="normal")
 
     def _warn_if_voicebox_down(self) -> None:
@@ -9013,13 +9026,13 @@ class App(tk.Tk):
             try:
                 vbe.VoiceboxClient(url).health()
             except Exception:                          # noqa: BLE001
-                self._post_if_alive(lambda: self._vb_status(text))
+                self._post_if_alive(lambda: self._vb_status(text, "warn"))
 
         threading.Thread(target=work, name="voicebox-precheck", daemon=True).start()
 
-    def _vb_status(self, text: str) -> None:
+    def _vb_status(self, text: str, level: str = "info") -> None:
         self._lbl_vb_status.configure(text=text)
-        self._log_line("voicebox", text)
+        self._log_line("voicebox", text, level)
 
     # -- ElevenLabs live voice ---------------------------------------------------
 
@@ -9081,7 +9094,7 @@ class App(tk.Tk):
             settings=self._elevenlabs_settings(), api_key=load_elevenlabs_key(),
             target_lang=self._lang_tgt.get(), on_save=self._save_elevenlabs_settings,
             preview_hub=self._voice_preview_hub,
-            log=lambda text: self._log_line("elevenlabs", text))
+            log=lambda text, level="info": self._log_line("elevenlabs", text, level))
 
     def _open_models_dialog(self) -> None:
         dialog = self._models_dialog
@@ -9095,7 +9108,7 @@ class App(tk.Tk):
             current=self._current_model_choices(), on_apply=self._apply_model_choices,
             on_revert=self._revert_model_choices, media_path=self._benchmark_media_path,
             busy=lambda: bool(self._running) or self._live_session is not None,
-            log=lambda text: self._log_line("models", text))
+            log=lambda text, level="info": self._log_line("models", text, level))
 
     def _schedule_live_save(self) -> None:
         """Save the live bar choices shortly after the last change.
@@ -9678,7 +9691,7 @@ class App(tk.Tk):
             if self._mpv_x11_noise <= 3:
                 self._log_write(f"[mpv] {line}\n")
             elif (self._mpv_x11_noise == 4
-                    or stamp - self._mpv_x11_noise_at >= 5.0):
+                    or stamp - self._mpv_x11_noise_at >= 60.0):
                 self._mpv_x11_noise_at = stamp
                 self._log_write(
                     f"[mpv] harmless X11 window errors during playback "
@@ -10767,10 +10780,67 @@ class App(tk.Tk):
     _LOG_MAX_LINES = 5000
 
     def _log_write(self, text: str):
+        """Raw text (print, pipeline, libraries, player modules): every new line
+        gets time, level and area in front (``app_log.classify``)."""
+        segments: list[tuple[str, str | None]] = []
+        for piece in re.split(r"(\n)", text):
+            if not piece:
+                continue
+            if piece == "\n":
+                segments.append(("\n", None))
+                self._log_bol = True
+                continue
+            if self._log_bol:
+                self._log_bol = False
+                level, area, message = _app_log.classify(piece)
+                if level is None:                    # a traceback frame and the like
+                    segments.append((piece, None))
+                    continue
+                self._log_level_now = level
+                segments.extend(self._log_prefix(level, area))
+                segments.append((message, None))
+            else:
+                segments.append((piece, None))
+        self._log_insert(segments)
+
+    def _log_words(self) -> dict:
+        try:
+            words = {"info": self._s("log_level_info"), "warn": self._s("log_level_warn"),
+                     "error": self._s("log_level_error")}
+        except Exception:                                # noqa: BLE001
+            words = {"info": "INFO", "warn": "WARNING", "error": "ERROR"}
+        return _app_log.level_words(words)
+
+    def _log_prefix(self, level: str, area: str) -> list:
+        """``HH:MM:SS LEVEL [area] `` as segments; only the level word is coloured."""
+        return [(time.strftime("%H:%M:%S "), None),
+                (self._log_words().get(level, level), f"lvl_{level}"),
+                (f" [{area}] ", None)]
+
+    def _log_emit(self, message: str, area: str = "app", level: str = "info") -> None:
+        """One formatted line from the app itself. Callable from any thread."""
+        if threading.current_thread() is not threading.main_thread():
+            if not self._destroying:
+                with contextlib.suppress(RuntimeError):
+                    self.after(0, self._log_emit, message, area, level)
+            return
+        message = " ".join(str(message or "").split())
+        if not message:
+            return
+        segments = [] if self._log_bol else [("\n", None)]
+        segments.extend(self._log_prefix(level, area))
+        segments.extend([(message, None), ("\n", None)])
+        self._log_bol = True
+        self._log_level_now = level
+        self._log_insert(segments)
+
+    def _log_insert(self, segments: list) -> None:
+        """Write segments to the log file and the panel (level word coloured)."""
+        text = "".join(chunk for chunk, _tag in segments)
         log_file = getattr(self, "_log_file", None)
         if log_file is not None:
             log_file.write(text)
-        if self._destroying:
+        if self._destroying or not text:
             return
         # Smart auto-scroll: only follow tail if user hasn't scrolled up
         try:
@@ -10779,7 +10849,11 @@ class App(tk.Tk):
             yview_bottom = 1.0
         at_bottom = yview_bottom >= 0.95
         self._log.configure(state="normal")
-        self._log.insert("end", text)
+        for chunk, tag in segments:
+            if tag and tag != "lvl_info":
+                self._log.insert("end", chunk, tag)
+            else:
+                self._log.insert("end", chunk)
         # Hard cap to prevent RAM blowup on long pipelines
         try:
             line_count = int(self._log.index("end-1c").split(".")[0])
@@ -10799,26 +10873,25 @@ class App(tk.Tk):
         Callable from any thread. Never raises: a broken format string still
         logs the raw key and fields.
         """
+        if threading.current_thread() is not threading.main_thread():
+            # The UI language is a Tk variable: format on the Tk thread.
+            if not self._destroying:
+                with contextlib.suppress(RuntimeError):
+                    self.after(0, lambda: self._log_event(key, **fields))
+            return
+        # A command echoed right after the click that sent it says nothing new.
+        if key in ("log_player", "log_live") and time.monotonic() - self._last_click_at < 1.0:
+            return
         try:
             text = self._s(key).format(**fields)
         except Exception:                                # noqa: BLE001
             text = f"{key} {fields}"
-        line = _app_log.stamp(text) + "\n"
-        if threading.current_thread() is threading.main_thread():
-            self._log_write(line)
-        else:
-            self._log_async(line)
+        self._log_emit(text, _app_log.EVENT_AREAS.get(key, "app"),
+                       _app_log.EVENT_LEVELS.get(key, "info"))
 
-    def _log_line(self, area: str, text: str) -> None:
+    def _log_line(self, area: str, text: str, level: str = "info") -> None:
         """Log a result already written in the UI language (what the user sees)."""
-        text = " ".join(str(text or "").split())
-        if not text:
-            return
-        line = _app_log.stamp(f"[{area}] {text}") + "\n"
-        if threading.current_thread() is threading.main_thread():
-            self._log_write(line)
-        else:
-            self._log_async(line)
+        self._log_emit(text, area, level)
 
     def _install_log_hooks(self) -> None:
         """Route every print, click, choice and error to the Log panel and file."""
@@ -10842,10 +10915,65 @@ class App(tk.Tk):
                     self.tk.call("bind", cls, sequence, "+" + original)
         self.bind_class("TCombobox", "<<ComboboxSelected>>", self._log_combo_choice, add="+")
         self.bind_class("TScale", "<ButtonRelease-1>", self._log_scale_choice, add="+")
-        self._log_event("log_started", py=platform.python_version(),
-                        os=f"{platform.system()} {platform.release()}")
+        self._log_session_header()
+
+    def _log_session_header(self) -> None:
+        """What a bug report needs first: version, system, hardware, settings."""
+        from videotranslator import __version__ as version
+        commit = _app_log.git_commit(Path(__file__).resolve().parent)
+        self._log_file.write("=" * 72 + "\n")            # session separator (file only)
+        self._log_event("log_started", version=version + (f" ({commit})" if commit else ""),
+                        py=platform.python_version(),
+                        os=f"{platform.system()} {platform.release()} {platform.machine()}")
         if self._log_file.ok:
             self._log_event("log_file", days=_app_log.KEEP_DAYS, path=self._log_file.path)
+        with contextlib.suppress(Exception):
+            s = self._ui_settings
+            self._log_event("log_settings", theme=s["ui_theme"], accent=s["ui_accent"],
+                            scale=s["ui_scale"])
+        with contextlib.suppress(Exception):
+            self._log_line("job", self._summary_var.get())
+            out = _platforms.resolve_output_dir(self._output_dir_var.get().strip() or None)
+            self._log_line("job", f"{self._s('label_output_dir')} {out}")
+        with contextlib.suppress(Exception):
+            raw = self._live_bar.current_settings()
+            self._log_event("log_session_live", mode=raw["mode"], engine=raw["engine"],
+                            asr=load_config().get("live_asr_model", "auto"),
+                            voice=self._live_voice_info_text())
+
+        found: list = []
+
+        def probe() -> None:                  # nvidia-smi only: no torch at startup
+            try:
+                from videotranslator.hardware_profile import detect_hardware
+                found.append(detect_hardware(use_torch=False))
+            except Exception:                            # noqa: BLE001
+                found.append(None)
+
+        def collect(tries: int = 100) -> None:
+            # The Tk thread picks the result up: the worker never touches Tk.
+            if self._destroying:
+                return
+            if found:
+                if found[0] is not None:
+                    self._log_hardware(found[0])
+            elif tries > 0:
+                self.after(200, collect, tries - 1)
+
+        threading.Thread(target=probe, name="log-hardware", daemon=True).start()
+        self.after(200, collect)
+
+    def _log_hardware(self, hw) -> None:
+        s = self._s
+        lines = [s("mdl_hw_cpu").format(name=hw.cpu_name, cores=hw.cpu_cores or "?"),
+                 s("mdl_hw_ram").format(ram=f"{hw.ram_gb:.1f}" if hw.ram_gb else "?")]
+        for gpu in hw.gpus or ():
+            vram = f"{gpu.vram_gb:.1f}" if gpu.vram_gb else "?"
+            lines.append(s("mdl_hw_gpu").format(gpu=gpu.name, vram=vram))
+        if not hw.gpus:
+            lines.append(s("mdl_hw_no_gpu"))
+        for line in lines:
+            self._log_line("app", line)
 
     def _remove_log_hooks(self) -> None:
         global _DEFAULT_REDIRECT
@@ -10900,6 +11028,7 @@ class App(tk.Tk):
     def _log_widget_activation(self, widget) -> None:
         """Log a button (before Tk runs its command, so the click precedes its
         result), a check box or a radio button (its value once applied)."""
+        self._last_click_at = time.monotonic()
         try:
             name = self._widget_context(widget)
             if str(widget.cget("state")) == "disabled":
@@ -10924,6 +11053,7 @@ class App(tk.Tk):
             pass
 
     def _log_combo_choice(self, event) -> None:
+        self._last_click_at = time.monotonic()
         with contextlib.suppress(Exception):
             widget = event.widget
             top = widget.winfo_toplevel()
@@ -10931,6 +11061,7 @@ class App(tk.Tk):
             self._log_event("log_choice", name=where, value=_app_log.short(widget.get()))
 
     def _log_scale_choice(self, event) -> None:
+        self._last_click_at = time.monotonic()
         with contextlib.suppress(Exception):
             widget = event.widget
             self._log_event("log_choice", name="slider", value=round(float(widget.get()), 2))
