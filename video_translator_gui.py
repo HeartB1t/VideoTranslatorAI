@@ -5605,6 +5605,11 @@ _thread_local = threading.local()
 # Where print() of a thread without its own redirect goes while the GUI runs:
 # the Log panel (and so the log file), set by App, cleared when it closes.
 _DEFAULT_REDIRECT = None
+# Control segments of App._log_insert (never Text tags): a \r that empties the
+# panel's current line, and the removal of the previous line before a
+# progress bar is rewritten.
+_LOG_CUT_LINE = "ctl_cut_line"
+_LOG_DROP_PREVIOUS_LINE = "ctl_drop_previous_line"
 
 
 class _GlobalRedirect(io.TextIOBase):
@@ -6082,6 +6087,8 @@ class App(tk.Tk):
         self._log_hooks_installed = False
         self._log_bol = True                   # the next log text starts a line
         self._log_level_now = "info"           # level of the line being written
+        self._log_progress_key = None          # progress activity on the panel's last line
+        self._log_pending_cr = False           # a trailing \r, judged with the next text
         self._last_click_at = 0.0              # to drop the echo of a clicked command
         _ocfg = load_config()
         self._ui_settings = _normalize_ui_settings(_ocfg, lang_codes=UI_LANG_CODES)
@@ -10790,26 +10797,47 @@ class App(tk.Tk):
 
     def _log_write(self, text: str):
         """Raw text (print, pipeline, libraries, player modules): every new line
-        gets time, level and area in front (``app_log.classify``)."""
+        gets time, level and area in front (``app_log.classify``).
+
+        Progress bars stay one line: ``\\r`` rewrites the current line (as a
+        terminal does), and an update of the activity shown on the previous
+        line (``app_log.progress_of``) replaces that line instead of adding one.
+        """
+        if self._log_pending_cr:
+            text, self._log_pending_cr = "\r" + text, False
+        pieces = [piece for piece in re.split(r"(\r\n|\n|\r)", text) if piece]
+        if pieces and pieces[-1] == "\r":
+            # Maybe the first half of a split \r\n: decide with the next text.
+            pieces.pop()
+            self._log_pending_cr = True
         segments: list[tuple[str, str | None]] = []
-        for piece in re.split(r"(\n)", text):
-            if not piece:
-                continue
-            if piece == "\n":
+        for piece in pieces:
+            if piece in ("\n", "\r\n"):
                 segments.append(("\n", None))
                 self._log_bol = True
                 continue
-            if self._log_bol:
-                self._log_bol = False
-                level, area, message = _app_log.classify(piece)
-                if level is None:                    # a traceback frame and the like
-                    segments.append((piece, None))
-                    continue
-                self._log_level_now = level
-                segments.extend(self._log_prefix(level, area))
-                segments.append((message, None))
-            else:
+            if piece == "\r":
+                segments.append(("\r", _LOG_CUT_LINE))
+                self._log_bol = True
+                self._log_progress_key = None
+                continue
+            if not self._log_bol:
                 segments.append((piece, None))
+                continue
+            self._log_bol = False
+            level, area, message = _app_log.classify(piece)
+            if level is None:                        # a traceback frame and the like
+                self._log_progress_key = None
+                segments.append((piece, None))
+                continue
+            progress = _app_log.progress_of(message)
+            key = progress.key if progress is not None else None
+            if key is not None and key == self._log_progress_key:
+                segments.append(("", _LOG_DROP_PREVIOUS_LINE))
+            self._log_progress_key = key
+            self._log_level_now = level
+            segments.extend(self._log_prefix(level, area))
+            segments.append((message, None))
         self._log_insert(segments)
 
     def _log_words(self) -> dict:
@@ -10841,10 +10869,17 @@ class App(tk.Tk):
         segments.extend([(message, None), ("\n", None)])
         self._log_bol = True
         self._log_level_now = level
+        self._log_progress_key = None
         self._log_insert(segments)
 
     def _log_insert(self, segments: list) -> None:
-        """Write segments to the log file and the panel (level word coloured)."""
+        """Write segments to the log file and the panel (level word coloured).
+
+        Two control segments edit the panel instead of adding text: a cut
+        (``\\r``, also sent to the file, which keeps the last state) empties
+        the current line, a drop removes the previous line (a progress bar
+        about to be rewritten).
+        """
         text = "".join(chunk for chunk, _tag in segments)
         log_file = getattr(self, "_log_file", None)
         if log_file is not None:
@@ -10859,7 +10894,15 @@ class App(tk.Tk):
         at_bottom = yview_bottom >= 0.95
         self._log.configure(state="normal")
         for chunk, tag in segments:
-            if tag and tag != "lvl_info":
+            if tag == _LOG_CUT_LINE:
+                self._log.delete("end-1c linestart", "end-1c")
+            elif tag == _LOG_DROP_PREVIOUS_LINE:
+                # Only a progress line goes: a mismatch (the panel was cleared
+                # meanwhile) must never eat an ordinary line.
+                previous = self._log.get("end-2c linestart", "end-1c")
+                if _app_log.progress_of(previous) is not None:
+                    self._log.delete("end-2c linestart", "end-1c")
+            elif tag and tag != "lvl_info":
                 self._log.insert("end", chunk, tag)
             else:
                 self._log.insert("end", chunk)
@@ -11237,6 +11280,7 @@ class App(tk.Tk):
         self._log.configure(state="normal")
         self._log.delete("1.0", "end")
         self._log.configure(state="disabled")
+        self._log_progress_key = None
 
     def _toggle_log(self):
         self._log_visible = not getattr(self, "_log_visible", True)

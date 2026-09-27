@@ -19,11 +19,70 @@ import re
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 KEEP_DAYS = 7
 LOG_NAME = "videotranslator.log"
 _STAMPED = re.compile(r"^\d{2}:\d{2}:\d{2} ")
+
+# Progress bars in the file: the first update of an activity, then at most
+# one every PROGRESS_MIN_INTERVAL_S seconds or PROGRESS_MIN_STEP percent, then
+# the last one (100%, or the last seen when something else is logged).
+PROGRESS_MIN_INTERVAL_S = 2.0
+PROGRESS_MIN_STEP = 25
+
+
+# -- Progress lines (tqdm style) -----------------------------------------------
+#
+# transformers ("Loading weights"), huggingface_hub downloads, faster-whisper
+# and Demucs all print tqdm bars. Off a terminal each update comes on its own
+# line, so a plain log would show hundreds of them: the panel keeps one line
+# per activity and rewrites it, the file thins them (FileSink).
+
+@dataclass(frozen=True)
+class Progress:
+    key: str              # the same for every update of one activity
+    label: str            # "Loading weights", "model.safetensors", "" for a bare bar
+    percent: int | None   # None for a bar without a total ("24it [00:01, 20it/s]")
+
+    @property
+    def done(self) -> bool:
+        return self.percent is not None and self.percent >= 100
+
+
+# The panel's own prefix, so a file line and a raw line give the same activity.
+_PANEL_PREFIX = re.compile(r"^\d{2}:\d{2}:\d{2} .*?\[[a-z][a-z0-9_-]{1,15}\] ")
+# " 12%|#1        | 24/200": percentage, bar, count.
+_TQDM_BAR = re.compile(r"(?<![\w.])(\d{1,3})%\|[^|]*\|\s*([^\s\[]*)")
+# "[00:01<00:03, 52it/s]", "[00:10, 4.5seconds/s]", "[.., 1.2s/it]" closing the line.
+_TQDM_TAIL = re.compile(r"\[[^\[\]]*\b(?:[\w.]+/s|s/it)\]\s*$")
+_TRAILING_COUNT = re.compile(r"\s*[\d.,]+\w*\s*$")
+
+
+def progress_of(line: str) -> Progress | None:
+    """The progress update carried by a raw log line, or None for anything else.
+
+    Recognises tqdm output only: a ``NN%|bar|`` or a closing ``[elapsed,
+    rate]`` bracket. A percentage inside a sentence ("CPU at 50%") is not
+    progress. Handles a line with the panel prefix and one rewritten with
+    ``\\r`` (the last state counts).
+    """
+    text = line.rstrip("\r").rsplit("\r", 1)[-1].strip()
+    text = _PANEL_PREFIX.sub("", text, count=1)
+    bar = _TQDM_BAR.search(text)
+    if bar is not None:
+        percent: int | None = int(bar.group(1))
+        head, count = text[:bar.start()], bar.group(2)
+    else:
+        tail = _TQDM_TAIL.search(text)
+        if tail is None:
+            return None
+        percent = None
+        head, count = _TRAILING_COUNT.sub("", text[:tail.start()]), ""
+    label = head.strip().rstrip(":").strip()
+    total = count.rpartition("/")[2] if "/" in count else ""
+    return Progress(key=f"{label}|{total}", label=label, percent=percent)
 
 
 def log_dir_for(config_path: Path) -> Path:
@@ -42,13 +101,21 @@ class FileSink:
     ``write`` takes raw panel text (pieces of lines, ``\\r`` progress bars
     included); complete lines are written with the date and time in front.
     Lines that already start with ``HH:MM:SS`` (the app's own events) only
-    get the date, so the time is not repeated.
+    get the date, so the time is not repeated. Progress updates of one
+    activity (``progress_of``) are thinned: first, a few steps, last.
     """
 
-    def __init__(self, directory: Path, *, keep_days: int = KEEP_DAYS) -> None:
+    def __init__(self, directory: Path, *, keep_days: int = KEEP_DAYS,
+                 clock=time.monotonic) -> None:
         self.path = Path(directory) / LOG_NAME
         self._lock = threading.Lock()
         self._pending = ""
+        self._clock = clock
+        self._progress_key: str | None = None      # activity of the bar being thinned
+        self._progress_pending: str | None = None  # its last update, not written yet
+        self._progress_written_pct: int | None = None
+        self._progress_written_at = 0.0
+        self._progress_written_text = ""
         self._logger = logging.getLogger(f"videotranslatorai.file.{id(self)}")
         self._logger.propagate = False
         self._logger.setLevel(logging.INFO)
@@ -87,8 +154,48 @@ class FileSink:
         prefix = time.strftime("%Y-%m-%d ", now)
         if not _STAMPED.match(line):
             prefix += time.strftime("%H:%M:%S ", now)
+        formatted = prefix + line
+        progress = progress_of(line)
+        if progress is None:
+            self._flush_progress()
+            self._write(formatted)
+            return
+        body = _PANEL_PREFIX.sub("", line, count=1)
+        if body == self._progress_written_text:
+            return                             # tqdm repeats the final state on close
+        if progress.key != self._progress_key:
+            self._flush_progress()             # the last state of the previous bar
+            self._progress_key = progress.key
+            self._write_progress(formatted, body, progress)
+            return
+        percent = progress.percent
+        due = progress.done or self._clock() - self._progress_written_at >= PROGRESS_MIN_INTERVAL_S
+        if not due and percent is not None and self._progress_written_pct is not None:
+            due = percent - self._progress_written_pct >= PROGRESS_MIN_STEP
+        if due:
+            self._write_progress(formatted, body, progress)
+        else:
+            self._progress_pending = formatted
+
+    def _write_progress(self, formatted: str, body: str, progress: Progress) -> None:
+        self._write(formatted)
+        self._progress_pending = None
+        self._progress_written_pct = progress.percent
+        self._progress_written_at = self._clock()
+        self._progress_written_text = body
+        if progress.done:
+            self._progress_key = None          # the next bar with this label is a new one
+
+    def _flush_progress(self) -> None:
+        if self._progress_pending is not None:
+            self._write(self._progress_pending)
+            self._progress_pending = None
+        self._progress_key = None
+        self._progress_written_text = ""
+
+    def _write(self, formatted: str) -> None:
         try:
-            self._logger.info(prefix + line)
+            self._logger.info(formatted)
         except Exception:                      # noqa: BLE001
             pass
 
@@ -97,6 +204,7 @@ class FileSink:
             if self._pending:
                 self._emit(self._pending)
                 self._pending = ""
+            self._flush_progress()
             if self._handler is not None:
                 try:
                     self._handler.close()
