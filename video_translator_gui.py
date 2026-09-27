@@ -341,6 +341,7 @@ from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noq
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator import app_log as _app_log  # noqa: E402
 from videotranslator import bevel_tk as _bevel_tk  # noqa: E402
+from videotranslator import gear_icon as _gear_icon  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
 from videotranslator import live_session as _live_session_module  # noqa: E402
@@ -6787,6 +6788,17 @@ class App(tk.Tk):
         btn.bind("<KP_Enter>", _return)
         return btn.outer, btn
 
+    def _paint_gear(self, hover: bool = False) -> None:
+        """Put the header gear in FG2, or FG under the pointer, over BG and at
+        the text size. Images are kept by colour and size: a theme or size
+        change makes new ones (``_refresh_theme_dependents``)."""
+        size = max(16, round(22 * self._theme.scale))
+        key = (size, FG if hover else FG2, BG)
+        image = self._gear_images.get(key)
+        if image is None:
+            image = self._gear_images[key] = _gear_icon.gear_image(self, size, key[1], BG)
+        self._btn_settings.configure(image=image)
+
     @staticmethod
     def _hover_bg():
         """Hover colour of a flat button: the border colour, unless the text
@@ -7134,15 +7146,19 @@ class App(tk.Tk):
                                            colors_fn=lambda: (SEL, FG))
 
         # Keyboard focus ring: bd/pady 0 offset its 2 px, so the header keeps its height.
-        self._btn_settings = tk.Label(right, text="⚙", bg=BG, fg=FG2, font="VT.Title",
+        # The gear is an image drawn by gear_icon: the "⚙" glyph came from the
+        # system font, a thin uneven outline on Windows.
+        self._btn_settings = tk.Label(right, bg=BG, fg=FG2,
                                       cursor="hand2", padx=4, pady=0, bd=0,
                                       highlightthickness=2,
                                       highlightbackground=BG, highlightcolor=ACC)
+        self._gear_images = {}
+        self._paint_gear()
         self._btn_settings.pack(side="left")
         self._btn_settings.bind("<Button-1>", lambda e: self._open_settings())
         self._keyboard_operable(self._btn_settings, self._open_settings)
-        self._btn_settings.bind("<Enter>", lambda e: self._btn_settings.configure(fg=FG))
-        self._btn_settings.bind("<Leave>", lambda e: self._btn_settings.configure(fg=FG2))
+        self._btn_settings.bind("<Enter>", lambda e: self._paint_gear(hover=True))
+        self._btn_settings.bind("<Leave>", lambda e: self._paint_gear())
 
         # Thin border line under header
         tk.Frame(header_wrap, bg=BORDER, height=1).grid(
@@ -8280,6 +8296,8 @@ class App(tk.Tk):
         self._card_frames = alive
         # Last: the loops above may repaint a key's frames with a plain colour.
         _bevel_tk.repaint_all()
+        self._gear_images.clear()                 # drawn over the old background
+        self._paint_gear()
         speaker = getattr(self, "_voice_speaker", None)
         if speaker is not None:
             speaker.apply_palette(self._theme.palette, self._theme.scale)
