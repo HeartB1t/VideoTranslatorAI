@@ -259,6 +259,8 @@ python -m videotranslator --preflight
 
 Lefuttatja a helyi környezet diagnosztikáját anélkül, hogy elkezdené a fordítást vagy bármit telepítene. A `--preflight-lipsync` igény szerint kezeli a Wav2Lip arccsomagokat, ami hasznos a **Lip Sync** engedélyezése előtt. A grafikus felhasználói felület ugyanazt az alapellenőrzést teszi közzé a naplópanel **Diagnosztika** gombjával. A `--preflight-player` igény szerint kezeli az integrált videolejátszót (python-mpv és egy betölthető libmpv). A `python -m videotranslator.libmpv_runtime check` egyedül a libmpv-t vizsgálja (kilépés 0 kész, 2 nem érhető el).
 
+**Naplófájl:** minden, amit a naplópanel mutat (minden kattintás és választás, eredmények, feldolgozási lépések, hibák részletekkel), a konfiguráció melletti `logs/videotranslator.log` fájlba is mentésre kerül: Linuxon `~/.config/videotranslatorai/logs/`, Windowson `%APPDATA%\VideoTranslatorAI\logs\`. Naponta egy fájl, az utolsó 7 nap marad meg; a **Diagnosztika** gomb megmutatja az útvonalat. Csatold, amikor hibát jelentesz. Az API-kulcsok és a mezőkbe írt szöveg soha nem kerül bele.
+
 ### GUI
 
 ```bash

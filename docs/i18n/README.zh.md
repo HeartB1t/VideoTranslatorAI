@@ -259,6 +259,8 @@ python -m videotranslator --preflight
 
 运行本地环境诊断，无需开始翻译或安装任何内容。 `--preflight-lipsync` 根据需要处理 Wav2Lip 脸部包，这在启用 **Lip Sync** 之前很有用。 GUI 通过日志面板的 **Diagnostics** 按钮公开相同的基本检查。 `--preflight-player` 根据需要处理集成视频播放器（python-mpv 和可加载的 libmpv）。 `python -m videotranslator.libmpv_runtime check` 单独探测 libmpv（出口 0 就绪，2 不可用）。
 
+**日志文件：** 日志面板显示的所有内容（每次点击和选择、结果、处理步骤、带详细信息的错误）也会保存到配置旁的 `logs/videotranslator.log`：Linux 上为 `~/.config/videotranslatorai/logs/`，Windows 上为 `%APPDATA%\VideoTranslatorAI\logs\`。每天一个文件，保留最近 7 天；**诊断** 按钮会显示路径。报告问题时请附上它。API 密钥和在字段中输入的文本永远不会被写入。
+
 ### GUI
 
 ```bash

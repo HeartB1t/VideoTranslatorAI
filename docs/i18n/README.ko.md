@@ -259,6 +259,8 @@ python -m videotranslator --preflight
 
 번역을 시작하거나 아무것도 설치하지 않고 로컬 환경 진단을 실행합니다. `--preflight-lipsync`는 ​​필요에 따라 Wav2Lip 얼굴 패키지를 처리하며 이는 **립싱크**를 활성화하기 전에 유용합니다. GUI는 로그 패널의 **진단** 버튼에서 동일한 기본 검사를 표시합니다. `--preflight-player`는 필요에 따라 통합 비디오 플레이어(python-mpv 및 로드 가능한 libmpv)를 처리합니다. `python -m videotranslator.libmpv_runtime check`는 libmpv만 조사합니다(종료 0은 준비되어 있고 2는 사용할 수 없음).
 
+**로그 파일:** 로그 패널에 표시되는 모든 내용(모든 클릭과 선택, 결과, 처리 단계, 세부 정보가 포함된 오류)은 설정 파일 옆의 `logs/videotranslator.log`에도 저장됩니다. Linux에서는 `~/.config/videotranslatorai/logs/`, Windows에서는 `%APPDATA%\VideoTranslatorAI\logs\`입니다. 하루에 한 파일씩 최근 7일분을 보관하며, **진단** 버튼이 경로를 보여 줍니다. 문제를 보고할 때 첨부하세요. API 키와 입력란에 입력한 텍스트는 절대 기록되지 않습니다.
+
 ### GUI
 
 ```bash

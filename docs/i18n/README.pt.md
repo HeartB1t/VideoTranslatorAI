@@ -259,6 +259,8 @@ python -m videotranslator --preflight
 
 Executa diagnósticos do ambiente local sem iniciar a tradução ou instalar nada. `--preflight-lipsync` trata os pacotes faciais Wav2Lip conforme necessário, o que é útil antes de ativar o **Lip Sync**. A GUI expõe a mesma verificação básica do botão **Diagnóstico** do painel de log. `--preflight-player` trata o player de vídeo integrado (python-mpv e um libmpv carregável) conforme necessário. `python -m videotranslator.libmpv_runtime check` investiga apenas libmpv (saída 0 pronta, 2 indisponível).
 
+**Ficheiro de registo:** tudo o que o painel de registo mostra (cada clique e escolha, resultados, passos do processamento, erros com os detalhes) é também guardado em `logs/videotranslator.log` junto da configuração: `~/.config/videotranslatorai/logs/` no Linux, `%APPDATA%\VideoTranslatorAI\logs\` no Windows. Um ficheiro por dia, guardam-se os últimos 7 dias; o botão **Diagnóstico** mostra o caminho. Anexe-o quando comunicar um problema. As chaves de API e o texto escrito nos campos nunca são registados.
+
 ### GUI
 
 ```bash

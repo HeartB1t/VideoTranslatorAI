@@ -269,6 +269,8 @@ anything. `--preflight-lipsync` treats Wav2Lip face packages as required,
 which is useful before enabling **Lip Sync**. The GUI exposes the same base
 check from the log panel's **Diagnostics** button. `--preflight-player` treats the integrated video player (python-mpv and a loadable libmpv) as required. `python -m videotranslator.libmpv_runtime check` probes libmpv alone (exit 0 ready, 2 unavailable).
 
+**Log file:** everything the log panel shows (every click and choice, results, pipeline steps, errors with their details) is also saved to `logs/videotranslator.log` next to the config: `~/.config/videotranslatorai/logs/` on Linux, `%APPDATA%\VideoTranslatorAI\logs\` on Windows. One file per day, the last 7 days are kept; the **Diagnostics** button shows the path. Attach it when you report a problem. API keys and the text typed in the fields are never written.
+
 ### GUI
 
 ```bash

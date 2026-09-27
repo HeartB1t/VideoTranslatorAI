@@ -259,6 +259,8 @@ python -m videotranslator --preflight
 
 Chạy chẩn đoán môi trường cục bộ mà không cần bắt đầu dịch hoặc cài đặt bất cứ thứ gì. `--preflight-lipsync` xử lý các gói khuôn mặt Wav2Lip theo yêu cầu, điều này rất hữu ích trước khi bật **Lip Sync**. GUI hiển thị kiểm tra cơ sở tương tự từ nút **Chẩn đoán** của bảng nhật ký. `--preflight-player` xử lý trình phát video tích hợp (python-mpv và libmpv có thể tải) theo yêu cầu. `python -m videotranslator.libmpv_runtime check` chỉ thăm dò libmpv (thoát 0 sẵn sàng, 2 không khả dụng).
 
+**Tệp nhật ký:** mọi thứ bảng nhật ký hiển thị (mỗi lần nhấp và lựa chọn, kết quả, các bước xử lý, lỗi kèm chi tiết) cũng được lưu vào `logs/videotranslator.log` cạnh tệp cấu hình: `~/.config/videotranslatorai/logs/` trên Linux, `%APPDATA%\VideoTranslatorAI\logs\` trên Windows. Mỗi ngày một tệp, giữ 7 ngày gần nhất; nút **Chẩn đoán** hiển thị đường dẫn. Hãy đính kèm khi báo lỗi. Khóa API và văn bản nhập vào các ô không bao giờ được ghi lại.
+
 ### GUI
 
 ```bash
