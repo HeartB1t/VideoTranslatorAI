@@ -8010,6 +8010,21 @@ class App(tk.Tk):
         except tk.TclError:
             pass  # the window is being destroyed
 
+    def _sync_right_column_settled(self):
+        """_sync_right_column once a relabel's size requests have propagated.
+
+        A label that grows asks its frame for room at idle time, and each frame
+        above passes the request on in a later idle round: measured in the
+        first round, the cards still report their old width (a German label
+        wider than 460 px left the column at 460). update_idletasks runs those
+        rounds first.
+        """
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            return  # the window is being destroyed
+        self._sync_right_column()
+
     def _on_right_canvas_configure(self, event):
         """Stretch the cards to the canvas width; pin a column that fits."""
         self._right_canvas.itemconfig(self._right_canvas_window, width=event.width)
@@ -8347,7 +8362,7 @@ class App(tk.Tk):
         self._apply_video_effect()
         # Another text size changes the cards' width, and a large shrink can
         # leave the view below the content without any <Configure>.
-        self.after_idle(self._sync_right_column)
+        self.after_idle(self._sync_right_column_settled)
 
     def _remember_system_dark(self, value):
         """Cache the OS dark-mode answer so the next start paints with it."""
@@ -8513,7 +8528,7 @@ class App(tk.Tk):
         # A relabel can change what the cards ask for (closed accordion
         # sections included) without changing their height, and then no
         # <Configure> reaches _sync_right_column.
-        self.after_idle(self._sync_right_column)
+        self.after_idle(self._sync_right_column_settled)
 
     # ── Voice buttons ────────────────────────────────────────────────────────
 
@@ -8602,7 +8617,7 @@ class App(tk.Tk):
             pass
         self._update_start_summary()
         # New voice chips can change the cards' width.
-        self.after_idle(self._sync_right_column)
+        self.after_idle(self._sync_right_column_settled)
 
     def _update_rate_label(self, *_):
         try:
