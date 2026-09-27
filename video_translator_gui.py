@@ -5902,7 +5902,8 @@ class SubtitleEditor(tk.Toplevel):
         tk.Label(win, text=f"{self._s('editor_seg_label').format(idx+1)} {col_name}:",
                  bg=BG, fg=FG).pack(pady=6)
         entry = tk.Entry(win, width=60, bg=FIELD, fg=FG, **_field_colors(),
-                         font="VT.Base", relief="flat")
+                         font="VT.Base", relief="flat", highlightthickness=1,
+                         highlightbackground=BORDER, highlightcolor=ACC)
         entry.insert(0, current)
         entry.pack(padx=10)
         entry.focus()

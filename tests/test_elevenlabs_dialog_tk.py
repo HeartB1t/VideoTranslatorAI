@@ -131,6 +131,15 @@ class DialogTests(unittest.TestCase):
             self.root.after(10)
         self.fail("verification did not finish")
 
+    def test_key_field_has_a_visible_border(self):
+        # Tk on Windows draws no ring around an Entry unless asked: a FIELD
+        # entry on the BG of the dialog then looks like empty background.
+        pal = _Theme.palette
+        entry = self._dialog()._key_entry
+        self.assertEqual(int(entry.cget("highlightthickness")), 1)
+        self.assertEqual(entry.cget("highlightbackground"), pal.BORDER)
+        self.assertEqual(entry.cget("highlightcolor"), pal.ACC)
+
     def test_verify_loads_catalogue_and_picks_a_fast_model_for_the_language(self):
         dlg = self._dialog()
         self._verify(dlg)

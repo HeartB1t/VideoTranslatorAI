@@ -131,9 +131,12 @@ class ElevenLabsDialog:
         grid.pack(fill="x", pady=(0, 4))
         label(grid, "el_key").grid(row=0, column=0, sticky="w")
         self._key_var = tk.StringVar(value=api_key)
+        # An explicit 1 px frame: Tk on Windows draws none by default, and a
+        # FIELD entry on BG alone looks like empty background there.
         self._key_entry = tk.Entry(grid, textvariable=self._key_var, show="•", width=44,
                                    bg=pal.FIELD, fg=pal.FG, insertbackground=pal.FG,
-                                   relief="flat")
+                                   relief="flat", highlightthickness=1,
+                                   highlightbackground=pal.BORDER, highlightcolor=pal.ACC)
         self._key_entry.grid(row=0, column=1, sticky="w", padx=(8, 6))
         wrap, self._verify_btn = make_button(grid, text=ui_s("el_verify"), command=self.verify)
         wrap.grid(row=0, column=2, sticky="w")
