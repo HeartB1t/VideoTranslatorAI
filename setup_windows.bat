@@ -679,6 +679,7 @@ powershell -Command ^
     "$out = $env:TEMP + '\python_installer.exe';" ^
     "Write-Host '     Downloading Python 3.11.9...';" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
     "Write-Host '     Installing silently (this may take a minute)...';" ^
     "Start-Process -FilePath $out -ArgumentList '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 Include_doc=0' -Wait;" ^
@@ -726,6 +727,7 @@ powershell -Command ^
     "$out = $env:TEMP + '\python_installer.exe';" ^
     "Write-Host '     Downloading Python 3.11.9...';" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
     "Write-Host '     Installing silently (this may take a minute)...';" ^
     "Start-Process -FilePath $out -ArgumentList '/quiet InstallAllUsers=1 Include_test=0 Include_doc=0' -Wait;" ^
@@ -899,6 +901,7 @@ powershell -Command ^
     "$url = 'https://aka.ms/vs/17/release/vs_BuildTools.exe';" ^
     "$out = $env:TEMP + '\vs_BuildTools.exe';" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
     "Write-Host '     Installing VS C++ Build Tools (silent)...';" ^
     "Start-Process -FilePath $out -ArgumentList '--quiet --wait --norestart --nocache --installPath C:\BuildTools --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' -Wait;" ^
@@ -1040,6 +1043,7 @@ powershell -Command ^
     "$out = $env:TEMP + '\git_installer.exe';" ^
     "Write-Host '     Downloading Git for Windows 2.47.1...';" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing;" ^
     "Write-Host '     Installing silently (this may take a minute)...';" ^
     "Start-Process -FilePath $out -ArgumentList '/VERYSILENT','/NORESTART','/NOCANCEL','/SP-','/SUPPRESSMSGBOXES','/COMPONENTS=icons,ext\reg\shellhere,assoc,assoc_sh' -Wait;" ^
@@ -1113,6 +1117,7 @@ echo  [*] Trying %~2...
 powershell -Command ^
     "try {" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri '%~1' -OutFile '%WAV2LIP_MODEL%' -UseBasicParsing -ErrorAction Stop;" ^
     "exit 0" ^
     "} catch { exit 1 }"
@@ -1154,6 +1159,7 @@ powershell -Command ^
     "$zip = '%FFMPEG_DIR%\ffmpeg.zip';" ^
     "Write-Host '     Connecting...';" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
     "Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing;" ^
     "Write-Host '     Extracting...';" ^
     "Expand-Archive -Path $zip -DestinationPath '%FFMPEG_DIR%\tmp' -Force;" ^

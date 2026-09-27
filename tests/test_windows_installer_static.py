@@ -116,6 +116,14 @@ class WindowsInstallerStaticTests(unittest.TestCase):
     def test_no_folder_named_mpv(self):
         self.assertIsNone(re.search(r'\\mpv(["\\\s]|$)', self.text, re.MULTILINE))
 
+    def test_every_download_hides_the_progress_bar(self):
+        # PowerShell 5.1 redraws the bar per chunk: a 416 MB file took minutes.
+        lines = self.flat.split("\n")
+        downloads = [n for n, line in enumerate(lines) if "Invoke-WebRequest" in line]
+        self.assertEqual(len(downloads), 6)
+        for n in downloads:
+            self.assertIn("$ProgressPreference = 'SilentlyContinue';", lines[n - 1])
+
 
 if __name__ == "__main__":
     unittest.main()
