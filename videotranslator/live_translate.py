@@ -410,6 +410,17 @@ class DeeplLiveTranslator:
         pass
 
 
+# One sentence at a time needs a tiny context. Ollama's default window (up to
+# 32k tokens) makes a 32B model take 29 GB instead of 21, spill onto the CPU
+# and answer in 5-6 s, over the 3 s a live sentence has (measured on an RTX
+# 3090 next to Whisper large-v3: 1.7 s with this window).
+LIVE_OLLAMA_NUM_CTX = 2048
+# Loading a large model the first time can take 30-40 s: the warm-up waits
+# for it (the session holds the video until the translator is ready) instead
+# of letting the first sentences time out.
+LIVE_OLLAMA_WARMUP_S = 120.0
+
+
 class OllamaLiveTranslator:
     """Per-sentence translation through a local Ollama daemon (design 4.9).
 
@@ -453,7 +464,8 @@ class OllamaLiveTranslator:
         self._tgt_name = _ollama_lang_name(tgt)
         if self._generate is None:          # warm the model up (best effort)
             try:
-                self._http_generate(".", num_predict=1, timeout=(3.05, 10.0),
+                self._http_generate(".", num_predict=1,
+                                    timeout=(3.05, LIVE_OLLAMA_WARMUP_S),
                                     keep_alive="30m")
             except Exception:               # noqa: BLE001
                 pass
@@ -484,7 +496,8 @@ class OllamaLiveTranslator:
         import requests
         payload = {"model": self._model, "prompt": prompt, "stream": False,
                    "think": False, "keep_alive": keep_alive,
-                   "options": {"temperature": 0, "num_predict": num_predict}}
+                   "options": {"temperature": 0, "num_predict": num_predict,
+                               "num_ctx": LIVE_OLLAMA_NUM_CTX}}
         resp = requests.post(f"{self._api_url}/api/generate", json=payload,
                              timeout=timeout)
         resp.raise_for_status()

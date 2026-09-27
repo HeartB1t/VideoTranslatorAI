@@ -235,6 +235,34 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
         self.assertTrue(out.ok)
         self.assertEqual(out.text, "Ciao, come stai?")
 
+    def test_http_requests_use_a_small_context_and_a_long_warm_up(self):
+        from unittest import mock
+        from videotranslator import live_translate as lt
+        sent = []
+
+        class Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"response": "Ciao"}
+
+        def post(url, json, timeout):
+            sent.append((json, timeout))
+            return Resp()
+
+        tr = OllamaLiveTranslator(model="qwen3:32b", health_check=self._ok_health)
+        with mock.patch("requests.post", side_effect=post):
+            tr.prepare("en", "it")
+            out = tr.translate("Hello", timeout_s=3.0)
+        self.assertTrue(out.ok)
+        warm, translate = sent
+        self.assertEqual(warm[1], (3.05, lt.LIVE_OLLAMA_WARMUP_S))
+        self.assertEqual(translate[1], (3.05, 3.0))
+        for payload, _timeout in sent:
+            self.assertEqual(payload["options"]["num_ctx"], lt.LIVE_OLLAMA_NUM_CTX)
+            self.assertFalse(payload["think"])
+
     def test_daemon_down_raises_on_prepare(self):
         tr = OllamaLiveTranslator(health_check=self._down_health,
                                   generate=lambda *a, **k: "x")
