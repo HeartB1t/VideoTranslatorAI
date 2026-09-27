@@ -15,29 +15,29 @@ meaning, executable commands and corresponding section positions unchanged.
 
 | Language | README |
 |---|---|
-| العربية | [العربية](README.ar.md) |
-| 中文 | [中文](README.zh.md) |
+| Bahasa Indonesia | [Bahasa Indonesia](README.id.md) |
 | Čeština | [Čeština](README.cs.md) |
 | Dansk | [Dansk](README.da.md) |
-| Nederlands | [Nederlands](README.nl.md) |
-| English | [English](../../README.md) |
-| Suomi | [Suomi](README.fi.md) |
-| Français | [Français](README.fr.md) |
 | Deutsch | [Deutsch](README.de.md) |
-| Ελληνικά | [Ελληνικά](README.el.md) |
-| हिन्दी | [हिन्दी](README.hi.md) |
-| Magyar | [Magyar](README.hu.md) |
-| Bahasa Indonesia | [Bahasa Indonesia](README.id.md) |
+| English | [English](../../README.md) |
+| Español | [Español](README.es.md) |
+| Français | [Français](README.fr.md) |
 | Italiano | [Italiano](README.it.md) |
-| 日本語 | [日本語](README.ja.md) |
-| 한국어 | [한국어](README.ko.md) |
+| Magyar | [Magyar](README.hu.md) |
+| Nederlands | [Nederlands](README.nl.md) |
 | Norsk | [Norsk](README.no.md) |
 | Polski | [Polski](README.pl.md) |
 | Português | [Português](README.pt.md) |
 | Română | [Română](README.ro.md) |
-| Русский | [Русский](README.ru.md) |
-| Español | [Español](README.es.md) |
+| Suomi | [Suomi](README.fi.md) |
 | Svenska | [Svenska](README.sv.md) |
-| Türkçe | [Türkçe](README.tr.md) |
-| Українська | [Українська](README.uk.md) |
 | Tiếng Việt | [Tiếng Việt](README.vi.md) |
+| Türkçe | [Türkçe](README.tr.md) |
+| Ελληνικά | [Ελληνικά](README.el.md) |
+| Русский | [Русский](README.ru.md) |
+| Українська | [Українська](README.uk.md) |
+| العربية | [العربية](README.ar.md) |
+| हिन्दी | [हिन्दी](README.hi.md) |
+| 中文 | [中文](README.zh.md) |
+| 日本語 | [日本語](README.ja.md) |
+| 한국어 | [한국어](README.ko.md) |
