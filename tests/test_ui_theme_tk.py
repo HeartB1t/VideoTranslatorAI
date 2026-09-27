@@ -222,6 +222,22 @@ def _pending_timers(root):
     return root.tk.splitlist(root.tk.call("after", "info"))
 
 
+def focus_until(app, widget, timeout=5.0):
+    """Give ``widget`` the keyboard focus; True once ``app`` reports it there.
+
+    On Windows the focus reaches a widget of a window just shown only after
+    the system activates that window, so it is forced again between event
+    loop turns until it arrives. Where it is there at once (X11), no loop
+    turn runs, so nothing can move it before the caller sends a key.
+    """
+    deadline = time.monotonic() + timeout
+    widget.focus_force()
+    while app.focus_get() is not widget and time.monotonic() < deadline:
+        app.update()
+        widget.focus_force()
+    return app.focus_get() is widget
+
+
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class AutoThemeDetectionTests(unittest.TestCase):
     """M7: the OS dark-mode probe runs off the Tk thread, its answer comes back late."""
@@ -504,9 +520,14 @@ def built_app(config):
                         app._destroying = True
                         # Tk timers outlive the app: a later test that runs
                         # the event loop would fire them against its deleted
-                        # commands ("invalid command name" on stderr).
+                        # commands ("invalid command name" on stderr). Cancel
+                        # the timers only: app.after_cancel would also delete
+                        # the command a widget registered (a tooltip's pending
+                        # _show), and that widget's destroy would then fail
+                        # with "can't delete Tcl command". destroy() deletes
+                        # every command through the widget that owns it.
                         for after_id in app.tk.splitlist(app.tk.call("after", "info")):
-                            app.after_cancel(after_id)
+                            app.tk.call("after", "cancel", after_id)
                         app.destroy()
                         # Collect its Tk variables now, on the main thread (see
                         # the dialog tests): later a worker thread could hang on them.
@@ -697,7 +718,7 @@ class KeyboardAccessTests(unittest.TestCase):
         self.assertTrue(window.winfo_viewable())
 
     def _focus(self, app, widget):
-        widget.focus_force()
+        focus_until(app, widget)
         self.assertIs(app.focus_get(), widget)
 
     def _press(self, app, widget, key):
@@ -883,8 +904,9 @@ class SkinTests(unittest.TestCase):
             wrap.pack()
             app._settings_win.deiconify()
             app.update()
+            # The binding runs inside event_generate: no event loop turn before
+            # the check, or the real pointer's <Leave> would undo the hover.
             button.event_generate("<Enter>")
-            app.update()
             self.assertEqual(button.cget("bg"), p.SEL)
             app._seg_theme.winfo_children()[1].invoke()         # back to Graphite
             self.assertEqual((app._theme.palette.name, gui.BORDER_PX), ("graphite", 1))
@@ -943,8 +965,9 @@ class TalkingLogTests(unittest.TestCase):
                 w.pack()
             app.update()
             for w in (button, check, off):
-                w.focus_force()
-                app.update()
+                # The key goes to the focus widget: no event loop turn between
+                # the focus and the key (a real <Leave>, a window manager).
+                focus_until(app, w)
                 w.event_generate("<Key-space>")
             text = self._panel(app)
             # every line: time, level, area, message

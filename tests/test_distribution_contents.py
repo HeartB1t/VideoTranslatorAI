@@ -141,8 +141,9 @@ class DistributionContentsTests(unittest.TestCase):
                              timeout=120)
         self.assertEqual(run.returncode, 0, run.stderr)
         assets, fonts, registered = run.stdout.strip().splitlines()[-3:]
-        self.assertEqual(Path(assets), site / "videotranslator" / "assets")
-        self.assertEqual(Path(fonts), site / "videotranslator" / "assets" / "fonts")
+        # samefile: Windows may spell the temp folder with 8.3 names (RUNNER~1).
+        self.assertTrue(os.path.samefile(assets, site / "videotranslator" / "assets"), assets)
+        self.assertTrue(os.path.samefile(fonts, site / "videotranslator" / "assets" / "fonts"), fonts)
         self.assertEqual(registered.split(","), ["PixelifySans.ttf", "VT323-Regular.ttf"])
         copied = home / ".local" / "share" / "fonts" / "VideoTranslatorAI" / "VT323-Regular.ttf"
         self.assertEqual(copied.read_bytes(), (ROOT / "assets" / "fonts" / "VT323-Regular.ttf").read_bytes())
