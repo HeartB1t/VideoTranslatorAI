@@ -40,6 +40,11 @@ class CacheTests(unittest.TestCase):
             self.assertEqual(mm.downloaded_mb("org/none", root=Path(tmp)), 0.0)
 
 
+# What faster-whisper downloads for Systran/faster-whisper-small.
+COMPLETE = {"model.bin": (b"weights", True), "config.json": (b"{}", False),
+            "tokenizer.json": (b'{"t": 1}', False), "vocabulary.txt": (b"a\nb\n", False)}
+
+
 class VerifyTests(unittest.TestCase):
     def _snapshot(self, tmp, files):
         snap = Path(tmp) / "abc123"
@@ -48,32 +53,80 @@ class VerifyTests(unittest.TestCase):
             (snap / name).write_bytes(data)
         return snap
 
+    def _verify(self, snap, hub_files):
+        return mm.verify_snapshot("org/m", snap, model_info=lambda r, rev: _info(hub_files))
+
     def test_matching_files_pass(self):
-        files = {"model.bin": (b"weights", True), "config.json": (b"{}", False)}
         with tempfile.TemporaryDirectory() as tmp:
-            snap = self._snapshot(tmp, files)
+            snap = self._snapshot(tmp, COMPLETE)
             seen = []
             bad = mm.verify_snapshot("org/m", snap, model_info=lambda r, rev: (
-                seen.append(rev), _info(files))[1])
+                seen.append(rev), _info(COMPLETE))[1])
             self.assertEqual(bad, [])
             self.assertEqual(seen, ["abc123"])          # checked at its own commit
 
-    def test_corrupted_files_are_reported(self):
-        files = {"model.bin": (b"weights", True), "config.json": (b"{}", False)}
+    def test_large_v3_layout_passes(self):
+        # vocabulary.json instead of .txt, plus the preprocessor config.
+        files = {**{k: v for k, v in COMPLETE.items() if k != "vocabulary.txt"},
+                 "vocabulary.json": (b'["a"]', False),
+                 "preprocessor_config.json": (b'{"n_mels": 128}', False)}
         with tempfile.TemporaryDirectory() as tmp:
-            snap = self._snapshot(tmp, files)
+            self.assertEqual(self._verify(self._snapshot(tmp, files), files), [])
+
+    def test_files_outside_the_download_are_ignored(self):
+        hub = {**COMPLETE, "README.md": (b"# m", False), ".gitattributes": (b"*", False)}
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._verify(self._snapshot(tmp, COMPLETE), hub), [])
+
+    def test_corrupted_files_are_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = self._snapshot(tmp, COMPLETE)
             (snap / "model.bin").write_bytes(b"broken")
             (snap / "config.json").write_bytes(b"{ }")
-            bad = mm.verify_snapshot("org/m", snap, model_info=lambda r, rev: _info(files))
-            self.assertEqual(sorted(bad), ["config.json", "model.bin"])
+            self.assertEqual(sorted(self._verify(snap, COMPLETE)), ["config.json", "model.bin"])
 
     def test_missing_weights_fail(self):
-        files = {"config.json": (b"{}", False)}
+        local = {k: v for k, v in COMPLETE.items() if k != "model.bin"}
         with tempfile.TemporaryDirectory() as tmp:
-            snap = self._snapshot(tmp, files)
-            self.assertEqual(mm.verify_snapshot("org/m", snap,
-                                                model_info=lambda r, rev: _info(files)),
-                             ["model.bin"])
+            self.assertEqual(self._verify(self._snapshot(tmp, local), COMPLETE), ["model.bin"])
+
+    def test_valid_weights_without_config_fail(self):
+        local = {k: v for k, v in COMPLETE.items() if k != "config.json"}
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._verify(self._snapshot(tmp, local), COMPLETE), ["config.json"])
+
+    def test_empty_metadata_proves_nothing(self):
+        # Weights on disk but no Hub listing: nothing was checked, so every
+        # required file is reported instead of an empty "all good" list.
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = self._snapshot(tmp, COMPLETE)
+            for info in (SimpleNamespace(siblings=[]), SimpleNamespace(siblings=None),
+                         SimpleNamespace()):
+                with self.subTest(info=info):
+                    bad = mm.verify_snapshot("org/m", snap, model_info=lambda r, rev: info)
+                    self.assertEqual(bad, list(mm.REQUIRED_FILES))
+
+    def test_metadata_missing_a_required_file_fails(self):
+        hub = {k: v for k, v in COMPLETE.items() if k != "config.json"}
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._verify(self._snapshot(tmp, COMPLETE), hub), ["config.json"])
+
+    def test_a_file_without_a_hash_fails(self):
+        info = _info(COMPLETE)
+        for sibling in info.siblings:
+            if sibling.rfilename == "tokenizer.json":
+                sibling.blob_id = None
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = self._snapshot(tmp, COMPLETE)
+            self.assertEqual(mm.verify_snapshot("org/m", snap, model_info=lambda r, rev: info),
+                             ["tokenizer.json"])
+
+    def test_the_required_files_are_part_of_the_download(self):
+        import fnmatch
+        for required in mm.REQUIRED_FILES:
+            with self.subTest(required=required):
+                self.assertTrue(any(fnmatch.fnmatch(required, pattern)
+                                    for pattern in mm.DOWNLOADED_FILES))
 
 
 class _Proc:

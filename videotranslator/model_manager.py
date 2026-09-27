@@ -12,7 +12,9 @@ by ``ollama pull``; the catalogue labels them accordingly.
   working model, and the app keeps using the current model until the new one
   is verified and the user applies it.
 - Verification: every downloaded file is hashed and compared with the Hub
-  metadata (SHA-256 for large LFS files, the git blob id for small ones).
+  metadata (SHA-256 for large LFS files, the git blob id for small ones), and
+  the files a model cannot work without (weights, config, tokenizer,
+  vocabulary) must all be there.
 - Benchmark: opt-in, on the first seconds of a local media file; it measures
   load time, time to the first transcribed segment and the real-time factor.
   Nothing is uploaded: the audio stays on the PC.
@@ -20,6 +22,7 @@ by ``ollama pull``; the catalogue labels them accordingly.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import subprocess
 import sys
@@ -102,30 +105,53 @@ def _model_info(repo: str, revision: str) -> Any:
     return HfApi().model_info(repo, revision=revision, files_metadata=True)
 
 
+# The files faster-whisper downloads (``faster_whisper.utils.download_model``),
+# matched like huggingface_hub matches its ``allow_patterns``.
+DOWNLOADED_FILES = ("config.json", "preprocessor_config.json", _WEIGHTS,
+                    "tokenizer.json", "vocabulary.*")
+# A snapshot is unusable without these: weights, model config, tokenizer and
+# the vocabulary (vocabulary.txt or vocabulary.json, depending on the model).
+REQUIRED_FILES = (_WEIGHTS, "config.json", "tokenizer.json", "vocabulary.*")
+
+
+def _downloaded(name: str) -> bool:
+    return any(fnmatch.fnmatch(name, pattern) for pattern in DOWNLOADED_FILES)
+
+
 def verify_snapshot(repo: str, snapshot: Path, *,
                     model_info: Callable[[str, str], Any] = _model_info) -> list[str]:
-    """Names of the files in ``snapshot`` whose hash differs from the Hub.
+    """Names of the files that keep ``snapshot`` from being a complete model.
 
-    An empty list means every downloaded file matches. The snapshot folder name
-    is the commit the files came from, so they are checked against it.
+    The Hub metadata at the snapshot's commit (the folder name) lists the files
+    faster-whisper downloads; each must be on disk and match its hash (SHA-256
+    for LFS files, the git blob id for small ones). A file missing, different
+    or without a hash to check is reported, and so is every required file the
+    metadata does not list: empty metadata proves nothing. An empty list means
+    the snapshot is complete and intact.
     """
     info = model_info(repo, snapshot.name)
     bad: list[str] = []
+    listed: list[str] = []
     for sibling in getattr(info, "siblings", None) or []:
-        path = snapshot / sibling.rfilename
-        if not path.is_file():
+        name = sibling.rfilename
+        if not _downloaded(name):
             continue                   # not part of the download (README, ...)
+        listed.append(name)
+        path = snapshot / name
         lfs = getattr(sibling, "lfs", None)
-        if lfs is not None and getattr(lfs, "sha256", None):
+        if not path.is_file():
+            ok = False
+        elif lfs is not None and getattr(lfs, "sha256", None):
             ok = _file_sha256(path) == lfs.sha256
         elif getattr(sibling, "blob_id", None):
             ok = _git_blob_sha1(path) == sibling.blob_id
         else:
-            continue
+            ok = False
         if not ok:
-            bad.append(sibling.rfilename)
-    if not (snapshot / _WEIGHTS).is_file():
-        bad.append(_WEIGHTS)
+            bad.append(name)
+    for required in REQUIRED_FILES:
+        if not any(fnmatch.fnmatch(name, required) for name in listed):
+            bad.append(required)
     return bad
 
 
@@ -222,7 +248,7 @@ class WhisperDownload:
                 return
             bad = self._verify(self.repo, snapshot)
             if bad:
-                self._finish("failed", "checksum mismatch: " + ", ".join(bad))
+                self._finish("failed", "missing or corrupted files: " + ", ".join(bad))
                 return
             self._finish("done")
         except Exception as exc:                # noqa: BLE001 (reported, not raised)
