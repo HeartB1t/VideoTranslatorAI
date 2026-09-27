@@ -24,6 +24,8 @@ Herramienta de doblaje de voz y video basada en inteligencia artificial que tran
 ## Características
 
 - 🖥️ GUI temática (Tkinter): no se necesita línea de comando; Temas Graphite, Slate, Light y Neon, colores de acento, tamaño de texto y paneles de configuración que puede reordenar arrastrando
+- 🕹️ **Skins** - estilos divertidos en los ajustes: Dex y Handheld recuerdan a una consola de bolsillo (fuente pixelada, marcos gruesos), CRT y CRT Amber a un monitor de fósforo de los años 80, con curvatura y líneas de barrido también en el vídeo
+- 🔊 **Escucha antes de elegir** - un icono de altavoz junto a la voz reproduce una frase de prueba en el idioma de destino (Edge-TTS) o la muestra gratuita de una voz de ElevenLabs
 - 🌍 **26 idiomas de destino** con múltiples voces por idioma
 - 🌐 **UI en 26 idiomas**: la interfaz se adapta a tu idioma
 - 🎬 **Compatibilidad con YouTube y URL**: pegue cualquier enlace de YouTube y traduzca directamente (con tecnología de yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (temas, orden de los paneles, configuraciones)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # fuentes de las skins
 rm -f  ~/.videotranslatorai_config.json     # configuración heredada de versiones <= 1.9, si está presente
 ```
 
@@ -334,6 +337,7 @@ Pueden ocurrir dos bloqueos diferentes, con diferentes soluciones:
 Haga clic en el ícono de ajustes en el encabezado para abrir **Configuración**:
 
 - **Tema**: Automático (sigue el modo oscuro/claro del sistema operativo), Graphite (predeterminado), Slate, Light, Neon.
+- **Skins**: Dex y Handheld (consola de bolsillo, fuente pixelada, marcos gruesos), CRT y CRT Amber (monitor de fósforo de los años 80; el vídeo también recibe curvatura y líneas de barrido mediante un shader de mpv). Graphite sigue siendo el predeterminado.
 - **Color de acento**: predeterminado por tema, o azul, verde azulado, violeta, verde, ámbar, rosa.
 - **Tamaño del texto**: pequeño, normal, grande, extra grande.
 - **Idioma de la interfaz**: 26 idiomas.
@@ -456,3 +460,4 @@ El código del repositorio es MIT. Los instaladores descargan los siguientes com
 - **Modelos MarianMT** (Helsinki-NLP), descargados de Hugging Face Hub en el primer uso bajo sus propias licencias (Apache-2.0 para los modelos `opus-mt`, CC-BY-4.0 para `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opcional, lo instala aparte el usuario; sus motores tienen licencias propias (Chatterbox MIT con marca de agua de audio, pesos de TADA bajo la Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), servicio en línea opcional que se usa con la cuenta y la clave API del usuario, según sus propias condiciones.
+- Fuentes **Pixelify Sans** y **VT323** (SIL Open Font License 1.1), usadas por las skins: los únicos archivos de terceros incluidos en el repositorio, en `assets/fonts` junto a sus textos de licencia.

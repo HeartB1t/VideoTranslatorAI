@@ -24,6 +24,8 @@ AI-drivet videoröstdubbningsverktyg som automatiskt transkriberar, översätter
 ## Funktioner
 
 - 🖥️ GUI med tema (Tkinter) - ingen kommandorad behövs; Graphite, Slate, Light och Neon teman, accentfärger, textstorlek och inställningspaneler som du kan ordna om genom att dra
+- 🕹️ **Skins** - lekfulla utseenden i inställningarna: Dex och Handheld påminner om en fickkonsol (pixeltypsnitt, tjocka ramar), CRT och CRT Amber om en fosforskärm från 80-talet, med krökning och sveplinjer även på videon
+- 🔊 **Lyssna innan du väljer** - en högtalarikon vid rösten spelar upp en provmening på målspråket (Edge-TTS) eller det kostnadsfria provet av en ElevenLabs-röst
 - 🌍 **26 målspråk** med flera röster per språk
 - 🌐 **UI på 26 språk** - själva gränssnittet anpassar sig efter ditt språk
 - 🎬 **YouTube- och URL-stöd** - klistra in valfri YouTube-länk och översätt direkt (driven av yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (teman, panelordning, inställningar)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # typsnitt för skins
 rm -f  ~/.videotranslatorai_config.json     # äldre konfiguration av versioner <= 1.9, om sådan finns
 ```
 
@@ -334,6 +337,7 @@ Två olika block kan hända, med olika korrigeringar:
 Klicka på kugghjulsikonen i rubriken för att öppna **Inställningar**:
 
 - **Tema**: Automatisk (följer operativsystemets mörka/ljusläge), Graphite (standard), Slate, Light, Neon.
+- **Skins**: Dex och Handheld (fickkonsol, pixeltypsnitt, tjocka ramar), CRT och CRT Amber (fosforskärm från 80-talet; även videon får krökning och sveplinjer via en mpv-shader). Graphite är fortfarande standard.
 - **Accentfärg**: standard per tema, eller blå, kricka, violett, grön, bärnsten, ros.
 - **Textstorlek**: liten, normal, stor, extra stor.
 - **Gränssnittsspråk**: 26 språk.
@@ -456,3 +460,4 @@ Förvarskoden är MIT. Installatörerna laddar ner komponenterna nedan från sin
 - **MarianMT-modeller** (Helsingfors-NLP), nedladdade från Hugging Face Hub vid första användningen under sina egna licenser (Apache-2.0 för `opus-mt`-modellerna, CC-BY-4.0 för `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), valfritt, installeras separat av användaren; motorerna har egna licenser (Chatterbox MIT med ljudvattenmärke, TADA-vikter under Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), valfri onlinetjänst som används med användarens eget konto och API-nyckel enligt tjänstens egna villkor.
+- Typsnitten **Pixelify Sans** och **VT323** (SIL Open Font License 1.1), som används av skins: de enda tredjepartsfilerna i arkivet, i `assets/fonts` bredvid licenstexterna.

@@ -24,6 +24,8 @@ AI を活用したビデオ音声吹き替えツール。ビデオを 26 言語�
 ## 特長
 
 - 🖥️ テーマ別 GUI (Tkinter) - コマンドラインは必要ありません。 Graphite、Slate、Light、および Neon のテーマ、アクセント カラー、テキスト サイズ、設定パネルはドラッグして並べ替えることができます
+- 🕹️ **スキン** - 設定から選べる遊び心のある外観：Dex と Handheld は携帯ゲーム機風（ピクセルフォント、太い枠）、CRT と CRT Amber は 80 年代の蛍光体モニター風で、動画にも湾曲と走査線が付きます
+- 🔊 **選ぶ前に試聴** - 音声の横のスピーカーアイコンで、対象言語のサンプル文（Edge-TTS）または ElevenLabs 音声の無料サンプルを再生できます
 - 🌍 **26 のターゲット言語**、言語ごとに複数の音声あり
 - 🌐 **26 言語の UI** - インターフェース自体があなたの言語に適応します
 - 🎬 **YouTube と URL のサポート** - YouTube リンクを貼り付けて直接翻訳します (yt-dlp を利用)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (テーマ、パネルの順序、設定)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # スキン用フォント
 rm -f  ~/.videotranslatorai_config.json     # バージョン 1.9 以下のレガシー構成 (存在する場合)
 ```
 
@@ -334,6 +337,7 @@ python video_translator_gui.py
 ヘッダーの歯車アイコンをクリックして **設定** を開きます。
 
 - **テーマ**: 自動 (OS のダーク/ライト モードに従います)、Graphite (デフォルト)、Slate、Light、Neon。
+- **スキン**：Dex と Handheld（携帯ゲーム機、ピクセルフォント、太い枠）、CRT と CRT Amber（80 年代の蛍光体モニター。mpv シェーダーで動画にも湾曲と走査線が付きます）。既定は引き続き Graphite です。
 - **アクセントカラー**: テーマごとのデフォルト、またはブルー、ティール、バイオレット、グリーン、アンバー、ローズ。
 - **文字サイズ**: 小、標準、大、特大。
 - **インターフェース言語**: 26 言語。
@@ -456,3 +460,4 @@ MIT
 - **MarianMT モデル** (ヘルシンキ-NLP)、Hugging Face Hub からダウンロードされたものは、最初は独自のライセンスに基づいて使用されます (`opus-mt` モデルの場合は Apache-2.0、`opus-mt-tc-big` の場合は CC-BY-4.0)。
 - **Voicebox**（MIT、https://github.com/jamiepine/voicebox）、オプション、ユーザーが別途インストールします。エンジンにはそれぞれのライセンスがあります（音声透かし付きの Chatterbox MIT、Llama 3.2 Community License の TADA 重み）。
 - **ElevenLabs**（https://elevenlabs.io）、ユーザー自身のアカウントと API キーで、サービス独自の規約に従って使うオプションのオンラインサービス。
+- **Pixelify Sans** と **VT323** フォント（SIL Open Font License 1.1）。スキンで使用し、リポジトリに同梱される唯一のサードパーティファイルとして、ライセンス文と一緒に `assets/fonts` に置かれています。

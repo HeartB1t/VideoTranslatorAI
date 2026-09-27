@@ -24,6 +24,8 @@ A mesterséges intelligencia által vezérelt videó hangszinkronizálási eszk�
 ## Jellemzők
 
 - 🖥️ Tematikus GUI (Tkinter) - nincs szükség parancssorra; Graphite, Slate, Light és Neon témák, kiemelő színek, szövegméret és beállítási panelek, amelyeket húzással átrendezhet
+- 🕹️ **Skinek** - játékos megjelenések a beállításokban: a Dex és a Handheld zsebkonzolra emlékeztet (pixeles betűtípus, vastag keretek), a CRT és a CRT Amber egy 80-as évekbeli foszformonitorra, görbülettel és pásztázó sorokkal a videón is
+- 🔊 **Hallgasd meg, mielőtt választasz** - a hang melletti hangszóró ikon lejátszik egy mintamondatot a célnyelven (Edge-TTS), vagy egy ElevenLabs hang ingyenes mintáját
 - 🌍 **26 célnyelv** nyelvenként több hanggal
 - 🌐 **UI 26 nyelven** - maga a felület igazodik az Ön nyelvéhez
 - 🎬 **YouTube és URL-támogatás** - illesszen be bármilyen YouTube-linket, és fordítsa le közvetlenül (az yt-dlp segítségével)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # konfiguráció (témák, panelek sorrendje, beállítások)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # a skinek betűtípusai
 rm -f  ~/.videotranslatorai_config.json     # <= 1.9-es verziók örökölt konfigurációja, ha van
 ```
 
@@ -334,6 +337,7 @@ Két különböző blokk történhet, különböző javításokkal:
 Kattintson a fogaskerék ikonra a fejlécben a **Beállítások** megnyitásához:
 
 - **Téma**: Automatikus (követi az operációs rendszer sötét/világos üzemmódját), Graphite (alapértelmezett), Slate, Light, Neon.
+- **Skinek**: Dex és Handheld (zsebkonzol, pixeles betűtípus, vastag keretek), CRT és CRT Amber (80-as évekbeli foszformonitor; a videó is görbületet és pásztázó sorokat kap egy mpv shaderrel). Az alapértelmezett továbbra is a Graphite.
 - **Kiemelési szín**: alapértelmezett témánként, vagy kék, kékeszöld, lila, zöld, borostyán, rózsa.
 - **Szövegméret**: kicsi, normál, nagy, extra nagy.
 - **Interfész nyelve**: 26 nyelv.
@@ -456,3 +460,4 @@ Az adattár kódja MIT. A telepítők a telepítéskor letöltik az alábbi öss
 - **MarianMT modellek** (Helsinki-NLP), letöltve a Hugging Face Hub-ról első használatkor saját licencük alapján (Apache-2.0 a `opus-mt` modellekhez, CC-BY-4.0 a `opus-mt-tc-big`-hez).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opcionális, a felhasználó külön telepíti; a motorjainak saját licencük van (Chatterbox MIT hangvízjellel, TADA-súlyok a Llama 3.2 Community License alatt).
 - **ElevenLabs** (https://elevenlabs.io), opcionális online szolgáltatás, amelyet a felhasználó saját fiókjával és API-kulcsával, a szolgáltatás saját feltételei szerint használ.
+- **Pixelify Sans** és **VT323** betűtípusok (SIL Open Font License 1.1), a skinek használják őket: a tárolóban található egyetlen harmadik féltől származó fájlok, az `assets/fonts` mappában a licencszövegek mellett.

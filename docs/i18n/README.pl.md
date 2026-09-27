@@ -24,6 +24,8 @@ Narzędzie do kopiowania głosu wideo oparte na sztucznej inteligencji, które a
 ## Funkcje
 
 - 🖥️ Tematyczny GUI (Tkinter) - nie jest wymagana linia poleceń; Motywy Graphite, Slate, Light i Neon, kolory akcentów, rozmiar tekstu i panele ustawień można zmieniać poprzez przeciąganie
+- 🕹️ **Skórki** - zabawne style w ustawieniach: Dex i Handheld przypominają kieszonkową konsolę (pikselowa czcionka, grube ramki), CRT i CRT Amber monitor fosforowy z lat 80., z krzywizną i liniami skanowania także na wideo
+- 🔊 **Posłuchaj, zanim wybierzesz** - ikona głośnika obok głosu odtwarza przykładowe zdanie w języku docelowym (Edge-TTS) lub darmową próbkę głosu ElevenLabs
 - 🌍 **26 języków docelowych** z wieloma głosami w każdym języku
 - 🌐 **UI w 26 językach** - sam interfejs dostosowuje się do Twojego języka
 - 🎬 **Obsługa YouTube i adresów URL** - wklej dowolny link do YouTube i tłumacz bezpośrednio (obsługiwane przez yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (motywy, kolejność paneli, ustawienia)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # czcionki skórek
 rm -f  ~/.videotranslatorai_config.json     # starsza konfiguracja wersji <= 1.9, jeśli jest dostępna
 ```
 
@@ -334,6 +337,7 @@ Mogą wystąpić dwa różne bloki z różnymi poprawkami:
 Kliknij ikonę koła zębatego w nagłówku, aby otworzyć **Ustawienia**:
 
 - **Motyw**: Automatyczny (zgodnie z trybem ciemnym/jasnym systemu operacyjnego), Graphite (domyślny), Slate, Light, Neon.
+- **Skórki**: Dex i Handheld (kieszonkowa konsola, pikselowa czcionka, grube ramki), CRT i CRT Amber (monitor fosforowy z lat 80.; wideo też dostaje krzywiznę i linie skanowania dzięki shaderowi mpv). Domyślny pozostaje Graphite.
 - **Kolor akcentujący**: domyślny dla każdego motywu lub niebieski, turkusowy, fioletowy, zielony, bursztynowy, różowy.
 - **Rozmiar tekstu**: mały, normalny, duży, bardzo duży.
 - **Język interfejsu**: 26 języków.
@@ -456,3 +460,4 @@ Kod repozytorium to MIT. Instalatorzy pobierają poniższe komponenty z własnyc
 - **Modele MarianMT** (Helsinki-NLP), pobrane z Hugging Face Hub przy pierwszym użyciu na podstawie własnych licencji (Apache-2.0 dla modeli `opus-mt`, CC-BY-4.0 dla `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opcjonalny, instalowany osobno przez użytkownika; jego silniki mają własne licencje (Chatterbox MIT ze znakiem wodnym w dźwięku, wagi TADA na licencji Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), opcjonalna usługa online używana z własnym kontem i kluczem API użytkownika, na jej własnych warunkach.
+- Czcionki **Pixelify Sans** i **VT323** (SIL Open Font License 1.1), używane przez skórki: jedyne pliki stron trzecich dołączone do repozytorium, w `assets/fonts` obok tekstów licencji.

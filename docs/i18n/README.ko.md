@@ -24,6 +24,8 @@
 ## 특징
 
 - 🖥️ 테마 GUI(Tkinter) - 명령줄이 필요하지 않습니다. Graphite, Slate, Light 및 Neon 테마, 강조 색상, 텍스트 크기 및 설정 패널을 드래그하여 재정렬할 수 있습니다.
+- 🕹️ **스킨** - 설정에서 고르는 재미있는 외형: Dex와 Handheld는 휴대용 게임기(픽셀 글꼴, 두꺼운 테두리)를, CRT와 CRT Amber는 80년대 형광체 모니터를 떠올리게 하며 동영상에도 곡률과 주사선이 적용됩니다
+- 🔊 **고르기 전에 들어 보기** - 음성 옆의 스피커 아이콘이 대상 언어의 예문(Edge-TTS)이나 ElevenLabs 음성의 무료 샘플을 재생합니다
 - 🌍 **26개 대상 언어**(언어당 여러 음성 포함)
 - 🌐 **26개 언어로 지원되는 UI** - 인터페이스 자체가 언어에 맞게 조정됩니다.
 - 🎬 **YouTube 및 URL 지원** - YouTube 링크를 붙여넣고 직접 번역하세요(yt-dlp 제공)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # 구성(테마, 패널 순서, 설정)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # 스킨용 글꼴
 rm -f  ~/.videotranslatorai_config.json     # 버전 <= 1.9의 레거시 구성(있는 경우)
 ```
 
@@ -334,6 +337,7 @@ python video_translator_gui.py
 헤더에 있는 톱니바퀴 아이콘을 클릭하여 **설정**을 엽니다.
 
 - **테마**: 자동(OS 어두운/밝은 모드를 따름), Graphite(기본값), Slate, Light, Neon.
+- **스킨**: Dex와 Handheld(휴대용 게임기, 픽셀 글꼴, 두꺼운 테두리), CRT와 CRT Amber(80년대 형광체 모니터, mpv 셰이더로 동영상에도 곡률과 주사선 적용). 기본값은 계속 Graphite입니다.
 - **악센트 색상**: 테마별 기본값 또는 파란색, 청록색, 보라색, 녹색, 호박색, 장미입니다.
 - **텍스트 크기**: 작음, 보통, 큼, 매우 큼.
 - **인터페이스 언어**: 26개 언어.
@@ -456,3 +460,4 @@ MIT
 - **MarianMT 모델**(Helsinki-NLP), 자체 라이선스(`opus-mt` 모델의 경우 Apache-2.0, `opus-mt-tc-big`의 경우 CC-BY-4.0)에 따라 처음 사용 시 Hugging Face Hub에서 다운로드됩니다.
 - **Voicebox**(MIT, https://github.com/jamiepine/voicebox), 선택 사항으로 사용자가 따로 설치합니다. 엔진마다 라이선스가 따로 있습니다(오디오 워터마크가 있는 Chatterbox MIT, Llama 3.2 Community License를 따르는 TADA 가중치).
 - **ElevenLabs**(https://elevenlabs.io), 사용자 본인의 계정과 API 키로 서비스 자체 약관에 따라 쓰는 선택형 온라인 서비스.
+- 스킨이 사용하는 **Pixelify Sans** 및 **VT323** 글꼴(SIL Open Font License 1.1): 저장소에 포함된 유일한 서드파티 파일로, 라이선스 문서와 함께 `assets/fonts`에 있습니다.

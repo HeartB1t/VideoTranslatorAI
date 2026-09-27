@@ -24,6 +24,8 @@ AI-powered video dubbing tool that automatically transcribes, translates, and re
 ## Features
 
 - 🖥️ Themed GUI (Tkinter) - no command line needed; Graphite, Slate, Light and Neon themes, accent colours, text size, and cards you can reorder by dragging
+- 🕹️ **Skins** - playful looks from the settings: Dex and Handheld recall a pocket console (pixel font, thick frames), CRT and CRT Amber an 80s phosphor monitor, with curvature and scanlines on the video too
+- 🔊 **Listen before choosing** - a speaker icon next to the voice plays a sample sentence in the target language (Edge-TTS) or the free sample of an ElevenLabs voice
 - 🌍 **26 target languages** with multiple voices per language
 - 🌐 **UI in 26 languages** - the interface itself adapts to your language
 - 🎬 **YouTube & URL support** - paste any YouTube link and translate directly (powered by yt-dlp)
@@ -247,6 +249,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (themes, panel order, settings)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # fonts of the skins
 rm -f  ~/.videotranslatorai_config.json     # legacy config of versions <= 1.9, if present
 ```
 
@@ -369,6 +372,7 @@ Two different blocks can happen, with different fixes:
 Click the gear icon in the header to open **Settings**:
 
 - **Theme**: Automatic (follows the OS dark/light mode), Graphite (default), Slate, Light, Neon.
+- **Skin**: Dex and Handheld (pocket console, pixel font, thick frames), CRT and CRT Amber (80s phosphor monitor; the video gets curvature and scanlines through an mpv shader). Graphite stays the default.
 - **Accent colour**: default per theme, or blue, teal, violet, green, amber, rose.
 - **Text size**: small, normal, large, extra large.
 - **Interface language**: 26 languages.
@@ -497,3 +501,4 @@ The repository code is MIT. The installers download the components below from th
 - **MarianMT models** (Helsinki-NLP), downloaded from the Hugging Face Hub at first use under their own licences (Apache-2.0 for the `opus-mt` models, CC-BY-4.0 for `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optional, installed separately by the user; its engines have their own licences (Chatterbox MIT with an audio watermark, TADA weights under the Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), optional online service used with the user's own account and API key, under its own terms.
+- **Pixelify Sans** and **VT323** fonts (SIL Open Font License 1.1), used by the skins: the only third-party files shipped in the repository, in `assets/fonts` next to their licence texts.

@@ -24,6 +24,8 @@ Yerel işleme seçenekleriyle ve varsayılan olarak hiçbir API anahtarı gerekt
 ## Özellikler
 
 - 🖥️ Temalı GUI (Tkinter) - komut satırına gerek yok; Graphite, Slate, Light ve Neon temalarını, vurgu renklerini, metin boyutunu ve ayar panellerini sürükleyerek yeniden sıralayabilirsiniz
+- 🕹️ **Görünümler** - ayarlardan eğlenceli stiller: Dex ve Handheld cep oyun konsolunu (piksel yazı tipi, kalın çerçeveler), CRT ve CRT Amber ise 80'lerin fosforlu monitörünü hatırlatır; videoda da kavis ve tarama çizgileri olur
+- 🔊 **Seçmeden önce dinleyin** - sesin yanındaki hoparlör simgesi hedef dilde örnek bir cümle (Edge-TTS) ya da bir ElevenLabs sesinin ücretsiz örneğini çalar
 - 🌍 **26 hedef dil**, dil başına birden fazla ses ile
 - 🌐 **26 dilde kullanıcı arayüzü** - arayüzün kendisi dilinize uyum sağlar
 - 🎬 **YouTube ve URL desteği** - herhangi bir YouTube bağlantısını yapıştırın ve doğrudan çevirin (yt-dlp tarafından desteklenmektedir)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # yapılandırma (temalar, panel sırası, ayarlar)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # görünümlerin yazı tipleri
 rm -f  ~/.videotranslatorai_config.json     # <= 1.9 sürümlerinin eski yapılandırması (varsa)
 ```
 
@@ -334,6 +337,7 @@ Farklı düzeltmelerle iki farklı blok meydana gelebilir:
 **Ayarlar**'ı açmak için başlıktaki dişli simgesini tıklayın:
 
 - **Tema**: Otomatik (işletim sistemi karanlık/açık modunu takip eder), Graphite (varsayılan), Slate, Light, Neon.
+- **Görünümler**: Dex ve Handheld (cep konsolu, piksel yazı tipi, kalın çerçeveler), CRT ve CRT Amber (80'lerin fosforlu monitörü; video da bir mpv gölgelendiricisiyle kavis ve tarama çizgileri kazanır). Varsayılan yine Graphite'tir.
 - **Vurgu rengi**: temaya göre varsayılan veya mavi, deniz mavisi, mor, yeşil, kehribar, gül.
 - **Metin boyutu**: küçük, normal, büyük, ekstra büyük.
 - **Arayüz dili**: 26 dil.
@@ -456,3 +460,4 @@ Depo kodu MIT'dir. Kurulumcular aşağıdaki bileşenleri kurulum sırasında ke
 - **MarianMT modelleri** (Helsinki-NLP), ilk kullanımda kendi lisansları altında Hugging Face Hub'dan indirilmiştir (`opus-mt` modelleri için Apache-2.0, `opus-mt-tc-big` için CC-BY-4.0).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), isteğe bağlı, kullanıcı tarafından ayrıca kurulur; motorlarının kendi lisansları vardır (ses filigranlı Chatterbox MIT, Llama 3.2 Community License kapsamındaki TADA ağırlıkları).
 - **ElevenLabs** (https://elevenlabs.io), kullanıcının kendi hesabı ve API anahtarıyla, hizmetin kendi koşullarına göre kullanılan isteğe bağlı çevrimiçi hizmet.
+- Görünümlerin kullandığı **Pixelify Sans** ve **VT323** yazı tipleri (SIL Open Font License 1.1): depoda bulunan tek üçüncü taraf dosyalar, lisans metinleriyle birlikte `assets/fonts` içinde.

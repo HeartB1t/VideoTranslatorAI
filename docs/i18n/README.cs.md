@@ -24,6 +24,8 @@ Nástroj pro dabování videí pomocí umělé inteligence, který automaticky p
 ## Vlastnosti
 
 - 🖥️ Tématické GUI (Tkinter) - není potřeba žádný příkazový řádek; Motivy Graphite, Slate, Light a Neon, zvýrazňující barvy, velikost textu a panely nastavení, které můžete změnit přetažením
+- 🕹️ **Vzhledy** - hravé styly v nastavení: Dex a Handheld připomínají kapesní herní konzoli (pixelové písmo, silné rámečky), CRT a CRT Amber fosforový monitor z 80. let, se zakřivením a řádkováním i na videu
+- 🔊 **Poslechněte si před výběrem** - ikona reproduktoru vedle hlasu přehraje ukázkovou větu v cílovém jazyce (Edge-TTS) nebo bezplatnou ukázku hlasu ElevenLabs
 - 🌍 **26 cílových jazyků** s více hlasy na jazyk
 - 🌐 **UI ve 26 jazycích** - samotné rozhraní se přizpůsobí vašemu jazyku
 - 🎬 **Podpora YouTube a URL** - vložte jakýkoli odkaz na YouTube a překládejte přímo (využívá yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (témata, pořadí panelů, nastavení)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # písma vzhledů
 rm -f  ~/.videotranslatorai_config.json     # starší konfigurace verzí <= 1.9, pokud existuje
 ```
 
@@ -334,6 +337,7 @@ Mohou nastat dva různé bloky s různými opravami:
 Kliknutím na ikonu ozubeného kola v záhlaví otevřete **Nastavení**:
 
 - **Motiv**: Automaticky (sleduje tmavý/světlý režim OS), Graphite (výchozí), Slate, Light, Neon.
+- **Vzhledy**: Dex a Handheld (kapesní konzole, pixelové písmo, silné rámečky), CRT a CRT Amber (fosforový monitor z 80. let; video dostane zakřivení a řádkování pomocí shaderu mpv). Výchozí zůstává Graphite.
 - **Barva zvýraznění**: výchozí pro motiv nebo modrá, modrozelená, fialová, zelená, jantarová, růžová.
 - **Velikost textu**: malá, normální, velká, extra velká.
 - **Jazyk rozhraní**: 26 jazyků.
@@ -456,3 +460,4 @@ Kód úložiště je MIT. Instalační programy stahují komponenty níže ze sv
 - **Modely MarianMT** (Helsinki-NLP), stažené z Hugging Face Hub při prvním použití pod vlastními licencemi (Apache-2.0 pro modely `opus-mt`, CC-BY-4.0 pro `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), volitelný, uživatel ho instaluje zvlášť; jeho enginy mají vlastní licence (Chatterbox MIT se zvukovým vodoznakem, váhy TADA pod licencí Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), volitelná online služba používaná s vlastním účtem a klíčem API uživatele podle jejích vlastních podmínek.
+- Písma **Pixelify Sans** a **VT323** (SIL Open Font License 1.1), která používají vzhledy: jediné soubory třetích stran obsažené v repozitáři, v `assets/fonts` vedle textů licencí.

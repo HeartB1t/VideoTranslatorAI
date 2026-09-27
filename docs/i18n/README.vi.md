@@ -24,6 +24,8 @@ Công cụ lồng tiếng video được hỗ trợ bởi AI tự động phiên
 ## Tính năng
 
 - 🖥️ GUI theo chủ đề (Tkinter) - không cần dòng lệnh; Các chủ đề Graphite, Slate, Light và Neon, màu nhấn, kích thước văn bản và bảng cài đặt mà bạn có thể sắp xếp lại bằng cách kéo
+- 🕹️ **Giao diện vui nhộn** - các kiểu dáng vui mắt trong phần cài đặt: Dex và Handheld gợi nhớ máy chơi game cầm tay (phông pixel, khung dày), CRT và CRT Amber gợi nhớ màn hình phốt pho thập niên 80, có độ cong và đường quét cả trên video
+- 🔊 **Nghe trước khi chọn** - biểu tượng loa bên cạnh giọng đọc sẽ phát một câu mẫu bằng ngôn ngữ đích (Edge-TTS) hoặc mẫu miễn phí của một giọng ElevenLabs
 - 🌍 **26 ngôn ngữ đích** với nhiều giọng nói cho mỗi ngôn ngữ
 - 🌐 **Giao diện người dùng bằng 26 ngôn ngữ** - giao diện tự điều chỉnh theo ngôn ngữ của bạn
 - 🎬 **Hỗ trợ YouTube và URL** - dán bất kỳ liên kết YouTube nào và dịch trực tiếp (được cung cấp bởi yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (chủ đề, thứ tự bảng điều khiển, cài đặt)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # phông chữ của giao diện vui nhộn
 rm -f  ~/.videotranslatorai_config.json     # cấu hình cũ của phiên bản <= 1.9, nếu có
 ```
 
@@ -334,6 +337,7 @@ Hai khối khác nhau có thể xảy ra với các cách khắc phục khác nh
 Nhấp vào biểu tượng bánh răng trong tiêu đề để mở **Cài đặt**:
 
 - **Chủ đề**: Tự động (tuân theo chế độ tối/sáng của hệ điều hành), Graphite (mặc định), Slate, Light, Neon.
+- **Giao diện vui nhộn**: Dex và Handheld (máy chơi game cầm tay, phông pixel, khung dày), CRT và CRT Amber (màn hình phốt pho thập niên 80; video cũng có độ cong và đường quét nhờ một shader của mpv). Mặc định vẫn là Graphite.
 - **Màu nhấn**: mặc định theo chủ đề hoặc xanh lam, xanh mòng két, tím, xanh lá cây, hổ phách, hồng.
 - **Kích thước văn bản**: nhỏ, bình thường, lớn, cực lớn.
 - **Ngôn ngữ giao diện**: 26 ngôn ngữ.
@@ -456,3 +460,4 @@ Mã kho lưu trữ là MIT. Trình cài đặt tải xuống các thành phần 
 - **Mẫu MarianMT** (Helsinki-NLP), được tải xuống từ Hugging Face Hub trong lần sử dụng đầu tiên theo giấy phép của riêng họ (Apache-2.0 dành cho mẫu `opus-mt`, CC-BY-4.0 dành cho `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), tùy chọn, do người dùng cài riêng; các bộ máy của nó có giấy phép riêng (Chatterbox MIT có dấu nước âm thanh, trọng số TADA theo Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), dịch vụ trực tuyến tùy chọn, dùng với tài khoản và khóa API của chính người dùng theo điều khoản riêng của dịch vụ.
+- Phông chữ **Pixelify Sans** và **VT323** (SIL Open Font License 1.1) do giao diện vui nhộn sử dụng: là các tệp bên thứ ba duy nhất đi kèm trong kho mã, nằm trong `assets/fonts` cùng văn bản giấy phép.

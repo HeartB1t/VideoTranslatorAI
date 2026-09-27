@@ -24,6 +24,8 @@
 ## 特点
 
 - 🖥️ 主题 GUI (Tkinter) - 无需命令行； Graphite、Slate、Light 和 Neon 主题、强调色、文本大小和设置面板可通过拖动重新排序
+- 🕹️ **皮肤** - 在设置中选择趣味外观：Dex 和 Handheld 让人想起掌上游戏机（像素字体、粗边框），CRT 和 CRT Amber 则是 80 年代的荧光屏显示器，视频上也有弯曲和扫描线效果
+- 🔊 **先听再选** - 语音旁边的扬声器图标会用目标语言播放一句示例（Edge-TTS），或播放 ElevenLabs 语音的免费样本
 - 🌍 **26 种目标语言**，每种语言有多种语音
 - 🌐 **26 种语言的 UI** - 界面本身会适应您的语言
 - 🎬 **YouTube 和 URL 支持** - 粘贴任何 YouTube 链接并直接翻译（由 yt-dlp 提供支持）
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # 配置（主题、面板顺序、设置）
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # 皮肤使用的字体
 rm -f  ~/.videotranslatorai_config.json     # 版本 <= 1.9 的旧配置（如果存在）
 ```
 
@@ -334,6 +337,7 @@ python video_translator_gui.py
 单击标题中的齿轮图标打开**设置**：
 
 - **主题**：自动（遵循操作系统暗/亮模式）、Graphite（默认）、Slate、Light、Neon。
+- **皮肤**：Dex 和 Handheld（掌上游戏机、像素字体、粗边框），CRT 和 CRT Amber（80 年代荧光屏显示器；视频也会通过 mpv 着色器获得弯曲和扫描线效果）。默认仍为 Graphite。
 - **强调色**：每个主题默认，或蓝色、青色、紫色、绿色、琥珀色、玫瑰色。
 - **文字大小**：小、正常、大、超大。
 - **界面语言**：26 种语言。
@@ -456,3 +460,4 @@ MIT
 - **MarianMT 模型**（赫尔辛基-NLP），首次使用时根据自己的许可证从 Hugging Face Hub 下载（Apache-2.0 用于 `opus-mt` 模型，CC-BY-4.0 用于 `opus-mt-tc-big`）。
 - **Voicebox**（MIT，https://github.com/jamiepine/voicebox），可选，由用户单独安装；其引擎有各自的许可证（带音频水印的 Chatterbox MIT，采用 Llama 3.2 Community License 的 TADA 权重）。
 - **ElevenLabs**（https://elevenlabs.io），可选的在线服务，使用用户自己的账户和 API 密钥，遵循其自身条款。
+- **Pixelify Sans** 和 **VT323** 字体（SIL Open Font License 1.1），供皮肤使用：这是仓库中唯一随附的第三方文件，位于 `assets/fonts`，旁边附有许可证文本。

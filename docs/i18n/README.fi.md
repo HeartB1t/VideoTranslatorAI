@@ -24,6 +24,8 @@ Tekoälyllä toimiva videoäänen jälkiäänitystyökalu, joka litteroi, kään
 ## Ominaisuudet
 
 - 🖥️ Teemallinen GUI (Tkinter) - komentoriviä ei tarvita; Graphite, Slate, Light ja Neon teemat, korostusvärit, tekstin koko ja asetuspaneelit, joita voit järjestää uudelleen vetämällä
+- 🕹️ **Teemat** - leikkisät tyylit asetuksista: Dex ja Handheld muistuttavat taskukonsolia (pikselifontti, paksut kehykset), CRT ja CRT Amber 80-luvun fosforinäyttöä, ja videossakin on kaarevuus ja juovat
+- 🔊 **Kuuntele ennen valintaa** - äänen vieressä oleva kaiutinkuvake toistaa esimerkkilauseen kohdekielellä (Edge-TTS) tai ElevenLabs-äänen maksuttoman näytteen
 - 🌍 **26 kohdekieltä** useilla äänillä kielellä
 - 🌐 **Käyttöliittymä 26 kielellä** - käyttöliittymä itse mukautuu kielellesi
 - 🎬 **YouTube- ja URL-tuki** - liitä mikä tahansa YouTube-linkki ja käännä suoraan (yt-dlp:n avulla)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # konfiguraatio (teemat, paneelien järjestys, asetukset)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # teemojen fontit
 rm -f  ~/.videotranslatorai_config.json     # versioiden <= 1.9 vanha konfiguraatio, jos sellainen on
 ```
 
@@ -334,6 +337,7 @@ Kaksi erilaista lohkoa voi tapahtua eri korjauksin:
 Napsauta otsikossa olevaa rataskuvaketta avataksesi **Asetukset**:
 
 - **Teema**: Automaattinen (seuraa käyttöjärjestelmän tummaa/vaaleaa tilaa), Graphite (oletus), Slate, Light, Neon.
+- **Teemat**: Dex ja Handheld (taskukonsoli, pikselifontti, paksut kehykset), CRT ja CRT Amber (80-luvun fosforinäyttö; myös video saa kaarevuuden ja juovat mpv-varjostimella). Oletuksena pysyy Graphite.
 - **Aksenttiväri**: oletusväri teeman mukaan tai sininen, sinivihreä, violetti, vihreä, keltainen, ruusu.
 - **Tekstin koko**: pieni, normaali, suuri, erittäin suuri.
 - **Käyttöliittymän kieli**: 26 kieltä.
@@ -456,3 +460,4 @@ Arkiston koodi on MIT. Asentajat lataavat alla olevat komponentit omista lähtei
 - **MarianMT-mallit** (Helsinki-NLP), ladattu Hugging Face Hubista ensimmäisellä käyttökerralla omilla lisenssillään (Apache-2.0 `opus-mt`-malleille, CC-BY-4.0 `opus-mt-tc-big`-malleille).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), valinnainen, käyttäjän erikseen asentama; sen moottoreilla on omat lisenssinsä (Chatterbox MIT äänivesileimalla, TADA-painot Llama 3.2 Community License -lisenssillä).
 - **ElevenLabs** (https://elevenlabs.io), valinnainen verkkopalvelu, jota käytetään käyttäjän omalla tilillä ja API-avaimella palvelun omin ehdoin.
+- Fontit **Pixelify Sans** ja **VT323** (SIL Open Font License 1.1), joita teemat käyttävät: repositorion ainoat kolmannen osapuolen tiedostot, hakemistossa `assets/fonts` lisenssitekstien vieressä.

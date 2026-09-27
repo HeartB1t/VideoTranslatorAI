@@ -24,6 +24,8 @@ Outil de doublage vocal vidéo alimenté par l'IA qui transcrit, traduit et redo
 ## Caractéristiques
 
 - 🖥️ Interface graphique thématique (Tkinter) - aucune ligne de commande nécessaire ; Thèmes Graphite, Slate, Light et Neon, couleurs d'accentuation, taille du texte et panneaux de paramètres que vous pouvez réorganiser en faisant glisser
+- 🕹️ **Habillages** - des styles ludiques dans les paramètres : Dex et Handheld rappellent une console de poche (police pixel, cadres épais), CRT et CRT Amber un moniteur à phosphore des années 80, avec courbure et lignes de balayage jusque sur la vidéo
+- 🔊 **Écoutez avant de choisir** - une icône de haut-parleur à côté de la voix fait entendre une phrase d'essai dans la langue cible (Edge-TTS) ou l'extrait gratuit d'une voix ElevenLabs
 - 🌍 **26 langues cibles** avec plusieurs voix par langue
 - 🌐 **UI en 26 langues** - l'interface elle-même s'adapte à votre langue
 - 🎬 **Support YouTube et URL** - collez n'importe quel lien YouTube et traduisez directement (propulsé par yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (thèmes, ordre des panneaux, paramètres)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # polices des habillages
 rm -f  ~/.videotranslatorai_config.json     # configuration héritée des versions <= 1.9, si présente
 ```
 
@@ -334,6 +337,7 @@ Deux blocages différents peuvent survenir, avec des correctifs différents :
 Cliquez sur l'icône en forme d'engrenage dans l'en-tête pour ouvrir les **Paramètres** :
 
 - **Thème** : Automatique (suit le mode sombre/clair du système d'exploitation), Graphite (par défaut), Slate, Light, Neon.
+- **Habillages** : Dex et Handheld (console de poche, police pixel, cadres épais), CRT et CRT Amber (moniteur à phosphore des années 80 ; la vidéo reçoit aussi courbure et lignes de balayage grâce à un shader mpv). Graphite reste le thème par défaut.
 - **Couleur d'accent** : par défaut par thème, ou bleu, sarcelle, violet, vert, ambre, rose.
 - **Taille du texte** : petit, normal, grand, très grand.
 - **Langue de l'interface** : 26 langues.
@@ -456,3 +460,4 @@ Le code du référentiel est MIT. Les installateurs téléchargent les composant
 - **Modèles MarianMT** (Helsinki-NLP), téléchargés à partir du Hugging Face Hub lors de la première utilisation sous leurs propres licences (Apache-2.0 pour les modèles `opus-mt`, CC-BY-4.0 pour `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), en option, installé séparément par l'utilisateur ; ses moteurs ont leurs propres licences (Chatterbox MIT avec un filigrane audio, poids TADA sous la Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), service en ligne facultatif utilisé avec le compte et la clé API de l'utilisateur, selon ses propres conditions.
+- Polices **Pixelify Sans** et **VT323** (SIL Open Font License 1.1), utilisées par les habillages : les seuls fichiers tiers fournis dans le dépôt, dans `assets/fonts` à côté de leurs textes de licence.

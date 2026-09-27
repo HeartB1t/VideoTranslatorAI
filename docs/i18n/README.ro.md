@@ -24,6 +24,8 @@ Instrument de dublare a vocii video bazat pe inteligență artificială, care tr
 ## Caracteristici
 
 - 🖥️ GUI tematic (Tkinter) - nu este nevoie de linie de comandă; Teme Graphite, Slate, Light și Neon, culori de accent, dimensiunea textului și panouri de setări pe care le puteți reordona trăgând
+- 🕹️ **Skinuri** - stiluri jucăușe din setări: Dex și Handheld amintesc de o consolă portabilă (font pixelat, rame groase), CRT și CRT Amber de un monitor cu fosfor din anii '80, cu curbură și linii de baleiaj și pe video
+- 🔊 **Ascultă înainte să alegi** - o pictogramă de difuzor lângă voce redă o propoziție de probă în limba țintă (Edge-TTS) sau mostra gratuită a unei voci ElevenLabs
 - 🌍 **26 de limbi țintă** cu mai multe voci în fiecare limbă
 - 🌐 **UI în 26 de limbi** - interfața în sine se adaptează limbii dvs
 - 🎬 **Suport YouTube și URL** - inserați orice link YouTube și traduceți direct (produs de yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (teme, ordinea panoului, setări)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # fonturile skinurilor
 rm -f  ~/.videotranslatorai_config.json     # configurație moștenită a versiunilor <= 1.9, dacă există
 ```
 
@@ -334,6 +337,7 @@ Se pot întâmpla două blocuri diferite, cu remedieri diferite:
 Faceți clic pe pictograma roată din antet pentru a deschide **Setări**:
 
 - **Temă**: automată (urmează modul întuneric/luminos al sistemului de operare), Graphite (implicit), Slate, Light, Neon.
+- **Skinuri**: Dex și Handheld (consolă portabilă, font pixelat, rame groase), CRT și CRT Amber (monitor cu fosfor din anii '80; și video-ul primește curbură și linii de baleiaj printr-un shader mpv). Implicit rămâne Graphite.
 - **Culoare de accent**: implicit pentru fiecare temă sau albastru, ceai, violet, verde, chihlimbar, trandafir.
 - **Dimensiunea textului**: mic, normal, mare, foarte mare.
 - **Limba interfeței**: 26 de limbi.
@@ -456,3 +460,4 @@ Codul depozitului este MIT. Instalatorii descarcă componentele de mai jos din p
 - **Modele MarianMT** (Helsinki-NLP), descărcate de la Hugging Face Hub la prima utilizare sub propriile licențe (Apache-2.0 pentru modelele `opus-mt`, CC-BY-4.0 pentru `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opțional, instalat separat de utilizator; motoarele lui au licențe proprii (Chatterbox MIT cu filigran audio, ponderile TADA sub Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), serviciu online opțional folosit cu contul și cheia API proprii ale utilizatorului, în condițiile sale.
+- Fonturile **Pixelify Sans** și **VT323** (SIL Open Font License 1.1), folosite de skinuri: singurele fișiere terțe incluse în depozit, în `assets/fonts` lângă textele licențelor.

@@ -24,6 +24,8 @@ KI-gestütztes Video-Sprachsynchronisierungstool, das Videos automatisch in 26 S
 ## Funktionen
 
 - 🖥️ Thematische GUI (Tkinter) - keine Befehlszeile erforderlich; Graphite-, Slate-, Light- und Neon-Themen, Akzentfarben, Textgröße und Einstellungsfelder, die Sie durch Ziehen neu anordnen können
+- 🕹️ **Skins** - verspielte Looks in den Einstellungen: Dex und Handheld erinnern an eine Taschenkonsole (Pixelschrift, dicke Rahmen), CRT und CRT Amber an einen Phosphormonitor der 80er, mit Wölbung und Scanlines auch auf dem Video
+- 🔊 **Vor der Wahl anhören** - ein Lautsprechersymbol neben der Stimme spielt einen Beispielsatz in der Zielsprache (Edge-TTS) oder die kostenlose Hörprobe einer ElevenLabs-Stimme ab
 - 🌍 **26 Zielsprachen** mit mehreren Stimmen pro Sprache
 - 🌐 **Benutzeroberfläche in 26 Sprachen** - die Benutzeroberfläche selbst passt sich Ihrer Sprache an
 - 🎬 **YouTube- und URL-Unterstützung** - Fügen Sie einen beliebigen YouTube-Link ein und übersetzen Sie ihn direkt (unterstützt von yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (Themen, Panel-Reihenfolge, Einstellungen)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # Schriften der Skins
 rm -f  ~/.videotranslatorai_config.json     # Legacy-Konfiguration von Versionen <= 1.9, falls vorhanden
 ```
 
@@ -334,6 +337,7 @@ Es können zwei verschiedene Blockaden mit unterschiedlichen Korrekturen auftret
 Klicken Sie auf das Zahnradsymbol in der Kopfzeile, um **Einstellungen** zu öffnen:
 
 - **Thema**: Automatisch (folgt dem Dunkel-/Hellmodus des Betriebssystems), Graphite (Standard), Slate, Light, Neon.
+- **Skins**: Dex und Handheld (Taschenkonsole, Pixelschrift, dicke Rahmen), CRT und CRT Amber (Phosphormonitor der 80er; auch das Video erhält Wölbung und Scanlines über einen mpv-Shader). Standard bleibt Graphite.
 - **Akzentfarbe**: Standard pro Thema oder Blau, Blaugrün, Violett, Grün, Bernstein, Rose.
 - **Textgröße**: klein, normal, groß, extra groß.
 - **Schnittstellensprache**: 26 Sprachen.
@@ -456,3 +460,4 @@ Der Repository-Code ist MIT. Die Installationsprogramme laden die folgenden Komp
 - **MarianMT-Modelle** (Helsinki-NLP), heruntergeladen vom Hugging Face Hub bei der ersten Verwendung unter ihren eigenen Lizenzen (Apache-2.0 für die `opus-mt`-Modelle, CC-BY-4.0 für `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optional, vom Benutzer separat installiert; seine Engines haben eigene Lizenzen (Chatterbox MIT mit Audio-Wasserzeichen, TADA-Gewichte unter der Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), optionaler Onlinedienst, genutzt mit dem eigenen Konto und API-Schlüssel des Benutzers, zu dessen eigenen Bedingungen.
+- Schriften **Pixelify Sans** und **VT323** (SIL Open Font License 1.1), genutzt von den Skins: die einzigen Dateien Dritter im Repository, in `assets/fonts` neben ihren Lizenztexten.

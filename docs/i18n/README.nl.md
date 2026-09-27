@@ -24,6 +24,8 @@ Door AI aangedreven tool voor het nasynchroniseren van video's die video's autom
 ## Kenmerken
 
 - 🖥️ Thematische GUI (Tkinter) - geen opdrachtregel nodig; Graphite, Slate, Light en Neon thema's, accentkleuren, tekstgrootte en instellingenpanelen die u kunt herschikken door te slepen
+- 🕹️ **Skins** - speelse looks via de instellingen: Dex en Handheld doen denken aan een zakconsole (pixellettertype, dikke randen), CRT en CRT Amber aan een fosformonitor uit de jaren 80, met kromming en scanlijnen ook op de video
+- 🔊 **Luister voordat je kiest** - een luidsprekerpictogram naast de stem speelt een voorbeeldzin in de doeltaal af (Edge-TTS) of het gratis voorbeeld van een ElevenLabs-stem
 - 🌍 **26 doeltalen** met meerdere stemmen per taal
 - 🌐 **UI in 26 talen** - de interface past zich aan uw taal aan
 - 🎬 **YouTube- en URL-ondersteuning** - plak een YouTube-link en vertaal deze direct (mogelijk gemaakt door yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (thema's, paneelvolgorde, instellingen)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # lettertypen van de skins
 rm -f  ~/.videotranslatorai_config.json     # verouderde configuratie van versies <= 1.9, indien aanwezig
 ```
 
@@ -334,6 +337,7 @@ Er kunnen twee verschillende blokkades optreden, met verschillende oplossingen:
 Klik op het tandwielpictogram in de koptekst om **Instellingen** te openen:
 
 - **Thema**: Automatisch (volgt de donker/licht-modus van het besturingssysteem), Graphite (standaard), Slate, Light, Neon.
+- **Skins**: Dex en Handheld (zakconsole, pixellettertype, dikke randen), CRT en CRT Amber (fosformonitor uit de jaren 80; ook de video krijgt kromming en scanlijnen via een mpv-shader). Graphite blijft de standaard.
 - **Accentkleur**: standaard per thema, of blauw, groenblauw, violet, groen, amber, roze.
 - **Tekstgrootte**: klein, normaal, groot, extra groot.
 - **Interfacetaal**: 26 talen.
@@ -456,3 +460,4 @@ De repositorycode is MIT. De installatieprogramma's downloaden de onderstaande c
 - **MarianMT-modellen** (Helsinki-NLP), bij eerste gebruik gedownload van de Hugging Face Hub onder hun eigen licenties (Apache-2.0 voor de `opus-mt`-modellen, CC-BY-4.0 voor `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), optioneel, door de gebruiker apart geïnstalleerd; de engines hebben eigen licenties (Chatterbox MIT met een audiowatermerk, TADA-gewichten onder de Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), optionele onlinedienst die wordt gebruikt met het eigen account en de API-sleutel van de gebruiker, onder de eigen voorwaarden.
+- Lettertypen **Pixelify Sans** en **VT323** (SIL Open Font License 1.1), gebruikt door de skins: de enige bestanden van derden in de repository, in `assets/fonts` naast hun licentieteksten.

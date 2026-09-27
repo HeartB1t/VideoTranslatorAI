@@ -24,6 +24,8 @@ Alat sulih suara video bertenaga AI yang secara otomatis mentranskripsikan, mene
 ## Fitur
 
 - 🖥️ GUI Bertema (Tkinter) - tidak memerlukan baris perintah; Graphite, Slate, Light dan Neon tema, warna aksen, ukuran teks, dan panel pengaturan dapat Anda susun ulang dengan menyeret
+- 🕹️ **Skin** - tampilan ceria dari pengaturan: Dex dan Handheld mengingatkan pada konsol genggam (font piksel, bingkai tebal), CRT dan CRT Amber pada monitor fosfor tahun 80-an, dengan lengkungan dan garis pindai juga di video
+- 🔊 **Dengarkan sebelum memilih** - ikon pengeras suara di samping suara memutar kalimat contoh dalam bahasa tujuan (Edge-TTS) atau sampel gratis suara ElevenLabs
 - 🌍 **26 bahasa target** dengan banyak suara per bahasa
 - 🌐 **UI dalam 26 bahasa** - antarmukanya sendiri menyesuaikan dengan bahasa Anda
 - 🎬 **Dukungan YouTube & URL** - tempel tautan YouTube apa pun dan terjemahkan secara langsung (didukung oleh yt-dlp)
@@ -240,6 +242,7 @@ rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
 rm -rf ~/.local/share/tts ~/.local/share/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (tema, urutan panel, pengaturan)
+rm -rf ~/.local/share/fonts/VideoTranslatorAI   # font untuk skin
 rm -f  ~/.videotranslatorai_config.json     # konfigurasi lama versi <= 1.9, jika ada
 ```
 
@@ -334,6 +337,7 @@ Dua blok berbeda dapat terjadi, dengan perbaikan berbeda:
 Klik ikon roda gigi di header untuk membuka **Pengaturan**:
 
 - **Tema**: Otomatis (mengikuti mode gelap/terang OS), Graphite (default), Slate, Light, Neon.
+- **Skin**: Dex dan Handheld (konsol genggam, font piksel, bingkai tebal), CRT dan CRT Amber (monitor fosfor tahun 80-an; video juga mendapat lengkungan dan garis pindai melalui shader mpv). Graphite tetap menjadi bawaan.
 - **Warna aksen**: default per tema, atau biru, teal, ungu, hijau, kuning, mawar.
 - **Ukuran teks**: kecil, normal, besar, ekstra besar.
 - **Bahasa antarmuka**: 26 bahasa.
@@ -456,3 +460,4 @@ Kode repositori adalah MIT. Pemasang mengunduh komponen di bawah ini dari sumber
 - **Model MarianMT** (Helsinki-NLP), diunduh dari Hugging Face Hub saat pertama kali digunakan di bawah lisensi mereka sendiri (Apache-2.0 untuk model `opus-mt`, CC-BY-4.0 untuk `opus-mt-tc-big`).
 - **Voicebox** (MIT, https://github.com/jamiepine/voicebox), opsional, dipasang terpisah oleh pengguna; mesinnya punya lisensi sendiri (Chatterbox MIT dengan tanda air audio, bobot TADA di bawah Llama 3.2 Community License).
 - **ElevenLabs** (https://elevenlabs.io), layanan daring opsional yang dipakai dengan akun dan kunci API milik pengguna sendiri, sesuai ketentuannya sendiri.
+- Font **Pixelify Sans** dan **VT323** (SIL Open Font License 1.1), dipakai oleh skin: satu-satunya berkas pihak ketiga yang disertakan di repositori, di `assets/fonts` bersama teks lisensinya.
