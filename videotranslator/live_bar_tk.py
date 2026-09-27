@@ -150,26 +150,27 @@ class LiveBar(tk.Frame):
             command=self._on_subs, bg=pal.SURFACE, fg=pal.FG, selectcolor=pal.FIELD,
             activebackground=pal.SURFACE, activeforeground=pal.FG, font="VT.Small")
         self._chk_subs.pack(side="left", padx=(0, 4))
+        # Second options row (the first one does not fit a narrow window):
+        # original audio, ElevenLabs settings, then the voice the dub will use.
+        row_voice = tk.Frame(self._idle, bg=pal.SURFACE)
+        row_voice.pack(fill="x", padx=8, pady=(0, 2))
         self._chk_original_mute_idle = tk.Checkbutton(
-            row2, text=self._s("live_opt_mute_original"),
+            row_voice, text=self._s("live_opt_mute_original"),
             variable=self._original_mute_var,
             command=lambda: self._emit("original_mute", muted=bool(self._original_mute_var.get())),
             bg=pal.SURFACE, fg=pal.FG, selectcolor=pal.FIELD,
             activebackground=pal.SURFACE, activeforeground=pal.FG,
             font="VT.Small", takefocus=1)
         self._chk_original_mute_idle.pack(side="left", padx=(0, 4))
-
-        # Which voice the dub will use, and the ElevenLabs settings next to it.
-        row_voice = tk.Frame(self._idle, bg=pal.SURFACE)
-        row_voice.pack(fill="x", padx=8, pady=(0, 2))
-        self._voice_label = tk.Label(
-            row_voice, text="", bg=pal.SURFACE, fg=pal.FG2, font="VT.Small",
-            justify="left", wraplength=380, anchor="w")
-        self._voice_label.pack(side="left", fill="x", expand=True)
         self._el_wrap, self._el_button = self._make_button(
             row_voice, text=self._s("live_btn_elevenlabs"), font="VT.Small",
             padx=6, pady=1, command=lambda: self._emit("elevenlabs"))
-        self._el_wrap.pack(side="right", padx=(6, 0))
+        self._el_wrap.pack(side="left", padx=(2, 8))
+
+        self._voice_label = tk.Label(
+            row_voice, text="", bg=pal.SURFACE, fg=pal.FG2, font="VT.Small",
+            justify="left", wraplength=300, anchor="w")
+        self._voice_label.pack(side="left", fill="x", expand=True)
         self._el_tip = HoverTip(self._el_button, lambda: self._s("el_caption"),
                                 colors_fn=lambda: (self._palette.BTN, self._palette.FG))
 
