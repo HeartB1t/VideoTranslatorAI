@@ -19,7 +19,7 @@ class LiveTransportRoutingTests(unittest.TestCase):
                                                 item=SimpleNamespace(path="/v.mp4"))
         self.app = SimpleNamespace(
             _live_session=self.session, _player_controller=self.controller,
-            _player_clock=Mock(), _stop_live_session=Mock())
+            _player_clock=Mock(), _stop_live_session=Mock(), _log_event=Mock())
 
     def test_live_pause_is_an_intent_not_a_second_player_writer(self):
         gui.App._on_player_command(self.app, "play_pause", {})
@@ -80,13 +80,17 @@ class LiveChoicesPersistenceTests(unittest.TestCase):
 
     def test_choice_changes_schedule_a_save_even_without_a_session(self):
         for intent in ("mode", "delay", "engine", "dub", "subs"):
-            app = SimpleNamespace(_live_session=None, _schedule_live_save=Mock())
+            app = SimpleNamespace(_live_session=None, _schedule_live_save=Mock(),
+                                  _log_event=Mock())
             gui.App._on_live_command(app, intent, {})
             app._schedule_live_save.assert_called_once_with()
 
     def test_original_mute_is_not_persisted(self):
-        app = SimpleNamespace(_live_session=Mock(), _schedule_live_save=Mock())
+        app = SimpleNamespace(_live_session=Mock(), _schedule_live_save=Mock(),
+                              _log_event=Mock())
         gui.App._on_live_command(app, "original_mute", {"muted": True})
+        app._log_event.assert_called_once_with("log_live", command="original_mute",
+                                               value="muted=True")
         app._schedule_live_save.assert_not_called()
 
     def test_save_writes_config_keys_with_delay_by_slider_range(self):
@@ -284,14 +288,16 @@ class LanguageNameTests(unittest.TestCase):
 class VoiceboxCheckTests(unittest.TestCase):
     def test_result_text_is_built_on_the_tk_thread(self):
         app = SimpleNamespace(_destroying=False, _lbl_vb_status=Mock(),
-                              _btn_vb_check=Mock(),
+                              _btn_vb_check=Mock(), _log_line=Mock(),
                               _s=lambda key: {"vb_ok": "ok {device}",
                                               "vb_unreachable": "down {url}"}[key])
+        app._vb_status = lambda text: gui.App._vb_status(app, text)
         gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", "CUDA")
         app._lbl_vb_status.configure.assert_called_with(text="ok CUDA")
         gui.App._show_voicebox_check(app, "http://127.0.0.1:17493", None)
         app._lbl_vb_status.configure.assert_called_with(text="down http://127.0.0.1:17493")
         app._btn_vb_check.configure.assert_called_with(state="normal")
+        app._log_line.assert_called_with("voicebox", "down http://127.0.0.1:17493")
 
 
 class LiveVoiceForTests(unittest.TestCase):

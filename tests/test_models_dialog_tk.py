@@ -63,6 +63,7 @@ class DialogTests(unittest.TestCase):
         self.root = tk.Tk()
         self.root.withdraw()
         self.applied = []
+        self.logged = []
         self.busy = False
         self.media = None
         self.previous = {"asr": "small", "asr_live": "small", "mt": "google", "tts": "edge"}
@@ -77,7 +78,8 @@ class DialogTests(unittest.TestCase):
                                 "tts": "edge"},
             on_apply=self.applied.append, on_revert=lambda: self.previous,
             media_path=lambda: self.media, busy=lambda: self.busy,
-            detect=lambda: hw or _hw(), cached=lambda: {"small", "medium"})
+            detect=lambda: hw or _hw(), cached=lambda: {"small", "medium"},
+            log=self.logged.append)
         self.addCleanup(dlg.close)
         for _ in range(100):
             self.root.update()
@@ -113,6 +115,19 @@ class DialogTests(unittest.TestCase):
         dlg._apply()
         self.assertEqual(self.applied, [])
         self.assertEqual(dlg._status.cget("text"), _s("mdl_busy"))
+
+    def test_messages_hardware_and_choices_reach_the_app_log(self):
+        dlg = self._dialog()
+        self.assertTrue(any(line.startswith("CPU") or "CPU" in line for line in self.logged))
+        dlg._apply()
+        self.assertTrue(self.logged[-1].startswith(_s("mdl_applied")))
+        self.assertIn("asr=", self.logged[-1])
+        count = len(self.logged)
+        dlg._set_status("same")
+        dlg._set_status("same")                       # repeated text is logged once
+        dlg._set_status("progress 1", progress=True)
+        dlg._set_status("progress 2", progress=True)  # within 5 s: not logged
+        self.assertEqual(self.logged[count:], ["same", "progress 1"])
 
     def test_busy_is_explained_and_apply_greys_out_until_it_ends(self):
         dlg = self._dialog()

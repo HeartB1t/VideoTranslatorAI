@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable
@@ -92,8 +93,12 @@ class ModelsDialog:
                  on_revert: Callable[[], dict[str, str] | None],
                  media_path: Callable[[], str | None], busy: Callable[[], bool],
                  detect: Callable[[], HardwareInfo] = detect_hardware,
-                 cached: Callable[[], set[str]] = cached_whisper_models) -> None:
+                 cached: Callable[[], set[str]] = cached_whisper_models,
+                 log: Callable[[str], None] | None = None) -> None:
         self._s = ui_s
+        self._log = log
+        self._last_logged = ""
+        self._last_progress_log = 0.0
         self._pal = theme.palette
         self._on_apply = on_apply
         self._on_revert = on_revert
@@ -214,6 +219,9 @@ class ModelsDialog:
         if kind == "hw":
             self._hw, self._cached = value
             self._hw_label.configure(text="\n".join(hardware_lines(self._hw, self._s)))
+            if self._log is not None:
+                for line in hardware_lines(self._hw, self._s):
+                    self._log(line)
             for rb in self._pref_buttons:
                 rb.configure(state="normal")
             self._fill_combos()
@@ -323,8 +331,20 @@ class ModelsDialog:
         elif not busy and current == self._s("mdl_busy"):
             self._set_status("")
 
-    def _set_status(self, text: str) -> None:
+    def _set_status(self, text: str, *, progress: bool = False) -> None:
         self._status.configure(text=text)
+        # Every message goes to the app log; download progress at most every 5 s.
+        if self._log is None or not text or text == self._last_logged:
+            return
+        now = time.monotonic()
+        if progress and now - self._last_progress_log < 5.0:
+            return
+        self._last_progress_log = now if progress else 0.0
+        self._last_logged = text
+        try:
+            self._log(text)
+        except Exception:                      # noqa: BLE001
+            pass
 
     def _start_download(self) -> None:
         missing = self._missing_whisper()
@@ -341,7 +361,7 @@ class ModelsDialog:
         label = WHISPER[dl.key].label
         if dl.state in ("idle", "running"):
             self._set_status(self._s("mdl_dl_running").format(
-                model=label, done=f"{dl.progress_mb():.0f}", total=dl.expected_mb))
+                model=label, done=f"{dl.progress_mb():.0f}", total=dl.expected_mb), progress=True)
             return
         if dl.state == "verifying":
             self._set_status(self._s("mdl_dl_verifying").format(model=label))
@@ -401,7 +421,8 @@ class ModelsDialog:
             return
         self._on_apply(picked)
         self._current = dict(picked)
-        self._set_status(self._s("mdl_applied"))
+        self._set_status(self._s("mdl_applied") + " " + ", ".join(
+            f"{stage}={key}" for stage, key in picked.items()))
         self._set_buttons()
 
     def _revert(self) -> None:

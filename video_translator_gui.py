@@ -19,6 +19,8 @@ import datetime
 import importlib.util
 import io
 import locale
+import logging
+import platform
 import traceback
 import math
 import os
@@ -336,6 +338,7 @@ from videotranslator.ui_layout import right_column_width as _right_column_width 
 from videotranslator.ui_layout import WheelAccumulator as _WheelAccumulator  # noqa: E402
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
+from videotranslator import app_log as _app_log  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
 from videotranslator import live_session as _live_session_module  # noqa: E402
@@ -3904,6 +3907,8 @@ from videotranslator.voice_preview_tk import SpeakerButton as _SpeakerButton  # 
 from videotranslator.voice_preview_tk import error_key as _preview_error_key  # noqa: E402
 from videotranslator.video_effects import shader_for_theme as _shader_for_theme  # noqa: E402
 _PLAYER_STRING_PROBLEMS += _merge_models_strings(UI_STRINGS)
+from videotranslator.ui_strings_log import merge_into as _merge_log_strings  # noqa: E402
+_PLAYER_STRING_PROBLEMS += _merge_log_strings(UI_STRINGS)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -5596,11 +5601,15 @@ def check_dependencies():
 
 
 _thread_local = threading.local()
+# Where print() of a thread without its own redirect goes while the GUI runs:
+# the Log panel (and so the log file), set by App, cleared when it closes.
+_DEFAULT_REDIRECT = None
 
 
 class _GlobalRedirect(io.TextIOBase):
     """Installed once at GUI startup. Routes print() to the per-thread _TkStreamRedirect
-    if one is active for the calling thread, otherwise passes through to the original stream."""
+    if one is active for the calling thread, else to the app-wide default one (the
+    Log panel), otherwise passes through to the original stream."""
 
     def __init__(self, original):
         super().__init__()
@@ -5609,7 +5618,7 @@ class _GlobalRedirect(io.TextIOBase):
     def writable(self): return True
 
     def write(self, s):
-        redir = getattr(_thread_local, "redirect", None)
+        redir = getattr(_thread_local, "redirect", None) or _DEFAULT_REDIRECT
         if redir is not None:
             return redir.write(s)
         if self._original is None:
@@ -5620,7 +5629,7 @@ class _GlobalRedirect(io.TextIOBase):
         return self._original.write(s)
 
     def flush(self):
-        redir = getattr(_thread_local, "redirect", None)
+        redir = getattr(_thread_local, "redirect", None) or _DEFAULT_REDIRECT
         if redir is not None:
             redir.flush()
         elif self._original is not None:
@@ -5630,6 +5639,21 @@ class _GlobalRedirect(io.TextIOBase):
         if self._original is None:
             raise io.UnsupportedOperation("fileno")
         return self._original.fileno()
+
+
+class _LogPanelHandler(logging.Handler):
+    """Warnings and errors of the libraries (python ``logging``) to the Log panel."""
+
+    def __init__(self, app):
+        super().__init__(level=logging.WARNING)
+        self._app = app
+
+    def emit(self, record):
+        try:
+            line = _app_log.stamp(f"[{record.name}] {record.levelname}: {record.getMessage()}")
+            self._app._log_async(line + "\n")
+        except Exception:                        # noqa: BLE001
+            pass
 
 
 class _TkStreamRedirect(io.TextIOBase):
@@ -5652,7 +5676,7 @@ class _TkStreamRedirect(io.TextIOBase):
             self._flush_pending = True
             try:
                 self._root.after(100, self._flush_buf)
-            except RuntimeError:
+            except (RuntimeError, tk.TclError):
                 pass
         return len(s)
 
@@ -6051,6 +6075,9 @@ def _harmless_mpv_log_kind(line: str) -> str | None:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        # Everything the Log panel shows also goes to a daily log file (7 days).
+        self._log_file = _app_log.FileSink(_app_log.log_dir_for(CONFIG_PATH))
+        self._log_hooks_installed = False
         _ocfg = load_config()
         self._ui_settings = _normalize_ui_settings(_ocfg, lang_codes=UI_LANG_CODES)
         # Movable panels of the settings column: id -> (outer frame, pack
@@ -6235,6 +6262,7 @@ class App(tk.Tk):
         # Install global redirect once - routes print() to per-thread GUI log
         sys.stdout = _GlobalRedirect(sys.stdout)
         sys.stderr = _GlobalRedirect(sys.stderr)
+        self._install_log_hooks()
 
     def _set_window_icon(self) -> None:
         """Set the window icon from the bundled assets folder.
@@ -6739,6 +6767,7 @@ class App(tk.Tk):
             w.configure(bg=ACC if p else BORDER)
 
         def _return(_e, b=btn):
+            self._log_widget_activation(b)
             if str(b.cget("state")) != "disabled":
                 b.invoke()
             return "break"
@@ -8043,6 +8072,7 @@ class App(tk.Tk):
         win = tk.Toplevel(self, bg=BG)
         self._settings_win = win
         win.title(self._s("settings_title"))
+        self._log_event("log_window", title=self._s("settings_title"))
         win.resizable(False, False)
         win.transient(self)
         win.protocol("WM_DELETE_WINDOW", self._close_settings)
@@ -8192,6 +8222,8 @@ class App(tk.Tk):
         self._ui_settings = dict(self._theme.settings)
         save_config({k: self._ui_settings[k] for k in ("ui_theme", "ui_accent", "ui_scale")})
         self._refresh_theme_dependents()
+        self._log_event("log_settings", theme=self._ui_settings["ui_theme"],
+                        accent=self._ui_settings["ui_accent"], scale=self._ui_settings["ui_scale"])
 
     def _refresh_theme_dependents(self):
         """Repaint what the colour mapping of a theme change cannot handle.
@@ -8441,6 +8473,13 @@ class App(tk.Tk):
             key, lambda: _synthesize_edge_preview(text, voice, rate))
 
     def _on_voice_preview_state(self, key, state, kind) -> None:
+        voice = key.split(":")[1] if key.count(":") >= 1 else key
+        if state == "error":
+            self._log_event("log_vp", voice=voice, state=self._s(_preview_error_key(kind)))
+        else:
+            state_key = {"loading": "log_state_loading", "playing": "log_state_playing",
+                         "idle": "log_state_idle"}.get(state, "log_state_idle")
+            self._log_event("log_vp", voice=voice, state=self._s(state_key))
         speaker = self._voice_speaker
         if speaker is None:
             return
@@ -8451,7 +8490,6 @@ class App(tk.Tk):
         if state == "error":
             text = self._s(_preview_error_key(kind))
             speaker.set_state("error", text)
-            print(f"[voice preview] {text}")
         else:
             speaker.set_state(state)
 
@@ -8626,6 +8664,8 @@ class App(tk.Tk):
 
     def _on_player_command(self, name: str, args: dict) -> None:
         """Route PlayerPanel intents on Tk; the controller owns player state."""
+        detail = " ".join(f"{k}={v}" for k, v in (args or {}).items())
+        self._log_event("log_player", command=f"{name} {detail}".strip())
         if name == "install":
             self._install_player()
             return
@@ -8769,6 +8809,8 @@ class App(tk.Tk):
 
     def _on_live_command(self, intent: str, params: dict) -> None:
         """Route LiveBar intents on the Tk thread (mirrors _on_player_command)."""
+        self._log_event("log_live", command=intent,
+                        value=" ".join(f"{k}={v}" for k, v in (params or {}).items()))
         if intent == "start":
             self._start_live_session()
             return
@@ -8917,10 +8959,10 @@ class App(tk.Tk):
         from videotranslator import voicebox_engine as vbe
         url = self._voicebox_url_var.get().strip() or vbe.DEFAULT_URL
         if not vbe.is_local_url(url):
-            self._lbl_vb_status.configure(text=self._s("vb_not_local"))
+            self._vb_status(self._s("vb_not_local"))
             return
         self._save_voicebox_settings()
-        self._lbl_vb_status.configure(text=self._s("vb_checking"))
+        self._vb_status(self._s("vb_checking") + f" ({url}, {self._voicebox_engine_var.get()})")
         self._btn_vb_check.configure(state="disabled")
 
         def work() -> None:
@@ -8939,8 +8981,12 @@ class App(tk.Tk):
             return
         text = (self._s("vb_ok").format(device=device) if device is not None
                 else self._s("vb_unreachable").format(url=url))
-        self._lbl_vb_status.configure(text=text)
+        self._vb_status(text)
         self._btn_vb_check.configure(state="normal")
+
+    def _vb_status(self, text: str) -> None:
+        self._lbl_vb_status.configure(text=text)
+        self._log_line("voicebox", text)
 
     # -- ElevenLabs live voice ---------------------------------------------------
 
@@ -8974,11 +9020,13 @@ class App(tk.Tk):
             dialog.win.lift()
             return
         from videotranslator.elevenlabs_dialog_tk import ElevenLabsDialog
+        self._log_event("log_window", title=self._s("el_title"))
         self._elevenlabs_dialog = ElevenLabsDialog(
             self, ui_s=self._s, theme=self._theme, make_button=self._flat_btn,
             settings=self._elevenlabs_settings(), api_key=load_elevenlabs_key(),
             target_lang=self._lang_tgt.get(), on_save=self._save_elevenlabs_settings,
-            preview_hub=self._voice_preview_hub)
+            preview_hub=self._voice_preview_hub,
+            log=lambda text: self._log_line("elevenlabs", text))
 
     def _open_models_dialog(self) -> None:
         dialog = self._models_dialog
@@ -8986,11 +9034,13 @@ class App(tk.Tk):
             dialog.win.lift()
             return
         from videotranslator.models_dialog_tk import ModelsDialog
+        self._log_event("log_window", title=self._s("mdl_title"))
         self._models_dialog = ModelsDialog(
             self, ui_s=self._s, theme=self._theme, make_button=self._flat_btn,
             current=self._current_model_choices(), on_apply=self._apply_model_choices,
             on_revert=self._revert_model_choices, media_path=self._benchmark_media_path,
-            busy=lambda: bool(self._running) or self._live_session is not None)
+            busy=lambda: bool(self._running) or self._live_session is not None,
+            log=lambda text: self._log_line("models", text))
 
     def _schedule_live_save(self) -> None:
         """Save the live bar choices shortly after the last change.
@@ -10632,6 +10682,9 @@ class App(tk.Tk):
     _LOG_MAX_LINES = 5000
 
     def _log_write(self, text: str):
+        log_file = getattr(self, "_log_file", None)
+        if log_file is not None:
+            log_file.write(text)
         if self._destroying:
             return
         # Smart auto-scroll: only follow tail if user hasn't scrolled up
@@ -10653,10 +10706,161 @@ class App(tk.Tk):
             self._log.see("end")
         self._log.configure(state="disabled")
 
+    # -- Talking log: clicks, choices, results and errors ---------------------
+
+    def _log_event(self, key: str, **fields) -> None:
+        """Write one event line, in the UI language, with the time in front.
+
+        Callable from any thread. Never raises: a broken format string still
+        logs the raw key and fields.
+        """
+        try:
+            text = self._s(key).format(**fields)
+        except Exception:                                # noqa: BLE001
+            text = f"{key} {fields}"
+        line = _app_log.stamp(text) + "\n"
+        if threading.current_thread() is threading.main_thread():
+            self._log_write(line)
+        else:
+            self._log_async(line)
+
+    def _log_line(self, area: str, text: str) -> None:
+        """Log a result already written in the UI language (what the user sees)."""
+        text = " ".join(str(text or "").split())
+        if not text:
+            return
+        line = _app_log.stamp(f"[{area}] {text}") + "\n"
+        if threading.current_thread() is threading.main_thread():
+            self._log_write(line)
+        else:
+            self._log_async(line)
+
+    def _install_log_hooks(self) -> None:
+        """Route every print, click, choice and error to the Log panel and file."""
+        global _DEFAULT_REDIRECT
+        if self._log_hooks_installed:
+            return
+        self._log_hooks_installed = True
+        _DEFAULT_REDIRECT = _TkStreamRedirect(self, self._log_write)
+        self._saved_thread_excepthook = threading.excepthook
+        threading.excepthook = self._log_thread_exception
+        self._lib_log_handler = _LogPanelHandler(self)
+        logging.getLogger().addHandler(self._lib_log_handler)
+        for cls in ("Button", "Checkbutton", "Radiobutton"):
+            self.bind_class(cls, "<ButtonRelease-1>", self._log_widget_click, add="+")
+            self.bind_class(cls, "<Key-space>", self._log_widget_key, add="+")
+        self.bind_class("TCombobox", "<<ComboboxSelected>>", self._log_combo_choice, add="+")
+        self.bind_class("TScale", "<ButtonRelease-1>", self._log_scale_choice, add="+")
+        self._log_event("log_started", py=platform.python_version(),
+                        os=f"{platform.system()} {platform.release()}")
+        if self._log_file.ok:
+            self._log_event("log_file", days=_app_log.KEEP_DAYS, path=self._log_file.path)
+
+    def _remove_log_hooks(self) -> None:
+        global _DEFAULT_REDIRECT
+        if not self._log_hooks_installed:
+            return
+        self._log_hooks_installed = False
+        _DEFAULT_REDIRECT = None
+        if threading.excepthook == self._log_thread_exception:
+            threading.excepthook = self._saved_thread_excepthook
+        with contextlib.suppress(Exception):
+            logging.getLogger().removeHandler(self._lib_log_handler)
+
+    def destroy(self):
+        self._remove_log_hooks()
+        with contextlib.suppress(Exception):
+            self._log_file.close()
+        super().destroy()
+
+    def _widget_context(self, widget) -> str:
+        """``name`` of a control, with its window title when not the main one."""
+        try:
+            name = widget.cget("text")
+        except tk.TclError:
+            name = ""
+        name = _app_log.short(name) or widget.winfo_class()
+        try:
+            top = widget.winfo_toplevel()
+            if top is not self and top.title():
+                return f"{_app_log.short(top.title(), 40)} > {name}"
+        except tk.TclError:
+            pass
+        return name
+
+    def _log_widget_click(self, event) -> None:
+        widget = event.widget
+        try:
+            inside = widget.winfo_containing(event.x_root, event.y_root) is widget
+        except (tk.TclError, KeyError):
+            inside = True
+        if inside:
+            self._log_widget_activation(widget)
+
+    def _log_widget_key(self, event) -> None:
+        self._log_widget_activation(event.widget)
+
+    def _log_widget_activation(self, widget) -> None:
+        """Log a button, check box or radio button just used (value after the change)."""
+        try:
+            name = self._widget_context(widget)
+            if str(widget.cget("state")) == "disabled":
+                self._log_event("log_click_disabled", name=name)
+                return
+            cls = widget.winfo_class()
+            variable = str(widget.cget("variable")) if cls in ("Checkbutton", "Radiobutton") else ""
+            if cls == "Checkbutton" and variable:
+                on = str(self.getvar(variable)) == str(widget.cget("onvalue"))
+                self._log_event("log_on" if on else "log_off", name=name)
+            elif cls == "Radiobutton" and variable:
+                self._log_event("log_choice", name=name, value=self.getvar(variable))
+            else:
+                self._log_event("log_click", name=name)
+        except Exception:                                # noqa: BLE001 - logging must not break a click
+            pass
+
+    def _log_combo_choice(self, event) -> None:
+        with contextlib.suppress(Exception):
+            widget = event.widget
+            top = widget.winfo_toplevel()
+            where = _app_log.short(top.title(), 40) if top is not self else "combobox"
+            self._log_event("log_choice", name=where, value=_app_log.short(widget.get()))
+
+    def _log_scale_choice(self, event) -> None:
+        with contextlib.suppress(Exception):
+            widget = event.widget
+            self._log_event("log_choice", name="slider", value=round(float(widget.get()), 2))
+
+    def report_callback_exception(self, exc, val, tb):
+        """An error inside a Tk callback: log it with its traceback instead of stderr."""
+        with contextlib.suppress(Exception):
+            where = "Tk"
+            frame = tb
+            while frame is not None:                 # the innermost frame names the callback
+                where = frame.tb_frame.f_code.co_name
+                frame = frame.tb_next
+            self._log_event("log_error", where=where, error=f"{exc.__name__}: {val}")
+            self._log_write("".join(traceback.format_exception(exc, val, tb)))
+
+    def _log_thread_exception(self, args) -> None:
+        """An uncaught error in a worker thread: to the log (the old hook only if
+        logging it fails, so the traceback is not written twice)."""
+        try:
+            name = args.thread.name if args.thread is not None else "thread"
+            self._log_event("log_error", where=name,
+                            error=f"{args.exc_type.__name__}: {args.exc_value}")
+            self._log_async("".join(traceback.format_exception(
+                args.exc_type, args.exc_value, args.exc_traceback)))
+        except Exception:                                # noqa: BLE001
+            with contextlib.suppress(Exception):
+                self._saved_thread_excepthook(args)
+
     def _run_gui_preflight(self):
         if self._preflight_running:
             return
         self._preflight_running = True
+        if self._log_file.ok:
+            self._log_event("log_file", days=_app_log.KEEP_DAYS, path=self._log_file.path)
         with contextlib.suppress(Exception):
             self._btn_preflight.configure(state="disabled")
         if not getattr(self, "_log_visible", True):

@@ -888,6 +888,71 @@ class SkinTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class TalkingLogTests(unittest.TestCase):
+    """Every click, choice and error reaches the Log panel and the log file."""
+
+    def _panel(self, app):
+        app.update()
+        app.after(150)
+        app.update()
+        return app._log.get("1.0", "end")
+
+    def test_clicks_toggles_disabled_controls_and_errors_are_logged(self):
+        import threading
+        with built_app({"ui_theme": "graphite", "ui_lang": "it"}) as (gui, app, cfg_path):
+            it = gui.UI_STRINGS["it"]
+            log_path = cfg_path.parent / "logs" / "videotranslator.log"
+            self.assertIn(it["log_file"].split("{")[0].strip(), self._panel(app))
+            app.deiconify()
+            host = tk.Toplevel(app)
+            host.title("Voicebox")
+            button = tk.Button(host, text="Verifica")
+            check_var = tk.BooleanVar(value=False)
+            check = tk.Checkbutton(host, text="Voicebox", variable=check_var)
+            off = tk.Button(host, text="Scarica", state="disabled")
+            for w in (button, check, off):
+                w.pack()
+            app.update()
+            for w in (button, check, off):
+                w.focus_force()
+                app.update()
+                w.event_generate("<Key-space>")
+            text = self._panel(app)
+            self.assertIn(it["log_click"].format(name="Voicebox > Verifica"), text)
+            self.assertIn(it["log_on"].format(name="Voicebox > Voicebox"), text)
+            self.assertIn(it["log_click_disabled"].format(name="Voicebox > Scarica"), text)
+            host.destroy()
+            # print() from the Tk thread reaches the panel (it used to go to the terminal)
+            print("main-thread line")
+            self.assertIn("main-thread line", self._panel(app))
+            # an error inside a Tk callback is logged with its traceback
+            app.report_callback_exception(ValueError, ValueError("boom"), None)
+            text = self._panel(app)
+            self.assertIn("ValueError: boom", text)
+            # an uncaught error in a worker thread too (the hook is called here on
+            # the Tk thread: without a running mainloop a worker cannot reach Tk)
+            self.assertEqual(threading.excepthook, app._log_thread_exception)
+            try:
+                1 / 0
+            except ZeroDivisionError as exc:
+                args = threading.ExceptHookArgs(
+                    (type(exc), exc, exc.__traceback__, threading.Thread(name="unit-worker")))
+            app._saved_thread_excepthook = lambda _args: None
+            app._log_thread_exception(args)
+            text = self._panel(app)
+            self.assertIn("unit-worker", text)
+            self.assertIn("ZeroDivisionError", text)
+            app._log_file._handler.flush()
+            on_disk = log_path.read_text(encoding="utf-8")
+            self.assertIn(it["log_click"].format(name="Voicebox > Verifica"), on_disk)
+            self.assertIn("main-thread line", on_disk)
+            hook = app._log_thread_exception
+        # after destroy nothing points at the dead app any more
+        self.assertIsNone(gui._DEFAULT_REDIRECT)
+        self.assertNotEqual(threading.excepthook, hook)
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class LogToggleStartupTests(unittest.TestCase):
     def test_visible_log_at_startup_shows_hide_label(self):
         with built_app({"ui_lang": "it", "ui_log_visible": True}) as (gui, app, _):

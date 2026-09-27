@@ -95,6 +95,7 @@ class DialogTests(unittest.TestCase):
         self.root = tk.Tk()
         self.root.withdraw()
         self.saved = []
+        self.logged = []
 
     def tearDown(self):
         self.root.destroy()
@@ -106,7 +107,7 @@ class DialogTests(unittest.TestCase):
             settings=settings or {}, api_key=key, target_lang=lang,
             on_save=lambda st, k: self.saved.append((st, k)),
             client_factory=client or (lambda k: _Client(k, fail)), preview_hub=hub,
-            sample_loader=lambda url: f"audio:{url}".encode())
+            sample_loader=lambda url: f"audio:{url}".encode(), log=self.logged.append)
         self.addCleanup(dlg.close)
         return dlg
 
@@ -125,6 +126,16 @@ class DialogTests(unittest.TestCase):
         self.assertEqual(dlg.selected_model().model_id, "eleven_flash_v2_5")
         self.assertEqual(dlg.selected_voice().voice_id, "v1")
         self.assertIn("100 of 10000", dlg._account.cget("text"))
+
+    def test_results_reach_the_app_log(self):
+        dlg = self._dialog()
+        self._verify(dlg)
+        self.assertIn(_s("el_checking"), self.logged)
+        self.assertTrue(any("100 of 10000" in line and "2 voices" in line
+                            for line in self.logged))
+        dlg = self._dialog(fail="auth")
+        self._verify(dlg)
+        self.assertEqual(self.logged[-1], _s("el_err_auth"))
 
     def test_model_without_the_target_language_is_flagged(self):
         dlg = self._dialog()

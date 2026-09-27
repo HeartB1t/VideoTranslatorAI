@@ -72,8 +72,10 @@ class ElevenLabsDialog:
                  on_save: Callable[[dict, str], None],
                  client_factory: Callable[[str], Any] = ElevenLabsClient,
                  preview_hub: Any = None,
-                 sample_loader: Callable[[str], bytes] = fetch_sample) -> None:
+                 sample_loader: Callable[[str], bytes] = fetch_sample,
+                 log: Callable[[str], None] | None = None) -> None:
         self._s = ui_s
+        self._log = log
         self._hub = preview_hub
         self._sample_loader = sample_loader
         self._refreshed_for_preview = False
@@ -151,7 +153,7 @@ class ElevenLabsDialog:
         label(body, "el_note", fg=pal.FG2, font="VT.Small",
               wraplength=620).pack(fill="x", pady=(8, 4))
         self._status = label(body, "el_checking", font="VT.Small", wraplength=620)
-        self._status.configure(text="")
+        self._set_status("")
         self._status.pack(fill="x", pady=(2, 8))
 
         buttons = tk.Frame(body, bg=pal.BG)
@@ -164,6 +166,15 @@ class ElevenLabsDialog:
 
         self._fill(settings.get("model_id"), settings.get("voice_id"))
         self._schedule_poll()
+
+    def _set_status(self, text: str) -> None:
+        """Show a result under the buttons and write it to the app log."""
+        self._status.configure(text=text)
+        if self._log is not None and text:
+            try:
+                self._log(text)
+            except Exception:                  # noqa: BLE001
+                pass
 
     # -- catalogue -----------------------------------------------------------
 
@@ -196,9 +207,9 @@ class ElevenLabsDialog:
     def _check_language(self) -> None:
         model = self.selected_model()
         if model is not None and not model.supports(self._lang):
-            self._status.configure(text=self._s("el_model_no_lang").format(lang=self._lang))
+            self._set_status(self._s("el_model_no_lang").format(lang=self._lang))
         elif self._status.cget("text") == self._s("el_model_no_lang").format(lang=self._lang):
-            self._status.configure(text="")
+            self._set_status("")
 
     def selected_model(self) -> Model | None:
         index = self._model_combo.current()
@@ -231,7 +242,7 @@ class ElevenLabsDialog:
                 return
             if self.speaker is not None:
                 self.speaker.set_state("error", self._s("vp_err_no_sample"))
-            self._status.configure(text=self._s("vp_err_no_sample"))
+            self._set_status(self._s("vp_err_no_sample"))
             return
         loader = self._sample_loader
         self._hub.toggle(self._sample_key(voice, url), lambda: loader(url))
@@ -253,7 +264,7 @@ class ElevenLabsDialog:
         if state == "error":
             text = self._s(error_key(kind))
             self.speaker.set_state("error", text)
-            self._status.configure(text=text)
+            self._set_status(text)
         else:
             self.speaker.set_state(state)
 
@@ -264,12 +275,12 @@ class ElevenLabsDialog:
             return
         key = self._key_var.get().strip()
         if not key:
-            self._status.configure(text=self._s("el_err_auth"))
+            self._set_status(self._s("el_err_auth"))
             return
         self._checking = True
         self._verify_btn.configure(state="disabled")
         self._refresh_btn.configure(state="disabled")
-        self._status.configure(text=self._s("el_checking"))
+        self._set_status(self._s("el_checking"))
 
         def work() -> None:
             try:
@@ -307,18 +318,21 @@ class ElevenLabsDialog:
             account, models, voices = value
             self._account.configure(text=self._s("el_account").format(
                 used=account.used, limit=account.limit, tier=account.tier or "?"))
+            if self._log is not None:
+                self._log(self._account.cget("text") + f" · {len(voices)} voices · "
+                          f"{len([m for m in models if m.can_tts])} models")
             model = self.selected_model()
             voice = self.selected_voice()
             self._models = [m for m in models if m.can_tts]
             self._voices = list(voices)
-            self._status.configure(text="")
+            self._set_status("")
             self._fill(model.model_id if model else None, voice.voice_id if voice else None)
             if self._pending_preview:
                 self._pending_preview = False
                 self.preview()
         else:
             self._pending_preview = False
-            self._status.configure(text=self._s(_ERROR_KEYS.get(value, "el_err_unavailable")))
+            self._set_status(self._s(_ERROR_KEYS.get(value, "el_err_unavailable")))
 
     # -- save / close -------------------------------------------------------
 
@@ -336,10 +350,10 @@ class ElevenLabsDialog:
         current = self.settings()
         key = self._key_var.get().strip()
         if current["enabled"] and not (key and current["model_id"] and current["voice_id"]):
-            self._status.configure(text=self._s("el_missing"))
+            self._set_status(self._s("el_missing"))
             return False
         self._on_save(current, key)
-        self._status.configure(text=self._s("el_saved"))
+        self._set_status(self._s("el_saved"))
         return True
 
     def close(self) -> None:

@@ -1,0 +1,60 @@
+import re
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from videotranslator import app_log
+
+
+class FileSinkTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name) / "logs"
+
+    def read(self, sink):
+        sink.close()
+        return sink.path.read_text(encoding="utf-8").splitlines()
+
+    def test_lines_get_date_and_time_and_events_keep_their_time(self):
+        sink = app_log.FileSink(self.dir)
+        self.assertTrue(sink.ok)
+        sink.write("[+] step one\npart")
+        sink.write("ial line\n12:00:01 [voicebox] check\n\n")
+        lines = self.read(sink)
+        self.assertEqual(len(lines), 3)
+        self.assertRegex(lines[0], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[\+\] step one$")
+        self.assertRegex(lines[1], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} partial line$")
+        self.assertRegex(lines[2], r"^\d{4}-\d{2}-\d{2} 12:00:01 \[voicebox\] check$")
+
+    def test_progress_bars_keep_their_last_state_and_close_flushes(self):
+        sink = app_log.FileSink(self.dir)
+        sink.write("10%\r50%\r100%\nunterminated")
+        lines = self.read(sink)
+        self.assertTrue(lines[0].endswith(" 100%"))
+        self.assertTrue(lines[1].endswith(" unterminated"))
+
+    def test_daily_rotation_keeps_seven_days(self):
+        sink = app_log.FileSink(self.dir)
+        handler = sink._handler
+        self.assertEqual((handler.when, handler.backupCount), ("MIDNIGHT", app_log.KEEP_DAYS))
+        self.assertEqual(sink.path, self.dir / "videotranslator.log")
+        self.assertEqual(app_log.log_dir_for(Path("/x/cfg/config.json")), Path("/x/cfg/logs"))
+        sink.close()
+
+    def test_unwritable_folder_disables_the_file_quietly(self):
+        blocker = Path(self.tmp.name) / "file"
+        blocker.write_text("x")
+        sink = app_log.FileSink(blocker / "logs")
+        self.assertFalse(sink.ok)
+        sink.write("nothing happens\n")
+        sink.close()
+
+    def test_helpers(self):
+        self.assertRegex(app_log.stamp("x"), r"^\d{2}:\d{2}:\d{2} x$")
+        self.assertEqual(app_log.short("a\n  b"), "a b")
+        self.assertEqual(len(app_log.short("x" * 100, 10)), 10)
+
+
+if __name__ == "__main__":
+    unittest.main()
