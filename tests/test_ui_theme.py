@@ -55,10 +55,82 @@ class PlayerIconColorsTests(unittest.TestCase):
     def test_disabled_controls_are_neutral_even_when_hovered(self):
         for theme in CONCRETE_THEMES:
             palette = resolve_palette(theme)
+            face = ui_theme.player_chip_colors(palette, "play", enabled=False).face
             for hovered in (False, True):
                 self.assertEqual(ui_theme.player_icon_colors(
                     palette, "play", enabled=False, hovered=hovered),
-                    (palette.FG2, palette.SURFACE))
+                    (palette.FG2, face))
+            self.assertGreaterEqual(contrast_ratio(palette.FG2, face), 3.0, theme)
+
+    def test_icon_colours_sit_on_the_chip_face_in_every_state(self):
+        roles = ("play", "pause", "stop", "next", "snapshot", "open_folder", "volume",
+                 "muted", "fullscreen")
+        for theme, accent in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES):
+            palette = resolve_palette(theme, accent)
+            for role, hovered, pressed in itertools.product(roles, (False, True), (False, True)):
+                with self.subTest(theme=theme, accent=accent, role=role, hovered=hovered,
+                                  pressed=pressed):
+                    fg, bg = ui_theme.player_icon_colors(palette, role, hovered=hovered,
+                                                         pressed=pressed)
+                    chip = ui_theme.player_chip_colors(palette, role, hovered=hovered,
+                                                       pressed=pressed)
+                    self.assertEqual(bg, chip.face)
+                    self.assertGreaterEqual(contrast_ratio(fg, bg), 3.0)
+
+
+class PlayerChipColorsTests(unittest.TestCase):
+    """The raised chip under each transport icon (bevel, hover, pressed, disabled)."""
+
+    ICONS = ("play", "pause", "stop", "next", "snapshot", "open_folder", "volume", "fullscreen")
+
+    def test_raised_chip_is_lit_top_left_and_shaded_bottom_right_and_inverts_when_pressed(self):
+        lum = ui_theme.relative_luminance
+        for theme, accent, hovered in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES,
+                                                         (False, True)):
+            palette = resolve_palette(theme, accent)
+            for icon in self.ICONS:
+                with self.subTest(theme=theme, accent=accent, icon=icon, hovered=hovered):
+                    chip = ui_theme.player_chip_colors(palette, icon, hovered=hovered)
+                    self.assertGreater(lum(chip.top_left), lum(chip.face))
+                    self.assertGreater(lum(chip.face), lum(chip.bottom_right))
+                    pressed = ui_theme.player_chip_colors(palette, icon, hovered=hovered,
+                                                          pressed=True)
+                    self.assertLess(lum(pressed.top_left), lum(pressed.face))
+                    self.assertLess(lum(pressed.face), lum(pressed.bottom_right))
+                    self.assertNotEqual(pressed.face, chip.face)
+                    for value in (chip.face, chip.top_left, chip.bottom_right,
+                                  pressed.face, pressed.top_left, pressed.bottom_right):
+                        self.assertRegex(value, r"^#[0-9a-f]{6}$")
+
+    def test_face_starts_from_the_button_role_and_hover_tints_it_towards_the_action(self):
+        lum = ui_theme.relative_luminance
+        for theme in CONCRETE_THEMES:
+            palette = resolve_palette(theme)
+            with self.subTest(theme=theme):
+                base = ui_theme.player_chip_colors(palette, "play").face
+                self.assertEqual(base, palette.BTN)
+                hover = ui_theme.player_chip_colors(palette, "play", hovered=True).face
+                self.assertNotEqual(hover, base)
+                if palette.dark:
+                    self.assertGreater(lum(hover), lum(base))
+                else:
+                    self.assertLess(lum(hover), lum(base))
+                # The tint carries the action: play and stop hover faces differ.
+                self.assertNotEqual(
+                    hover, ui_theme.player_chip_colors(palette, "stop", hovered=True).face)
+
+    def test_disabled_chip_is_flat_and_close_to_the_surface_whatever_the_pointer_does(self):
+        lum = ui_theme.relative_luminance
+        for theme in CONCRETE_THEMES:
+            palette = resolve_palette(theme)
+            with self.subTest(theme=theme):
+                chip = ui_theme.player_chip_colors(palette, "play", enabled=False)
+                self.assertEqual((chip.top_left, chip.bottom_right), (chip.face, chip.face))
+                low, high = sorted((lum(palette.BTN), lum(palette.SURFACE)))
+                self.assertTrue(low <= lum(chip.face) <= high)
+                for hovered, pressed in ((True, False), (False, True), (True, True)):
+                    self.assertEqual(ui_theme.player_chip_colors(
+                        palette, "play", enabled=False, hovered=hovered, pressed=pressed), chip)
 
 
 class DeriveAccentTests(unittest.TestCase):

@@ -91,8 +91,15 @@ class PlayerPanelTests(unittest.TestCase):
         self.root.update_idletasks()
         return panel
 
+    def _chip(self, canvas):
+        """(face, top_left, bottom_right) as drawn: the face rectangle and the
+        bevel bands in drawing order (top, left, bottom, right)."""
+        face = canvas.itemcget(canvas.find_withtag("chip_face")[0], "fill")
+        bevel = [canvas.itemcget(item, "fill") for item in canvas.find_withtag("chip_bevel")]
+        return face, bevel
+
     def test_transport_colours_follow_playback_hover_and_theme(self):
-        from videotranslator.ui_theme import player_icon_colors
+        from videotranslator.ui_theme import player_chip_colors, player_icon_colors
 
         canvas = self.panel._icon_controls["play_pause"]
         for theme in ("graphite", "light"):
@@ -103,9 +110,44 @@ class PlayerPanelTests(unittest.TestCase):
                 for hovered in (True, False):
                     self.panel._hover_icon("play_pause", hovered)
                     fg, bg = player_icon_colors(self.theme.palette, icon, hovered=hovered)
-                    self.assertEqual(canvas.cget("bg"), bg)
+                    chip = player_chip_colors(self.theme.palette, icon, hovered=hovered)
+                    # The canvas keeps the row colour; the chip carries the face.
+                    self.assertEqual(canvas.cget("bg"), self.theme.palette.SURFACE)
+                    face, bevel = self._chip(canvas)
+                    self.assertEqual(face, bg)
+                    self.assertEqual(bevel, [chip.top_left, chip.top_left,
+                                             chip.bottom_right, chip.bottom_right])
                     for item in canvas.find_withtag("icon"):
                         self.assertEqual(canvas.itemcget(item, "fill"), fg)
+                    # The icon is drawn above the chip.
+                    self.assertGreater(min(canvas.find_withtag("icon")),
+                                       max(canvas.find_withtag("chip")))
+
+    def test_pressing_a_control_sinks_its_chip_until_release_and_still_dispatches(self):
+        from videotranslator.ui_theme import player_chip_colors
+
+        self.panel.render(self._state(status="paused"), position=12.0)
+        canvas = self.panel._icon_controls["stop"]
+        raised = player_chip_colors(self.theme.palette, "stop")
+        pressed = player_chip_colors(self.theme.palette, "stop", pressed=True)
+        self.assertEqual(self._chip(canvas)[0], raised.face)
+        self.panel._press_icon("stop")
+        face, bevel = self._chip(canvas)
+        self.assertEqual(face, pressed.face)
+        self.assertEqual(bevel[0], pressed.top_left)
+        self.assertEqual(bevel[-1], pressed.bottom_right)
+        self.assertEqual(self.commands, [("stop", {})])
+        self.panel._release_icon("stop")
+        self.assertEqual(self._chip(canvas)[0], raised.face)
+        self.assertEqual(self.commands, [("stop", {})])
+        # A disabled control: flat chip, no relief, no command.
+        self.panel.render(self._state(item=None, status="idle"), position=None)
+        disabled = player_chip_colors(self.theme.palette, "stop", enabled=False)
+        self.panel._press_icon("stop")
+        face, bevel = self._chip(canvas)
+        self.assertEqual((face, bevel), (disabled.face, []))
+        self.panel._release_icon("stop")
+        self.assertEqual(self.commands, [("stop", {})])
 
     def test_empty_player_transport_is_neutral_and_does_not_dispatch(self):
         self.panel.render(self._state(item=None, status="idle"), position=None)

@@ -311,21 +311,64 @@ _PLAYER_ACTION_COLORS = {
 }
 
 
-def player_icon_colors(palette: Palette, icon: str, *, enabled: bool = True,
-                       hovered: bool = False) -> tuple[str, str]:
-    """Return semantic icon/background colours with at least 3:1 icon contrast."""
-    if not enabled:
-        return palette.FG2, palette.SURFACE
+def _player_action_color(palette: Palette, icon: str) -> str:
     role = "navigation" if icon in ("previous", "back", "forward", "next") else icon
     if role == "muted":
         role = "stop"
-    color = _PLAYER_ACTION_COLORS[palette.dark].get(role, palette.FG)
-    background = mix(color, palette.SURFACE, 0.15) if hovered else palette.SURFACE
+    return _PLAYER_ACTION_COLORS[palette.dark].get(role, palette.FG)
+
+
+@dataclass(frozen=True)
+class ChipColors:
+    """Colours of the raised chip drawn under a transport icon."""
+
+    face: str
+    top_left: str       # lit edge when raised, shaded when pressed
+    bottom_right: str   # shaded edge when raised, lit when pressed
+
+
+def player_chip_colors(palette: Palette, icon: str, *, enabled: bool = True,
+                       hovered: bool = False, pressed: bool = False) -> ChipColors:
+    """The chip under a transport icon, from palette roles only.
+
+    The face is the theme's button surface (BTN), with a bevel: lit edge top
+    and left, shaded edge bottom and right, swapped (and the face sunk a
+    little) while pressed. Hovering tints the face with the action colour of
+    the icon. A disabled chip is flat and sits between BTN and SURFACE: the
+    missing relief tells the state. Mixes of palette roles only, so every
+    theme (dark or light) and accent gets a consistent relief.
+    """
+    if not enabled:
+        face = mix(palette.BTN, palette.SURFACE, 0.5)
+        return ChipColors(face, face, face)
+    face = palette.BTN
+    if hovered:
+        face = mix(_player_action_color(palette, icon), face, 0.15)
+    if pressed:
+        face = darken(face, 0.08 if palette.dark else 0.05)
+    if palette.dark:
+        lit, shade = lighten(face, 0.22), darken(face, 0.45)
+    else:
+        lit, shade = lighten(face, 0.7), darken(face, 0.2)
+    if pressed:
+        lit, shade = shade, lit
+    return ChipColors(face, lit, shade)
+
+
+def player_icon_colors(palette: Palette, icon: str, *, enabled: bool = True,
+                       hovered: bool = False, pressed: bool = False) -> tuple[str, str]:
+    """Semantic icon colour and the chip face under it, with at least 3:1
+    icon contrast against that face."""
+    face = player_chip_colors(palette, icon, enabled=enabled, hovered=hovered,
+                              pressed=pressed).face
+    if not enabled:
+        return palette.FG2, face
+    color = _player_action_color(palette, icon)
     for _ in range(20):
-        if contrast_ratio(color, background) >= 3.0:
+        if contrast_ratio(color, face) >= 3.0:
             break
         color = mix(palette.FG, color, 0.15)
-    return color, background
+    return color, face
 
 
 # -- Settings -------------------------------------------------------------

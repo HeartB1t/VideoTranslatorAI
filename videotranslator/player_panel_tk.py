@@ -33,7 +33,7 @@ from .player_core import (
     playlist_groups,
     x_to_seconds,
 )
-from .ui_theme import player_icon_colors, resolve_palette
+from .ui_theme import ChipColors, player_chip_colors, player_icon_colors, resolve_palette
 
 VIDEO_BG = "#000000"
 TEXT_FG = "#a3a3a3"
@@ -415,6 +415,7 @@ class PlayerPanel(_P1PlayerPanel):
         self.transport_row.pack(fill="x", padx=6, pady=(2, 6))
         self._icon_controls: dict[str, tk.Canvas] = {}
         self._hovered_icon: str | None = None
+        self._pressed_icon: str | None = None
         self._transport_widgets: dict[str, tk.Widget] = {}
         for name in ("previous", "back", "stop", "play_pause", "forward", "next",
                      "snapshot", "open_folder"):
@@ -443,7 +444,8 @@ class PlayerPanel(_P1PlayerPanel):
             highlightbackground=palette.SURFACE, highlightcolor=palette.ACC,
             takefocus=1, cursor="hand2",
         )
-        canvas.bind("<Button-1>", lambda _event, value=name: self._activate_icon(value))
+        canvas.bind("<Button-1>", lambda _event, value=name: self._press_icon(value))
+        canvas.bind("<ButtonRelease-1>", lambda _event, value=name: self._release_icon(value))
         self._keyboard_operable(canvas, lambda value=name: self._activate_icon(value))
         canvas.bind("<Enter>", lambda _event, value=name: self._hover_icon(value, True))
         canvas.bind("<Leave>", lambda _event, value=name: self._hover_icon(value, False))
@@ -478,16 +480,20 @@ class PlayerPanel(_P1PlayerPanel):
 
     def _draw_icon(self, control: str) -> None:
         canvas = self._icon_controls[control]
-        canvas.delete("icon")
+        canvas.delete("chip", "icon")
         size = max(14, round(16 * self._scale))
-        canvas.configure(width=size + 8, height=size + 8)
+        extent = size + 8
+        canvas.configure(width=extent, height=extent)
         offset = 4.0
         icon = self._icon_name(control)
         enabled = self._icon_enabled(control)
-        color, background = player_icon_colors(
-            self._palette, icon, enabled=enabled, hovered=self._hovered_icon == control)
-        canvas.configure(bg=background, highlightbackground=background,
+        state = {"enabled": enabled, "hovered": self._hovered_icon == control,
+                 "pressed": self._pressed_icon == control}
+        color, _face = player_icon_colors(self._palette, icon, **state)
+        surface = self._palette.SURFACE
+        canvas.configure(bg=surface, highlightbackground=surface,
                          cursor="hand2" if enabled else "arrow")
+        self._draw_chip(canvas, extent, player_chip_colors(self._palette, icon, **state))
         for kind, raw in icon_shapes(icon, size):
             coords = [value + offset for value in raw]
             if kind == "line":
@@ -501,6 +507,22 @@ class PlayerPanel(_P1PlayerPanel):
             else:
                 canvas.create_polygon(*coords, fill=color, outline=color, tags="icon")
 
+    def _draw_chip(self, canvas: tk.Canvas, extent: int, chip: ChipColors) -> None:
+        """The raised chip under an icon: face, then a bevel of ``edge`` pixels
+        (lit top and left, shaded bottom and right; the theme swaps them
+        while pressed and flattens them when disabled)."""
+        edge = max(1, round(1.2 * self._scale))
+        face = {"fill": chip.face, "outline": chip.face}
+        canvas.create_rectangle(0, 0, extent, extent, tags=("chip", "chip_face"), **face)
+        if chip.top_left == chip.face == chip.bottom_right:
+            return
+        lit = {"fill": chip.top_left, "width": 0, "tags": ("chip", "chip_bevel")}
+        shade = {"fill": chip.bottom_right, "width": 0, "tags": ("chip", "chip_bevel")}
+        canvas.create_rectangle(0, 0, extent, edge, **lit)
+        canvas.create_rectangle(0, 0, edge, extent, **lit)
+        canvas.create_rectangle(0, extent - edge, extent, extent, **shade)
+        canvas.create_rectangle(extent - edge, 0, extent, extent, **shade)
+
     def _icon_enabled(self, control: str) -> bool:
         # Playlist navigation can load another item even after Stop clears it.
         if control in ("volume", "fullscreen", "previous", "next"):
@@ -510,6 +532,19 @@ class PlayerPanel(_P1PlayerPanel):
     def _activate_icon(self, control: str) -> None:
         if self._icon_enabled(control):
             self._activate(self._ACTIONS[control])
+
+    def _press_icon(self, control: str) -> None:
+        # The chip sinks for as long as the button is held; the command still
+        # fires on press, as before (keyboard activation is unchanged).
+        self._pressed_icon = control
+        self._draw_icon(control)
+        self._activate_icon(control)
+
+    def _release_icon(self, control: str) -> None:
+        if self._pressed_icon == control:
+            self._pressed_icon = None
+            if control in self._icon_controls and self._icon_controls[control].winfo_exists():
+                self._draw_icon(control)
 
     def _hover_icon(self, control: str, entered: bool) -> None:
         self._hovered_icon = control if entered else None
