@@ -410,6 +410,28 @@ class HoverTipTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_a_tip_near_the_right_edge_of_the_screen_stays_on_it(self):
+        # The header gear sits at the far right: a tip aligned on its left
+        # edge ran off a maximised window.
+        from videotranslator.player_panel_tk import HoverTip
+
+        root = tk.Tk()
+        try:
+            width = root.winfo_screenwidth()
+            root.geometry(f"40x30+{width - 40}+0")
+            label = tk.Label(root, text="x")
+            label.pack()
+            root.update()
+            tip = HoverTip(label, lambda: "A caption much wider than the gear under it",
+                           colors_fn=lambda: ("#111111", "#eeeeee"))
+            tip._show()
+            tip._tip.update()
+            self.assertLessEqual(tip._tip.winfo_rootx() + tip._tip.winfo_width(), width)
+            self.assertGreaterEqual(tip._tip.winfo_rootx(), 0)
+            tip.hide()
+        finally:
+            root.destroy()
+
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class GuiPlayerWiringTests(unittest.TestCase):

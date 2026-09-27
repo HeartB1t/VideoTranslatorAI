@@ -134,7 +134,11 @@ class HoverTip:
         tip.wm_overrideredirect(True)
         tk.Label(tip, text=text, bg=bg, fg=fg, font="VT.Small", justify="left",
                  wraplength=360, padx=6, pady=4).pack()
-        x = self._widget.winfo_rootx()
+        # Under the widget, from its left edge, but kept on the screen: a
+        # widget at the far right (the header gear) would push it off.
+        tip.update_idletasks()
+        right_edge = self._widget.winfo_screenwidth() - tip.winfo_reqwidth() - 4
+        x = max(0, min(self._widget.winfo_rootx(), right_edge))
         y = self._widget.winfo_rooty() + self._widget.winfo_height() + 4
         tip.wm_geometry(f"+{x}+{y}")
         self._tip = tip

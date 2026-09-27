@@ -7159,6 +7159,9 @@ class App(tk.Tk):
         self._keyboard_operable(self._btn_settings, self._open_settings)
         self._btn_settings.bind("<Enter>", lambda e: self._paint_gear(hover=True))
         self._btn_settings.bind("<Leave>", lambda e: self._paint_gear())
+        # Caption under the pointer, in the UI language (read when it opens).
+        self._btn_settings_tip = _HoverTip(self._btn_settings, lambda: self._s("settings_title"),
+                                           colors_fn=lambda: (SEL, FG))
 
         # Thin border line under header
         tk.Frame(header_wrap, bg=BORDER, height=1).grid(

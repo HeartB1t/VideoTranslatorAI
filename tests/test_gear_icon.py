@@ -101,6 +101,9 @@ class HeaderGearTests(unittest.TestCase):
             self.assertIsNot(shown(), idle)
             gear.event_generate("<Leave>")
             self.assertIs(shown(), idle)
+            # The caption under the pointer: "Settings" in the UI language.
+            self.assertEqual(app._btn_settings_tip._text_fn(),
+                             gui.UI_STRINGS["en"]["settings_title"])
             app._ui_theme_var.set("light")
             app._apply_ui_settings()
             light = app._theme.palette
