@@ -3894,6 +3894,11 @@ UI_LANG_CODES = {code for code, _ in UI_LANG_OPTIONS}
 from videotranslator.ui_strings_player import merge_into as _merge_player_strings  # noqa: E402
 _PLAYER_STRING_PROBLEMS = _merge_player_strings(UI_STRINGS)
 from videotranslator.ui_strings_models import merge_into as _merge_models_strings  # noqa: E402
+from videotranslator.voice_preview import preview_sentence as _preview_sentence  # noqa: E402
+from videotranslator.voice_preview import synthesize_edge as _synthesize_edge_preview  # noqa: E402
+from videotranslator.voice_preview_tk import PreviewHub as _PreviewHub  # noqa: E402
+from videotranslator.voice_preview_tk import SpeakerButton as _SpeakerButton  # noqa: E402
+from videotranslator.voice_preview_tk import error_key as _preview_error_key  # noqa: E402
 _PLAYER_STRING_PROBLEMS += _merge_models_strings(UI_STRINGS)
 
 
@@ -6068,6 +6073,10 @@ class App(tk.Tk):
         self._ui_accent_var = tk.StringVar(value=self._ui_settings["ui_accent"])
         self._ui_scale_var  = tk.StringVar(value=self._ui_settings["ui_scale"])
         self._settings_win  = None
+        # One voice preview at a time for the whole app (speaker icons).
+        self._voice_preview_hub = _PreviewHub(self._post_if_alive)
+        self._voice_preview_key = None
+        self._voice_speaker = None
         self._model     = tk.StringVar(value=DEFAULT_WHISPER_MODEL)
         self._lang_src  = tk.StringVar(value="auto")
         self._lang_tgt  = tk.StringVar(value="it")
@@ -7555,6 +7564,11 @@ class App(tk.Tk):
             voice_lbl_row, text=self._s("label_voice"),
             bg=CARD, fg=FG2, font="VT.Small")
         self._lbl_voice.pack(side="left")
+        self._voice_speaker = _SpeakerButton(
+            voice_lbl_row, palette=self._theme.palette, bg_role="SURFACE", ui_s=self._s,
+            on_click=self._preview_edge_voice, scale=self._theme.scale)
+        self._voice_speaker.canvas.pack(side="left", padx=(6, 0))
+        self._voice_preview_hub.add_listener(self._on_voice_preview_state)
 
         self._voice_frame = tk.Frame(inner, bg=CARD)
         self._voice_frame.pack(fill="x", pady=(0, 6))
@@ -8167,6 +8181,9 @@ class App(tk.Tk):
         live_bar = getattr(self, "_live_bar", None)
         if live_bar is not None:
             live_bar.apply_theme()
+        speaker = getattr(self, "_voice_speaker", None)
+        if speaker is not None:
+            speaker.apply_palette(self._theme.palette, self._theme.scale)
         # Another text size changes the cards' width, and a large shrink can
         # leave the view below the content without any <Configure>.
         self.after_idle(self._sync_right_column)
@@ -8345,6 +8362,7 @@ class App(tk.Tk):
         def _refresh_pills(*_):
             """Re-color all pill buttons to reflect selection."""
             cur = self._voice.get()
+            self._voice_preview_hub.stop_if("edge:")
             for btn_v, btn_w in _pill_map.items():
                 if btn_v == cur:
                     btn_w.configure(bg=ACC_SOFT, fg=FG, highlightbackground=ACC)
@@ -8373,6 +8391,32 @@ class App(tk.Tk):
         # Apply initial coloring
         _refresh_pills()
         self._update_start_summary()
+
+    def _preview_edge_voice(self) -> None:
+        """Speaker icon: say a short sentence in the target language with the
+        selected Edge-TTS voice and speed (free, online); click again to stop."""
+        voice = self._voice.get()
+        rate = int(round(self._tts_rate.get()))
+        text = _preview_sentence(self._lang_tgt.get())
+        key = f"edge:{voice}:{rate}"
+        self._voice_preview_key = key
+        self._voice_preview_hub.toggle(
+            key, lambda: _synthesize_edge_preview(text, voice, rate))
+
+    def _on_voice_preview_state(self, key, state, kind) -> None:
+        speaker = self._voice_speaker
+        if speaker is None:
+            return
+        if key != self._voice_preview_key:
+            if speaker.state != "error":
+                speaker.set_state("idle")
+            return
+        if state == "error":
+            text = self._s(_preview_error_key(kind))
+            speaker.set_state("error", text)
+            print(f"[voice preview] {text}")
+        else:
+            speaker.set_state(state)
 
     def _on_lang_tgt_change(self, _=None):
         self._lang_tgt.set(list(LANGUAGES.keys())[self._tgt_combo.current()])
@@ -8896,7 +8940,8 @@ class App(tk.Tk):
         self._elevenlabs_dialog = ElevenLabsDialog(
             self, ui_s=self._s, theme=self._theme, make_button=self._flat_btn,
             settings=self._elevenlabs_settings(), api_key=load_elevenlabs_key(),
-            target_lang=self._lang_tgt.get(), on_save=self._save_elevenlabs_settings)
+            target_lang=self._lang_tgt.get(), on_save=self._save_elevenlabs_settings,
+            preview_hub=self._voice_preview_hub)
 
     def _open_models_dialog(self) -> None:
         dialog = self._models_dialog
@@ -10688,6 +10733,10 @@ class App(tk.Tk):
         """Stop native player resources before destroying their Tk host window."""
         self._destroying = True
         self._theme.close()
+        # Never wait here: the preview worker may be in a network read. It stops
+        # its player as soon as it sees the close request.
+        with contextlib.suppress(Exception):
+            self._voice_preview_hub.close(0.0)
         # A live bar change made just before closing is still waiting for its
         # debounced save: write it now instead of losing it.
         if getattr(self, "_live_save_after", None) is not None:

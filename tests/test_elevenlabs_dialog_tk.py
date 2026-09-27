@@ -48,12 +48,45 @@ class _Client:
         return VOICES
 
 
+SAMPLED = [Voice("v1", "Adam", "", "male", ("it",), "https://s.test/en.mp3",
+                  (("it", "https://s.test/it.mp3"),))]
+
+
+class _Hub:
+    def __init__(self):
+        self.toggles, self.listeners, self.stopped = [], [], []
+
+    def add_listener(self, fn):
+        self.listeners.append(fn)
+
+    def remove_listener(self, fn):
+        self.listeners.remove(fn)
+
+    def toggle(self, key, loader):
+        self.toggles.append((key, loader()))
+
+    def stop_if(self, prefix):
+        self.stopped.append(prefix)
+
+    def emit(self, key, state, kind=None):
+        for fn in list(self.listeners):
+            fn(key, state, kind)
+
+
 class CacheTests(unittest.TestCase):
     def test_catalogue_round_trip_has_no_secret(self):
         cache = ed.catalog_to_cache(VOICES, MODELS)
         self.assertEqual(ed.voices_from_cache(cache["voices"]), VOICES)
         self.assertEqual(ed.models_from_cache(cache["models"]), MODELS)
         self.assertEqual(ed.voices_from_cache([{"bad": 1}]), [])
+
+    def test_catalogue_keeps_the_voice_samples(self):
+        voices = [Voice("v1", "Adam", "", "male", ("it",), "https://s.test/en.mp3",
+                        (("it", "https://s.test/it.mp3"),))]
+        cache = ed.catalog_to_cache(voices, MODELS)
+        self.assertEqual(ed.voices_from_cache(cache["voices"]), voices)
+        self.assertEqual(ed.voices_from_cache([{"voice_id": "v", "name": "N",
+                                                "previews": ["bad"]}]), [])
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
@@ -66,12 +99,14 @@ class DialogTests(unittest.TestCase):
     def tearDown(self):
         self.root.destroy()
 
-    def _dialog(self, settings=None, key="sk", fail=None, lang="it"):
+    def _dialog(self, settings=None, key="sk", fail=None, lang="it", hub=None,
+                client=None):
         dlg = ed.ElevenLabsDialog(
             self.root, ui_s=_s, theme=_Theme(), make_button=_make_button,
             settings=settings or {}, api_key=key, target_lang=lang,
             on_save=lambda st, k: self.saved.append((st, k)),
-            client_factory=lambda k: _Client(k, fail))
+            client_factory=client or (lambda k: _Client(k, fail)), preview_hub=hub,
+            sample_loader=lambda url: f"audio:{url}".encode())
         self.addCleanup(dlg.close)
         return dlg
 
@@ -128,6 +163,54 @@ class DialogTests(unittest.TestCase):
         self.assertEqual(dlg.selected_voice().voice_id, "v2")
         self.assertEqual(dlg.selected_model().model_id, "eleven_multilingual_v2")
         self.assertFalse(dlg._fallback.get())
+
+
+    def test_no_speaker_without_a_hub(self):
+        self.assertIsNone(self._dialog().speaker)
+
+    def test_speaker_plays_the_sample_in_the_target_language(self):
+        hub = _Hub()
+        dlg = self._dialog({"catalog": ed.catalog_to_cache(SAMPLED, MODELS)}, hub=hub)
+        dlg.speaker.click()
+        key = "el:v1:https://s.test/it.mp3"
+        self.assertEqual(hub.toggles, [(key, b"audio:https://s.test/it.mp3")])
+        hub.emit(key, "playing")
+        self.assertEqual(dlg.speaker.state, "playing")
+        hub.emit("edge:x", "loading")
+        self.assertEqual(dlg.speaker.state, "idle")
+        hub.emit(key, "error", "network")
+        self.assertEqual(dlg.speaker.state, "error")
+        self.assertEqual(dlg._status.cget("text"), _s("vp_err_network"))
+        dlg._voice_changed()
+        dlg.close()
+        self.assertEqual(hub.listeners, [])
+        self.assertEqual(hub.stopped, ["el:", "el:"])
+
+    def test_old_catalogue_is_refreshed_once_to_get_the_samples(self):
+        hub = _Hub()
+
+        class Client(_Client):
+            def voices(self):
+                return SAMPLED
+
+        dlg = self._dialog({"catalog": ed.catalog_to_cache(VOICES, MODELS),
+                            "voice_id": "v1"}, hub=hub, client=lambda k: Client(k))
+        dlg.preview()
+        for _ in range(200):
+            self.root.update()
+            if hub.toggles:
+                break
+            self.root.after(10)
+        self.assertEqual(hub.toggles[0][0], "el:v1:https://s.test/it.mp3")
+
+    def test_voice_without_sample_is_explained(self):
+        hub = _Hub()
+        dlg = self._dialog({"catalog": ed.catalog_to_cache(VOICES, MODELS)}, key="",
+                           hub=hub)
+        dlg.preview()
+        self.assertEqual(hub.toggles, [])
+        self.assertEqual(dlg._status.cget("text"), _s("vp_err_no_sample"))
+        self.assertEqual(dlg.speaker.state, "error")
 
 
 if __name__ == "__main__":

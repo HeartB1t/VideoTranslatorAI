@@ -113,6 +113,19 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(el.pick_live_model(models, "en").model_id, "eleven_multilingual_v2")
         self.assertIsNone(el.pick_live_model(models, "ja"))
 
+    def test_voice_samples_prefer_the_target_language(self):
+        voices = el.parse_voices({"voices": [{
+            "voice_id": "v1", "name": "Adam", "preview_url": "https://s.test/en.mp3",
+            "verified_languages": [
+                {"language": "it", "preview_url": "https://s.test/it.mp3"},
+                {"language": "it", "preview_url": "https://s.test/it2.mp3"},
+                {"language": "de"}, "junk"]}]})
+        voice = voices[0]
+        self.assertEqual(voice.previews, (("it", "https://s.test/it.mp3"),))
+        self.assertEqual(voice.sample_url("it-IT"), "https://s.test/it.mp3")
+        self.assertEqual(voice.sample_url("de"), "https://s.test/en.mp3")
+        self.assertEqual(el.Voice("v", "N").sample_url("it"), "")
+
     def test_synthesize_sends_language_only_to_models_that_accept_it(self):
         opener = _Opener([b"mp3", b"mp3"])
         client = el.ElevenLabsClient("k", opener=opener)

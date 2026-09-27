@@ -18,6 +18,8 @@ from typing import Any, Callable
 
 from .elevenlabs_tts import (ElevenLabsClient, ElevenLabsError, Model, Voice,
                              pick_live_model)
+from .voice_preview import fetch_sample
+from .voice_preview_tk import SpeakerButton, error_key
 
 _ERROR_KEYS = {kind: f"el_err_{kind}" for kind in
                ("auth", "quota", "rate_limited", "unavailable", "timeout", "invalid")}
@@ -27,9 +29,12 @@ def voices_from_cache(items) -> list[Voice]:
     out = []
     for item in items or []:
         try:
+            previews = tuple((str(code), str(url)) for code, url in
+                             (item.get("previews") or {}).items())
             out.append(Voice(item["voice_id"], item["name"], item.get("accent", ""),
-                             item.get("gender", ""), tuple(item.get("languages", ()))))
-        except (KeyError, TypeError):
+                             item.get("gender", ""), tuple(item.get("languages", ())),
+                             str(item.get("preview_url") or ""), previews))
+        except (KeyError, TypeError, AttributeError):
             continue
     return out
 
@@ -47,7 +52,9 @@ def models_from_cache(items) -> list[Model]:
 
 def catalog_to_cache(voices: list[Voice], models: list[Model]) -> dict:
     return {"voices": [{"voice_id": v.voice_id, "name": v.name, "accent": v.accent,
-                        "gender": v.gender, "languages": list(v.languages)} for v in voices],
+                        "gender": v.gender, "languages": list(v.languages),
+                        "preview_url": v.preview_url, "previews": dict(v.previews)}
+                       for v in voices],
             "models": [{"model_id": m.model_id, "name": m.name,
                         "languages": list(m.languages), "can_tts": m.can_tts}
                        for m in models]}
@@ -55,14 +62,23 @@ def catalog_to_cache(voices: list[Voice], models: list[Model]) -> dict:
 
 class ElevenLabsDialog:
     """``settings`` keys: enabled, voice_id, model_id, fallback, catalog.
-    ``on_save(settings, api_key)`` persists them (the key goes to the keyring)."""
+    ``on_save(settings, api_key)`` persists them (the key goes to the keyring).
+    ``preview_hub`` (a ``PreviewHub``) adds the speaker icon that plays the
+    voice's free sample."""
 
     def __init__(self, parent: tk.Misc, *, ui_s: Callable[[str], str], theme: Any,
                  make_button: Callable[..., tuple[tk.Widget, tk.Button]],
                  settings: dict, api_key: str, target_lang: str,
                  on_save: Callable[[dict, str], None],
-                 client_factory: Callable[[str], Any] = ElevenLabsClient) -> None:
+                 client_factory: Callable[[str], Any] = ElevenLabsClient,
+                 preview_hub: Any = None,
+                 sample_loader: Callable[[str], bytes] = fetch_sample) -> None:
         self._s = ui_s
+        self._hub = preview_hub
+        self._sample_loader = sample_loader
+        self._refreshed_for_preview = False
+        self._pending_preview = False
+        self.speaker: SpeakerButton | None = None
         self._on_save = on_save
         self._client_factory = client_factory
         self._lang = target_lang
@@ -119,6 +135,13 @@ class ElevenLabsDialog:
         self._voice_combo = ttk.Combobox(grid, state="readonly", width=52)
         self._voice_combo.grid(row=3, column=1, columnspan=2, sticky="w", padx=(8, 0),
                                pady=(6, 0))
+        self._voice_combo.bind("<<ComboboxSelected>>", lambda _e: self._voice_changed())
+        if preview_hub is not None:
+            self.speaker = SpeakerButton(grid, palette=pal, bg_role="BG", ui_s=ui_s,
+                                         on_click=self.preview, tip_key="vp_tip_sample",
+                                         scale=getattr(theme, "scale", 1.0))
+            self.speaker.canvas.grid(row=3, column=3, sticky="w", padx=(6, 0), pady=(6, 0))
+            preview_hub.add_listener(self._on_preview_state)
         wrap, self._refresh_btn = make_button(grid, text=ui_s("el_refresh"),
                                               command=self.verify)
         wrap.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
@@ -185,6 +208,55 @@ class ElevenLabsDialog:
         index = self._voice_combo.current()
         return self._voices[index] if 0 <= index < len(self._voices) else None
 
+    # -- voice sample ---------------------------------------------------------
+
+    def _sample_key(self, voice: Voice, url: str) -> str:
+        return f"el:{voice.voice_id}:{url}"
+
+    def preview(self) -> None:
+        """Play (or stop) the free sample of the selected voice."""
+        if self._hub is None:
+            return
+        voice = self.selected_voice()
+        if voice is None:
+            return
+        url = voice.sample_url(self._lang)
+        if not url:
+            # A catalogue cached before samples were kept: reload it once.
+            if (not self._refreshed_for_preview and self._key_var.get().strip()
+                    and not any(v.preview_url or v.previews for v in self._voices)):
+                self._refreshed_for_preview = True
+                self._pending_preview = True
+                self.verify()
+                return
+            if self.speaker is not None:
+                self.speaker.set_state("error", self._s("vp_err_no_sample"))
+            self._status.configure(text=self._s("vp_err_no_sample"))
+            return
+        loader = self._sample_loader
+        self._hub.toggle(self._sample_key(voice, url), lambda: loader(url))
+
+    def _voice_changed(self) -> None:
+        if self._hub is not None:
+            self._hub.stop_if("el:")
+
+    def _on_preview_state(self, key: str, state: str, kind: str | None) -> None:
+        if self._closed or self.speaker is None:
+            return
+        voice = self.selected_voice()
+        mine = voice is not None and key == self._sample_key(
+            voice, voice.sample_url(self._lang))
+        if not mine:
+            if self.speaker.state != "error":
+                self.speaker.set_state("idle")
+            return
+        if state == "error":
+            text = self._s(error_key(kind))
+            self.speaker.set_state("error", text)
+            self._status.configure(text=text)
+        else:
+            self.speaker.set_state(state)
+
     # -- network (worker) ---------------------------------------------------
 
     def verify(self) -> None:
@@ -241,7 +313,11 @@ class ElevenLabsDialog:
             self._voices = list(voices)
             self._status.configure(text="")
             self._fill(model.model_id if model else None, voice.voice_id if voice else None)
+            if self._pending_preview:
+                self._pending_preview = False
+                self.preview()
         else:
+            self._pending_preview = False
             self._status.configure(text=self._s(_ERROR_KEYS.get(value, "el_err_unavailable")))
 
     # -- save / close -------------------------------------------------------
@@ -270,6 +346,9 @@ class ElevenLabsDialog:
         if self._closed:
             return
         self._closed = True
+        if self._hub is not None:
+            self._hub.remove_listener(self._on_preview_state)
+            self._hub.stop_if("el:")
         if self._poll_after is not None:
             try:
                 self.win.after_cancel(self._poll_after)

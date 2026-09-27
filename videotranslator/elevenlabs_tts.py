@@ -79,6 +79,16 @@ class Voice:
     accent: str = ""
     gender: str = ""
     languages: tuple[str, ...] = ()        # verified languages, when listed
+    preview_url: str = ""                  # free sample of the voice (usually English)
+    previews: tuple[tuple[str, str], ...] = ()   # (language, sample URL) per language
+
+    def sample_url(self, lang: str) -> str:
+        """The free sample in ``lang`` when the voice has one, else the default."""
+        wanted = _lang(lang)
+        for code, url in self.previews:
+            if code == wanted and url:
+                return url
+        return self.preview_url
 
     def label(self) -> str:
         extra = [part for part in (self.accent, self.gender) if part]
@@ -111,12 +121,19 @@ def parse_voices(data: dict) -> list[Voice]:
     voices = []
     for item in data.get("voices") or []:
         labels = item.get("labels") or {}
-        langs = tuple(sorted({_lang(v.get("language", "")) for v in
-                              item.get("verified_languages") or [] if v.get("language")}))
+        verified = [v for v in item.get("verified_languages") or [] if isinstance(v, dict)]
+        langs = tuple(sorted({_lang(v.get("language", "")) for v in verified
+                              if v.get("language")}))
+        previews: dict[str, str] = {}
+        for v in verified:
+            code, url = _lang(v.get("language", "")), v.get("preview_url") or ""
+            if code and url and code not in previews:
+                previews[code] = str(url)
         if item.get("voice_id"):
             voices.append(Voice(item["voice_id"], item.get("name") or item["voice_id"],
                                 labels.get("accent", "") or "", labels.get("gender", "") or "",
-                                langs))
+                                langs, str(item.get("preview_url") or ""),
+                                tuple(sorted(previews.items()))))
     return sorted(voices, key=lambda v: v.name.lower())
 
 
