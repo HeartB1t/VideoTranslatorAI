@@ -20,6 +20,10 @@ set "WAV2LIP_SHA256=ca9ab7b7b812c0e80a6e70a5977c545a1e8a365a6c49d5e533023c034d7a
 set "PUBLIC_SHORTCUT=%PUBLIC%\Desktop\Video Translator AI.lnk"
 set "ICON_PATH=%INSTALL_DIR%\assets\icon.ico"
 set "SCRIPT_DIR=%~dp0"
+:: Setup log: one timestamped line per step and per outcome, for install,
+:: repair and uninstall. Lives in the profile root so an uninstall (which
+:: wipes AppData, Temp and the install folder) never deletes it.
+set "VTAI_SETUP_LOG=%USERPROFILE%\VideoTranslatorAI-setup.log"
 
 :: Per-user paths resolved at runtime for the CURRENT console user
 set "USER_CONFIG=%USERPROFILE%\.videotranslatorai_config.json"
@@ -123,29 +127,32 @@ exit /b 0
 :mode_install
 color 0A
 call :print_banner "Video Translator AI - Installer"
+call :log_session "INSTALL"
 
-call :preflight_arch    || exit /b 1
-call :preflight_disk    || exit /b 1
-call :preflight_network || exit /b 1
+call :preflight_arch    || ( call :logfile "Preflight architecture: FAILED" & exit /b 1 )
+call :preflight_disk    || ( call :logfile "Preflight disk space: FAILED" & exit /b 1 )
+call :preflight_network || ( call :logfile "Preflight Internet: FAILED" & exit /b 1 )
+call :logfile "Preflight architecture, disk space and Internet: ok"
 
 call :legacy_cleanup_current
 
 call :step_python   "1/6"
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "Step 1/6 Python: FAILED - install stopped" & pause & exit /b 1 )
 
 call :step_copy_files "2/6"
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "Step 2/6 copy files: FAILED - install stopped" & pause & exit /b 1 )
 
 call :step_install_deps "3/6" "0"
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "Step 3/6 Python packages: FAILED - install stopped" & pause & exit /b 1 )
 
 call :step_ffmpeg "4/6" "0"
 call :step_player "5/6"
 call :step_shortcut "6/6"
 
 call :validate_install
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "RESULT: installation incomplete" & pause & exit /b 1 )
 call :player_check
+call :logfile "RESULT: installation complete"
 call :print_done "Installation complete"
 pause
 exit /b 0
@@ -157,6 +164,7 @@ exit /b 0
 :mode_repair
 color 0E
 call :print_banner "Video Translator AI - Repair / Update"
+call :log_session "REPAIR"
 echo.
 echo  This will:
 echo    - Re-copy the latest video_translator_gui.py and assets
@@ -170,6 +178,7 @@ set "CONFIRM="
 set /p "CONFIRM=Proceed? [Y/N]: "
 if /i not "%CONFIRM%"=="Y" (
     echo  Cancelled.
+    call :logfile "Repair cancelled by the user"
     pause
     goto end
 )
@@ -178,17 +187,19 @@ if not exist "%INSTALL_DIR%" (
     echo.
     echo  [!] %INSTALL_DIR% not found.
     echo      Repair requires an existing install. Use the Install mode instead.
+    call :logfile "Repair stopped: %INSTALL_DIR% not found, use Install instead"
     pause
     goto end
 )
 
-call :preflight_network || exit /b 1
+call :preflight_network || ( call :logfile "Preflight Internet: FAILED" & exit /b 1 )
+call :logfile "Preflight Internet: ok"
 
 call :step_python   "1/6"
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "Step 1/6 Python: FAILED - repair stopped" & pause & exit /b 1 )
 
 call :step_copy_files "2/6"
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "Step 2/6 copy files: FAILED - repair stopped" & pause & exit /b 1 )
 
 call :step_install_deps "3/6" "1"
 
@@ -199,13 +210,15 @@ call :step_player "5/6"
 if exist "%PUBLIC_SHORTCUT%" (
     echo.
     echo [6/6] Desktop shortcut already present, skipping.
+    call :logfile "Step 6/6 shortcut: already present"
 ) else (
     call :step_shortcut "6/6"
 )
 
 call :validate_install
-if errorlevel 1 ( pause & exit /b 1 )
+if errorlevel 1 ( call :logfile "RESULT: repair incomplete" & pause & exit /b 1 )
 call :player_check
+call :logfile "RESULT: repair complete"
 call :print_done "Repair complete"
 pause
 exit /b 0
@@ -216,6 +229,7 @@ exit /b 0
 :: ============================================================================
 :mode_uninstall
 color 0E
+call :log_session "UNINSTALL"
 :uninst_menu
 cls
 echo.
@@ -240,6 +254,7 @@ echo   [Q] Quit
 echo.
 set "UCHOICE="
 set /p "UCHOICE=Your choice [1/2/3/Q]: "
+call :logfile "Uninstall menu: choice %UCHOICE%"
 if /i "%UCHOICE%"=="1" goto uninst_full
 if /i "%UCHOICE%"=="2" goto uninst_user
 if /i "%UCHOICE%"=="3" goto uninst_custom
@@ -268,6 +283,7 @@ set "CONFIRM="
 set /p "CONFIRM=Type YES (uppercase) to confirm: "
 if not "%CONFIRM%"=="YES" (
     echo  Cancelled.
+    call :logfile "Full uninstall: cancelled by the user"
     pause
     goto uninst_menu
 )
@@ -280,6 +296,7 @@ set /p "Q_PY_FULL=Uninstall Python 3.11 ? [Y/N]: "
 set /p "Q_GIT_FULL=Uninstall Git for Windows ? [Y/N]: "
 set /p "Q_OLL_FULL=Uninstall Ollama (also wipes downloaded models, can be GB) ? [Y/N]: "
 echo.
+call :logfile "Full uninstall: confirmed. Also remove Python=%Q_PY_FULL% Git=%Q_GIT_FULL% Ollama=%Q_OLL_FULL%"
 call :remove_app
 call :remove_shortcut_public
 call :remove_ffmpeg_path
@@ -310,10 +327,12 @@ set "CONFIRM="
 set /p "CONFIRM=Proceed? [Y/N]: "
 if /i not "%CONFIRM%"=="Y" (
     echo  Cancelled.
+    call :logfile "Current user uninstall: cancelled by the user"
     pause
     goto uninst_menu
 )
 echo.
+call :logfile "Current user uninstall: confirmed for %USERNAME%"
 call :remove_user_config_current
 call :remove_user_cache_current
 call :remove_saved_keys
@@ -325,6 +344,7 @@ goto uninst_done
 echo.
 echo  Custom uninstall - answer Y or N for each item.
 echo.
+call :logfile "Custom uninstall: started, each removed item is logged below"
 
 set "Q_APP="
 set /p "Q_APP=Remove application folder %INSTALL_DIR% ? [Y/N]: "
@@ -385,34 +405,42 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
 set "Q_TTS="
 set /p "Q_TTS=Remove TTS group (coqui-tts, transformers) ? [Y/N]: "
 if /i "!Q_TTS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y coqui-tts transformers
+if /i "!Q_TTS!"=="Y" call :logfile "Custom uninstall: pip uninstall coqui-tts transformers - code !ERRORLEVEL!"
 
 set "Q_TORCH="
 set /p "Q_TORCH=Remove PyTorch stack (torch, torchaudio, torchvision, torchcodec) ? [Y/N]: "
 if /i "!Q_TORCH!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y torch torchaudio torchvision torchcodec
+if /i "!Q_TORCH!"=="Y" call :logfile "Custom uninstall: pip uninstall torch torchaudio torchvision torchcodec - code !ERRORLEVEL!"
 
 set "Q_WHI="
 set /p "Q_WHI=Remove Whisper + ctranslate2 ? [Y/N]: "
 if /i "!Q_WHI!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y faster-whisper ctranslate2
+if /i "!Q_WHI!"=="Y" call :logfile "Custom uninstall: pip uninstall faster-whisper ctranslate2 - code !ERRORLEVEL!"
 
 set "Q_DEM="
 set /p "Q_DEM=Remove Demucs ? [Y/N]: "
 if /i "!Q_DEM!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y demucs
+if /i "!Q_DEM!"=="Y" call :logfile "Custom uninstall: pip uninstall demucs - code !ERRORLEVEL!"
 
 set "Q_W2L="
 set /p "Q_W2L=Remove Wav2Lip deps (new-basicsr/basicsr, facexlib, dlib) ? [Y/N]: "
 if /i "!Q_W2L!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y new-basicsr basicsr facexlib dlib
+if /i "!Q_W2L!"=="Y" call :logfile "Custom uninstall: pip uninstall new-basicsr basicsr facexlib dlib - code !ERRORLEVEL!"
 
 set "Q_PYA="
 set /p "Q_PYA=Remove pyannote.audio (speaker diarization) ? [Y/N]: "
 if /i "!Q_PYA!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y pyannote.audio
+if /i "!Q_PYA!"=="Y" call :logfile "Custom uninstall: pip uninstall pyannote.audio - code !ERRORLEVEL!"
 
 set "Q_MIS="
 set /p "Q_MIS=Remove pipeline utilities (yt-dlp, edge-tts, deep-translator, pydub, pyloudnorm, soundfile, sacremoses, sentencepiece) ? [Y/N]: "
 if /i "!Q_MIS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
+if /i "!Q_MIS!"=="Y" call :logfile "Custom uninstall: pip uninstall yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece - code !ERRORLEVEL!"
 
 set "Q_MPV="
 set /p "Q_MPV=Remove the integrated video player package (mpv / python-mpv) ? [Y/N]: "
 if /i "!Q_MPV!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y mpv python-mpv
+if /i "!Q_MPV!"=="Y" call :logfile "Custom uninstall: pip uninstall mpv python-mpv - code !ERRORLEVEL!"
 
 :uninst_custom_tools
 echo.
@@ -434,6 +462,7 @@ goto uninst_done
 
 
 :uninst_done
+call :logfile "RESULT: uninstall complete"
 echo.
 echo  ============================================
 echo    Uninstall complete
@@ -443,6 +472,8 @@ echo  If anything was skipped or you want to double-check, open
 echo  "Apps and features" (Windows Settings) - entries like
 echo  "Python 3.11.9", "Git" or "Visual Studio Build Tools"
 echo  can be removed from there manually.
+echo.
+echo  Setup log (kept on purpose): %VTAI_SETUP_LOG%
 echo.
 pause
 goto end
@@ -465,6 +496,30 @@ echo  ============================================
 echo    %~1
 echo  ============================================
 echo.
+goto :eof
+
+
+:: %~1 = message. Appends "[time] message" to the setup log only: the
+:: console output and the interactive prompts stay exactly as they are.
+:: Always pass the message as ONE quoted argument. Inside the quotes
+:: parentheses are safe; never use < > | ^ or a double quote in it.
+:logfile
+>>"%VTAI_SETUP_LOG%" echo [%TIME%] %~1
+goto :eof
+
+
+:: %~1 = mode name. Writes the session header and tells the user where the
+:: log is. Runs append-only, so repeated runs keep their history.
+:log_session
+>>"%VTAI_SETUP_LOG%" echo(
+>>"%VTAI_SETUP_LOG%" echo ================================================================
+>>"%VTAI_SETUP_LOG%" echo  Video Translator AI - Setup v%SCRIPT_VERSION% - %~1
+>>"%VTAI_SETUP_LOG%" echo  Started: %DATE% %TIME%
+>>"%VTAI_SETUP_LOG%" echo  User: %USERNAME%   Admin: %IS_ADMIN%   Arch: %PROCESSOR_ARCHITECTURE%
+for /f "delims=" %%v in ('ver') do >>"%VTAI_SETUP_LOG%" echo  %%v
+>>"%VTAI_SETUP_LOG%" echo  Script folder: %SCRIPT_DIR%
+>>"%VTAI_SETUP_LOG%" echo ================================================================
+echo  [*] Setup log: %VTAI_SETUP_LOG%
 goto :eof
 
 
@@ -495,6 +550,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo  [+] All core modules importable.
+call :logfile "Validation: core modules torch, faster_whisper, demucs, edge_tts, soundfile, numpy import ok"
 pushd "%INSTALL_DIR%" >nul 2>&1
 "%PYTHON_EXE%" -c "import video_translator_gui" >nul 2>&1
 set "APP_IMPORT_RC=%ERRORLEVEL%"
@@ -509,16 +565,19 @@ if not "%APP_IMPORT_RC%"=="0" (
     echo   Run setup_windows.bat again and choose
     echo   option [2] Repair / Update.
     echo.
+    call :logfile "Validation: the application does not import, code %APP_IMPORT_RC%"
     pause
     exit /b 1
 )
 echo  [+] Application importable.
+call :logfile "Validation: application import ok"
 exit /b 0
 
 
 :check_module
 "%PYTHON_EXE%" -c "import %~1" >nul 2>&1
 if errorlevel 1 echo     - %~2
+if errorlevel 1 call :logfile "Validation: missing module %~1"
 goto :eof
 
 
@@ -534,6 +593,8 @@ echo   python "%INSTALL_DIR%\video_translator_gui.py"
 echo.
 echo   NOTE: on first use, Whisper will download
 echo   the selected model (150MB - 3GB depending on model).
+echo.
+echo   Setup log: %VTAI_SETUP_LOG%
 echo.
 pause
 goto :eof
@@ -690,8 +751,10 @@ if errorlevel 1 (
     echo  [!] Auto-install failed. Download manually from:
     echo      https://www.python.org/downloads/
     echo      Check "Add Python to PATH" during installation, then re-run this bat.
+    call :logfile "Step 1/6 Python: FAILED - download or silent install of Python 3.11.9"
     exit /b 1
 )
+call :logfile "Step 1/6 Python: no usable Python found, installed Python 3.11.9 from python.org"
 call :reload_path
 
 :: After fresh install, point at the canonical install path explicitly so we
@@ -766,8 +829,10 @@ if not errorlevel 1 (
     echo        - Install Python 3.11.9 manually from
     echo          https://www.python.org/downloads/release/python-3119/
     echo      then re-run this script.
+    call :logfile "Step 1/6 Python: FAILED - only the Microsoft Store stub was found"
     exit /b 1
 )
+call :logfile "Step 1/6 Python: ok - !PY_VER! at !PYTHON_EXE!"
 exit /b 0
 
 
@@ -794,6 +859,7 @@ echo  [*] Copying script...
 copy /Y "%SCRIPT_DIR%video_translator_gui.py" "%INSTALL_DIR%\video_translator_gui.py" >nul
 if errorlevel 1 (
     echo  [!] Error copying script. Make sure video_translator_gui.py is in the same folder as this .bat
+    call :logfile "Step 2/6 copy files: video_translator_gui.py not copied from %SCRIPT_DIR%"
     exit /b 1
 )
 echo  [+] Script copied.
@@ -803,6 +869,7 @@ if exist "%SCRIPT_DIR%videotranslator" (
     copy /Y "%SCRIPT_DIR%videotranslator\*.py" "%INSTALL_DIR%\videotranslator\" >nul
     if errorlevel 1 (
         echo  [!] Error copying Python package folder. Make sure videotranslator\*.py is next to this .bat
+        call :logfile "Step 2/6 copy files: videotranslator package not copied from %SCRIPT_DIR%"
         exit /b 1
     )
     echo  [+] Python package copied.
@@ -819,6 +886,7 @@ if exist "%SCRIPT_DIR%assets" (
     )
     echo  [+] Assets copied.
 )
+call :logfile "Step 2/6 copy files: ok - %INSTALL_DIR%"
 exit /b 0
 
 
@@ -850,7 +918,11 @@ echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo  [!] PyTorch cu124 failed, trying CPU version...
+    call :logfile "Step 3/6 PyTorch: cu124 build failed, trying the CPU build"
     "%PYTHON_EXE%" -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet
+    if errorlevel 1 call :logfile "Step 3/6 PyTorch: CPU build failed too"
+) else (
+    call :logfile "Step 3/6 PyTorch 2.6.0 cu124: ok"
 )
 
 echo  [*] Installing ctranslate2...
@@ -860,20 +932,25 @@ echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)..
 "%PYTHON_EXE%" -m pip install %PYANNOTE_PIN% !PACKAGES! --quiet
 if errorlevel 1 (
     echo  [!] Error installing Python packages.
+    call :logfile "Step 3/6 pipeline packages: FAILED - pip install of faster-whisper, demucs, edge-tts and the rest"
     exit /b 1
 )
+call :logfile "Step 3/6 pipeline packages: ok"
 
 "%PYTHON_EXE%" -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
     echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
+    call :logfile "Step 3/6 PyTorch: a dependency replaced the cu124 build, reinstalling cu124"
     "%PYTHON_EXE%" -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
+    if errorlevel 1 call :logfile "Step 3/6 PyTorch: cu124 reinstall FAILED - GPU acceleration may be unavailable"
 )
 
 echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
 "%PYTHON_EXE%" -m pip install "transformers>=4.40.0,<5.1" --quiet
 if errorlevel 1 (
     echo  [!] transformers install failed.
+    call :logfile "Step 3/6 transformers: FAILED"
     exit /b 1
 )
 
@@ -892,11 +969,13 @@ if not errorlevel 1 goto step_tts_ok
 if "%~2"=="1" (
     echo  [!] coqui-tts not installed and repair mode does not auto-install VS Build Tools.
     echo      Re-run setup_windows.bat install if you need voice cloning.
+    call :logfile "Step 3/6 voice cloning coqui-tts: not installed - repair mode skips VS Build Tools"
     goto step_tts_end
 )
 
 echo  [*] VS C++ Build Tools not found - downloading and installing silently...
 echo      (this may take 5-10 minutes, please wait)
+call :logfile "Step 3/6 voice cloning: coqui-tts needs a compiler, installing VS C++ Build Tools"
 powershell -Command ^
     "$url = 'https://aka.ms/vs/17/release/vs_BuildTools.exe';" ^
     "$out = $env:TEMP + '\vs_BuildTools.exe';" ^
@@ -910,6 +989,7 @@ powershell -Command ^
 
 if errorlevel 1 (
     echo  [!] VS Build Tools auto-install failed. Voice cloning skipped.
+    call :logfile "Step 3/6 voice cloning: VS C++ Build Tools install FAILED"
     goto step_tts_failed
 )
 
@@ -918,6 +998,7 @@ call :find_vcvarsall
 if not errorlevel 1 goto step_tts_ok
 
 :step_tts_failed
+call :logfile "Step 3/6 voice cloning coqui-tts: NOT installed - everything else works"
 echo.
 echo  +------------------------------------------------------+
 echo  ^|  Voice Cloning (XTTS v2) could not be installed.    ^|
@@ -935,11 +1016,13 @@ goto step_tts_end
 
 :step_tts_ok
 echo  [+] Coqui TTS installed successfully.
+call :logfile "Step 3/6 voice cloning coqui-tts: ok"
 
 :step_tts_end
 
 call :step_wav2lip "%~2"
 echo  [+] Python packages installed.
+call :logfile "Step 3/6 Python packages: done"
 exit /b 0
 
 
@@ -974,6 +1057,7 @@ if "%PY_TAG%"=="312" set "DLIB_WHEEL_URL=https://github.com/z-mahmud22/Dlib_Wind
 "%PYTHON_EXE%" -c "import dlib" >nul 2>&1
 if not errorlevel 1 (
     echo  [+] dlib already installed.
+    call :logfile "Step 3/6 lip sync dlib: already installed"
     goto step_dlib_done
 )
 
@@ -1002,7 +1086,9 @@ if not defined _DLIB_OK (
 
 if defined _DLIB_OK (
     echo  [+] dlib installed.
+    call :logfile "Step 3/6 lip sync dlib: ok"
 ) else (
+    call :logfile "Step 3/6 lip sync dlib: NOT installed - lip sync disabled"
     echo.
     echo  +------------------------------------------------------+
     echo  ^|  Lip Sync disabled - dlib could not be installed.    ^|
@@ -1027,8 +1113,10 @@ if defined _DLIB_OK (
 :: close the else branch in cmd's parser. Use ^( ^) to escape, or drop them.
 if errorlevel 1 (
     echo  [!] new-basicsr/facexlib install failed. Lip Sync may not work.
+    call :logfile "Step 3/6 lip sync new-basicsr and facexlib: FAILED - lip sync may not work"
 ) else (
     echo  [+] new-basicsr ^(drop-in basicsr^) and facexlib installed.
+    call :logfile "Step 3/6 lip sync new-basicsr and facexlib: ok"
 )
 
 if not exist "%WAV2LIP_DIR%" mkdir "%WAV2LIP_DIR%"
@@ -1051,8 +1139,10 @@ powershell -Command ^
     "Write-Host '  [+] Git for Windows installed.'"
 if errorlevel 1 (
     echo  [!] Git auto-install failed. Install manually from https://git-scm.com/download/win
+    call :logfile "Step 3/6 lip sync: Git for Windows install FAILED - Wav2Lip repo not cloned"
     goto step_wav2lip_repo_done
 )
+call :logfile "Step 3/6 lip sync: Git for Windows installed"
 
 call :reload_path
 timeout /t 2 /nobreak >nul
@@ -1064,17 +1154,24 @@ if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "PATH=%LOCALAPPDATA%\Prog
 where git >nul 2>&1
 if errorlevel 1 (
     echo  [!] git still not found after install. Lip Sync disabled.
+    call :logfile "Step 3/6 lip sync: git still not found after install - lip sync disabled"
     goto step_wav2lip_repo_done
 )
 
 :step_wav2lip_clone
 echo  [*] Cloning Wav2Lip repo...
 git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git "%WAV2LIP_REPO%"
-if errorlevel 1 echo  [!] Wav2Lip clone failed. Lip Sync disabled.
+if errorlevel 1 (
+    echo  [!] Wav2Lip clone failed. Lip Sync disabled.
+    call :logfile "Step 3/6 lip sync: Wav2Lip repo clone FAILED - lip sync disabled"
+) else (
+    call :logfile "Step 3/6 lip sync: Wav2Lip repo cloned"
+)
 
 :step_wav2lip_repo_done
 if exist "%WAV2LIP_MODEL%" (
     echo  [+] Wav2Lip GAN model already present.
+    call :logfile "Step 3/6 lip sync model: already present"
     goto step_wav2lip_model_done
 )
 
@@ -1091,20 +1188,24 @@ if not errorlevel 1 goto step_wav2lip_sha
 
 echo  [!] All Wav2Lip model mirrors failed. Lip Sync disabled.
 echo  [!] Rest of the installation will continue normally.
+call :logfile "Step 3/6 lip sync model: all 3 mirrors FAILED - lip sync disabled"
 goto step_wav2lip_model_done
 
 :step_wav2lip_sha
 if not defined WAV2LIP_SHA256 (
     echo  [!] WAV2LIP_SHA256 not set - skipping integrity check.
+    call :logfile "Step 3/6 lip sync model: no SHA256 to check against, integrity check skipped"
     goto step_wav2lip_model_done
 )
 set "GOT_SHA256="
 for /f %%h in ('powershell -NoProfile -Command "(Get-FileHash '%WAV2LIP_MODEL%' -Algorithm SHA256).Hash.ToLower()"') do set "GOT_SHA256=%%h"
 if /i "!GOT_SHA256!"=="!WAV2LIP_SHA256!" (
     echo  [+] Wav2Lip model SHA256 verified.
+    call :logfile "Step 3/6 lip sync model: SHA256 verified"
     goto step_wav2lip_model_done
 )
 echo  [!] Wav2Lip model SHA256 mismatch. Expected !WAV2LIP_SHA256!, got !GOT_SHA256!.
+call :logfile "Step 3/6 lip sync model: SHA256 MISMATCH - file deleted, lip sync disabled. Got !GOT_SHA256!"
 del /Q "%WAV2LIP_MODEL%" >nul 2>&1
 
 :step_wav2lip_model_done
@@ -1114,6 +1215,7 @@ exit /b 0
 :: %~1 = URL, %~2 = label
 :wav2lip_try_mirror
 echo  [*] Trying %~2...
+call :logfile "Step 3/6 lip sync model: downloading about 416 MB from %~2"
 powershell -Command ^
     "try {" ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
@@ -1125,10 +1227,12 @@ if errorlevel 1 goto wav2lip_try_fail
 powershell -NoProfile -Command "if ((Get-Item '%WAV2LIP_MODEL%').Length -lt 100MB) { exit 1 } else { exit 0 }"
 if not errorlevel 1 (
     echo  [+] Wav2Lip model downloaded.
+    call :logfile "Step 3/6 lip sync model: downloaded from %~2"
     exit /b 0
 )
 :wav2lip_try_fail
 echo  [!] %~2 failed.
+call :logfile "Step 3/6 lip sync model: %~2 FAILED"
 if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
 exit /b 1
 
@@ -1140,6 +1244,7 @@ echo [%~1] Installing ffmpeg...
 
 if exist "%FFMPEG_DIR%\ffmpeg.exe" (
     echo  [+] ffmpeg already present, skipping download.
+    call :logfile "Step 4/6 ffmpeg: already present"
     goto step_ffmpeg_path
 )
 
@@ -1152,6 +1257,7 @@ if errorlevel 1 (
 )
 
 echo  [*] Downloading ffmpeg (essentials build ~90MB)...
+call :logfile "Step 4/6 ffmpeg: downloading the essentials build, about 90 MB"
 if not exist "%FFMPEG_DIR%" mkdir "%FFMPEG_DIR%"
 
 powershell -Command ^
@@ -1175,6 +1281,7 @@ if errorlevel 1 (
     echo  [!] ffmpeg download failed. You can download it manually from:
     echo      https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
     echo      and extract ffmpeg.exe and ffprobe.exe to: %FFMPEG_DIR%
+    call :logfile "Step 4/6 ffmpeg: download or extraction FAILED"
     goto step_ffmpeg_skip
 )
 
@@ -1186,6 +1293,7 @@ powershell -Command ^
     "  [Environment]::SetEnvironmentVariable('PATH', $p + ';%FFMPEG_DIR%', 'Machine')" ^
     "}"
 echo  [+] ffmpeg added to machine PATH.
+call :logfile "Step 4/6 ffmpeg: ok - %FFMPEG_DIR% on the machine PATH"
 
 powershell -Command ^
     "$p = [Environment]::GetEnvironmentVariable('PATH','User');" ^
@@ -1197,6 +1305,7 @@ exit /b 0
 
 :step_ffmpeg_skip
 echo  [!] ffmpeg not installed - translation will not work without it.
+call :logfile "Step 4/6 ffmpeg: NOT installed - translation will not work without it"
 exit /b 0
 
 
@@ -1212,17 +1321,25 @@ echo [%~1] Installing the integrated video player (optional)...
 :: echoed: cmd.exe would read the comparison signs as redirections.
 set "MPV_PIN=mpv>=1.0.6,<2"
 "%PYTHON_EXE%" -m pip install "%MPV_PIN%" --quiet
-if errorlevel 1 goto step_player_disabled
+if errorlevel 1 (
+    call :logfile "Step 5/6 player: pip install of the mpv package FAILED"
+    goto step_player_disabled
+)
 pushd "%INSTALL_DIR%" >nul 2>&1
 if errorlevel 1 goto step_player_disabled
 "%PYTHON_EXE%" -m videotranslator.libmpv_runtime install --dest "%MPV_DIR%"
 set "MPV_RC=%ERRORLEVEL%"
 popd >nul 2>&1
-if not "%MPV_RC%"=="0" goto step_player_disabled
+if not "%MPV_RC%"=="0" (
+    call :logfile "Step 5/6 player: libmpv download or check FAILED, code %MPV_RC%"
+    goto step_player_disabled
+)
 echo  [+] Integrated video player ready.
+call :logfile "Step 5/6 player: ok - libmpv in %MPV_DIR%"
 exit /b 0
 
 :step_player_disabled
+call :logfile "Step 5/6 player: disabled - the application works without it"
 echo.
 echo  ============================================
 echo    Integrated player disabled - everything else works
@@ -1246,8 +1363,10 @@ set "MPV_CHECK_RC=%ERRORLEVEL%"
 popd >nul 2>&1
 if "%MPV_CHECK_RC%"=="0" (
     echo  [+] Integrated video player check passed.
+    call :logfile "Player load check: ok"
 ) else (
     echo  [!] Integrated video player check failed, code %MPV_CHECK_RC%. The application works without it.
+    call :logfile "Player load check: FAILED, code %MPV_CHECK_RC% - the application works without it"
 )
 goto :eof
 
@@ -1276,9 +1395,11 @@ powershell -Command ^
 
 if exist "%PUBLIC_SHORTCUT%" (
     echo  [+] Desktop shortcut created.
+    call :logfile "Step 6/6 shortcut: ok - %PUBLIC_SHORTCUT%"
 ) else (
     echo  [!] Shortcut not created. You can launch the GUI with:
     echo      python "%INSTALL_DIR%\video_translator_gui.py"
+    call :logfile "Step 6/6 shortcut: NOT created - pythonw was %PYTHONW%"
 )
 exit /b 0
 
@@ -1314,11 +1435,14 @@ if exist "%INSTALL_DIR%" (
     rmdir /S /Q "%INSTALL_DIR%" 2>nul
     if exist "%INSTALL_DIR%" (
         echo  [!] Some files could not be removed. Close any running Video Translator AI and retry.
+        call :logfile "Remove application folder: PARTIAL - some files are in use, close the app and retry"
     ) else (
         echo  [+] Removed.
+        call :logfile "Remove application folder: ok - %INSTALL_DIR%"
     )
 ) else (
     echo  [-] Not found, skipping.
+    call :logfile "Remove application folder: not found, skipped"
 )
 exit /b 0
 
@@ -1327,13 +1451,16 @@ echo  [*] Removing Public Desktop shortcut ...
 if exist "%PUBLIC_SHORTCUT%" (
     del /Q "%PUBLIC_SHORTCUT%" 2>nul
     echo  [+] Removed.
+    call :logfile "Remove Desktop shortcut: ok"
 ) else (
     echo  [-] Not found, skipping.
+    call :logfile "Remove Desktop shortcut: not found, skipped"
 )
 exit /b 0
 
 :remove_ffmpeg_path
 echo  [*] Removing ffmpeg from machine PATH ...
+call :logfile "Removing ffmpeg from the machine PATH"
 powershell -NoProfile -Command ^
     "$p = [Environment]::GetEnvironmentVariable('PATH','Machine');" ^
     "if ($p) {" ^
@@ -1347,17 +1474,21 @@ exit /b 0
 
 :remove_legacy_all_users
 echo  [*] Removing legacy per-user installs for all Windows users ...
+call :logfile "Removing legacy per-user installs for all users"
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\VideoTranslatorAI" (
         echo      - %%~nxU : legacy app folder
+        call :logfile "  user %%~nxU: removing legacy app folder"
         rmdir /S /Q "%%~U\VideoTranslatorAI" 2>nul
     )
     if exist "%%~U\.local\share\wav2lip" (
         echo      - %%~nxU : legacy wav2lip
+        call :logfile "  user %%~nxU: removing legacy wav2lip"
         rmdir /S /Q "%%~U\.local\share\wav2lip" 2>nul
     )
     if exist "%%~U\Desktop\Video Translator AI.lnk" (
         echo      - %%~nxU : legacy shortcut
+        call :logfile "  user %%~nxU: removing legacy shortcut"
         del /Q "%%~U\Desktop\Video Translator AI.lnk" 2>nul
     )
 )
@@ -1366,6 +1497,7 @@ exit /b 0
 
 :remove_legacy_current_user
 echo  [*] Removing legacy per-user install for %USERNAME% ...
+call :logfile "Removing legacy per-user install for %USERNAME%"
 if exist "%USER_LEGACY_DIR%" rmdir /S /Q "%USER_LEGACY_DIR%" 2>nul
 if exist "%USER_LEGACY_WAV2LIP%" rmdir /S /Q "%USER_LEGACY_WAV2LIP%" 2>nul
 if exist "%USER_LEGACY_SHORTCUT%" del /Q "%USER_LEGACY_SHORTCUT%" 2>nul
@@ -1374,13 +1506,16 @@ exit /b 0
 
 :remove_user_configs_all
 echo  [*] Removing VTAI config and logs for all users ...
+call :logfile "Removing config and logs for all users"
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\.videotranslatorai_config.json" (
         echo      - %%~nxU : legacy config file
+        call :logfile "  user %%~nxU: removing legacy config file"
         del /Q "%%~U\.videotranslatorai_config.json" 2>nul
     )
     if exist "%%~U\AppData\Roaming\VideoTranslatorAI" (
         echo      - %%~nxU : config and logs
+        call :logfile "  user %%~nxU: removing config and logs"
         rmdir /S /Q "%%~U\AppData\Roaming\VideoTranslatorAI" 2>nul
     )
 )
@@ -1393,13 +1528,16 @@ if exist "%USER_CONFIG%" del /Q "%USER_CONFIG%" 2>nul
 if exist "%USER_APP_DATA%" (
     rmdir /S /Q "%USER_APP_DATA%" 2>nul
     echo  [+] Removed %USER_APP_DATA%
+    call :logfile "Remove config and logs for %USERNAME%: ok - %USER_APP_DATA%"
 ) else (
     echo  [-] Not found.
+    call :logfile "Remove config and logs for %USERNAME%: not found, skipped"
 )
 exit /b 0
 
 :remove_user_caches_all
 echo  [*] Removing model caches, runtimes and temp files for all users ...
+call :logfile "Removing model caches, runtimes and temp files for all users"
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\.cache\huggingface\hub" (
         for /d %%M in ("%%~U\.cache\huggingface\hub\models--*") do (
@@ -1408,14 +1546,17 @@ for /d %%U in ("%SystemDrive%\Users\*") do (
     )
     if exist "%%~U\AppData\Local\tts" (
         echo      - %%~nxU : XTTS cache
+        call :logfile "  user %%~nxU: removing XTTS cache"
         rmdir /S /Q "%%~U\AppData\Local\tts" 2>nul
     )
     if exist "%%~U\AppData\Local\VideoTranslatorAI" (
         echo      - %%~nxU : player and JS runtimes
+        call :logfile "  user %%~nxU: removing player and JS runtimes"
         rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI" 2>nul
     )
     if exist "%%~U\AppData\Local\Temp\VideoTranslatorAI" (
         echo      - %%~nxU : temp files
+        call :logfile "  user %%~nxU: removing temp files"
         rmdir /S /Q "%%~U\AppData\Local\Temp\VideoTranslatorAI" 2>nul
     )
 )
@@ -1424,6 +1565,7 @@ exit /b 0
 
 :remove_user_cache_current
 echo  [*] Removing model caches, runtimes and temp files for %USERNAME% ...
+call :logfile "Removing model caches, runtimes and temp files for %USERNAME%"
 if exist "%USER_HF_CACHE%\hub" (
     for /d %%M in ("%USER_HF_CACHE%\hub\models--*") do (
         echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote opus-mt" >nul && rmdir /S /Q "%%~M" 2>nul
@@ -1443,6 +1585,7 @@ echo  [*] Removing saved keys (HF token, ElevenLabs) for %USERNAME% ...
 where python >nul 2>&1
 if errorlevel 1 (
     echo  [!] python not found in PATH, skipping. Remove them in Credential Manager.
+    call :logfile "Remove saved keys for %USERNAME%: SKIPPED - python not found, check Credential Manager"
     exit /b 0
 )
 if not defined PYTHON_EXE (
@@ -1453,6 +1596,11 @@ if not defined PYTHON_EXE (
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
 "%PYTHON_EXE%" -c "import keyring;[print('  [+] removed '+u) for u in ('hf_token','elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI',u) is not None and keyring.delete_password('VideoTranslatorAI',u) is None]" 2>nul
 if errorlevel 1 echo  [!] Could not reach the keyring. Remove them in Credential Manager if present.
+if errorlevel 1 (
+    call :logfile "Remove saved keys for %USERNAME%: keyring NOT reachable, check Credential Manager"
+) else (
+    call :logfile "Remove saved keys for %USERNAME%: done"
+)
 echo  [+] Done.
 exit /b 0
 
@@ -1461,6 +1609,7 @@ echo  [*] Removing all Python AI packages ...
 where python >nul 2>&1
 if errorlevel 1 (
     echo  [!] python not found in PATH, skipping.
+    call :logfile "Remove Python AI packages: SKIPPED - python not found"
     exit /b 0
 )
 if not defined PYTHON_EXE (
@@ -1482,11 +1631,13 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
     silero-vad keyring ^
     mpv python-mpv ^
     yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
+call :logfile "Remove Python AI packages: pip uninstall finished, code %ERRORLEVEL%"
 echo  [+] Done.
 exit /b 0
 
 :remove_python
 echo  [*] Uninstalling Python 3.11 ...
+call :logfile "Uninstalling Python 3.11"
 :: Bug B fix: when Python 3.11 was originally installed via the Microsoft
 :: Store stub (Bug 1), no entry exists in the Uninstall registry. The PS
 :: block now exits 2 in that case so we can fall back to winget, then to a
@@ -1517,14 +1668,17 @@ if exist "%ProgramFiles%\Python311" (
     rmdir /S /Q "%ProgramFiles%\Python311" 2>nul
     if exist "%ProgramFiles%\Python311" (
         echo  [!] Could not remove leftover folder. Please remove it manually.
+        call :logfile "Uninstall Python 3.11: leftover folder could NOT be removed"
     ) else (
         echo  [+] Leftover folder removed.
+        call :logfile "Uninstall Python 3.11: leftover folder removed"
     )
 )
 exit /b 0
 
 :remove_git
 echo  [*] Uninstalling Git for Windows ...
+call :logfile "Uninstalling Git for Windows"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Git( |$)' -and $_.DisplayName -notmatch 'LFS|Extensions' -and $_.UninstallString } } };" ^
@@ -1541,6 +1695,7 @@ exit /b 0
 
 :remove_ollama
 echo  [*] Uninstalling Ollama ...
+call :logfile "Uninstalling Ollama"
 :: Stop running daemon and tray app first so the uninstaller can replace files.
 :: Different Ollama Windows builds use different process names --try them all.
 taskkill /F /IM ollama.exe       >nul 2>&1

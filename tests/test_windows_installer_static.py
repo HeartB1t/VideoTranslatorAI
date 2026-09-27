@@ -50,7 +50,8 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         return match.group(1)
 
     def test_the_player_check_only_warns_after_validation(self):
-        pattern = r'call :validate_install\nif errorlevel 1 \( pause & exit /b 1 \)\ncall :player_check\n'
+        pattern = (r'call :validate_install\nif errorlevel 1 \( call :logfile "RESULT: [a-z]+ incomplete" '
+                   r'& pause & exit /b 1 \)\ncall :player_check\n')
         self.assertEqual(len(re.findall(pattern, self.flat)), 2)
         body = self._label_body("player_check", "goto :eof")  # the final line, not the early `if`
         self.assertIn('-m videotranslator.libmpv_runtime check --dir "%MPV_DIR%"', body)
@@ -115,6 +116,23 @@ class WindowsInstallerStaticTests(unittest.TestCase):
 
     def test_no_folder_named_mpv(self):
         self.assertIsNone(re.search(r'\\mpv(["\\\s]|$)', self.text, re.MULTILINE))
+
+    # -- setup log (install, repair, uninstall) --
+
+    def test_setup_log_survives_the_uninstall(self):
+        self.assertIn(r'set "VTAI_SETUP_LOG=%USERPROFILE%\VideoTranslatorAI-setup.log"', self.text)
+        for mode in ("INSTALL", "REPAIR", "UNINSTALL"):
+            self.assertIn(f'call :log_session "{mode}"', self.text)
+        # nothing the uninstaller deletes may contain the log file
+        self.assertNotIn(r'del /Q "%USERPROFILE%\VideoTranslatorAI-setup.log"', self.text)
+
+    def test_every_log_call_is_one_safe_quoted_argument(self):
+        calls = [line for line in self.lines if "call :logfile" in line]
+        self.assertGreater(len(calls), 50)
+        for line in calls:
+            message = re.search(r'call :logfile "([^"]*)"', line)
+            self.assertIsNotNone(message, line)
+            self.assertNotRegex(message.group(1), r"[<>|^]", line)
 
     def test_every_download_hides_the_progress_bar(self):
         # PowerShell 5.1 redraws the bar per chunk: a 416 MB file took minutes.
