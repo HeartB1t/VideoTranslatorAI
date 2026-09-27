@@ -8,7 +8,11 @@
 
 기본적으로 API 키가 필요하지 않고 로컬 처리 옵션을 사용하여 비디오를 26개 언어로 자동으로 전사, 번역 및 다시 더빙하는 AI 기반 비디오 음성 더빙 도구입니다. Whisper 음성 인식은 로컬에서 실행됩니다. Edge-TTS, Google Translate 및 DeepL에는 인터넷 연결이 필요합니다. 선택적 기능(DeepL, 말하는 사람 식별(분할))에는 API 키 또는 액세스 토큰이 필요할 수 있습니다.
 
+![Video Translator AI 메인 창: 비디오 플레이어와 번역 패널](../../assets/screenshot.png)
+
 > **v2.0** - 모듈식 패키지, 로컬 Ollama 번역, 품질 프로필 조정, 설치 가능한 Python 메타데이터 및 실제 모델과의 선택 통합 테스트. 전체 변경 목록은 [GitHub 릴리스](https://github.com/HeartB1t/VideoTranslatorAI/releases) 및 커밋 기록을 참조하세요.
+
+> **v2.1.0** - 강화된 Windows 설치 프로그램(Microsoft Visual C++ 런타임, 명확한 설치 로그, GitHub 릴리스를 통한 자동 업데이트), 더 깔끔한 로그(다운로드당 진행되는 진행 표시줄 하나), GPU가 없는 컴퓨터에서의 소프트웨어 비디오 디코딩, 그리고 높아진 트랜스포트 버튼. 자세한 내용은 [GitHub 릴리스](https://github.com/HeartB1t/VideoTranslatorAI/releases)를 참조하세요.
 
 ## 작동 원리
 
@@ -155,17 +159,18 @@ Claude/프로젝트 유지 관리 노트는 **Voice Catalog Source Of Truth** �
 
 ### Windows
 
-1. 이 저장소를 복제하거나 다운로드하세요.
-2. `setup_windows.bat`를 마우스 오른쪽 버튼으로 클릭 → **관리자 권한으로 실행** → 메뉴에 `[1] Install`가 표시됩니다.
-3. 설치 프로그램이 자동으로 다음을 수행합니다.
-   - Python 3.11이 없으면 설치합니다(시스템 전체).
-   - Git for Windows가 없으면 설치합니다.
-   - 모든 Python 종속 항목(PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps 등)을 설치합니다.
-   - ffmpeg 다운로드 및 설치
-   - 통합 비디오 플레이어(python-mpv 및 `mpv-runtime`의 libmpv 빌드)를 설치합니다. 이 단계는 선택 사항입니다. 실패하면 다른 모든 것이 작동하고 플레이어 창에서 누락된 내용을 설명합니다.
-   - **공용 데스크톱 바로가기** 생성(PC의 모든 Windows 계정에 표시)
+명령줄 없이 단계별로 진행됩니다. 깨끗한 Windows 11 PC에서 테스트되었습니다.
 
-> 설치 프로그램은 **다중 사용자**입니다. 모든 것이 `%ProgramFiles%\VideoTranslatorAI` 아래 시스템 전체에 설치되며 컴퓨터의 모든 Windows 사용자는 바로 가기가 준비된 것을 찾습니다. VS C++ 빌드 도구는 **더 이상 필요하지 않습니다** - 유지 관리되는 `coqui-tts` 포크는 사전 컴파일된 Python 휠 패키지를 제공합니다.
+1. **다운로드**: 초록색 **Code** 버튼 → **Download ZIP**, 또는 [GitHub 릴리스](https://github.com/HeartB1t/VideoTranslatorAI/releases)에서 최신 zip 파일을 받습니다. 원하는 폴더(예: 바탕화면)에 압축을 풉니다.
+2. **설치**: `setup_windows.bat`를 마우스 오른쪽 버튼으로 클릭 → **관리자 권한으로 실행** → `1`을 눌러 설치합니다 (Install). SmartScreen이 "Windows에서 PC를 보호했습니다"라고 표시하면 **추가 정보** → **실행**을 클릭하세요. 스크립트는 일반 텍스트이므로 메모장으로 열어볼 수 있습니다.
+3. **대기**: 빠른 인터넷을 사용하는 새 PC 기준으로 약 15분과 디스크 8GB가 필요합니다. 설치 프로그램은 다음 순서로 다운로드하고 설정합니다.
+   - Python 3.11(시스템 전체)과 Microsoft Visual C++ 런타임(없는 경우)
+   - Python 패키지: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote, Wav2Lip 스택
+   - Git for Windows(Wav2Lip용), ffmpeg, 통합 비디오 플레이어(`mpv-runtime`의 libmpv, 선택 사항이며 없어도 나머지는 모두 작동)
+   - PC의 모든 Windows 계정을 위한 **바탕화면 바로가기**와 앱 및 **Video Translator AI 업데이트**가 포함된 **시작 메뉴** 폴더
+4. **시작**: 바탕화면 바로가기나 시작 메뉴에서 실행합니다. NVIDIA GPU가 없으면 앱이 CPU에서 동작하며 속도만 느려집니다. 이 경우 작은 Whisper 모델을 선택하세요.
+
+> 모든 것이 `%ProgramFiles%\VideoTranslatorAI` 아래에 시스템 전체로 설치되므로 컴퓨터의 모든 Windows 사용자가 바로가기를 바로 사용할 수 있습니다. `setup_windows.bat`를 실행할 때마다 `%USERPROFILE%\VideoTranslatorAI-setup.log`에 로그가 기록됩니다. 문제를 신고할 때 이 로그를 첨부하세요. 설치 프로그램이 **INSTALLATION INCOMPLETE**로 끝나면 다시 실행하여 `[2] Repair / Update`를 선택하세요. VS C++ Build Tools는 필요하지 않습니다. 유지 관리되는 `coqui-tts` 포크는 미리 빌드된 wheel 패키지를 제공합니다.
 
 ### 리눅스/맥OS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | 통합 비디오 플레이어: python-mpv(시스템 또는 Windows 설치 프로그램의 libmpv 필요) |
 | `requirements-dev.txt` | CI/단위 테스트에서 사용되는 경량 종속성입니다. |
 
+## 업데이트
+
+### Windows
+
+시작 메뉴 → **Video Translator AI** → **Video Translator AI 업데이트** (관리자 권한을 요청합니다), 또는 `setup_windows.bat`를 관리자 권한으로 실행하여 `[2] Repair / Update`를 선택합니다. 설치 프로그램은 [GitHub 릴리스](https://github.com/HeartB1t/VideoTranslatorAI/releases)를 확인합니다. 더 최신 버전이 있으면 해당 릴리스를 다운로드하고 SHA256 체크섬을 검증한 후 설치하며, 그렇지 않으면 현재 파일을 복구합니다. 설정, 저장된 키, 다운로드한 모델, 번역된 동영상은 그대로 유지됩니다. 인터넷 연결이 없으면 업데이트는 건너뛰고 복구만 계속 진행됩니다.
+
+### 리눅스/맥OS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## 제거
 
 ### Windows
@@ -220,13 +239,13 @@ videotranslatorai --preflight
 
 | 모드 | 관리자 필요 | 범위 |
 |------|----------------|-------|
-| **[1] 전체 제거 - 한 번의 클릭** | ✅ | 앱 폴더, 공개 데스크톱 바로가기, 시스템 PATH에서 ffmpeg, 모든 사용자의 HF 모델 캐시(Whisper/XTTS) 및 구성(`HF token`), 설치 프로그램에서 설치한 모든 Python AI 패키지를 제거합니다. 마지막에는 레지스트리 자동 제거 문자열을 통해 **Python 3.11** 및 **Git for Windows**를 자동으로 제거할지 여부도 묻습니다(선택). |
+| **[1] 전체 제거 - 한 번의 클릭** | ✅ | 앱 폴더, 데스크톱 바로가기와 시작 메뉴 항목, 시스템 PATH에서 ffmpeg, 모든 사용자의 HF 모델 캐시(Whisper/XTTS) 및 구성(`HF token`), 설치 프로그램에서 설치한 모든 Python AI 패키지를 제거합니다. 마지막에는 레지스트리 자동 제거 문자열을 통해 **Python 3.11** 및 **Git for Windows**를 자동으로 제거할지 여부도 묻습니다(선택). |
 | **[2] 현재 사용자만 해당** | ❌ | 실행 중인 사용자의 VTAI 구성, HF/XTTS 캐시 및 레거시 사용자별 설치만 제거합니다. **시스템 전체 설치를 그대로 유지**하므로 PC의 다른 Windows 계정이 앱을 계속 사용할 수 있습니다. |
 | **[3] 사용자 정의 - 세분화됨** | ✅ 시스템 항목의 경우, ❌ 사용자 항목의 경우 | 각 범주에 대한 Y/N 프롬프트: 앱 폴더, 바로가기, 컴퓨터 PATH, 사용자별 레거시 설치, 사용자별 구성/캐시, 그룹화된 Python 패키지(TTS, PyTorch 스택, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, 파이프라인 유틸리티), 마지막으로 선택적 Python 3.11 및 Git. |
 
 모든 모드는 프로그램이 사용자를 위해 보관하는 항목도 삭제합니다: 설정과 일별 로그(`%APPDATA%\VideoTranslatorAI`), 플레이어·JavaScript·Wav2Lip 런타임이 포함된 프로그램 데이터(`%LOCALAPPDATA%\VideoTranslatorAI`), 실시간 기능의 임시 파일(`%TEMP%\VideoTranslatorAI`), MarianMT 모델, 그리고 Windows 자격 증명 관리자에 저장된 키(HF 토큰, ElevenLabs). 키는 Windows 계정마다 저장되므로 각 계정은 `[2]`(으)로 자신의 키를 삭제합니다.
 
-**자동으로 제거되지 않음:** Visual Studio C++ 빌드 도구(이전 실행에 있는 경우). 원하는 경우 Windows 설정에서 *앱 및 기능*을 사용하여 수동으로 제거하세요.
+**자동으로 제거되지 않음:** Visual Studio C++ 빌드 도구(이전 실행에 있는 경우)와 다른 프로그램과 공유되는 Microsoft Visual C++ 런타임. 원하는 경우 Windows 설정에서 *앱 및 기능*을 사용하여 수동으로 제거하세요. 설치 로그 `%USERPROFILE%\VideoTranslatorAI-setup.log`는 의도적으로 보존됩니다.
 
 ### 리눅스/맥OS
 

@@ -8,7 +8,11 @@
 
 Công cụ lồng tiếng video được hỗ trợ bởi AI tự động phiên âm, dịch và lồng tiếng lại video sang 26 ngôn ngữ, với các tùy chọn xử lý cục bộ và không yêu cầu khóa API theo mặc định. Nhận dạng giọng nói Whisper chạy cục bộ; Edge-TTS, Google Translate và DeepL yêu cầu kết nối internet. Các tính năng tùy chọn (DeepL, nhận dạng người đang nói (ghi nhật ký)) có thể yêu cầu khóa API hoặc mã thông báo truy cập.
 
+![Cửa sổ chính của Video Translator AI: trình phát video và các bảng dịch thuật](../../assets/screenshot.png)
+
 > **v2.0** - gói mô-đun, bản dịch Ollama cục bộ, điều phối hồ sơ chất lượng, siêu dữ liệu Python có thể cài đặt và thử nghiệm tích hợp chọn tham gia với các mô hình thực. Xem [Bản phát hành GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases) và lịch sử cam kết để biết danh sách đầy đủ các thay đổi.
+
+> **v2.1.0** - trình cài đặt Windows được củng cố (thời gian chạy Microsoft Visual C++, nhật ký cài đặt rõ ràng, tự cập nhật từ Bản phát hành GitHub), nhật ký gọn gàng hơn (một thanh tiến trình tiến dần cho mỗi lượt tải xuống), giải mã video bằng phần mềm trên các máy không có GPU và các nút điều khiển phát được nâng lên. Xem [Bản phát hành GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Nó hoạt động như thế nào
 
@@ -155,17 +159,18 @@ Quy trình sử dụng năm thành phần tăng tốc GPU (faster-whisper, Demuc
 
 ### Windows
 
-1. Sao chép hoặc tải xuống kho lưu trữ này
-2. Nhấp chuột phải vào `setup_windows.bat` → **Chạy với tư cách quản trị viên** → menu hiển thị `[1] Install`
-3. Trình cài đặt tự động:
-   - Cài đặt Python 3.11 nếu không có (toàn hệ thống)
-   - Cài đặt Git for Windows nếu không có
-   - Cài đặt tất cả các phần phụ thuộc Python (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, v.v.)
-   - Tải xuống và cài đặt ffmpeg
-   - Cài đặt trình phát video tích hợp (python-mpv cộng với bản dựng libmpv trong `mpv-runtime`). Bước này là tùy chọn: nếu thất bại, mọi thứ khác sẽ hoạt động và khung trình phát sẽ giải thích những gì còn thiếu
-   - Tạo **Lối tắt màn hình công cộng** (hiển thị với mọi tài khoản Windows trên PC)
+Từng bước một, không cần dòng lệnh. Đã được thử nghiệm trên một PC Windows 11 sạch.
 
-> Trình cài đặt **nhiều người dùng**: mọi thứ đều được cài đặt trên toàn hệ thống trong `%ProgramFiles%\VideoTranslatorAI` và bất kỳ người dùng Windows nào trên máy đều thấy lối tắt sẵn sàng hoạt động. Công cụ xây dựng VS C++ **không còn cần thiết** - nhánh `coqui-tts` được duy trì cung cấp các gói bánh xe Python được biên dịch sẵn.
+1. **Tải xuống** dự án: nút **Code** màu xanh lá → **Download ZIP**, hoặc tệp zip mới nhất từ [Bản phát hành GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases). Giải nén vào bất kỳ thư mục nào, ví dụ như màn hình nền.
+2. **Cài đặt**: nhấp chuột phải vào `setup_windows.bat` → **Chạy với tư cách quản trị viên** → nhấn `1` (Cài đặt). Nếu SmartScreen báo "Windows đã bảo vệ PC của bạn", nhấp vào **Thông tin khác** → **Vẫn chạy**: tập lệnh này là văn bản thuần túy, bạn có thể mở nó bằng Notepad.
+3. **Chờ đợi**: trên một PC sạch với kết nối nhanh, quá trình này mất khoảng 15 phút và 8 GB dung lượng đĩa. Trình cài đặt tải xuống và thiết lập, theo thứ tự này:
+   - Python 3.11 (toàn hệ thống) và thời gian chạy Microsoft Visual C++, nếu còn thiếu
+   - các gói Python: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote và ngăn xếp Wav2Lip
+   - Git for Windows (cho Wav2Lip), ffmpeg và trình phát video tích hợp (libmpv trong `mpv-runtime`; tùy chọn, mọi thứ khác vẫn hoạt động nếu không có nó)
+   - một **lối tắt trên màn hình nền** cho mọi tài khoản Windows trên PC và một thư mục trong **menu Bắt đầu** chứa ứng dụng cùng mục **Cập nhật Video Translator AI**
+4. **Khởi động** ứng dụng từ lối tắt trên màn hình nền hoặc từ menu Bắt đầu. Không có GPU NVIDIA, ứng dụng vẫn chạy trên CPU, chỉ chậm hơn: hãy chọn một mô hình Whisper nhỏ.
+
+> Mọi thứ được cài đặt trên toàn hệ thống trong `%ProgramFiles%\VideoTranslatorAI`, vì vậy mọi người dùng Windows trên máy đều thấy lối tắt sẵn sàng. Mỗi lần chạy `setup_windows.bat` sẽ ghi một nhật ký vào `%USERPROFILE%\VideoTranslatorAI-setup.log`: hãy đính kèm nó khi bạn báo cáo sự cố. Nếu trình cài đặt kết thúc với thông báo **CÀI ĐẶT KHÔNG HOÀN TẤT**, hãy chạy lại và chọn `[2] Repair / Update`. Không cần đến Công cụ xây dựng VS C++: nhánh `coqui-tts` được duy trì đi kèm các gói bánh xe đã biên dịch sẵn.
 
 ### Linux/macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Trình phát video tích hợp: python-mpv (cần libmpv từ hệ thống hoặc từ trình cài đặt Windows). |
 | `requirements-dev.txt` | Các phần phụ thuộc nhẹ được CI/kiểm thử đơn vị sử dụng. |
 
+## Cập nhật
+
+### Windows
+
+Menu Bắt đầu → **Video Translator AI** → **Cập nhật Video Translator AI** (yêu cầu quyền quản trị viên), hoặc chạy `setup_windows.bat` với quyền quản trị viên và chọn `[2] Repair / Update`. Trình cài đặt kiểm tra [Bản phát hành GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases): khi có phiên bản mới hơn, nó tải xuống bản phát hành, xác minh tổng kiểm tra SHA256 và cài đặt; nếu không, nó sửa chữa các tệp hiện tại. Cài đặt, khóa đã lưu, mô hình đã tải xuống và video đã dịch của bạn vẫn được giữ nguyên. Nếu không có kết nối internet, việc cập nhật sẽ bị bỏ qua và quá trình sửa chữa vẫn tiếp tục.
+
+### Linux/macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Gỡ cài đặt
 
 ### Windows
@@ -220,13 +239,13 @@ Chạy `setup_windows.bat` (nhấp chuột phải → **Chạy với tư cách q
 
 | Chế độ | Yêu cầu quản trị viên | Phạm vi |
 |------|----------------|-------|
-| **[1] Gỡ cài đặt hoàn toàn - một cú nhấp chuột** | ✅ | Xóa thư mục ứng dụng, lối tắt Public Desktop, ffmpeg khỏi máy PATH, bộ đệm mô hình HF của mọi người dùng (Whisper/XTTS) và cấu hình (`HF token`) cũng như tất cả các gói Python AI được trình cài đặt cài đặt. Cuối cùng, nó cũng hỏi (chọn tham gia) xem có nên gỡ cài đặt âm thầm **Python 3.11** và **Git for Windows** thông qua chuỗi gỡ cài đặt yên tĩnh đăng ký của họ hay không. |
+| **[1] Gỡ cài đặt hoàn toàn - một cú nhấp chuột** | ✅ | Xóa thư mục ứng dụng, lối tắt trên màn hình nền và các mục trong menu Bắt đầu, ffmpeg khỏi máy PATH, bộ đệm mô hình HF của mọi người dùng (Whisper/XTTS) và cấu hình (`HF token`) cũng như tất cả các gói Python AI được trình cài đặt cài đặt. Cuối cùng, nó cũng hỏi (chọn tham gia) xem có nên gỡ cài đặt âm thầm **Python 3.11** và **Git for Windows** thông qua chuỗi gỡ cài đặt yên tĩnh đăng ký của họ hay không. |
 | **[2] Chỉ người dùng hiện tại** | ❌ | Chỉ xóa cấu hình VTAI, bộ đệm HF/XTTS của người dùng đang chạy và cài đặt cũ cho mỗi người dùng. **Giữ nguyên cài đặt trên toàn hệ thống** để các tài khoản Windows khác trên PC có thể tiếp tục sử dụng ứng dụng. |
 | **[3] Tùy chỉnh - chi tiết** | ✅ cho các mục hệ thống, ❌ cho các mục người dùng | Lời nhắc Y/N cho từng danh mục: thư mục ứng dụng, lối tắt, PATH của máy, số lượt cài đặt cũ của mỗi người dùng, cấu hình/bộ nhớ đệm của mỗi người dùng, sau đó nhóm các gói Python (TTS, ngăn xếp PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, các tiện ích đường ống) và cuối cùng là Python 3.11 và Git tùy chọn. |
 
 Mọi chế độ cũng xóa những gì chương trình lưu cho người dùng: cấu hình và nhật ký hằng ngày (`%APPDATA%\VideoTranslatorAI`), dữ liệu chương trình gồm runtime của trình phát, JavaScript và Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), tệp tạm của chế độ thời gian thực (`%TEMP%\VideoTranslatorAI`), các mô hình MarianMT và các khóa đã lưu (token HF, ElevenLabs) trong Trình quản lý thông tin xác thực của Windows. Khóa được lưu theo từng tài khoản Windows: mỗi tài khoản tự xóa khóa của mình bằng `[2]`.
 
-**Không bao giờ bị xóa tự động:** Công cụ xây dựng Visual Studio C++ (nếu có từ các lần chạy cũ hơn). Sử dụng *Ứng dụng và tính năng* trong Cài đặt Windows để xóa chúng theo cách thủ công nếu muốn.
+**Không bao giờ bị xóa tự động:** Công cụ xây dựng Visual Studio C++ (nếu có từ các lần chạy cũ hơn) và thời gian chạy Microsoft Visual C++, được các chương trình khác dùng chung. Sử dụng *Ứng dụng và tính năng* trong Cài đặt Windows để xóa chúng theo cách thủ công nếu muốn. Nhật ký cài đặt `%USERPROFILE%\VideoTranslatorAI-setup.log` được giữ lại một cách có chủ đích.
 
 ### Linux/macOS
 

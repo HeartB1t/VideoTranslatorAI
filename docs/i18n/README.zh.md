@@ -8,7 +8,11 @@
 
 由 AI 驱动的视频语音配音工具，可自动将视频转录、翻译和重新配音为 26 种语言，具有本地处理选项，默认情况下无需 API 密钥。 Whisper 语音识别本地运行； Edge-TTS、Google Translate 和 DeepL 需要互联网连接。可选功能（DeepL、说话人识别（分类））可能需要 API 密钥或访问令牌。
 
+![Video Translator AI 主窗口：视频播放器和翻译面板](../../assets/screenshot.png)
+
 > **v2.0** - 模块化包、本地 Ollama 翻译、质量配置文件编排、可安装的 Python 元数据以及选择与真实模型的集成测试。请参阅 [GitHub 版本](https://github.com/HeartB1t/VideoTranslatorAI/releases) 和提交历史记录以获取完整的更改列表。
+
+> **v2.1.0** - 强化的 Windows 安装程序（Microsoft Visual C++ 运行时、清晰的安装日志、来自 GitHub 版本的自我更新）、更简洁的日志（每次下载一个递进的进度条）、无 GPU 设备上的软件视频解码，以及抬高的播放控制按钮。请参阅 [GitHub 版本](https://github.com/HeartB1t/VideoTranslatorAI/releases)。
 
 ## 它是如何运作的
 
@@ -155,17 +159,18 @@ Claude/项目维护注释在 **Voice Catalog Source Of Truth** 下的 `CLAUDE.md
 
 ### Windows
 
-1. 克隆或下载此存储库
-2. 右键单击 `setup_windows.bat` → **以管理员身份运行** → 菜单显示 `[1] Install`
-3. 安装程序自动：
-   - 如果不存在则安装 Python 3.11（系统范围）
-   - 如果不存在则安装 Git for Windows
-   - 安装所有 Python 依赖项（PyTorch CUDA 12.4、faster-whisper、Demucs、coqui-tts、Wav2Lip deps 等）
-   - 下载并安装 ffmpeg
-   - 安装集成视频播放器（python-mpv 以及 `mpv-runtime` 中的 libmpv 构建）。该步骤是可选的：如果失败，其他一切都会正常，并且播放器窗格会解释缺少的内容
-   - 创建**公共桌面快捷方式**（PC 上的每个 Windows 帐户都可见）
+按部就班，无需命令行。已在全新的 Windows 11 电脑上测试。
 
-> 安装程序是**多用户**：所有内容都在 `%ProgramFiles%\VideoTranslatorAI` 下在系统范围内安装，并且计算机上的任何 Windows 用户都会发现快捷方式已准备就绪。 **不再需要 VS C++ 构建工具** - 维护的 `coqui-tts` 分支提供预编译的 Python 轮包。
+1. **下载**项目：绿色的**代码**按钮 → **下载 ZIP**，或从 [GitHub 版本](https://github.com/HeartB1t/VideoTranslatorAI/releases) 下载最新的 zip 包。将其解压到任意文件夹，例如桌面。
+2. **安装**：右键单击 `setup_windows.bat` → **以管理员身份运行** → 按 `1`（安装）。如果 SmartScreen 显示“Windows 已保护你的电脑”，点击**更多信息** → **仍要运行**：该脚本是纯文本，你可以用记事本打开它。
+3. **等待**：在网速较快的全新电脑上，大约需要 15 分钟和 8 GB 磁盘空间。安装程序按以下顺序下载并设置：
+   - Python 3.11（系统范围）以及缺失时的 Microsoft Visual C++ 运行时
+   - Python 包：PyTorch CUDA 12.4、faster-whisper、Demucs、coqui-tts、pyannote 以及 Wav2Lip 相关组件
+   - Git for Windows（用于 Wav2Lip）、ffmpeg 以及集成视频播放器（`mpv-runtime` 中的 libmpv；可选，没有它其他一切照常运作）
+   - 为电脑上每个 Windows 帐户创建的**桌面快捷方式**，以及包含应用程序和**更新 Video Translator AI**的**开始菜单**文件夹
+4. 从桌面快捷方式或开始菜单**启动**它。没有 NVIDIA GPU 时应用会用 CPU 运行，只是速度较慢：请选择较小的 Whisper 模型。
+
+> 所有内容都在 `%ProgramFiles%\VideoTranslatorAI` 下按系统范围安装，因此机器上的每个 Windows 用户都能找到现成的快捷方式。每次运行 `setup_windows.bat` 都会将日志写入 `%USERPROFILE%\VideoTranslatorAI-setup.log`：报告问题时请附上它。如果安装程序以**安装未完成**结束，请再次运行并选择 `[2] Repair / Update`。不需要 VS C++ 构建工具：维护的 `coqui-tts` 分支提供预编译的轮包。
 
 ### Linux / macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | 集成视频播放器：python-mpv（需要系统或 Windows 安装程序中的 libmpv）。 |
 | `requirements-dev.txt` | CI/单元测试使用的轻量级依赖项。 |
 
+## 更新
+
+### Windows
+
+开始菜单 → **Video Translator AI** → **更新 Video Translator AI**（会请求管理员权限），或以管理员身份运行 `setup_windows.bat` 并选择 `[2] Repair / Update`。安装程序会检查 [GitHub 版本](https://github.com/HeartB1t/VideoTranslatorAI/releases)：如果有更新的版本，就会下载该版本、校验其 SHA256 校验和并安装；否则会修复当前文件。你的设置、保存的密钥、已下载的模型和已翻译的视频都会被保留。没有网络连接时会跳过更新，直接继续修复。
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## 卸载
 
 ### Windows
@@ -220,13 +239,13 @@ videotranslatorai --preflight
 
 | 模式 | 需要管理员 | 适用范围 |
 |------|----------------|-------|
-| **[1] 完全卸载 - 一键** | ✅ | 从计算机路径中删除应用程序文件夹、公共桌面快捷方式、ffmpeg、每个用户的 HF 模型缓存 (Whisper/XTTS) 和配置 (`HF token`) 以及安装程序安装的所有 Python AI 包。最后，它还询问（选择加入）是否通过注册表静默卸载字符串静默卸载 **Python 3.11** 和 **Git for Windows**。 |
+| **[1] 完全卸载 - 一键** | ✅ | 删除应用程序文件夹、桌面快捷方式和开始菜单项、计算机路径中的 ffmpeg、每个用户的 HF 模型缓存 (Whisper/XTTS) 和配置 (`HF token`) 以及安装程序安装的所有 Python AI 包。最后，它还询问（选择加入）是否通过注册表静默卸载字符串静默卸载 **Python 3.11** 和 **Git for Windows**。 |
 | **[2] 仅限当前用户** | ❌ | 仅删除正在运行的用户的 VTAI 配置、HF/XTTS 缓存和旧版每用户安装。 **保持系统范围内的安装完好无损**，以便 PC 上的其他 Windows 帐户可以继续使用该应用程序。 |
 | **[3] 自定义 - 粒度** | ✅ 对于系统项目，❌ 对于用户项目 | 每个类别的是/否提示：应用程序文件夹、快捷方式、计算机路径、每用户旧版安装、每用户配置/缓存，然后分组 Python 包（TTS、PyTorch 堆栈、Whisper+ctranslate2、Demucs、Wav2Lip deps、pyannote、管道实用程序），最后是可选的 Python 3.11 和 Git。 |
 
 每种模式还会删除程序为用户保存的内容：配置和每日日志（`%APPDATA%\VideoTranslatorAI`）、包含播放器、JavaScript 和 Wav2Lip 运行时的程序数据（`%LOCALAPPDATA%\VideoTranslatorAI`）、实时功能的临时文件（`%TEMP%\VideoTranslatorAI`）、MarianMT 模型，以及 Windows 凭据管理器中保存的密钥（HF 令牌、ElevenLabs）。密钥按 Windows 账户保存：每个账户用 `[2]` 删除自己的密钥。
 
-**永远不会自动删除：** Visual Studio C++ 构建工具（如果在较旧的运行中存在）。如果需要，请使用 Windows 设置中的“应用程序和功能”手动删除它们。
+**永远不会自动删除：** Visual Studio C++ 构建工具（如果在较旧的运行中存在）以及其他程序也会共用的 Microsoft Visual C++ 运行时。如果需要，请使用 Windows 设置中的”应用程序和功能”手动删除它们。安装日志 `%USERPROFILE%\VideoTranslatorAI-setup.log` 会被特意保留。
 
 ### Linux / macOS
 

@@ -8,7 +8,11 @@
 
 AI-powered video dubbing tool that automatically transcribes, translates, and re-dubs videos into 26 languages, with local processing options and no API keys required by default. Whisper speech recognition runs locally; Edge-TTS, Google Translate and DeepL require an internet connection. Optional features (DeepL, Speaker Diarization) may require an API key or access token.
 
+![The Video Translator AI main window: video player and translation panels](assets/screenshot.png)
+
 > **v2.0** - modular package, local Ollama translation, quality-profile orchestration, installable Python metadata, and opt-in heavy smoke tests. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) and the commit history for the full list of changes.
+
+> **v2.1.0** - Windows installer hardened (Microsoft Visual C++ runtime, a clear setup log, self-update from GitHub Releases), cleaner logs (one advancing progress bar per download), software video decoding on machines without a GPU, and raised transport buttons. See [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## How it works
 
@@ -162,17 +166,18 @@ The pipeline uses five GPU-accelerated components (faster-whisper, Demucs, XTTS,
 
 ### Windows
 
-1. Clone or download this repository
-2. Right-click `setup_windows.bat` → **Run as administrator** → menu shows `[1] Install`
-3. The installer automatically:
-   - Installs Python 3.11 if not present (system-wide)
-   - Installs Git for Windows if not present
-   - Installs all Python dependencies (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, etc.)
-   - Downloads and installs ffmpeg
-   - Installs the integrated video player (python-mpv plus a libmpv build in `mpv-runtime`). The step is optional: if it fails, everything else works and the player pane explains what is missing
-   - Creates a **Public Desktop shortcut** (visible to every Windows account on the PC)
+Step by step, no command line needed. Tested on a clean Windows 11 PC.
 
-> The installer is **multi-user**: everything is installed system-wide under `%ProgramFiles%\VideoTranslatorAI` and any Windows user on the machine finds the shortcut ready to go. VS C++ Build Tools are **no longer required** - the maintained `coqui-tts` fork ships pre-built wheels.
+1. **Download** the project: the green **Code** button → **Download ZIP**, or the latest zip from [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases). Extract it to any folder, for example the Desktop.
+2. **Install**: right-click `setup_windows.bat` → **Run as administrator** → press `1` (Install). If SmartScreen says "Windows protected your PC", click **More info** → **Run anyway**: the script is plain text, you can open it with Notepad.
+3. **Wait**: on a fresh PC with a fast connection it takes about 15 minutes and 8 GB of disk. The installer downloads and sets up, in this order:
+   - Python 3.11 (system-wide) and the Microsoft Visual C++ runtime, when missing
+   - the Python packages: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote and the Wav2Lip stack
+   - Git for Windows (for Wav2Lip), ffmpeg and the integrated video player (libmpv in `mpv-runtime`; optional, everything else works without it)
+   - a **Desktop shortcut** for every Windows account on the PC and a **Start Menu** folder with the application and **Update Video Translator AI**
+4. **Start** it from the Desktop shortcut or the Start Menu. Without an NVIDIA GPU the app works on the CPU, only slower: choose a small Whisper model.
+
+> Everything is installed system-wide under `%ProgramFiles%\VideoTranslatorAI`, so every Windows user on the machine finds the shortcut ready. Each run of `setup_windows.bat` writes a log to `%USERPROFILE%\VideoTranslatorAI-setup.log`: attach it when you report a problem. If the installer ends with **INSTALLATION INCOMPLETE**, run it again and choose `[2] Repair / Update`. VS C++ Build Tools are not required: the maintained `coqui-tts` fork ships pre-built wheels.
 
 ### Linux / macOS
 
@@ -219,6 +224,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Integrated video player: python-mpv (needs libmpv from the system or from the Windows installer). |
 | `requirements-dev.txt` | Lightweight dependencies used by CI/unit tests. |
 
+## Update
+
+### Windows
+
+Start Menu → **Video Translator AI** → **Update Video Translator AI** (it asks for administrator rights), or run `setup_windows.bat` as administrator and choose `[2] Repair / Update`. The installer checks [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases): when a newer version exists it downloads the release, verifies its SHA256 checksum and installs it; otherwise it repairs the current files. Your settings, saved keys, downloaded models and translated videos are kept. Without an internet connection the update is skipped and the repair goes on.
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Uninstall
 
 ### Windows
@@ -227,13 +246,13 @@ Run `setup_windows.bat` (right-click → **Run as administrator**) and pick `[3]
 
 | Mode | Admin required | Scope |
 |------|----------------|-------|
-| **[1] Full uninstall - one click** | ✅ | Removes the app folder, Public Desktop shortcut, ffmpeg from machine PATH, every user's HF model cache (Whisper/XTTS) and config (`HF token`), and all Python AI packages installed by the installer. At the end it also asks (opt-in) whether to silently uninstall **Python 3.11** and **Git for Windows** via their registry quiet-uninstall strings. |
+| **[1] Full uninstall - one click** | ✅ | Removes the app folder, the Desktop shortcut and the Start Menu entries, ffmpeg from machine PATH, every user's HF model cache (Whisper/XTTS) and config (`HF token`), and all Python AI packages installed by the installer. At the end it also asks (opt-in) whether to silently uninstall **Python 3.11** and **Git for Windows** via their registry quiet-uninstall strings. |
 | **[2] Current user only** | ❌ | Removes only the running user's VTAI config, HF/XTTS cache, and legacy per-user install. **Leaves the system-wide installation intact** so other Windows accounts on the PC can keep using the app. |
 | **[3] Custom - granular** | ✅ for system items, ❌ for user items | Y/N prompt for each category: app folder, shortcut, machine PATH, per-user legacy installs, per-user configs/caches, then grouped Python packages (TTS, PyTorch stack, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, pipeline utilities), and finally optional Python 3.11 and Git. |
 
 Every mode also removes what the app keeps for the user: config and daily logs (`%APPDATA%\VideoTranslatorAI`), app data with the player, JavaScript and Wav2Lip runtimes (`%LOCALAPPDATA%\VideoTranslatorAI`), temporary files of real time (`%TEMP%\VideoTranslatorAI`), the MarianMT models, and the saved keys (HF token, ElevenLabs) from Windows Credential Manager. Keys are stored per Windows account: each account removes its own with `[2]`.
 
-**Never removed automatically:** Visual Studio C++ Build Tools (if present from older runs). Use *Apps and features* in Windows Settings to remove them manually if desired.
+**Never removed automatically:** Visual Studio C++ Build Tools (if present from older runs) and the Microsoft Visual C++ runtime, which other programs share. Use *Apps and features* in Windows Settings to remove them manually if desired. The setup log `%USERPROFILE%\VideoTranslatorAI-setup.log` is kept on purpose.
 
 ### Linux / macOS
 

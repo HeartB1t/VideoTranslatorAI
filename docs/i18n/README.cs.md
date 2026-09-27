@@ -8,7 +8,11 @@
 
 Nástroj pro dabování videí pomocí umělé inteligence, který automaticky přepisuje, překládá a dabuje videa do 26 jazyků. Nabízí místní zpracování a ve výchozím nastavení nevyžaduje klíče API. Rozpoznávání řeči Whisper běží lokálně; Edge-TTS, Google Translate a DeepL vyžadují připojení k internetu. Volitelné funkce (DeepL, rozlišení mluvčích) mohou vyžadovat klíč API nebo přístupový token.
 
+![Hlavní okno aplikace Video Translator AI: přehrávač videa a panely překladu](../../assets/screenshot.png)
+
 > **v2.0** - modulární balíček, místní překlad přes Ollama, řízení pomocí profilů kvality, metadata pro instalaci balíčku Python a volitelné integrační testy se skutečnými modely. Úplný seznam změn naleznete v [přehledu vydání na GitHubu](https://github.com/HeartB1t/VideoTranslatorAI/releases) a historii commitů.
+
+> **v2.1.0** - vylepšený instalátor pro Windows (běhové prostředí Microsoft Visual C++, přehledný instalační protokol, automatická aktualizace z GitHub Releases), přehlednější protokoly (jeden postupující ukazatel průběhu na stahování), softwarové dekódování videa na počítačích bez GPU a výše umístěná tlačítka ovládání přehrávání. Viz [přehled vydání na GitHubu](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Jak to funguje
 
@@ -155,17 +159,18 @@ Pipeline využívá pět GPU akcelerovaných komponent (faster-whisper, Demucs, 
 
 ### Windows
 
-1. Naklonujte nebo stáhněte toto úložiště
-2. Klikněte pravým tlačítkem na `setup_windows.bat` → **Spustit jako správce** → nabídka zobrazí `[1] Install`
-3. Instalátor automaticky:
-   - Nainstaluje Python 3.11, pokud není přítomen (v rámci celého systému)
-   - Nainstaluje Git for Windows, pokud není přítomen
-   - Nainstaluje všechny závislosti Pythonu (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps atd.)
-   - Stáhne a nainstaluje ffmpeg
-   - Nainstaluje integrovaný přehrávač videa (python-mpv plus sestavení libmpv v `mpv-runtime`). Tento krok je volitelný: pokud selže, vše ostatní funguje a panel přehrávače vysvětluje, co chybí
-   - Vytvoří **Public Desktop zástupce** (viditelný pro každý účet Windows na PC)
+Krok za krokem, bez nutnosti příkazové řádky. Otestováno na čistém počítači s Windows 11.
 
-> Instalační program je **pro více uživatelů**: vše je nainstalováno v celém systému pod `%ProgramFiles%\VideoTranslatorAI` a jakýkoli uživatel Windows na počítači najde zástupce připraveného k použití. Nástroje VS C++ Build Tools **již nejsou vyžadovány** - udržovaná vidlice `coqui-tts` poskytuje předkompilované balíčky koleček Pythonu.
+1. **Stáhněte** projekt: zelené tlačítko **Kód** → **Stáhnout ZIP**, nebo nejnovější zip z [přehledu vydání na GitHubu](https://github.com/HeartB1t/VideoTranslatorAI/releases). Rozbalte jej do libovolné složky, například na plochu.
+2. **Instalace**: klikněte pravým tlačítkem na `setup_windows.bat` → **Spustit jako správce** → stiskněte `1` (Install). Pokud SmartScreen zobrazí "Windows chránil váš počítač", klikněte na **Další informace** → **Přesto spustit**: skript je čistý text, můžete jej otevřít v Poznámkovém bloku.
+3. **Počkejte**: na čistém počítači s rychlým připojením to trvá zhruba 15 minut a zabere 8 GB místa na disku. Instalátor v tomto pořadí stáhne a nastaví:
+   - Python 3.11 (v rámci celého systému) a běhové prostředí Microsoft Visual C++, pokud chybí
+   - balíčky Pythonu: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote a sadu nástrojů Wav2Lip
+   - Git for Windows (pro Wav2Lip), ffmpeg a integrovaný přehrávač videa (libmpv v `mpv-runtime`; volitelné, vše ostatní funguje i bez něj)
+   - **zástupce na ploše** pro každý účet Windows na počítači a složku v **nabídce Start** s aplikací a položkou **Aktualizovat Video Translator AI**
+4. **Spusťte** ji ze zástupce na ploše nebo z nabídky Start. Bez GPU NVIDIA aplikace funguje na CPU, jen pomaleji: zvolte menší model Whisper.
+
+> Vše je nainstalováno v celém systému pod `%ProgramFiles%\VideoTranslatorAI`, takže každý uživatel Windows na počítači najde zástupce připraveného. Každé spuštění `setup_windows.bat` zapíše protokol do `%USERPROFILE%\VideoTranslatorAI-setup.log`: přiložte jej, když hlásíte problém. Pokud instalátor skončí hláškou **INSTALACE NEDOKONČENA**, spusťte jej znovu a zvolte `[2] Repair / Update`. Nástroje VS C++ Build Tools nejsou vyžadovány: udržovaná vidlice `coqui-tts` poskytuje předkompilované balíčky.
 
 ### Linux / macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Integrovaný přehrávač videa: python-mpv (potřebuje libmpv ze systému nebo z instalačního programu Windows). |
 | `requirements-dev.txt` | Odlehčené závislosti používané testy CI/jednotka. |
 
+## Aktualizace
+
+### Windows
+
+Nabídka Start → **Video Translator AI** → **Aktualizovat Video Translator AI** (vyžádá si oprávnění správce), nebo spusťte `setup_windows.bat` jako správce a zvolte `[2] Repair / Update`. Instalátor zkontroluje [přehled vydání na GitHubu](https://github.com/HeartB1t/VideoTranslatorAI/releases): pokud existuje novější verze, stáhne ji, ověří její kontrolní součet SHA256 a nainstaluje ji; jinak opraví aktuální soubory. Vaše nastavení, uložené klíče, stažené modely a přeložená videa zůstanou zachovány. Bez připojení k internetu se aktualizace přeskočí a pokračuje se opravou.
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Odinstalovat
 
 ### Windows
@@ -220,13 +239,13 @@ Spusťte `setup_windows.bat` (klikněte pravým tlačítkem → **Spustit jako s
 
 | Režim | Je vyžadován administrátor | Rozsah |
 |------|----------------|-------|
-| **[1] Úplné odinstalování - jedním kliknutím** | ✅ | Odebere složku aplikace, zástupce Public Desktop, ffmpeg z PATH počítače, mezipaměť HF modelu každého uživatele (Whisper/XTTS) a konfiguraci (`HF token`) a všechny balíčky Python AI nainstalované instalačním programem. Na konci se také zeptá (opt-in), zda má tiše odinstalovat **Python 3.11** a **Git for Windows** prostřednictvím jejich řetězců tichého odinstalování v registru. |
+| **[1] Úplné odinstalování - jedním kliknutím** | ✅ | Odebere složku aplikace, zástupce na ploše a položky v nabídce Start, ffmpeg z PATH počítače, mezipaměť HF modelu každého uživatele (Whisper/XTTS) a konfiguraci (`HF token`) a všechny balíčky Python AI nainstalované instalačním programem. Na konci se také zeptá (opt-in), zda má tiše odinstalovat **Python 3.11** a **Git for Windows** prostřednictvím jejich řetězců tichého odinstalování v registru. |
 | **[2] Pouze aktuální uživatel** | ❌ | Odebere pouze konfiguraci VTAI běžícího uživatele, mezipaměť HF/XTTS a starší instalaci pro uživatele. **Instalaci celého systému ponechá nedotčenou**, takže ostatní účty Windows v počítači mohou aplikaci nadále používat. |
 | **[3] Vlastní - podrobné** | ✅ pro systémové položky, ❌ pro uživatelské položky | Výzva Y/N pro každou kategorii: složka aplikace, zástupce, systémová proměnná PATH, starší instalace jednotlivých uživatelů, jejich konfigurace a mezipaměti, poté skupiny balíčků Pythonu (TTS, PyTorch, Whisper+ctranslate2, Demucs, závislosti Wav2Lip, pyannote a pomocné nástroje pipeline) a nakonec volitelně Python 3.11 a Git. |
 
 Každý režim odstraní také to, co program ukládá pro uživatele: konfiguraci a denní protokoly (`%APPDATA%\VideoTranslatorAI`), data programu s běhovými prostředími přehrávače, JavaScriptu a Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), dočasné soubory reálného času (`%TEMP%\VideoTranslatorAI`), modely MarianMT a uložené klíče (token HF, ElevenLabs) ze Správce pověření Windows. Klíče patří jednotlivým účtům Windows: každý účet odstraní své pomocí `[2]`.
 
-**Nikdy se automaticky neodstraňuje:** Nástroje pro sestavení Visual Studio C++ (pokud existují ze starších běhů). Chcete-li je v případě potřeby ručně odebrat, použijte *Aplikace a funkce* v Nastavení systému Windows.
+**Nikdy se automaticky neodstraňuje:** Nástroje pro sestavení Visual Studio C++ (pokud existují ze starších běhů) a běhové prostředí Microsoft Visual C++, které sdílejí i jiné programy. Chcete-li je v případě potřeby ručně odebrat, použijte *Aplikace a funkce* v Nastavení systému Windows. Instalační protokol `%USERPROFILE%\VideoTranslatorAI-setup.log` se záměrně ponechává.
 
 ### Linux / macOS
 

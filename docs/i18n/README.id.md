@@ -8,7 +8,11 @@
 
 Alat sulih suara video bertenaga AI yang secara otomatis mentranskripsikan, menerjemahkan, dan menjuluki ulang video ke dalam 26 bahasa, dengan opsi pemrosesan lokal dan tidak memerlukan kunci API secara default. Pengenalan ucapan Whisper berjalan secara lokal; Edge-TTS, Google Translate dan DeepL memerlukan koneksi internet. Fitur opsional (DeepL, identifikasi orang yang berbicara (diarisasi)) mungkin memerlukan kunci API atau token akses.
 
+![Jendela utama Video Translator AI: pemutar video dan panel terjemahan](../../assets/screenshot.png)
+
 > **v2.0** - paket modular, terjemahan Ollama lokal, orkestrasi profil kualitas, metadata Python yang dapat diinstal, dan pengujian integrasi keikutsertaan dengan model nyata. Lihat [Rilis GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases) dan riwayat penerapan untuk daftar lengkap perubahan.
+
+> **v2.1.0** - installer Windows diperkuat (runtime Microsoft Visual C++, log pemasangan yang jelas, pembaruan otomatis dari GitHub Releases), log yang lebih rapi (satu progress bar yang berjalan per unduhan), decoding video perangkat lunak pada mesin tanpa GPU, dan tombol transport yang ditinggikan. Lihat [Rilis GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Bagaimana cara kerjanya
 
@@ -155,17 +159,18 @@ Pipeline ini menggunakan lima komponen yang dipercepat GPU (faster-whisper, Demu
 
 ### Windows
 
-1. Kloning atau unduh repositori ini
-2. Klik kanan `setup_windows.bat` → **Run as administrator** → menu menampilkan `[1] Install`
-3. Pemasang secara otomatis:
-   - Menginstal Python 3.11 jika tidak ada (seluruh sistem)
-   - Menginstal Git for Windows jika tidak ada
-   - Menginstal semua dependensi Python (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, dll.)
-   - Mengunduh dan menginstal ffmpeg
-   - Menginstal pemutar video terintegrasi (python-mpv plus libmpv build di `mpv-runtime`). Langkah ini opsional: jika gagal, semuanya berfungsi dan panel pemutar menjelaskan apa yang hilang
-   - Membuat **pintasan Desktop Publik** (terlihat oleh setiap akun Windows di PC)
+Langkah demi langkah, tanpa perlu baris perintah. Diuji pada PC Windows 11 yang bersih.
 
-> Pemasangnya **multi-pengguna**: semuanya terinstal di seluruh sistem di bawah `%ProgramFiles%\VideoTranslatorAI` dan setiap pengguna Windows di mesin menemukan pintasan yang siap digunakan. VS C++ Build Tools **tidak diperlukan lagi** - fork `coqui-tts` yang dikelola menyediakan paket roda Python yang telah dikompilasi sebelumnya.
+1. **Unduh** proyeknya: tombol hijau **Code** → **Download ZIP**, atau zip terbaru dari [Rilis GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases). Ekstrak ke folder mana pun, misalnya Desktop.
+2. **Instal**: klik kanan `setup_windows.bat` → **Run as administrator** → tekan `1` (Install). Jika SmartScreen menampilkan "Windows protected your PC", klik **More info** → **Run anyway**: skripnya berupa teks biasa, bisa dibuka dengan Notepad.
+3. **Tunggu**: pada PC baru dengan koneksi cepat, prosesnya memakan waktu sekitar 15 menit dan 8 GB ruang disk. Penginstal mengunduh dan menyiapkan, dalam urutan ini:
+   - Python 3.11 (seluruh sistem) dan runtime Microsoft Visual C++, jika belum ada
+   - paket Python: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote dan tumpukan Wav2Lip
+   - Git for Windows (untuk Wav2Lip), ffmpeg dan pemutar video terintegrasi (libmpv di `mpv-runtime`; opsional, semuanya tetap berfungsi tanpanya)
+   - **pintasan Desktop** untuk setiap akun Windows di PC dan folder **Start Menu** berisi aplikasi serta **Perbarui Video Translator AI**
+4. **Jalankan** dari pintasan Desktop atau Start Menu. Tanpa GPU NVIDIA aplikasi tetap berjalan di CPU, hanya lebih lambat: pilih model Whisper yang kecil.
+
+> Semuanya terinstal di seluruh sistem di bawah `%ProgramFiles%\VideoTranslatorAI`, sehingga setiap pengguna Windows di mesin menemukan pintasan yang siap dipakai. Setiap kali `setup_windows.bat` dijalankan, sebuah log ditulis ke `%USERPROFILE%\VideoTranslatorAI-setup.log`: lampirkan file ini saat melaporkan masalah. Jika penginstal berakhir dengan **INSTALLATION INCOMPLETE**, jalankan lagi dan pilih `[2] Repair / Update`. VS C++ Build Tools tidak diperlukan: fork `coqui-tts` yang dikelola menyediakan paket wheel yang sudah dikompilasi.
 
 ### Linux/macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Pemutar video terintegrasi: python-mpv (membutuhkan libmpv dari sistem atau dari penginstal Windows). |
 | `requirements-dev.txt` | Ketergantungan ringan yang digunakan oleh CI/pengujian unit. |
 
+## Pembaruan
+
+### Windows
+
+Start Menu → **Video Translator AI** → **Perbarui Video Translator AI** (akan meminta hak administrator), atau jalankan `setup_windows.bat` sebagai administrator dan pilih `[2] Repair / Update`. Penginstal memeriksa [Rilis GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases): jika ada versi yang lebih baru, ia mengunduh rilis tersebut, memverifikasi checksum SHA256-nya, lalu menginstalnya; jika tidak, ia memperbaiki file yang ada. Pengaturan, kunci tersimpan, model yang diunduh, dan video yang sudah diterjemahkan tetap dipertahankan. Tanpa koneksi internet, pembaruan dilewati dan perbaikan tetap berlanjut.
+
+### Linux/macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Copot pemasangan
 
 ### Windows
@@ -220,13 +239,13 @@ Jalankan `setup_windows.bat` (klik kanan → **Run as administrator**) dan pilih
 
 | Modus | Dibutuhkan Admin | Ruang lingkup |
 |------|----------------|-------|
-| **[1] Pencopotan pemasangan penuh - satu klik** | ✅ | Menghapus folder aplikasi, pintasan Desktop Publik, ffmpeg dari PATH mesin, cache model HF setiap pengguna (Whisper/XTTS) dan konfigurasi (`HF token`), dan semua paket Python AI yang diinstal oleh penginstal. Pada akhirnya ia juga menanyakan (ikut serta) apakah akan menghapus secara diam-diam **Python 3.11** dan **Git for Windows** melalui string pencopotan diam-diam registri mereka. |
+| **[1] Pencopotan pemasangan penuh - satu klik** | ✅ | Menghapus folder aplikasi, pintasan Desktop dan entri Start Menu, ffmpeg dari PATH mesin, cache model HF setiap pengguna (Whisper/XTTS) dan konfigurasi (`HF token`), dan semua paket Python AI yang diinstal oleh penginstal. Pada akhirnya ia juga menanyakan (ikut serta) apakah akan menghapus secara diam-diam **Python 3.11** dan **Git for Windows** melalui string pencopotan diam-diam registri mereka. |
 | **[2] Khusus pengguna saat ini** | ❌ | Hanya menghapus konfigurasi VTAI pengguna yang sedang berjalan, cache HF/XTTS, dan instalasi lama per pengguna. **Membiarkan penginstalan seluruh sistem tetap utuh** sehingga akun Windows lain di PC dapat tetap menggunakan aplikasi. |
 | **[3] Khusus - terperinci** | ✅ untuk item sistem, ❌ untuk item pengguna | Y/N prompt untuk setiap kategori: folder aplikasi, pintasan, PATH mesin, instalasi lama per pengguna, konfigurasi/cache per pengguna, lalu mengelompokkan paket Python (TTS, tumpukan PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, utilitas pipa), dan terakhir opsional Python 3.11 dan Git. |
 
 Setiap mode juga menghapus apa yang disimpan program untuk pengguna: konfigurasi dan log harian (`%APPDATA%\VideoTranslatorAI`), data program beserta runtime pemutar, JavaScript, dan Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), berkas sementara waktu nyata (`%TEMP%\VideoTranslatorAI`), model MarianMT, serta kunci tersimpan (token HF, ElevenLabs) dari Credential Manager Windows. Kunci disimpan per akun Windows: setiap akun menghapus kuncinya sendiri dengan `[2]`.
 
-**Tidak pernah dihapus secara otomatis:** Visual Studio C++ Build Tools (jika ada dari proses yang lebih lama). Gunakan *Aplikasi dan fitur* di Pengaturan Windows untuk menghapusnya secara manual jika diinginkan.
+**Tidak pernah dihapus secara otomatis:** Visual Studio C++ Build Tools (jika ada dari proses yang lebih lama) dan runtime Microsoft Visual C++, yang digunakan bersama oleh program lain. Gunakan *Aplikasi dan fitur* di Pengaturan Windows untuk menghapusnya secara manual jika diinginkan. Log pemasangan `%USERPROFILE%\VideoTranslatorAI-setup.log` sengaja dipertahankan.
 
 ### Linux/macOS
 

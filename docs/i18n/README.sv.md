@@ -8,7 +8,11 @@
 
 AI-drivet videoröstdubbningsverktyg som automatiskt transkriberar, översätter och dubbar om videor till 26 språk, med lokala bearbetningsalternativ och inga API-nycklar krävs som standard. Whisper taligenkänning körs lokalt; Edge-TTS, Google Translate och DeepL kräver en internetanslutning. Valfria funktioner (DeepL, identifiering av personer som talar (diarisering)) kan kräva en API-nyckel eller åtkomsttoken.
 
+![Huvudfönstret i Video Translator AI: videospelare och översättningspaneler](../../assets/screenshot.png)
+
 > **v2.0** - modulpaket, lokal Ollama-översättning, kvalitetsprofilorkestrering, installerbar Python-metadata och opt-in-integreringstester med riktiga modeller. Se [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) och commit-historiken för en fullständig lista över ändringar.
+
+> **v2.1.0** - Windows-installationsprogrammet förstärkt (Microsoft Visual C++-runtime, en tydlig installationslogg, självuppdatering från GitHub Releases), renare loggar (ett framåtskridande förloppsfält per nedladdning), mjukvarubaserad videoavkodning på datorer utan grafikkort, och upphöjda transportknappar. Se [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Hur det fungerar
 
@@ -155,17 +159,18 @@ Pipelinen använder fem GPU-accelererade komponenter (faster-whisper, Demucs, XT
 
 ### Windows
 
-1. Klona eller ladda ner det här förrådet
-2. Högerklicka `setup_windows.bat` → **Kör som administratör** → menyn visar `[1] Install`
-3. Installationsprogrammet automatiskt:
-   - Installerar Python 3.11 om det inte finns (systemomfattande)
-   - Installerar Git for Windows om den inte finns
-   - Installerar alla Python-beroenden (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, etc.)
-   - Laddar ner och installerar ffmpeg
-   - Installerar den integrerade videospelaren (python-mpv plus en libmpv-build i `mpv-runtime`). Steget är valfritt: om det misslyckas fungerar allt annat och spelarrutan förklarar vad som saknas
-   - Skapar en **genväg för offentligt skrivbord** (synlig för alla Windows-konton på datorn)
+Steg för steg, inget kommandorad behövs. Testat på en ren Windows 11-dator.
 
-> Installationsprogrammet är **multi-användare**: allt är installerat i hela systemet under `%ProgramFiles%\VideoTranslatorAI` och alla Windows-användare på maskinen hittar genvägen redo att gå. VS C++ byggverktyg krävs **inte längre** - den underhållna `coqui-tts`-gaffeln tillhandahåller förkompilerade Python-hjulpaket.
+1. **Ladda ner** projektet: den gröna **Code**-knappen → **Download ZIP**, eller den senaste zip-filen från [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases). Packa upp den i valfri mapp, till exempel skrivbordet.
+2. **Installera**: högerklicka på `setup_windows.bat` → **Kör som administratör** → tryck på `1` (Installera). Om SmartScreen säger "Windows skyddade din dator", klicka på **Mer information** → **Kör ändå**: skriptet är vanlig text, du kan öppna det med Anteckningar.
+3. **Vänta**: på en ny dator med snabb anslutning tar det cirka 15 minuter och 8 GB diskutrymme. Installationsprogrammet laddar ner och konfigurerar, i denna ordning:
+   - Python 3.11 (systemomfattande) och Microsoft Visual C++-runtime, om det saknas
+   - Python-paketen: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote och Wav2Lip-stacken
+   - Git for Windows (för Wav2Lip), ffmpeg och den integrerade videospelaren (libmpv i `mpv-runtime`; valfritt, allt annat fungerar utan den)
+   - en **genväg på skrivbordet** för varje Windows-konto på datorn och en mapp i **Startmenyn** med programmet och **Uppdatera Video Translator AI**
+4. **Starta** det från genvägen på skrivbordet eller Startmenyn. Utan ett NVIDIA-grafikkort körs appen på processorn, bara långsammare: välj en liten Whisper-modell.
+
+> Allt installeras systemomfattande under `%ProgramFiles%\VideoTranslatorAI`, så alla Windows-användare på datorn hittar genvägen redo. Varje körning av `setup_windows.bat` skriver en logg till `%USERPROFILE%\VideoTranslatorAI-setup.log`: bifoga den när du rapporterar ett problem. Om installationsprogrammet avslutas med **INSTALLATIONEN OFULLSTÄNDIG**, kör det igen och välj `[2] Repair / Update`. VS C++ byggverktyg krävs inte: den underhållna `coqui-tts`-gaffeln tillhandahåller förkompilerade hjulpaket.
 
 ### Linux/macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Integrerad videospelare: python-mpv (behöver libmpv från systemet eller från Windows-installationsprogrammet). |
 | `requirements-dev.txt` | Lättviktsberoenden som används av CI/enhetstester. |
 
+## Uppdatera
+
+### Windows
+
+Startmenyn → **Video Translator AI** → **Uppdatera Video Translator AI** (den begär administratörsrättigheter), eller kör `setup_windows.bat` som administratör och välj `[2] Repair / Update`. Installationsprogrammet kontrollerar [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases): när en nyare version finns laddar det ner utgåvan, verifierar dess SHA256-kontrollsumma och installerar den; annars reparerar det de aktuella filerna. Dina inställningar, sparade nycklar, nedladdade modeller och översatta videor behålls. Utan internetanslutning hoppas uppdateringen över och reparationen fortsätter.
+
+### Linux/macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Avinstallera
 
 ### Windows
@@ -220,13 +239,13 @@ Kör `setup_windows.bat` (högerklicka → **Kör som administratör**) och väl
 
 | Läge | Admin krävs | Omfattning |
 |------|----------------|-------|
-| **[1] Fullständig avinstallation - ett klick** | ✅ | Tar bort app-mappen, Public Desktop-genväg, ffmpeg från maskinen PATH, varje användares HF-modellcache (Whisper/XTTS) och config (`HF token`) och alla Python AI-paket installerade av installationsprogrammet. I slutet frågar den också (opt-in) om de ska avinstallera **Python 3.11** och **Git for Windows** tyst via deras registersträngar för tyst avinstallation. |
+| **[1] Fullständig avinstallation - ett klick** | ✅ | Tar bort app-mappen, genvägen på skrivbordet och posterna i Startmenyn, ffmpeg från maskinen PATH, varje användares HF-modellcache (Whisper/XTTS) och config (`HF token`) och alla Python AI-paket installerade av installationsprogrammet. I slutet frågar den också (opt-in) om de ska avinstallera **Python 3.11** och **Git for Windows** tyst via deras registersträngar för tyst avinstallation. |
 | **[2] Endast nuvarande användare** | ❌ | Tar endast bort den körande användarens VTAI-konfiguration, HF/XTTS-cache och äldre installation per användare. **Lämnar den systemomfattande installationen intakt** så att andra Windows-konton på datorn kan fortsätta använda appen. |
 | **[3] Anpassad - granulär** | ✅ för systemobjekt, ❌ för användarobjekt | Y/N-fråga för varje kategori: appmapp, genväg, systemets PATH, äldre installationer per användare, användarkonfigurationer och cacheminnen, därefter grupper av Python-paket (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-beroenden, pyannote och verktyg för bearbetningskedjan) och till sist valfri avinstallation av Python 3.11 och Git. |
 
 Varje läge tar också bort det programmet sparar åt användaren: konfiguration och dagliga loggar (`%APPDATA%\VideoTranslatorAI`), programdata med körmiljöerna för spelare, JavaScript och Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), tillfälliga filer för realtid (`%TEMP%\VideoTranslatorAI`), MarianMT-modellerna och de sparade nycklarna (HF-token, ElevenLabs) från Windows Autentiseringshanteraren. Nycklar sparas per Windows-konto: varje konto tar bort sina egna med `[2]`.
 
-**Aldrig borttagen automatiskt:** Visual Studio C++ Build Tools (om de finns från äldre körningar). Använd *Appar och funktioner* i Windows-inställningarna för att ta bort dem manuellt om så önskas.
+**Aldrig borttagen automatiskt:** Visual Studio C++ Build Tools (om de finns från äldre körningar) och Microsoft Visual C++-runtime, som delas av andra program. Använd *Appar och funktioner* i Windows-inställningarna för att ta bort dem manuellt om så önskas. Installationsloggen `%USERPROFILE%\VideoTranslatorAI-setup.log` behålls med avsikt.
 
 ### Linux/macOS
 

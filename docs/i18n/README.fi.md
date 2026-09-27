@@ -8,7 +8,11 @@
 
 Tekoälyllä toimiva videoäänen jälkiäänitystyökalu, joka litteroi, kääntää ja uudelleenäänittää videot automaattisesti 26 kielelle paikallisilla käsittelyvaihtoehdoilla eikä oletuksena vaadi API-avaimia. Whisper puheentunnistus toimii paikallisesti; Edge-TTS, Google Translate ja DeepL vaativat Internet-yhteyden. Valinnaiset ominaisuudet (DeepL, puhuvien ihmisten tunnistaminen (diarisaatio)) voivat vaatia API-avaimen tai pääsytunnuksen.
 
+![Video Translator AI:n pääikkuna: videosoitin ja käännöspaneelit](../../assets/screenshot.png)
+
 > **v2.0** - modulaarinen paketti, paikallinen Ollama-käännös, laatuprofiilien orkestrointi, asennettavat Python-metatiedot ja integraatiotestit oikeilla malleilla. Katso täydellinen luettelo muutoksista kohdasta [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases) ja toimitushistoria.
+
+> **v2.1.0** - Windows-asennusohjelma vahvistettu (Microsoft Visual C++ -ajoaikaympäristö, selkeä asennusloki, itsepäivitys GitHub Releasesista), siistimmät lokit (yksi etenevä edistymispalkki latausta kohden), ohjelmistopohjainen videon dekoodaus koneilla ilman GPU:ta, ja korotetut toistopainikkeet. Katso [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Miten se toimii
 
@@ -155,17 +159,18 @@ Putkilinjassa käytetään viittä GPU-kiihdytettyä komponenttia (faster-whispe
 
 ### Windows
 
-1. Kloonaa tai lataa tämä arkisto
-2. Napsauta hiiren kakkospainikkeella `setup_windows.bat` → **Suorita järjestelmänvalvojana** → valikko näyttää `[1] Install`
-3. Asennusohjelma automaattisesti:
-   - Asentaa Python 3.11:n, jos sitä ei ole (järjestelmänlaajuinen)
-   - Asentaa Git for Windows:n, jos sitä ei ole
-   - Asentaa kaikki Python-riippuvuudet (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps jne.)
-   - Lataa ja asentaa ffmpeg
-   - Asentaa integroidun videosoittimen (python-mpv plus libmpv-koontiversio `mpv-runtime`:ssä). Vaihe on valinnainen: jos se epäonnistuu, kaikki muu toimii ja soitinpaneeli selittää, mitä puuttuu
-   - Luo **julkisen työpöydän pikakuvakkeen** (näkyy kaikille PC:n Windows-tileille)
+Askel askeleelta, ei komentoriviä tarvita. Testattu puhtaalla Windows 11 -PC:llä.
 
-> Asennusohjelma on **monen käyttäjän**: kaikki on asennettu koko järjestelmään `%ProgramFiles%\VideoTranslatorAI`:n alla ja jokainen koneen Windows-käyttäjä löytää pikakuvakkeen valmiina käyttöön. VS C++ Build Tools -työkaluja **ei enää tarvita** - huollettu `coqui-tts`-haarukka tarjoaa esikäännetyt Python-pyöräpaketit.
+1. **Lataa** projekti: vihreä **Code**-painike → **Download ZIP**, tai uusin zip-tiedosto kohdasta [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases). Pura se mihin tahansa kansioon, esimerkiksi työpöydälle.
+2. **Asenna**: napsauta hiiren kakkospainikkeella `setup_windows.bat` → **Suorita järjestelmänvalvojana** → paina `1` (Install). Jos SmartScreen sanoo "Windows suojasi tietokonettasi", napsauta **Lisätietoja** → **Suorita silti**: skripti on pelkkää tekstiä, sen voi avata Muistiolla.
+3. **Odota**: tuoreella koneella nopealla yhteydellä se kestää noin 15 minuuttia ja 8 Gt levytilaa. Asennusohjelma lataa ja asettaa tässä järjestyksessä:
+   - Python 3.11:n (järjestelmänlaajuisesti) ja Microsoft Visual C++ -ajoaikaympäristön, jos puuttuu
+   - Python-paketit: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote ja Wav2Lip-pino
+   - Git for Windowsin (Wav2Lipia varten), ffmpegin ja integroidun videosoittimen (libmpv kansiossa `mpv-runtime`; valinnainen, kaikki muu toimii ilman sitä)
+   - **työpöydän pikakuvakkeen** jokaiselle koneen Windows-tilille ja **Käynnistä-valikon** kansion, jossa on sovellus ja **Päivitä Video Translator AI**
+4. **Käynnistä** se työpöydän pikakuvakkeesta tai Käynnistä-valikosta. Ilman NVIDIA GPU:ta sovellus toimii CPU:lla, vain hitaammin: valitse pieni Whisper-malli.
+
+> Kaikki on asennettu järjestelmänlaajuisesti kansioon `%ProgramFiles%\VideoTranslatorAI`, joten jokainen koneen Windows-käyttäjä löytää pikakuvakkeen valmiina. Jokainen `setup_windows.bat`-ajo kirjoittaa lokin tiedostoon `%USERPROFILE%\VideoTranslatorAI-setup.log`: liitä se mukaan, kun ilmoitat ongelmasta. Jos asennusohjelma päättyy tekstiin **ASENNUS KESKEN**, aja se uudelleen ja valitse `[2] Repair / Update`. VS C++ Build Tools -työkaluja ei tarvita: huollettu `coqui-tts`-haarukka tarjoaa esikäännetyt pyöräpaketit.
 
 ### Linux / macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Integroitu videosoitin: python-mpv (vaatii libmpv:n järjestelmästä tai Windowsin asennusohjelmasta). |
 | `requirements-dev.txt` | Kevyet riippuvuudet, joita käytetään CI/yksikkötesteissä. |
 
+## Päivitys
+
+### Windows
+
+Käynnistä-valikko → **Video Translator AI** → **Päivitä Video Translator AI** (kysyy järjestelmänvalvojan oikeuksia), tai aja `setup_windows.bat` järjestelmänvalvojana ja valitse `[2] Repair / Update`. Asennusohjelma tarkistaa [GitHub Releases](https://github.com/HeartB1t/VideoTranslatorAI/releases): jos uudempi versio on olemassa, se lataa julkaisun, tarkistaa sen SHA256-tarkisteen ja asentaa sen; muussa tapauksessa se korjaa nykyiset tiedostot. Asetukset, tallennetut avaimet, ladatut mallit ja käännetyt videot säilyvät. Ilman Internet-yhteyttä päivitys ohitetaan ja korjaus jatkuu.
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Poista asennus
 
 ### Windows
@@ -220,13 +239,13 @@ Suorita `setup_windows.bat` (napsauta hiiren kakkospainikkeella → **Suorita j�
 
 | tila | Admin vaaditaan | Laajuus |
 |------|----------------|-------|
-| **[1] Täysi asennuksen poisto - yksi napsautus** | ✅ | Poistaa sovelluskansion, julkisen työpöydän pikakuvakkeen, ffmpegin koneen PATH:sta, jokaisen käyttäjän HF-mallin välimuistin (Whisper/XTTS) ja konfiguroinnin (`HF token`) ja kaikki asennusohjelman asentamat Python AI -paketit. Lopussa se myös kysyy (opt-in), poistetaanko **Python 3.11** ja **Git for Windows** hiljainen asennus niiden rekisterin hiljaisten asennuksen poistomerkkijonojen kautta. |
+| **[1] Täysi asennuksen poisto - yksi napsautus** | ✅ | Poistaa sovelluskansion, työpöydän pikakuvakkeen ja Käynnistä-valikon kohdat, ffmpegin koneen PATH:sta, jokaisen käyttäjän HF-mallin välimuistin (Whisper/XTTS) ja konfiguroinnin (`HF token`) ja kaikki asennusohjelman asentamat Python AI -paketit. Lopussa se myös kysyy (opt-in), poistetaanko **Python 3.11** ja **Git for Windows** hiljainen asennus niiden rekisterin hiljaisten asennuksen poistomerkkijonojen kautta. |
 | **[2] Vain nykyinen käyttäjä** | ❌ | Poistaa vain käynnissä olevan käyttäjän VTAI-määrityksen, HF/XTTS-välimuistin ja vanhan käyttäjäkohtaisen asennuksen. **Jättää järjestelmän laajuisen asennuksen ennalleen**, jotta muut tietokoneen Windows-tilit voivat jatkaa sovelluksen käyttöä. |
 | **[3] Muokattu - rakeinen** | ✅ järjestelmäkohteille, ❌ käyttäjäkohteille | Y/N-kysymys jokaisesta luokasta: sovelluskansio, pikakuvake, järjestelmän PATH, vanhat käyttäjäkohtaiset asennukset, käyttäjien asetukset ja välimuistit, sitten Python-pakettiryhmät (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-riippuvuudet, pyannote ja käsittelyketjun aputyökalut) sekä lopuksi valinnainen Python 3.11:n ja Gitin poisto. |
 
 Jokainen tila poistaa myös sen, mitä ohjelma säilyttää käyttäjälle: asetukset ja päivittäiset lokit (`%APPDATA%\VideoTranslatorAI`), ohjelman tiedot soittimen, JavaScriptin ja Wav2Lipin ajoympäristöineen (`%LOCALAPPDATA%\VideoTranslatorAI`), reaaliajan väliaikaistiedostot (`%TEMP%\VideoTranslatorAI`), MarianMT-mallit sekä tallennetut avaimet (HF-tunnus, ElevenLabs) Windowsin tunnistetietojen hallinnasta. Avaimet ovat Windows-tilikohtaisia: kukin tili poistaa omansa valinnalla `[2]`.
 
-**Ei koskaan poistettu automaattisesti:** Visual Studio C++ Build Tools (jos olemassa vanhemmista ajoista). Voit poistaa ne manuaalisesti Windowsin asetuksissa käyttämällä *Sovelluksia ja ominaisuuksia*.
+**Ei koskaan poistettu automaattisesti:** Visual Studio C++ Build Tools (jos olemassa vanhemmista ajoista) ja Microsoft Visual C++ -ajoaikaympäristö, jota muutkin ohjelmat käyttävät. Voit poistaa ne manuaalisesti Windowsin asetuksissa käyttämällä *Sovelluksia ja ominaisuuksia*. Asennusloki `%USERPROFILE%\VideoTranslatorAI-setup.log` säilytetään tarkoituksella.
 
 ### Linux / macOS
 

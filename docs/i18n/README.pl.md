@@ -8,7 +8,11 @@
 
 Narzędzie do kopiowania głosu wideo oparte na sztucznej inteligencji, które automatycznie transkrybuje, tłumaczy i ponownie kopiuje filmy na 26 języków, z lokalnymi opcjami przetwarzania i domyślnie nie wymagając kluczy API. Rozpoznawanie mowy Whisper działa lokalnie; Edge-TTS, Google Translate i DeepL wymagają połączenia z Internetem. Funkcje opcjonalne (DeepL, identyfikacja osób mówiących (diaryzacja)) mogą wymagać klucza API lub tokena dostępu.
 
+![Główne okno Video Translator AI: odtwarzacz wideo i panele tłumaczenia](../../assets/screenshot.png)
+
 > **v2.0** - pakiet modułowy, lokalne tłumaczenie Ollama, orkiestracja profilu jakości, instalowalne metadane Pythona i opcjonalne testy integracji z rzeczywistymi modelami. Zobacz [Wersje GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases) i historię zatwierdzeń, aby uzyskać pełną listę zmian.
+
+> **v2.1.0** - instalator Windows wzmocniony (środowisko uruchomieniowe Microsoft Visual C++, przejrzysty dziennik instalacji, samoaktualizacja z Wersji GitHub), czystsze dzienniki (jeden postępujący pasek postępu na pobieranie), programowe dekodowanie wideo na komputerach bez GPU oraz podniesione przyciski transportu. Zobacz [Wersje GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Jak to działa
 
@@ -155,17 +159,18 @@ Potok wykorzystuje pięć komponentów akcelerowanych przez GPU (faster-whisper,
 
 ### Windows
 
-1. Sklonuj lub pobierz to repozytorium
-2. Kliknij prawym przyciskiem myszy `setup_windows.bat` → **Uruchom jako administrator** → menu pokazuje `[1] Install`
-3. Instalator automatycznie:
-   - Instaluje Python 3.11, jeśli nie jest obecny (w całym systemie)
-   - Instaluje Git for Windows, jeśli nie jest obecny
-   - Instaluje wszystkie zależności Pythona (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps itp.)
-   - Pobiera i instaluje ffmpeg
-   - Instaluje zintegrowany odtwarzacz wideo (python-mpv plus kompilacja libmpv w `mpv-runtime`). Ten krok jest opcjonalny: jeśli się nie powiedzie, wszystko inne działa, a panel odtwarzacza wyjaśnia, czego brakuje
-   - Tworzy **skrót na Pulpicie Publicznym** (widoczny dla każdego konta Windows na komputerze)
+Krok po kroku, bez linii poleceń. Przetestowano na czystym komputerze z Windows 11.
 
-> Instalator jest **dla wielu użytkowników**: wszystko jest instalowane w całym systemie pod `%ProgramFiles%\VideoTranslatorAI`, a każdy użytkownik systemu Windows na komputerze znajdzie skrót gotowy do użycia. Narzędzia do kompilacji VS C++ nie są już potrzebne** - utrzymywany fork `coqui-tts` zapewnia prekompilowane pakiety kół Pythona.
+1. **Pobierz** projekt: zielony przycisk **Kod** → **Pobierz ZIP**, lub najnowszy plik zip z [Wersje GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases). Rozpakuj go do dowolnego folderu, na przykład na pulpit.
+2. **Zainstaluj**: kliknij prawym przyciskiem myszy `setup_windows.bat` → **Uruchom jako administrator** → wciśnij `1` (Install). Jeśli SmartScreen pokaże "Windows ochronił twój komputer", kliknij **Więcej informacji** → **Uruchom mimo to**: skrypt jest zwykłym tekstem, można go otworzyć w Notatniku.
+3. **Poczekaj**: na czystym komputerze z szybkim łączem zajmuje to około 15 minut i 8 GB miejsca na dysku. Instalator pobiera i konfiguruje, w tej kolejności:
+   - Python 3.11 (w całym systemie) oraz środowisko uruchomieniowe Microsoft Visual C++, jeśli brakuje
+   - pakiety Pythona: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote i stos Wav2Lip
+   - Git for Windows (dla Wav2Lip), ffmpeg i zintegrowany odtwarzacz wideo (libmpv w `mpv-runtime`; opcjonalnie, wszystko inne działa bez niego)
+   - **skrót na pulpicie** dla każdego konta Windows na komputerze oraz folder w **Menu Start** z aplikacją i **Aktualizuj Video Translator AI**
+4. **Uruchom** go ze skrótu na pulpicie lub z Menu Start. Bez karty graficznej NVIDIA aplikacja działa na CPU, tylko wolniej: wybierz mały model Whisper.
+
+> Wszystko jest instalowane w całym systemie w `%ProgramFiles%\VideoTranslatorAI`, więc każdy użytkownik Windows na komputerze znajduje gotowy skrót. Każde uruchomienie `setup_windows.bat` zapisuje dziennik w `%USERPROFILE%\VideoTranslatorAI-setup.log`: dołącz go, zgłaszając problem. Jeśli instalator zakończy się komunikatem **INSTALACJA NIEKOMPLETNA**, uruchom go ponownie i wybierz `[2] Repair / Update`. Narzędzia VS C++ Build Tools nie są wymagane: utrzymywany fork `coqui-tts` dostarcza gotowe pakiety kół.
 
 ### Linux/macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Zintegrowany odtwarzacz wideo: python-mpv (wymaga libmpv z systemu lub z instalatora Windows). |
 | `requirements-dev.txt` | Lekkie zależności używane przez CI/testy jednostkowe. |
 
+## Aktualizacja
+
+### Windows
+
+Menu Start → **Video Translator AI** → **Aktualizuj Video Translator AI** (wymaga uprawnień administratora), lub uruchom `setup_windows.bat` jako administrator i wybierz `[2] Repair / Update`. Instalator sprawdza [Wersje GitHub](https://github.com/HeartB1t/VideoTranslatorAI/releases): jeśli istnieje nowsza wersja, pobiera wydanie, weryfikuje jego sumę kontrolną SHA256 i instaluje je; w przeciwnym razie naprawia bieżące pliki. Twoje ustawienia, zapisane klucze, pobrane modele i przetłumaczone filmy zostają zachowane. Bez połączenia z internetem aktualizacja jest pomijana, a naprawa jest kontynuowana.
+
+### Linux/macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Odinstaluj
 
 ### Windows
@@ -220,13 +239,13 @@ Uruchom `setup_windows.bat` (kliknij prawym przyciskiem myszy → **Uruchom jako
 
 | Tryb | Wymagany administrator | Zakres |
 |------|----------------|-------|
-| **[1] Pełna dezinstalacja - jedno kliknięcie** | ✅ | Usuwa folder aplikacji, skrót do pulpitu publicznego, plik ffmpeg z PATH komputera, pamięć podręczną modelu HF każdego użytkownika (Whisper/XTTS) i konfigurację (`HF token`) oraz wszystkie pakiety Python AI zainstalowane przez instalator. Na koniec pyta również (wyraża zgodę), czy odinstalować po cichu **Python 3.11** i **Git for Windows** za pomocą ciągów cichej dezinstalacji rejestru. |
+| **[1] Pełna dezinstalacja - jedno kliknięcie** | ✅ | Usuwa folder aplikacji, skrót na pulpicie oraz wpisy w Menu Start, plik ffmpeg z PATH komputera, pamięć podręczną modelu HF każdego użytkownika (Whisper/XTTS) i konfigurację (`HF token`) oraz wszystkie pakiety Python AI zainstalowane przez instalator. Na koniec pyta również (wyraża zgodę), czy odinstalować po cichu **Python 3.11** i **Git for Windows** za pomocą ciągów cichej dezinstalacji rejestru. |
 | **[2] Tylko bieżący użytkownik** | ❌ | Usuwa tylko konfigurację VTAI bieżącego użytkownika, pamięć podręczną HF/XTTS i starszą instalację na użytkownika. **Pozostawia instalację ogólnosystemową nienaruszoną**, dzięki czemu inne konta Windows na komputerze mogą nadal korzystać z aplikacji. |
 | **[3] Niestandardowe - granulowane** | ✅ dla elementów systemowych, ❌ dla elementów użytkownika | Monit T/N dla każdej kategorii: folder aplikacji, skrót, ŚCIEŻKA komputera, starsze instalacje na użytkownika, konfiguracje/pamięć podręczna na użytkownika, następnie pogrupowane pakiety Pythona (TTS, stos PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, narzędzia potokowe) i na koniec opcjonalne Python 3.11 i Git. |
 
 Każdy tryb usuwa też to, co program przechowuje dla użytkownika: konfigurację i dzienne dzienniki (`%APPDATA%\VideoTranslatorAI`), dane programu ze środowiskami uruchomieniowymi odtwarzacza, JavaScriptu i Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), pliki tymczasowe czasu rzeczywistego (`%TEMP%\VideoTranslatorAI`), modele MarianMT oraz zapisane klucze (token HF, ElevenLabs) z Menedżera poświadczeń Windows. Klucze są przypisane do konta Windows: każde konto usuwa swoje za pomocą `[2]`.
 
-**Nigdy nie usuwane automatycznie:** Narzędzia do budowania Visual Studio C++ (jeśli są obecne w starszych wersjach). Użyj *Aplikacji i funkcji* w Ustawieniach systemu Windows, aby w razie potrzeby usunąć je ręcznie.
+**Nigdy nie usuwane automatycznie:** Narzędzia do budowania Visual Studio C++ (jeśli są obecne w starszych wersjach) oraz środowisko uruchomieniowe Microsoft Visual C++, które współdzielą inne programy. Użyj *Aplikacji i funkcji* w Ustawieniach systemu Windows, aby w razie potrzeby usunąć je ręcznie. Dziennik instalacji `%USERPROFILE%\VideoTranslatorAI-setup.log` jest celowo zachowywany.
 
 ### Linux/macOS
 

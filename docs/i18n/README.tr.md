@@ -8,7 +8,11 @@
 
 Yerel işleme seçenekleriyle ve varsayılan olarak hiçbir API anahtarı gerektirmeden, videoları 26 dile otomatik olarak yazıya döken, çeviren ve yeniden dublaj yapan yapay zeka destekli video ses dublaj aracı. Whisper konuşma tanıma yerel olarak çalışır; Edge-TTS, Google Translate ve DeepL internet bağlantısı gerektirir. İsteğe bağlı özellikler (DeepL, konuşan kişilerin tanımlanması (günlük oluşturma)) bir API anahtarı veya erişim belirteci gerektirebilir.
 
+![Video Translator AI ana penceresi: video oynatıcı ve çeviri panelleri](../../assets/screenshot.png)
+
 > **v2.0** - modüler paket, yerel Ollama çevirisi, kalite profili düzenlemesi, kurulabilir Python meta verileri ve gerçek modellerle isteğe bağlı entegrasyon testleri. Değişikliklerin tam listesi için [GitHub Sürümleri](https://github.com/HeartB1t/VideoTranslatorAI/releases) ve işleme geçmişine bakın.
+
+> **v2.1.0** - Windows yükleyicisi güçlendirildi (Microsoft Visual C++ çalışma zamanı, net bir kurulum günlüğü, GitHub Sürümlerinden kendi kendini güncelleme), daha temiz günlükler (her indirme için ilerleyen tek bir ilerleme çubuğu), GPU'su olmayan bilgisayarlarda yazılım tabanlı video kod çözme ve yükseltilmiş taşıma düğmeleri. Bkz. [GitHub Sürümleri](https://github.com/HeartB1t/VideoTranslatorAI/releases).
 
 ## Nasıl çalışır?
 
@@ -155,17 +159,18 @@ Boru hattı beş GPU hızlandırmalı bileşen kullanıyor (faster-whisper, Demu
 
 ### Windows
 
-1. Bu depoyu klonlayın veya indirin
-2. `setup_windows.bat`'ye sağ tıklayın → **Yönetici olarak çalıştır** → menüde `[1] Install` görüntülenir
-3. Yükleyici otomatik olarak:
-   - Mevcut değilse Python 3.11'i yükler (sistem çapında)
-   - Mevcut değilse Git for Windows'yi yükler
-   - Tüm Python bağımlılıklarını yükler (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps, vb.)
-   - Ffmpeg'i indirir ve yükler
-   - Entegre video oynatıcıyı yükler (python-mpv artı `mpv-runtime`'de bir libmpv yapısı). Adım isteğe bağlıdır: Başarısız olursa, diğer her şey çalışır ve oynatıcı bölmesinde neyin eksik olduğu açıklanır
-   - **Genel Masaüstü kısayolu** oluşturur (PC'deki her Windows hesabı tarafından görülebilir)
+Adım adım, komut satırına gerek yok. Temiz bir Windows 11 bilgisayarda test edildi.
 
-> Yükleyici **çok kullanıcılıdır**: her şey sistem genelinde `%ProgramFiles%\VideoTranslatorAI` altında yüklenir ve makinedeki herhangi bir Windows kullanıcısı kısayolu kullanıma hazır bulur. VS C++ Derleme Araçlarına **artık gerek yok** - bakımı yapılan `coqui-tts` çatalı, önceden derlenmiş Python tekerlek paketleri sağlar.
+1. Projeyi **indirin**: yeşil **Code** düğmesi → **Download ZIP**, veya [GitHub Sürümleri](https://github.com/HeartB1t/VideoTranslatorAI/releases)'nden en son zip dosyası. Herhangi bir klasöre, örneğin Masaüstüne, çıkarın.
+2. **Yükleyin**: `setup_windows.bat`'ye sağ tıklayın → **Yönetici olarak çalıştır** → `1` tuşuna basın (Yükle). SmartScreen "Windows bilgisayarınızı korudu" derse, **Diğer bilgiler** → **Yine de çalıştır**'a tıklayın: betik düz metindir, Not Defteri ile açabilirsiniz.
+3. **Bekleyin**: hızlı bağlantılı temiz bir bilgisayarda yaklaşık 15 dakika ve 8 GB disk alanı gerekir. Yükleyici şu sırayla indirir ve kurar:
+   - Eksikse Python 3.11 (sistem çapında) ve Microsoft Visual C++ çalışma zamanı
+   - Python paketleri: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote ve Wav2Lip yığını
+   - Git for Windows (Wav2Lip için), ffmpeg ve entegre video oynatıcı (`mpv-runtime` içinde libmpv; isteğe bağlıdır, onsuz da her şey çalışır)
+   - bilgisayardaki her Windows hesabı için bir **Masaüstü kısayolu** ve uygulama ile **Video Translator AI'yi Güncelle**'yi içeren bir **Başlat Menüsü** klasörü
+4. **Başlatın**: Masaüstü kısayolundan veya Başlat Menüsünden başlatın. NVIDIA GPU olmadan uygulama işlemciyle çalışır, sadece daha yavaş: küçük bir Whisper modeli seçin.
+
+> Her şey `%ProgramFiles%\VideoTranslatorAI` altında sistem genelinde yüklenir, böylece bilgisayardaki her Windows kullanıcısı kısayolu hazır bulur. `setup_windows.bat`'nin her çalıştırılması `%USERPROFILE%\VideoTranslatorAI-setup.log` dosyasına bir günlük yazar: bir sorunu bildirirken bunu ekleyin. Yükleyici **KURULUM TAMAMLANMADI** ile biterse, tekrar çalıştırın ve `[2] Repair / Update` seçeneğini seçin. VS C++ Derleme Araçlarına gerek yoktur: bakımı yapılan `coqui-tts` çatalı önceden derlenmiş tekerlek paketleri sağlar.
 
 ### Linux / macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Entegre video oynatıcı: python-mpv (sistemden veya Windows yükleyicisinden libmpv gerekir). |
 | `requirements-dev.txt` | CI/birim testleri tarafından kullanılan hafif bağımlılıklar. |
 
+## Güncelle
+
+### Windows
+
+Başlat Menüsü → **Video Translator AI** → **Video Translator AI'yi Güncelle** (yönetici izni ister) veya `setup_windows.bat`'yi yönetici olarak çalıştırıp `[2] Repair / Update` seçeneğini seçin. Yükleyici [GitHub Sürümleri](https://github.com/HeartB1t/VideoTranslatorAI/releases)'ni kontrol eder: daha yeni bir sürüm varsa sürümü indirir, SHA256 sağlama toplamını doğrular ve yükler; aksi takdirde mevcut dosyaları onarır. Ayarlarınız, kaydedilmiş anahtarlarınız, indirilen modelleriniz ve çevrilmiş videolarınız korunur. İnternet bağlantısı olmadan güncelleme atlanır ve onarım devam eder.
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Kaldır
 
 ### Windows
@@ -220,13 +239,13 @@ videotranslatorai --preflight
 
 | Mod | Yönetici gerekli | Kapsam |
 |------|----------------|-------|
-| **[1] Tam kaldırma - tek tıklama** | ✅ | Uygulama klasörünü, Genel Masaüstü kısayolunu, makine PATH'sinden ffmpeg'i, her kullanıcının HF model önbelleğini (Whisper/XTTS) ve yapılandırmayı (`HF token`) ve yükleyici tarafından yüklenen tüm Python AI paketlerini kaldırır. Sonunda ayrıca **Python 3.11** ve **Git for Windows**'nin kayıt defteri sessiz kaldırma dizeleri aracılığıyla sessizce kaldırılıp kaldırılmayacağını da sorar (katılmayı tercih eder). |
+| **[1] Tam kaldırma - tek tıklama** | ✅ | Uygulama klasörünü, Masaüstü kısayolunu ve Başlat Menüsü girişlerini, makine PATH'sinden ffmpeg'i, her kullanıcının HF model önbelleğini (Whisper/XTTS) ve yapılandırmayı (`HF token`) ve yükleyici tarafından yüklenen tüm Python AI paketlerini kaldırır. Sonunda ayrıca **Python 3.11** ve **Git for Windows**'nin kayıt defteri sessiz kaldırma dizeleri aracılığıyla sessizce kaldırılıp kaldırılmayacağını da sorar (katılmayı tercih eder). |
 | **[2] Yalnızca mevcut kullanıcı** | ❌ | Yalnızca çalışan kullanıcının VTAI yapılandırmasını, HF/XTTS önbelleğini ve kullanıcı başına eski yüklemeyi kaldırır. **Sistem genelindeki kurulumu olduğu gibi bırakır**, böylece bilgisayardaki diğer Windows hesapları uygulamayı kullanmaya devam edebilir. |
 | **[3] Özel - ayrıntılı** | ✅ sistem öğeleri için, ❌ kullanıcı öğeleri için | Her kategori için E/H istemi: uygulama klasörü, kısayol, makine PATH'i, kullanıcı başına eski yüklemeler, kullanıcı başına yapılandırmalar/önbellekler, ardından gruplandırılmış Python paketleri (TTS, PyTorch yığını, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, ardışık düzen yardımcı programları) ve son olarak isteğe bağlı Python 3.11 ve Git. |
 
 Her mod, programın kullanıcı için sakladıklarını da kaldırır: yapılandırma ve günlük kayıtlar (`%APPDATA%\VideoTranslatorAI`), oynatıcı, JavaScript ve Wav2Lip çalışma ortamlarını içeren program verileri (`%LOCALAPPDATA%\VideoTranslatorAI`), gerçek zamanın geçici dosyaları (`%TEMP%\VideoTranslatorAI`), MarianMT modelleri ve Windows Kimlik Bilgisi Yöneticisi'nde kayıtlı anahtarlar (HF belirteci, ElevenLabs). Anahtarlar her Windows hesabına aittir: her hesap kendi anahtarlarını `[2]` ile kaldırır.
 
-**Asla otomatik olarak kaldırılmaz:** Visual Studio C++ Derleme Araçları (daha eski çalıştırmalarda mevcutsa). İsterseniz bunları manuel olarak kaldırmak için Windows Ayarlarında *Uygulamalar ve özellikler* seçeneğini kullanın.
+**Asla otomatik olarak kaldırılmaz:** Visual Studio C++ Derleme Araçları (daha eski çalıştırmalarda mevcutsa) ve diğer programların paylaştığı Microsoft Visual C++ çalışma zamanı. İsterseniz bunları manuel olarak kaldırmak için Windows Ayarlarında *Uygulamalar ve özellikler* seçeneğini kullanın. Kurulum günlüğü `%USERPROFILE%\VideoTranslatorAI-setup.log` kasıtlı olarak saklanır.
 
 ### Linux / macOS
 

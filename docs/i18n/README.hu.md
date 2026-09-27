@@ -8,7 +8,11 @@
 
 A mesterséges intelligencia által vezérelt videó hangszinkronizálási eszköz, amely automatikusan átírja, lefordítja és újraszinkronizálja a videókat 26 nyelvre, helyi feldolgozási lehetőségekkel, és alapértelmezés szerint nincs szükség API-kulcsokra. A Whisper beszédfelismerés helyben fut; Az Edge-TTS, a Google Translate és a DeepL internetkapcsolatot igényel. Az opcionális funkciókhoz (DeepL, beszélő emberek azonosítása (diarizálás)) API-kulcsra vagy hozzáférési tokenre lehet szükség.
 
+![A Video Translator AI fő ablaka: videólejátszó és fordítási panelek](../../assets/screenshot.png)
+
 > **v2.0** - moduláris csomag, helyi Ollama fordítás, minőségi profil hangszerelés, telepíthető Python-metaadatok és választható integrációs tesztek valós modellekkel. A változtatások teljes listáját a [GitHub-kiadások](https://github.com/HeartB1t/VideoTranslatorAI/releases) és a véglegesítési előzmények részben találja.
+
+> **v2.1.0** - megerősített Windows telepítő (Microsoft Visual C++ futtatókörnyezet, áttekinthető telepítési napló, önfrissítés a GitHub-kiadásokból), tisztább naplók (egyetlen előrehaladó folyamatjelző sáv letöltésenként), szoftveres videódekódolás GPU nélküli gépeken, és megemelt lejátszásvezérlő gombok. Lásd a [GitHub-kiadások](https://github.com/HeartB1t/VideoTranslatorAI/releases) oldalt.
 
 ## Hogyan működik
 
@@ -155,17 +159,18 @@ A folyamat öt GPU-gyorsított komponenst használ (faster-whisper, Demucs, XTTS
 
 ### Windows
 
-1. Klónozza vagy töltse le ezt a tárolót
-2. Kattintson jobb gombbal a `setup_windows.bat` → **Futtatás rendszergazdaként** elemre → a menüben megjelenik a `[1] Install`
-3. A telepítő automatikusan:
-   - Telepíti a Python 3.11-et, ha nincs jelen (rendszerszintű)
-   - Telepíti a Git for Windows-t, ha nincs jelen
-   - Telepíti az összes Python-függőséget (PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, Wav2Lip deps stb.)
-   - Letölti és telepíti az ffmpeg-et
-   - Telepíti az integrált videolejátszót (python-mpv plusz egy libmpv build a `mpv-runtime`-ben). A lépés nem kötelező: ha nem sikerül, minden más működik, és a lejátszópanel elmagyarázza, mi hiányzik
-   - Létrehoz egy **Public Desktop parancsikont** (látható minden Windows-fiókban a számítógépen)
+Lépésről lépésre, parancssor nélkül. Tiszta Windows 11 gépen tesztelve.
 
-> A telepítő **többfelhasználós**: minden a rendszerre telepítve van a `%ProgramFiles%\VideoTranslatorAI` alatt, és a gép bármely Windows-felhasználója készen találja a parancsikont. A VS C++ Build Toolsra **már nincs szükség** - a karbantartott `coqui-tts` villa előre összeállított Python kerékcsomagokat biztosít.
+1. **Töltse le** a projektet: a zöld **Code** gomb → **Download ZIP**, vagy a legújabb zip a [GitHub-kiadások](https://github.com/HeartB1t/VideoTranslatorAI/releases) oldalról. Csomagolja ki bármelyik mappába, például az asztalra.
+2. **Telepítse**: kattintson jobb gombbal a `setup_windows.bat` fájlra → **Futtatás rendszergazdaként** → nyomja meg az `1`-et (Install). Ha a SmartScreen azt írja, hogy "A Windows megvédte a számítógépét", kattintson a **További információ** → **Futtatás mindenképp** lehetőségre: a szkript egyszerű szöveg, megnyithatja Jegyzettömbben is.
+3. **Várjon**: egy tiszta gépen gyors internetkapcsolat mellett kb. 15 percet és 8 GB lemezterületet igényel. A telepítő ebben a sorrendben tölti le és állítja be:
+   - a Python 3.11-et (rendszerszinten) és a Microsoft Visual C++ futtatókörnyezetet, ha hiányzik
+   - a Python-csomagokat: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote és a Wav2Lip verem
+   - a Git for Windows-t (a Wav2Lip-hez), az ffmpeg-et és az integrált videolejátszót (libmpv a `mpv-runtime`-ban; nem kötelező, minden más nélküle is működik)
+   - egy **asztali parancsikont** a gép minden Windows-fiókjához, valamint egy **Start menü** mappát az alkalmazással és a **Video Translator AI frissítése** elemmel
+4. **Indítsa el** az asztali parancsikonról vagy a Start menüből. NVIDIA GPU nélkül az alkalmazás a CPU-n fut, csak lassabban: válasszon kisebb Whisper modellt.
+
+> Minden a rendszerre települ a `%ProgramFiles%\VideoTranslatorAI` alatt, így a gép bármely Windows-felhasználója készen találja a parancsikont. A `setup_windows.bat` minden futtatása naplót ír a `%USERPROFILE%\VideoTranslatorAI-setup.log` fájlba: csatolja ezt, ha problémát jelent. Ha a telepítő **INSTALLATION INCOMPLETE** üzenettel zárul, futtassa újra, és válassza a `[2] Repair / Update` lehetőséget. VS C++ Build Tools nem szükséges: a karbantartott `coqui-tts` villa előre összeállított kerékcsomagokat biztosít.
 
 ### Linux / macOS
 
@@ -212,6 +217,20 @@ videotranslatorai --preflight
 | `requirements-player.txt` | Integrált videolejátszó: python-mpv (libmpv szükséges a rendszerből vagy a Windows telepítőből). |
 | `requirements-dev.txt` | A CI/egységtesztek által használt könnyű függőségek. |
 
+## Frissítés
+
+### Windows
+
+Start menü → **Video Translator AI** → **Video Translator AI frissítése** (rendszergazdai jogokat kér), vagy futtassa a `setup_windows.bat` fájlt rendszergazdaként, és válassza a `[2] Repair / Update` lehetőséget. A telepítő ellenőrzi a [GitHub-kiadások](https://github.com/HeartB1t/VideoTranslatorAI/releases) oldalt: ha újabb verzió létezik, letölti a kiadást, ellenőrzi az SHA256 ellenőrzőösszegét, és telepíti; ellenkező esetben javítja a jelenlegi fájlokat. A beállításai, a mentett kulcsok, a letöltött modellek és a lefordított videók megmaradnak. Internetkapcsolat nélkül a frissítés kimarad, és a javítás folytatódik.
+
+### Linux / macOS
+
+```bash
+cd VideoTranslatorAI
+git pull
+pip install --break-system-packages -r requirements.txt
+```
+
 ## Eltávolítás
 
 ### Windows
@@ -220,13 +239,13 @@ Futtassa a `setup_windows.bat`-t (jobb gombbal kattintson → **Futtatás rendsz
 
 | mód | Admin szükséges | Hatály |
 |------|----------------|-------|
-| **[1] Teljes eltávolítás - egy kattintás** | ✅ | Eltávolítja az alkalmazásmappát, a nyilvános asztal parancsikonját, az ffmpeg-et a gép PATH-járól, minden felhasználó HF-modell gyorsítótárát (Whisper/XTTS) és konfigurációját (`HF token`), valamint a telepítő által telepített összes Python AI-csomagot. A végén azt is megkérdezi (feliratkozás), hogy csendesen távolítsa-e el a **Python 3.11** és **Git for Windows** rendszerleíró adatbázis csendes eltávolítási karakterláncain keresztül. |
+| **[1] Teljes eltávolítás - egy kattintás** | ✅ | Eltávolítja az alkalmazásmappát, az asztali parancsikont és a Start menü bejegyzéseit, az ffmpeg-et a gép PATH-járól, minden felhasználó HF-modell gyorsítótárát (Whisper/XTTS) és konfigurációját (`HF token`), valamint a telepítő által telepített összes Python AI-csomagot. A végén azt is megkérdezi (feliratkozás), hogy csendesen távolítsa-e el a **Python 3.11** és **Git for Windows** rendszerleíró adatbázis csendes eltávolítási karakterláncain keresztül. |
 | **[2] Csak jelenlegi felhasználó** | ❌ | Csak a futó felhasználó VTAI konfigurációját, HF/XTTS gyorsítótárát és a régi felhasználónkénti telepítést távolítja el. **Érintetlenül hagyja a rendszerszintű telepítést**, így a számítógépen lévő többi Windows-fiók továbbra is használhatja az alkalmazást. |
 | **[3] Egyéni - szemcsés** | ✅ rendszerelemekhez, ❌ felhasználói elemekhez | Y/N-kérdés minden kategóriához: alkalmazásmappa, parancsikon, rendszerszintű PATH, régi felhasználónkénti telepítések, felhasználói beállítások és gyorsítótárak, majd Python-csomagcsoportok (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-függőségek, pyannote és a feldolgozási folyamat segédprogramjai), végül a Python 3.11 és a Git opcionális eltávolítása. |
 
 Minden mód azt is eltávolítja, amit a program a felhasználónak megőriz: a beállításokat és a napi naplókat (`%APPDATA%\VideoTranslatorAI`), a program adatait a lejátszó, a JavaScript és a Wav2Lip futtatókörnyezetével (`%LOCALAPPDATA%\VideoTranslatorAI`), a valós idejű mód ideiglenes fájljait (`%TEMP%\VideoTranslatorAI`), a MarianMT-modelleket és a mentett kulcsokat (HF-token, ElevenLabs) a Windows Hitelesítőadat-kezelőből. A kulcsok Windows-fiókonként tárolódnak: minden fiók a sajátjait a `[2]` móddal törli.
 
-**Soha nem távolítják el automatikusan:** Visual Studio C++ Build Tools (ha van régebbi futtatásokból). Használja az *Alkalmazásokat és funkciókat* a Windows beállításaiban, ha kívánja, kézzel távolítsa el őket.
+**Soha nem távolítják el automatikusan:** Visual Studio C++ Build Tools (ha van régebbi futtatásokból) és a Microsoft Visual C++ futtatókörnyezet, amelyet más programok is használnak. Használja az *Alkalmazások és szolgáltatások* menüpontot a Windows beállításaiban, ha kézzel szeretné eltávolítani őket. A `%USERPROFILE%\VideoTranslatorAI-setup.log` telepítési napló szándékosan megmarad.
 
 ### Linux / macOS
 
