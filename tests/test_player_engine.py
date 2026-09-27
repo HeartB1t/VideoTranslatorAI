@@ -4,6 +4,7 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from videotranslator import player_engine as pe
 
@@ -225,6 +226,20 @@ class OptionBuilderTests(unittest.TestCase):
             pe.build_mpv_options("video", sys_platform="linux", wid=None,
                                  vo_profile="x11egl")
 
+    def test_hwdec_is_software_only_when_the_pc_has_no_real_gpu(self):
+        self.assertEqual(pe.choose_hwdec(None), "auto-safe")     # unknown: mpv probes
+        self.assertEqual(pe.choose_hwdec(True), "auto-safe")
+        self.assertEqual(pe.choose_hwdec(False), "no")
+        default = pe.build_mpv_options("video", sys_platform="win32", wid=4,
+                                       vo_profile="auto")
+        self.assertEqual(default["hwdec"], "auto-safe")
+        software = pe.build_mpv_options("video", sys_platform="win32", wid=4,
+                                        vo_profile="auto", hwdec="no")
+        self.assertEqual(software["hwdec"], "no")
+        voice = pe.build_mpv_options("voice", sys_platform="win32", wid=None,
+                                     vo_profile="none", hwdec="no")
+        self.assertNotIn("hwdec", voice)
+
     def test_profile_fallback_skips_unaccepted_entries(self):
         self.assertEqual(pe.next_vo_profile("linux", "x11egl", ("x11sw",)), "x11sw")
         self.assertIsNone(pe.next_vo_profile("linux", "x11sw", ("x11egl", "x11sw")))
@@ -411,6 +426,25 @@ class MpvBackendTests(unittest.TestCase):
             mpv_module=module, sys_platform="linux", log=lambda *_args: None,
         )
         return backend, module.instances[0], bridge
+
+    def test_factory_disables_hardware_decoding_only_without_a_real_gpu(self):
+        cases = ((("80ee",), "no"), ((), "no"), (("10de",), "auto-safe"), (None, "auto-safe"))
+        for vendors, expected in cases:
+            with self.subTest(vendors=vendors):
+                module = _FakeMpvModule()
+                with mock.patch.object(pe, "display_adapter_vendors", return_value=vendors):
+                    backend = pe.create_video_backend(
+                        wid=1, bridge=pe.EventBridge(), mixer=pe.VolumeMixer(),
+                        vo_profile="auto", mpv_module=module, sys_platform="win32")
+                self.assertEqual(module.instances[0].kwargs["hwdec"], expected)
+                self.assertTrue(backend.terminate(1.0))
+        module = _FakeMpvModule()
+        with mock.patch.object(pe, "display_adapter_vendors", return_value=()):
+            backend = pe.create_video_backend(
+                wid=1, bridge=pe.EventBridge(), mixer=pe.VolumeMixer(), vo_profile="x11sw",
+                mpv_module=module, sys_platform="linux", hwdec="auto-safe")
+        self.assertEqual(module.instances[0].kwargs["hwdec"], "auto-safe")  # explicit wins
+        self.assertTrue(backend.terminate(1.0))
 
     def test_factory_builds_player_and_registers_observers_events_and_mouse(self):
         backend, player, _bridge = self.make_backend()

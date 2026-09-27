@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from .hardware_profile import display_adapter_vendors, hardware_gpu_present
 from .libmpv_runtime import VO_PROFILE_OPTIONS, parse_mpv_version
 
 
@@ -289,8 +290,23 @@ def _profile_options(sys_platform: str, vo_profile: str) -> dict[str, str]:
     return {key.replace("-", "_"): value for key, value in options.items()}
 
 
+HWDEC_GPU = "auto-safe"        # mpv probes the platform's safe hardware decoders
+HWDEC_SOFTWARE = "no"
+
+
+def choose_hwdec(gpu_present: bool | None) -> str:
+    """``hwdec`` for the video mpv from the display adapter probe.
+
+    Software decoding only when the PC is known to have no real GPU (a VM,
+    a basic display adapter): mpv would otherwise try CUDA, DXVA2 and
+    D3D11VA at every load and log each failure. Unknown keeps mpv's own
+    probing, so a machine the probe cannot read behaves as before.
+    """
+    return HWDEC_SOFTWARE if gpu_present is False else HWDEC_GPU
+
+
 def build_mpv_options(kind: str, *, sys_platform: str, wid: int | None,
-                      vo_profile: str) -> dict[str, str]:
+                      vo_profile: str, hwdec: str = HWDEC_GPU) -> dict[str, str]:
     """Build python-mpv constructor options without loading the module."""
     common = {
         "idle": "yes",
@@ -318,7 +334,7 @@ def build_mpv_options(kind: str, *, sys_platform: str, wid: int | None,
     return {
         **common,
         "wid": str(window_id),
-        "hwdec": "auto-safe",
+        "hwdec": str(hwdec),
         "keep_open": "yes",
         "force_window": "yes",
         "osc": "no",
@@ -457,6 +473,7 @@ class MpvBackend:
         self.bridge = bridge
         self.mixer = mixer
         self.mpv_version: tuple[int, int] | None = None
+        self.options: Mapping[str, object] = dict(options)   # what mpv was created with
         self._mpv_module = mpv_module
         self._log = log
         self._queue = CommandQueue(maxsize=64)
@@ -745,10 +762,17 @@ class MpvBackend:
 
 def create_video_backend(*, wid: int, bridge: EventBridge, mixer: VolumeMixer,
                          vo_profile: str, mpv_module,
-                         sys_platform: str = sys.platform, log=None) -> MpvBackend:
-    """Construct the single video mpv instance for a Tk-owned window id."""
+                         sys_platform: str = sys.platform, log=None,
+                         hwdec: str | None = None) -> MpvBackend:
+    """Construct the single video mpv instance for a Tk-owned window id.
+
+    ``hwdec`` None (the default) decides from the PC's display adapters:
+    software decoding on a machine without a real GPU, mpv's probing else.
+    """
+    if hwdec is None:
+        hwdec = choose_hwdec(hardware_gpu_present(display_adapter_vendors()))
     options = build_mpv_options(
-        "video", sys_platform=sys_platform, wid=wid, vo_profile=vo_profile,
+        "video", sys_platform=sys_platform, wid=wid, vo_profile=vo_profile, hwdec=hwdec,
     )
     return MpvBackend(
         mpv_module=mpv_module, options=options, bridge=bridge, mixer=mixer, log=log,

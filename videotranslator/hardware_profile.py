@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -242,3 +244,129 @@ def detect_hardware(*, torch_module: Any | None = None, use_torch: bool = True,
         cuda_usable=cuda_usable,
         disk_free_gb=_disk_free_gb(model_dir or default_model_dir()),
     )
+
+
+# --- display adapters (for the player's hardware decoding) -------------------
+#
+# Cheap and instant on purpose (sysfs, one user32 call, a PATH lookup: no
+# subprocess, no torch): the player creates its mpv instance from a worker
+# thread at startup and must not wait for nvidia-smi.
+
+# PCI vendor ids of emulated or software-only display adapters. There is no
+# hardware video decoder behind them, so mpv's hwdec probing can only fail
+# (and log the failed CUDA / DXVA2 / D3D11VA attempts at every load).
+VIRTUAL_GPU_VENDORS: frozenset[str] = frozenset({
+    "80ee",   # VirtualBox
+    "15ad",   # VMware SVGA
+    "1234",   # QEMU / Bochs standard VGA
+    "1af4",   # virtio-gpu
+    "1b36",   # Red Hat QXL
+    "1414",   # Microsoft (Hyper-V synthetic video, Basic Render Driver)
+    "1a03",   # ASPEED (server BMC VGA)
+    "102b",   # Matrox G200 (server VGA)
+})
+NVIDIA_VENDOR = "10de"
+_PCI_VENDOR = re.compile(r"(?:^0x|\\VEN_)([0-9A-Fa-f]{4})(?![0-9A-Fa-f])")
+_DRM_ROOT = Path("/sys/class/drm")
+
+
+def parse_pci_vendor(text: str) -> str | None:
+    """Lower-case PCI vendor id from a sysfs value (``0x10de``) or a Windows
+    PnP id (``PCI\\VEN_10DE&DEV_2204&...``); None for anything else (a
+    VMBUS or ROOT device, an ACPI id, garbage)."""
+    match = _PCI_VENDOR.search((text or "").strip())
+    return match.group(1).lower() if match else None
+
+
+def _linux_display_vendors(drm_root: Path) -> tuple[str, ...] | None:
+    """Vendors of the DRM cards (GPUs with a kernel driver); None without sysfs."""
+    if not drm_root.is_dir():
+        return None
+    vendors: list[str] = []
+    for card in sorted(drm_root.glob("card[0-9]*")):
+        if "-" in card.name:                  # a connector (card0-HDMI-A-1), not a card
+            continue
+        try:
+            text = (card / "device" / "vendor").read_text(encoding="ascii", errors="replace")
+        except OSError:
+            continue                          # platform device: no PCI vendor
+        vendor = parse_pci_vendor(text)
+        if vendor:
+            vendors.append(vendor)
+    return tuple(vendors)
+
+
+def _windows_display_device_ids() -> list[str]:
+    """PnP ids of the display devices (``EnumDisplayDevicesW``); raises when
+    user32 is unavailable."""
+    import ctypes
+    from ctypes import wintypes
+
+    class DisplayDevice(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD),
+                    ("DeviceName", wintypes.WCHAR * 32),
+                    ("DeviceString", wintypes.WCHAR * 128),
+                    ("StateFlags", wintypes.DWORD),
+                    ("DeviceID", wintypes.WCHAR * 128),
+                    ("DeviceKey", wintypes.WCHAR * 128)]
+
+    enum_devices = ctypes.windll.user32.EnumDisplayDevicesW      # type: ignore[attr-defined]
+    enum_devices.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+                             ctypes.POINTER(DisplayDevice), wintypes.DWORD]
+    enum_devices.restype = wintypes.BOOL
+    ids: list[str] = []
+    for index in range(64):
+        device = DisplayDevice()
+        device.cb = ctypes.sizeof(DisplayDevice)
+        if not enum_devices(None, index, ctypes.byref(device), 0):
+            break
+        ids.append(str(device.DeviceID))
+    return ids
+
+
+def _vendors_from_ids(ids: Iterable[str]) -> tuple[str, ...]:
+    vendors: list[str] = []
+    for device_id in ids:
+        vendor = parse_pci_vendor(device_id)
+        if vendor:
+            vendors.append(vendor)
+    return tuple(vendors)
+
+
+def display_adapter_vendors(sys_platform: str | None = None, *,
+                            drm_root: Path = _DRM_ROOT,
+                            device_ids: Callable[[], Iterable[str]] | None = None,
+                            which: Callable[[str], str | None] = shutil.which,
+                            ) -> tuple[str, ...] | None:
+    """PCI vendor ids of the PC's display adapters, in enumeration order.
+
+    ``()`` means the probe worked and found no adapter with a PCI vendor (a
+    VM without a PCI GPU, a bare framebuffer); None means this platform or
+    this system cannot be probed. ``nvidia-smi`` on the PATH counts as an
+    NVIDIA adapter even when the kernel/driver enumeration misses it. Never
+    raises.
+    """
+    platform_key = sys_platform or sys.platform
+    vendors: tuple[str, ...] | None = None
+    try:
+        if platform_key.startswith("linux"):
+            vendors = _linux_display_vendors(drm_root)
+        elif platform_key == "win32":
+            vendors = _vendors_from_ids((device_ids or _windows_display_device_ids)())
+    except Exception:                         # noqa: BLE001 - a probe must never break the player
+        vendors = None
+    try:
+        has_smi = which("nvidia-smi") is not None
+    except Exception:                         # noqa: BLE001
+        has_smi = False
+    if has_smi and (vendors is None or NVIDIA_VENDOR not in vendors):
+        vendors = (vendors or ()) + (NVIDIA_VENDOR,)
+    return vendors
+
+
+def hardware_gpu_present(vendors: Sequence[str] | None) -> bool | None:
+    """True when a display adapter of a real GPU vendor is present, False when
+    there are none or only emulated ones, None when unknown (probe failed)."""
+    if vendors is None:
+        return None
+    return any(vendor not in VIRTUAL_GPU_VENDORS for vendor in vendors)

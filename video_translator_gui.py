@@ -9497,8 +9497,13 @@ class App(tk.Tk):
         self._player_controller.attach_backend(backend)
         with contextlib.suppress(Exception):
             version = ".".join(str(part) for part in (backend.mpv_version or ())) or "?"
-            self._log_emit(self._s("log_sys_player").format(version=version, vo=profile),
-                           "player")
+            text = self._s("log_sys_player").format(version=version, vo=profile)
+            # Technical suffix (no translation): "no" means software decoding,
+            # chosen when no real GPU was detected (player_engine.choose_hwdec).
+            hwdec = dict(getattr(backend, "options", None) or {}).get("hwdec")
+            if hwdec:
+                text = f"{text} · hwdec {hwdec}"
+            self._log_emit(text, "player")
         self._video_shader_applied = None
         self._apply_video_effect()
         self._start_player_poll()
