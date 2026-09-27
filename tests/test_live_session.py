@@ -718,15 +718,19 @@ class LiveSessionHeavyTests(unittest.TestCase):
                                factories=build_live_factories(cfg))
             sess.start()
             deadline = time.monotonic() + 180.0
+            # Wait through the startup states (starting, loading_models,
+            # detecting, buffering) until a caption shows or the session ends.
             while (time.monotonic() < deadline
-                   and sess.status().state == "running"
+                   and sess.status().state not in ("stopped", "failed", "ended")
                    and not any(a for a in video.rt.overlays if a)):
                 time.sleep(0.1)
+            caps = [a for a in video.rt.overlays if a]
             sess.request_stop()
-            sess.join(15.0)
+            # Real models can still be loading: wait for every live thread, so
+            # none leaks into (and slows or fails) the tests that follow.
+            self.assertTrue(sess.join(120.0), "live threads did not stop")
             self.assertIsNone(sess.status().error_key,
                               f"pipeline error: {sess.status().error_key}")
-            caps = [a for a in video.rt.overlays if a]
             self.assertTrue(caps, "the real pipeline produced no translated caption")
 
 
