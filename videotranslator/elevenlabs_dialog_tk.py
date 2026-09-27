@@ -23,6 +23,7 @@ from .elevenlabs_tts import (ElevenLabsClient, ElevenLabsError, Model, Voice,
 LOW_LATENCY_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2",
                       "eleven_turbo_v2")
 from .voice_preview import fetch_sample
+from .player_panel_tk import HoverTip
 from .voice_preview_tk import SpeakerButton, error_key
 
 _ERROR_KEYS = {kind: f"el_err_{kind}" for kind in
@@ -150,6 +151,12 @@ class ElevenLabsDialog:
                                          scale=getattr(theme, "scale", 1.0))
             self.speaker.canvas.grid(row=3, column=3, sticky="w", padx=(6, 0), pady=(6, 0))
             preview_hub.add_listener(self._on_preview_state)
+        # The lists cut long entries: the whole text shows on hover.
+        tip_colors = lambda: (pal.BTN, pal.FG)  # noqa: E731
+        self._model_tip = HoverTip(self._model_combo, lambda: self._model_combo.get(),
+                                   colors_fn=tip_colors)
+        self._voice_tip = HoverTip(self._voice_combo, lambda: self._voice_combo.get(),
+                                   colors_fn=tip_colors)
         wrap, self._refresh_btn = make_button(grid, text=ui_s("el_refresh"),
                                               command=self.verify)
         wrap.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
@@ -206,8 +213,9 @@ class ElevenLabsDialog:
     def _voice_text(self, voice: Voice) -> str:
         text = voice.label() + (f" · {', '.join(voice.languages)}"
                                 if voice.languages else "")
+        # In front: long names are cut at the right edge of the list.
         if self._paid_only(voice):
-            text += f" · {self._s('el_voice_paid_tag')}"
+            text = f"[{self._s('el_voice_paid_tag')}] {text}"
         return text
 
     def _fill(self, model_id: str | None, voice_id: str | None) -> None:

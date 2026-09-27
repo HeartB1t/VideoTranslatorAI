@@ -182,7 +182,9 @@ class DialogTests(unittest.TestCase):
         dlg = self._dialog({"catalog": cache, "voice_id": "p",
                             "model_id": "eleven_flash_v2_5"})
         self.assertEqual([v.voice_id for v in dlg._voices], ["r", "p"])
-        self.assertIn(_s("el_voice_paid_tag"), dlg._voice_combo.cget("values")[1])
+        self.assertTrue(dlg._voice_combo.cget("values")[1].startswith(
+            f"[{_s('el_voice_paid_tag')}] Carmelo"))
+        self.assertEqual(dlg._voice_tip._text_fn(), dlg._voice_combo.get())
         self.assertEqual(dlg._status.cget("text"), _s("el_err_paid_voice"))
         dlg._voice_combo.current(0)
         dlg._voice_changed()
