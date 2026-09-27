@@ -259,7 +259,7 @@ python -m videotranslator --preflight
 
 Çeviriyi başlatmadan veya herhangi bir şey yüklemeden yerel ortam teşhisini çalıştırır. `--preflight-lipsync`, Wav2Lip yüz paketlerini gerektiği gibi ele alır; bu, **Lip Sync**'i etkinleştirmeden önce faydalıdır. GUI, günlük panelinin **Teşhis** düğmesinden aynı temel kontrolü sunar. `--preflight-player`, entegre video oynatıcıyı (python-mpv ve yüklenebilir bir libmpv) gerektiği gibi ele alır. `python -m videotranslator.libmpv_runtime check`, libmpv'yi tek başına araştırır (çıkış 0 hazır, 2 kullanılamaz).
 
-**Günlük dosyası:** günlük panelinin gösterdiği her şey (her tıklama ve seçim, sonuçlar, işlem adımları, ayrıntılarıyla hatalar) yapılandırmanın yanındaki `logs/videotranslator.log` dosyasına da kaydedilir: Linux'ta `~/.config/videotranslatorai/logs/`, Windows'ta `%APPDATA%\VideoTranslatorAI\logs\`. Günde bir dosya, son 7 gün saklanır; **Tanılama** düğmesi yolu gösterir. Bir sorun bildirirken ekleyin. API anahtarları ve alanlara yazılan metin asla yazılmaz.
+**Günlük dosyası:** günlük panelinin gösterdiği her şey (her tıklama ve seçim, sonuçlar, işlem adımları, ayrıntılarıyla hatalar) yapılandırmanın yanındaki `logs/videotranslator.log` dosyasına da kaydedilir: Linux'ta `~/.config/videotranslatorai/logs/`, Windows'ta `%APPDATA%\VideoTranslatorAI\logs\`. Günde bir dosya, son 7 gün saklanır; **Tanılama** düğmesi yolu gösterir. Bir sorun bildirirken ekleyin. API anahtarları ve alanlara yazılan metin asla yazılmaz. Her satır zamanı, düzeyi (bilgi, uyarı, hata; arayüz dilinde, uyarılar ve hatalar panelde renkli) ve alanı gösterir, örneğin tıklamalar için [ui], çeviriler için [job], gerçek zaman için [live]; her başlatmada sürüm, sistem, GPU ve ayarları içeren bir başlık yazılır.
 
 ### GUI
 

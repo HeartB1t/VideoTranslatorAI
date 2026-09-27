@@ -259,7 +259,7 @@ python -m videotranslator --preflight
 
 Spouští diagnostiku místního prostředí bez spuštění překladu nebo instalace čehokoli. `--preflight-lipsync` zachází s balíčky obličejů Wav2Lip podle potřeby, což je užitečné před povolením **Synchronizace rtů**. GUI zobrazí stejnou základní kontrolu z tlačítka **Diagnostika** na panelu protokolu. `--preflight-player` zpracovává integrovaný videopřehrávač (python-mpv a načítatelný libmpv) podle potřeby. `python -m videotranslator.libmpv_runtime check` testuje samotný libmpv (výstup 0 připraven, 2 nedostupné).
 
-**Soubor protokolu:** vše, co ukazuje panel protokolu (každé kliknutí a volba, výsledky, kroky zpracování, chyby s podrobnostmi), se ukládá také do `logs/videotranslator.log` vedle konfigurace: `~/.config/videotranslatorai/logs/` v Linuxu, `%APPDATA%\VideoTranslatorAI\logs\` ve Windows. Jeden soubor za den, uchovává se posledních 7 dní; cestu ukáže tlačítko **Diagnostika**. Připojte ho při hlášení problému. Klíče API ani text zadaný do polí se nikdy nezapisují.
+**Soubor protokolu:** vše, co ukazuje panel protokolu (každé kliknutí a volba, výsledky, kroky zpracování, chyby s podrobnostmi), se ukládá také do `logs/videotranslator.log` vedle konfigurace: `~/.config/videotranslatorai/logs/` v Linuxu, `%APPDATA%\VideoTranslatorAI\logs\` ve Windows. Jeden soubor za den, uchovává se posledních 7 dní; cestu ukáže tlačítko **Diagnostika**. Připojte ho při hlášení problému. Klíče API ani text zadaný do polí se nikdy nezapisují. Každý řádek ukazuje čas, úroveň (info, varování, chyba, v jazyce rozhraní, varování a chyby jsou v panelu barevně) a oblast, například [ui] pro kliknutí, [job] pro překlady, [live] pro reálný čas; při každém spuštění se zapíše záhlaví s verzí, systémem, GPU a nastavením.
 
 ### GUI
 

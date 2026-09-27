@@ -259,7 +259,7 @@ python -m videotranslator --preflight
 
 翻訳を開始したり、何もインストールしたりせずに、ローカル環境診断を実行します。 `--preflight-lipsync` は Wav2Lip フェイス パッケージを必要に応じて処理します。これは **リップ シンク**を有効にする前に役立ちます。 GUI は、ログ パネルの [**診断**] ボタンから同じ基本チェックを公開します。 `--preflight-player` は、必要に応じて統合ビデオ プレーヤー (python-mpv およびロード可能な libmpv) を処理します。 `python -m videotranslator.libmpv_runtime check` は libmpv のみをプローブします (出口 0 は準備完了、2 は利用不可)。
 
-**ログファイル：** ログパネルに表示される内容（すべてのクリックと選択、結果、処理の各段階、詳細付きのエラー）は、設定ファイルの隣の `logs/videotranslator.log` にも保存されます。Linux では `~/.config/videotranslatorai/logs/`、Windows では `%APPDATA%\VideoTranslatorAI\logs\` です。1 日 1 ファイルで直近 7 日分を保存し、**診断** ボタンでパスを確認できます。問題を報告するときに添付してください。API キーと入力欄に入力したテキストは記録されません。
+**ログファイル：** ログパネルに表示される内容（すべてのクリックと選択、結果、処理の各段階、詳細付きのエラー）は、設定ファイルの隣の `logs/videotranslator.log` にも保存されます。Linux では `~/.config/videotranslatorai/logs/`、Windows では `%APPDATA%\VideoTranslatorAI\logs\` です。1 日 1 ファイルで直近 7 日分を保存し、**診断** ボタンでパスを確認できます。問題を報告するときに添付してください。API キーと入力欄に入力したテキストは記録されません。 各行には時刻、レベル（情報・警告・エラー。インターフェイスの言語で表示され、パネルでは警告とエラーに色が付きます）、領域（クリックは [ui]、翻訳は [job]、リアルタイムは [live] など）が表示されます。起動のたびに、バージョン、システム、GPU、設定を含む見出しが書き込まれます。
 
 ### GUI
 

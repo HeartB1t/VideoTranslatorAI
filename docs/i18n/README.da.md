@@ -259,7 +259,7 @@ python -m videotranslator --preflight
 
 Kører lokalmiljødiagnostik uden at starte oversættelse eller installere noget. `--preflight-lipsync` behandler Wav2Lip ansigtspakker efter behov, hvilket er nyttigt, før du aktiverer **Lip Sync**. GUI'en afslører det samme basistjek fra logpanelets **Diagnostik**-knap. `--preflight-player` behandler den integrerede videoafspiller (python-mpv og en indlæsbar libmpv) efter behov. `python -m videotranslator.libmpv_runtime check` sonderer libmpv alene (udgang 0 klar, 2 utilgængelige).
 
-**Logfil:** alt, hvad logpanelet viser (hvert klik og valg, resultater, behandlingstrin, fejl med detaljer), gemmes også i `logs/videotranslator.log` ved siden af konfigurationen: `~/.config/videotranslatorai/logs/` på Linux, `%APPDATA%\VideoTranslatorAI\logs\` på Windows. Én fil pr. dag, de seneste 7 dage gemmes; knappen **Diagnostik** viser stien. Vedhæft den, når du rapporterer et problem. API-nøgler og tekst skrevet i felterne skrives aldrig.
+**Logfil:** alt, hvad logpanelet viser (hvert klik og valg, resultater, behandlingstrin, fejl med detaljer), gemmes også i `logs/videotranslator.log` ved siden af konfigurationen: `~/.config/videotranslatorai/logs/` på Linux, `%APPDATA%\VideoTranslatorAI\logs\` på Windows. Én fil pr. dag, de seneste 7 dage gemmes; knappen **Diagnostik** viser stien. Vedhæft den, når du rapporterer et problem. API-nøgler og tekst skrevet i felterne skrives aldrig. Hver linje viser tidspunkt, niveau (info, advarsel, fejl, på grænsefladens sprog, med advarsler og fejl farvet i panelet) og område, fx [ui] for klik, [job] for oversættelser, [live] for realtid; hver start skriver et hoved med version, system, GPU og indstillinger.
 
 ### GUI
 
