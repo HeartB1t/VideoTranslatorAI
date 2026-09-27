@@ -302,6 +302,56 @@ class VoiceboxCheckTests(unittest.TestCase):
         app._log_line.assert_called_with("voicebox", "down http://127.0.0.1:17493", "warn")
 
 
+
+class OllamaCheckTests(unittest.TestCase):
+    URL = "http://localhost:11434"
+
+    def _app(self, lang="en"):
+        app = SimpleNamespace(_destroying=False, _lbl_ollama_status=Mock(),
+                              _btn_ollama_check=Mock(), _log_line=Mock(),
+                              _OLLAMA_CHECK_TEXTS=gui.App._OLLAMA_CHECK_TEXTS,
+                              _s=lambda key: gui.UI_STRINGS[lang][key])
+        app._ollama_status = lambda text, level="info": gui.App._ollama_status(app, text, level)
+        return app
+
+    def test_ready_names_version_address_and_model(self):
+        from videotranslator.ollama_runtime import OllamaCheck
+        app = self._app("it")
+        gui.App._show_ollama_check(app, self.URL, "qwen3:14b",
+                                   OllamaCheck("ready", "0.12.3", "qwen3:14b"))
+        text = "Ollama 0.12.3 risponde su http://localhost:11434: il modello qwen3:14b è pronto."
+        app._lbl_ollama_status.configure.assert_called_with(text=text)
+        app._log_line.assert_called_with("ollama", text, "info")
+        app._btn_ollama_check.configure.assert_called_with(state="normal")
+
+    def test_fallback_names_the_model_that_will_be_used_and_warns(self):
+        from videotranslator.ollama_runtime import OllamaCheck
+        app = self._app("en")
+        gui.App._show_ollama_check(app, self.URL, "qwen3:14b",
+                                   OllamaCheck("fallback", "", "qwen3:8b"))
+        text = app._log_line.call_args.args[1]
+        self.assertTrue(text.startswith("Ollama answers at"), text)     # no version: "Ollama"
+        self.assertIn("qwen3:14b", text)
+        self.assertIn("qwen3:8b", text)
+        self.assertEqual(app._log_line.call_args.args[2], "warn")
+
+    def test_a_failed_check_reads_as_unreachable(self):
+        app = self._app("en")
+        gui.App._show_ollama_check(app, self.URL, "qwen3:14b", None)
+        self.assertEqual(app._log_line.call_args.args[1:],
+                         (gui.UI_STRINGS["en"]["ollama_unreachable"].format(url=self.URL), "warn"))
+
+    def test_every_answer_formats_in_every_language(self):
+        from videotranslator.ollama_runtime import OllamaCheck
+        for lang in gui.UI_STRINGS:
+            for state in gui.App._OLLAMA_CHECK_TEXTS:
+                with self.subTest(lang=lang, state=state):
+                    app = self._app(lang)
+                    gui.App._show_ollama_check(app, self.URL, "qwen3:14b",
+                                               OllamaCheck(state, "0.12.3", "qwen3:8b"))
+                    self.assertNotIn("{", app._log_line.call_args.args[1])
+
+
 class LiveVoiceForTests(unittest.TestCase):
     def _call(self, current, tgt):
         fake = SimpleNamespace(_voice=SimpleNamespace(get=lambda: current))

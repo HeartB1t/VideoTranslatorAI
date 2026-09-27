@@ -4271,6 +4271,7 @@ from videotranslator.quality_flags import (  # noqa: E402
 
 from videotranslator.ollama_runtime import (  # noqa: E402
     set_subprocess_hooks as _set_ollama_subprocess_hooks,
+    check_ollama as _check_ollama_status,
     _ollama_find_binary,
     _ollama_health_check,
     _ollama_install,
@@ -7391,6 +7392,17 @@ class App(tk.Tk):
             highlightbackground=SURFACE, highlightcolor=ACC,
             font="VT.Small")
         self._chk_ollama_slot.pack(side="left", padx=(4, 0))
+        # Verify: says whether Ollama answers and has the model, like the
+        # Voicebox and ElevenLabs checks (read only, nothing is started).
+        _ol_line3 = tk.Frame(self._ollama_row, bg=SURFACE)
+        _ol_line3.pack(anchor="w", pady=(4, 0))
+        ol_wrap, self._btn_ollama_check = self._flat_btn(
+            _ol_line3, text=self._s("ollama_check"), command=self._check_ollama)
+        ol_wrap.pack(side="left")
+        self._lbl_ollama_status = tk.Label(self._ollama_row, text="", bg=SURFACE, fg=FG2,
+                                           font="VT.Small", wraplength=_HINT_WRAP - 30,
+                                           justify="left")
+        self._lbl_ollama_status.pack(anchor="w", pady=(2, 0))
         self._ollama_row.grid_remove()
 
         # Ollama thinking row (toggled by _on_engine_change)
@@ -8390,6 +8402,7 @@ class App(tk.Tk):
         self._lbl_vb_url.configure(text=self._s("vb_url"))
         self._lbl_vb_engine.configure(text=self._s("vb_engine"))
         self._btn_vb_check.configure(text=self._s("vb_check"))
+        self._btn_ollama_check.configure(text=self._s("ollama_check"))
         self._lbl_vb_note.configure(text=self._s("vb_note"))
         self._lbl_vb_scope.configure(text=self._s("vb_scope"))
         self._lbl_el_caption.configure(text=self._s("el_caption"))
@@ -9035,6 +9048,53 @@ class App(tk.Tk):
     def _vb_status(self, text: str, level: str = "info") -> None:
         self._lbl_vb_status.configure(text=text)
         self._log_line("voicebox", text, level)
+
+    # -- Ollama check ------------------------------------------------------------
+
+    _OLLAMA_CHECK_TEXTS = {
+        "ready": ("ollama_ready", "info"),
+        "fallback": ("ollama_fallback", "warn"),
+        "missing": ("ollama_missing", "info"),
+        "stopped": ("ollama_stopped", "info"),
+        "absent": ("ollama_absent", "info"),
+        "unreachable": ("ollama_unreachable", "warn"),
+    }
+
+    def _check_ollama(self) -> None:
+        """Ask Ollama whether it answers and has the chosen model, off the Tk
+        thread. Read only: the translation starts, installs or pulls what is
+        missing; this only says what it will find."""
+        url = self._ollama_url_var.get().strip() or "http://localhost:11434"
+        model = self._ollama_model_var.get().strip()
+        self._ollama_status(self._s("ollama_checking") + f" ({url}, {model})")
+        self._btn_ollama_check.configure(state="disabled")
+
+        def work() -> None:
+            # Network only here; the text is built on the Tk thread (self._s
+            # reads a Tk variable).
+            try:
+                result = _check_ollama_status(url, model)
+            except Exception:                         # noqa: BLE001
+                result = None
+            self.after(0, self._show_ollama_check, url, model, result)
+
+        threading.Thread(target=work, name="ollama-check", daemon=True).start()
+
+    def _show_ollama_check(self, url: str, model: str, result) -> None:
+        if self._destroying:
+            return
+        state = result.state if result is not None else "unreachable"
+        key, level = self._OLLAMA_CHECK_TEXTS.get(state, ("ollama_unreachable", "warn"))
+        version = getattr(result, "version", "")
+        text = self._s(key).format(
+            ollama=f"Ollama {version}" if version else "Ollama", url=url, model=model,
+            other=getattr(result, "model", "") or model)
+        self._ollama_status(text, level)
+        self._btn_ollama_check.configure(state="normal")
+
+    def _ollama_status(self, text: str, level: str = "info") -> None:
+        self._lbl_ollama_status.configure(text=text)
+        self._log_line("ollama", text, level)
 
     # -- ElevenLabs live voice ---------------------------------------------------
 

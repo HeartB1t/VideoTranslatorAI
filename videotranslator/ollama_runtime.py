@@ -9,8 +9,10 @@ import subprocess
 import sys
 import tempfile
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 _RegisterHook = Callable[[Any], None]
 _register_hook: _RegisterHook = lambda _proc: None
@@ -816,3 +818,57 @@ def _ollama_pull_model(
     return True, ""
 
 
+# -- Verify button -------------------------------------------------------------
+
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+
+
+@dataclass(frozen=True)
+class OllamaCheck:
+    """The Verify button's answer, gathered without starting or installing anything.
+
+    ``state``: "ready" (answers and has the chosen model), "fallback"
+    (answers, and ``model`` is the installed one a translation would use),
+    "missing" (answers, the chosen model is pulled at the first
+    translation), "stopped" (installed here but silent: started at the first
+    translation), "absent" (not installed here: installed at the first
+    translation), "unreachable" (a remote address that does not answer).
+    """
+
+    state: str
+    version: str = ""
+    model: str = ""
+
+
+def _ollama_version(api_url: str, timeout: float = 3.0) -> str:
+    """The daemon's version from `/api/version`, or "" when it cannot say."""
+    import requests
+    try:
+        r = requests.get(f"{api_url.rstrip('/')}/api/version", timeout=timeout)
+        r.raise_for_status()
+        return str(r.json().get("version") or "")
+    except Exception:
+        return ""
+
+
+def check_ollama(api_url: str, model: str, *, timeout: float = 3.0,
+                 find_binary: Callable[[], str | None] | None = None) -> OllamaCheck:
+    """What Ollama at ``api_url`` would do for a translation with ``model``.
+
+    Read only: a daemon that does not answer is not started, a missing
+    Ollama is not installed and a missing model is not pulled. The
+    translation itself does all that (``_ensure_ollama_ready_async``).
+    """
+    if _ollama_is_daemon_running(api_url, timeout=timeout):
+        version = _ollama_version(api_url, timeout=timeout)
+        ok, _message, resolved = _ollama_health_check(api_url, model, timeout=timeout)
+        if ok and resolved == model:
+            return OllamaCheck("ready", version, model)
+        if ok:
+            return OllamaCheck("fallback", version, resolved)
+        return OllamaCheck("missing", version, model)
+    host = (urlsplit(api_url).hostname or "").lower()
+    if host not in _LOCAL_HOSTS:
+        return OllamaCheck("unreachable")
+    finder = find_binary or _ollama_find_binary
+    return OllamaCheck("stopped" if finder() else "absent")
