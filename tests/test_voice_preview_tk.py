@@ -1,5 +1,6 @@
 """Speaker icon and preview hub. Tk tests: skip without a display, run under Xvfb."""
 
+import gc
 import tkinter as tk
 import unittest
 
@@ -73,6 +74,11 @@ class HubTests(unittest.TestCase):
         self.hub._dispatch("a", "idle", None)
         self.assertEqual(self.hub._listeners, [])
 
+    def test_labels_name_the_voice_for_the_log(self):
+        self.hub.toggle("el:pWHq:https://x", lambda: b"", label="Carmelo La Rosa")
+        self.assertEqual(self.hub.label("el:pWHq:https://x"), "Carmelo La Rosa")
+        self.assertEqual(self.hub.label("unknown"), "")
+
     def test_stop_if_prefix_and_close(self):
         self.hub.stop_if("el:")                     # nothing created yet
         self.hub.toggle("el:v1", lambda: b"")
@@ -95,6 +101,10 @@ class HubTests(unittest.TestCase):
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class SpeakerButtonTests(unittest.TestCase):
     def setUp(self):
+        # Collect Tk variables here, on the main thread: collected later inside a
+        # worker thread of another test, Variable.__del__ calls Tk without a
+        # running main loop and blocks that thread.
+        self.addCleanup(gc.collect)
         self.root = tk.Tk()
         self.root.withdraw()
         self.clicks = 0

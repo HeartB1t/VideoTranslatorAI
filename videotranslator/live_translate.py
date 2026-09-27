@@ -449,6 +449,7 @@ class OllamaLiveTranslator:
         self._src_name = ""
         self._tgt_name = ""
         self._is_qwen3 = False
+        self._warmup_s: float | None = None
 
     def prepare(self, src: str, tgt: str) -> None:
         if self._health is not None:
@@ -464,12 +465,43 @@ class OllamaLiveTranslator:
         self._src_name = _ollama_lang_name(src)
         self._tgt_name = _ollama_lang_name(tgt)
         if self._generate is None:          # warm the model up (best effort)
+            start = self._clock()
             try:
                 self._http_generate(".", num_predict=1,
                                     timeout=(3.05, LIVE_OLLAMA_WARMUP_S),
                                     keep_alive="30m")
             except Exception:               # noqa: BLE001
                 pass
+            self._warmup_s = self._clock() - start
+
+    def describe(self, ps: dict | None = None) -> str:
+        """One line for the log: load time and where the model runs.
+
+        A model partly on the CPU (too big for the free VRAM) is the usual
+        reason for sentences that miss their time, so say it plainly.
+        """
+        parts = [f"Ollama {self._model}"]
+        if self._warmup_s is not None:
+            parts.append(f"loaded in {self._warmup_s:.1f} s")
+        try:
+            if ps is None:
+                import requests
+                resp = requests.get(f"{self._api_url}/api/ps", timeout=(3.05, 5.0))
+                ps = resp.json()
+            entry = next((m for m in ps.get("models") or []
+                          if m.get("name") == self._model or m.get("model") == self._model),
+                         None)
+            if entry and entry.get("size"):
+                size, vram = float(entry["size"]), float(entry.get("size_vram") or 0)
+                gpu = round(100 * vram / size)
+                parts.append(f"{size / 1e9:.1f} GB, {gpu}% GPU / {100 - gpu}% CPU")
+                if entry.get("context_length"):
+                    parts.append(f"context {entry['context_length']}")
+                if gpu < 100:
+                    parts.append("part of the model runs on the CPU: slower sentences")
+        except Exception:                   # noqa: BLE001 - the line is informative only
+            pass
+        return ", ".join(parts)
 
     def translate(self, text: str, *, context=(), timeout_s: float = 8.0) -> Outcome:
         from .ollama_prompt import build_translation_prompt

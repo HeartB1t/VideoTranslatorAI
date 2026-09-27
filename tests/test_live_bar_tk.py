@@ -1,5 +1,6 @@
 """LiveBar widget (spec 2.3, 4.2, 5.9). Tk tests: skip without a display, run under Xvfb."""
 
+import gc
 import tkinter as tk
 import unittest
 from types import SimpleNamespace
@@ -30,6 +31,10 @@ class _Theme:
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class LiveBarTests(unittest.TestCase):
     def setUp(self):
+        # Collect Tk variables here, on the main thread: collected later inside a
+        # worker thread of another test, Variable.__del__ calls Tk without a
+        # running main loop and blocks that thread.
+        self.addCleanup(gc.collect)
         from videotranslator.live_bar_tk import LiveBar
         self.root = tk.Tk()
         self.root.withdraw()

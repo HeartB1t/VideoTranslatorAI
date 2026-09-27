@@ -1274,6 +1274,14 @@ class LiveSession:
                 except Exception:
                     pass
 
+    def _log_translator_ready(self, translator) -> None:
+        describe = getattr(translator, "describe", None)
+        if callable(describe):
+            try:
+                self._log(f"live: translator ready: {describe()}")
+            except Exception:               # noqa: BLE001
+                pass
+
     def _mt_loop(self) -> None:
         translator = None
         prepared = False
@@ -1290,6 +1298,7 @@ class LiveSession:
             if self._langlock.locked is not None:
                 translator.prepare(self._langlock.locked, self._cfg.lang_target)
                 prepared = True
+                self._log_translator_ready(translator)
                 self._translator_ready.set()
             while not self._stop.is_set():
                 try:
@@ -1307,6 +1316,7 @@ class LiveSession:
                     src = self._langlock.locked or self._cfg.lang_source
                     translator.prepare(src, self._cfg.lang_target)
                     prepared = True
+                    self._log_translator_ready(translator)
                     self._translator_ready.set()
                 # An online engine whose breaker is open keeps the original text
                 # (shown in the source language) without spending a call.

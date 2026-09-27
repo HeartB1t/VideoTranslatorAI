@@ -1,5 +1,6 @@
 """'Models for this PC' window. Tk tests: skip without a display, run under Xvfb."""
 
+import gc
 import tkinter as tk
 import unittest
 from unittest import mock
@@ -60,6 +61,10 @@ def _make_button(parent, **kwargs):
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class DialogTests(unittest.TestCase):
     def setUp(self):
+        # Collect Tk variables here, on the main thread: collected later inside a
+        # worker thread of another test, Variable.__del__ calls Tk without a
+        # running main loop and blocks that thread.
+        self.addCleanup(gc.collect)
         self.root = tk.Tk()
         self.root.withdraw()
         self.applied = []

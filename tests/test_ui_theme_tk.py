@@ -484,6 +484,10 @@ def built_app(config):
                         for after_id in app.tk.splitlist(app.tk.call("after", "info")):
                             app.after_cancel(after_id)
                         app.destroy()
+                        # Collect its Tk variables now, on the main thread (see
+                        # the dialog tests): later a worker thread could hang on them.
+                        import gc
+                        gc.collect()
     finally:
         sys.stdout, sys.stderr = saved_stdout, saved_stderr
 

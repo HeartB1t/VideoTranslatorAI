@@ -266,6 +266,19 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
             self.assertEqual(payload["options"]["num_ctx"], lt.LIVE_OLLAMA_NUM_CTX)
             self.assertFalse(payload["think"])
 
+    def test_describe_says_load_time_and_cpu_share(self):
+        tr = OllamaLiveTranslator(model="qwen3:32b", health_check=self._ok_health,
+                                  generate=lambda *a, **k: "x")
+        tr.prepare("en", "it")
+        tr._warmup_s = 38.9
+        line = tr.describe({"models": [{"name": "qwen3:32b", "size": 21e9,
+                                        "size_vram": 19.3e9, "context_length": 2048}]})
+        self.assertEqual(line, "Ollama qwen3:32b, loaded in 38.9 s, 21.0 GB, 92% GPU / 8% CPU, "
+                               "context 2048, part of the model runs on the CPU: slower sentences")
+        full = tr.describe({"models": [{"name": "qwen3:32b", "size": 10e9, "size_vram": 10e9}]})
+        self.assertEqual(full, "Ollama qwen3:32b, loaded in 38.9 s, 10.0 GB, 100% GPU / 0% CPU")
+        self.assertEqual(tr.describe({"models": []}), "Ollama qwen3:32b, loaded in 38.9 s")
+
     def test_daemon_down_raises_on_prepare(self):
         tr = OllamaLiveTranslator(health_check=self._down_health,
                                   generate=lambda *a, **k: "x")

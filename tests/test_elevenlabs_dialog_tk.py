@@ -1,5 +1,6 @@
 """ElevenLabs settings window. Tk tests: skip without a display, run under Xvfb."""
 
+import gc
 import tkinter as tk
 import unittest
 
@@ -62,8 +63,9 @@ class _Hub:
     def remove_listener(self, fn):
         self.listeners.remove(fn)
 
-    def toggle(self, key, loader):
+    def toggle(self, key, loader, label=""):
         self.toggles.append((key, loader()))
+        self.labels = getattr(self, "labels", []) + [label]
 
     def stop_if(self, prefix):
         self.stopped.append(prefix)
@@ -92,6 +94,10 @@ class CacheTests(unittest.TestCase):
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class DialogTests(unittest.TestCase):
     def setUp(self):
+        # Collect Tk variables here, on the main thread: collected later inside a
+        # worker thread of another test, Variable.__del__ calls Tk without a
+        # running main loop and blocks that thread.
+        self.addCleanup(gc.collect)
         self.root = tk.Tk()
         self.root.withdraw()
         self.saved = []
@@ -136,6 +142,16 @@ class DialogTests(unittest.TestCase):
         dlg = self._dialog(fail="auth")
         self._verify(dlg)
         self.assertEqual(self.logged[-1], _s("el_err_auth"))
+
+    def test_verify_error_logs_the_service_message(self):
+        class Client(_Client):
+            def account(self):
+                raise ElevenLabsError("auth", "HTTP 401: Invalid API key")
+
+        dlg = self._dialog(client=lambda k: Client(k))
+        self._verify(dlg)
+        self.assertEqual(dlg._status.cget("text"), _s("el_err_auth"))
+        self.assertIn("ElevenLabs: auth: HTTP 401: Invalid API key", self.logged)
 
     def test_model_without_the_target_language_is_flagged(self):
         dlg = self._dialog()
@@ -203,6 +219,7 @@ class DialogTests(unittest.TestCase):
         dlg.speaker.click()
         key = "el:v1:https://s.test/it.mp3"
         self.assertEqual(hub.toggles, [(key, b"audio:https://s.test/it.mp3")])
+        self.assertEqual(hub.labels, ["Adam"])          # the log names the voice
         hub.emit(key, "playing")
         self.assertEqual(dlg.speaker.state, "playing")
         hub.emit("edge:x", "loading")

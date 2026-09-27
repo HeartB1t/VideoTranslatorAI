@@ -8486,7 +8486,8 @@ class App(tk.Tk):
             key, lambda: _synthesize_edge_preview(text, voice, rate))
 
     def _on_voice_preview_state(self, key, state, kind) -> None:
-        voice = key.split(":")[1] if key.count(":") >= 1 else key
+        voice = (self._voice_preview_hub.label(key)
+                 or (key.split(":")[1] if key.count(":") >= 1 else key))
         if state == "error":
             self._log_event("log_vp", voice=voice, state=self._s(_preview_error_key(kind)))
         else:

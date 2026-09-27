@@ -33,6 +33,7 @@ class PreviewHub:
         self._make_preview = make_preview
         self._preview = None
         self._listeners: list[Listener] = []
+        self._labels: dict[str, str] = {}
         self._closed = False
 
     def _on_state(self, key: str, state: str, kind: str | None) -> None:
@@ -54,9 +55,15 @@ class PreviewHub:
         if listener in self._listeners:
             self._listeners.remove(listener)
 
-    def toggle(self, key: str, loader: Callable[[], bytes]) -> None:
+    def label(self, key: str) -> str:
+        """The readable name given with the key (a voice name, not its id)."""
+        return self._labels.get(key, "")
+
+    def toggle(self, key: str, loader: Callable[[], bytes], *, label: str = "") -> None:
         if self._closed:
             return
+        if label:
+            self._labels[key] = label
         if self._preview is None:
             self._preview = self._make_preview(self._on_state)
         self._preview.toggle(key, loader)

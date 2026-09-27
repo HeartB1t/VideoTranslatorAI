@@ -292,7 +292,7 @@ class ElevenLabsDialog:
             self._set_status(self._s("vp_err_no_sample"))
             return
         loader = self._sample_loader
-        self._hub.toggle(self._sample_key(voice, url), lambda: loader(url))
+        self._hub.toggle(self._sample_key(voice, url), lambda: loader(url), label=voice.name)
 
     def _voice_changed(self) -> None:
         self._check_language()
@@ -338,7 +338,7 @@ class ElevenLabsDialog:
                 voices = client.voices()
                 self._results.put(("ok", (account, models, voices)))
             except ElevenLabsError as exc:
-                self._results.put(("error", exc.kind))
+                self._results.put(("error", (exc.kind, str(exc))))
             except Exception:                    # noqa: BLE001
                 self._results.put(("error", "unavailable"))
 
@@ -381,7 +381,13 @@ class ElevenLabsDialog:
                 self.preview()
         else:
             self._pending_preview = False
-            self._set_status(self._s(_ERROR_KEYS.get(value, "el_err_unavailable")))
+            kind, detail = value if isinstance(value, tuple) else (value, "")
+            self._set_status(self._s(_ERROR_KEYS.get(kind, "el_err_unavailable")))
+            if self._log is not None and detail and detail != kind:
+                try:                        # ElevenLabs' own words, for bug reports
+                    self._log(f"ElevenLabs: {kind}: {detail}")
+                except Exception:           # noqa: BLE001
+                    pass
 
     # -- save / close -------------------------------------------------------
 
