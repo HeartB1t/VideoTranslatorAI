@@ -348,6 +348,10 @@ it), leave the URL field empty, choose the same live settings, and click
 - **Voice dubbing:** experimental Edge-TTS speech playback through a second mpv
   instance. It requires internet access and is separate from batch voice cloning.
 - **ElevenLabs voice:** optional, in Advanced settings > Voice cloning > **ElevenLabs live voice**. Enter your API key, check it, pick a model that speaks the target language and a voice. The translated text is sent to ElevenLabs (paid per character); the key stays in the system keyring. If the key or the quota fails, Edge-TTS continues. It also opens from the **ElevenLabs…** button of the real-time bar, whose line tells which voice the dub will use.
+  - Free ElevenLabs plan (checked on 27 September 2026): only the default voices (Roger, Sarah, George, River...) work through the API, with 10,000 characters a month and at most 4 requests at a time. The window tags the voices that need a paid plan.
+  - Voices from the ElevenLabs library, cloned voices and more characters need a paid ElevenLabs subscription, bought from ElevenLabs under its own prices and terms ([ElevenLabs pricing](https://elevenlabs.io/pricing)). VideoTranslatorAI stays free, is not affiliated with ElevenLabs and does not need it: Edge-TTS is the free default voice.
+  - Models for real time, first audio after about: Flash v2.5 0.2 s, Turbo v2.5 0.2 s, v3 Conversational 0.4 s. Multilingual v2 (0.9 s) and v3 (1-2 s) sound richer but lag behind the video; Turbo v2 and Flash v2 speak English only.
+  - When ElevenLabs refuses a voice line (key, plan, voice or model not found, language, characters used up, too many requests), the real-time bar says why and the log keeps ElevenLabs' own message.
 - **Mute original audio:** available both before starting and during translation.
   It silences the entire original soundtrack, including music and effects, but
   leaves the translated voice audible. It does not isolate the original speaker.
