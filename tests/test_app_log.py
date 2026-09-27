@@ -94,5 +94,48 @@ class LineFormatTests(unittest.TestCase):
             self.assertEqual(app_log.git_commit(Path(tmp) / "none"), "")
 
 
+
+class SystemFactsTests(unittest.TestCase):
+    def test_os_description_per_platform(self):
+        rel = 'NAME="Kali GNU/Linux"\nPRETTY_NAME="Kali GNU/Linux Rolling"\n'
+        self.assertEqual(app_log.os_description("linux", os_release=rel), "Kali GNU/Linux Rolling")
+        self.assertEqual(app_log.os_description("linux", os_release="NAME=x\n"), "Linux")
+        self.assertTrue(app_log.os_description(
+            "win32", win_ver=("11", "10.0.26100", "SP0", "Multiprocessor Free"))
+            .startswith("Windows 11 (10.0.26100)"))
+        self.assertEqual(app_log.os_description("darwin", mac_ver=("15.1", ("", "", ""), "")),
+                         "macOS 15.1")
+
+    def test_library_versions_skip_missing(self):
+        versions = {"torch": "2.6.0+cu124", "yt-dlp": "2026.8.19"}
+
+        def version(name):
+            if name not in versions:
+                raise LookupError(name)
+            return versions[name]
+
+        self.assertEqual(app_log.library_versions(("torch", "missing", "yt-dlp"), version=version),
+                         "torch 2.6.0+cu124, yt-dlp 2026.8.19")
+
+    def test_nvidia_banner_ffmpeg_and_tools(self):
+        banner = ("+----+\n| NVIDIA-SMI 580.173.02   Driver Version: 580.173.02   "
+                  "CUDA Version: 13.0 |\n")
+        self.assertEqual(app_log.parse_nvidia_smi_banner(banner), ("580.173.02", "13.0"))
+        self.assertEqual(app_log.parse_nvidia_smi_banner(""), ("", ""))
+        self.assertEqual(app_log.ffmpeg_version("ffmpeg version 8.1.2-2+b3 Copyright (c)"),
+                         "8.1.2-2+b3")
+        self.assertEqual(app_log.ffmpeg_version(""), "")
+
+        class Out:
+            stdout = "first\nsecond\n"
+
+        self.assertEqual(app_log.tool_first_line(["x"], run=lambda *a, **k: Out()), "first")
+
+        def missing(*a, **k):
+            raise FileNotFoundError("x")
+
+        self.assertEqual(app_log.tool_output(["x"], run=missing), "")
+
+
 if __name__ == "__main__":
     unittest.main()

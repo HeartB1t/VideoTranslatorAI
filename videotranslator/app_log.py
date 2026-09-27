@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import platform
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -204,3 +206,94 @@ def git_commit(root: Path) -> str:
     except Exception:                          # noqa: BLE001
         pass
     return ""
+
+
+# -- System facts for the session header (cheap, no torch, never raise) --------
+
+# Installed distributions whose versions explain most bug reports.
+LIBRARIES = ("torch", "faster-whisper", "ctranslate2", "transformers", "demucs",
+             "coqui-tts", "pyannote.audio", "edge-tts", "yt-dlp", "deep-translator",
+             "mpv", "av", "numpy", "keyring")
+
+
+def os_description(sys_platform: str = sys.platform, *, os_release: str | None = None,
+                   win_ver: tuple | None = None, mac_ver: tuple | None = None) -> str:
+    """Distribution or edition, e.g. 'Kali GNU/Linux Rolling', 'Windows 11 (10.0.26100)'."""
+    try:
+        if sys_platform.startswith("linux"):
+            if os_release is None:
+                for path in ("/etc/os-release", "/usr/lib/os-release"):
+                    try:
+                        os_release = Path(path).read_text(encoding="utf-8")
+                        break
+                    except OSError:
+                        continue
+            for line in (os_release or "").splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    return line.split("=", 1)[1].strip().strip('"')
+            return "Linux"
+        if sys_platform == "win32":
+            release, version, _csd, _ptype = win_ver or platform.win32_ver()
+            edition = ""
+            try:
+                edition = platform.win32_edition() or ""
+            except Exception:                  # noqa: BLE001
+                pass
+            text = f"Windows {release} ({version})".strip()
+            return f"{text} {edition}".strip()
+        if sys_platform == "darwin":
+            release = (mac_ver or platform.mac_ver())[0]
+            return f"macOS {release}".strip()
+    except Exception:                          # noqa: BLE001
+        pass
+    return platform.platform()
+
+
+def library_versions(names=LIBRARIES, *, version=None) -> str:
+    """'torch 2.6.0+cu124, faster-whisper 1.2.1, ...' for the installed ones."""
+    if version is None:
+        from importlib.metadata import version
+    found = []
+    for name in names:
+        try:
+            found.append(f"{name} {version(name)}")
+        except Exception:                      # noqa: BLE001 - not installed
+            continue
+    return ", ".join(found)
+
+
+_SMI_DRIVER = re.compile(r"Driver Version:\s*([\w.]+)")
+_SMI_CUDA = re.compile(r"CUDA Version:\s*([\w.]+)")
+
+
+def parse_nvidia_smi_banner(text: str) -> tuple[str, str]:
+    """(driver, CUDA) from the header of plain ``nvidia-smi`` output."""
+    driver = _SMI_DRIVER.search(text or "")
+    cuda = _SMI_CUDA.search(text or "")
+    return (driver.group(1) if driver else "", cuda.group(1) if cuda else "")
+
+
+def tool_output(cmd: list[str], *, run=None, timeout: float = 5.0) -> str:
+    """A tool's standard output ('' when missing or failing); no console
+    window on Windows."""
+    import subprocess
+    from .subprocess_utils import no_window_kwargs
+    run = run or subprocess.run
+    try:
+        out = run(cmd, capture_output=True, text=True, timeout=timeout,
+                  stdin=subprocess.DEVNULL, **no_window_kwargs(sys.platform))
+        return out.stdout or ""
+    except Exception:                          # noqa: BLE001
+        return ""
+
+
+def tool_first_line(cmd: list[str], *, run=None, timeout: float = 5.0) -> str:
+    """First line of a tool's output ('' when missing or failing)."""
+    lines = tool_output(cmd, run=run, timeout=timeout).strip().splitlines()
+    return lines[0] if lines else ""
+
+
+def ffmpeg_version(first_line: str) -> str:
+    """'ffmpeg version 8.1.2-2+b3 Copyright ...' -> '8.1.2-2+b3'."""
+    parts = (first_line or "").split()
+    return parts[2] if len(parts) > 2 and parts[1] == "version" else ""

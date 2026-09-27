@@ -952,6 +952,21 @@ class TalkingLogTests(unittest.TestCase):
             app._last_click_at = __import__("time").monotonic()
             app._log_event("log_live", command="start", value="source=file")
             self.assertEqual(self._panel(app).count(it["log_live"].split(":")[0]), count)
+            # the system part of the session header
+            from types import SimpleNamespace as NS
+            app._log_system({"os": "Kali GNU/Linux Rolling", "locale": "it_IT.UTF-8",
+                             "libs": "torch 2.6.0", "smi": ("580.1", "13.0"),
+                             "ffmpeg": "8.1.2",
+                             "hw": NS(cpu_name="i7", cpu_cores=16, ram_gb=31.2, gpus=(),
+                                      disk_free_gb=266.8)})
+            text = self._panel(app)
+            for line in (it["log_sys_os"].format(os="Kali GNU/Linux Rolling", locale="it_IT.UTF-8"),
+                         it["log_sys_gpu"].format(driver="580.1", cuda="13.0"),
+                         it["log_sys_libs"].format(libs="torch 2.6.0"),
+                         it["log_sys_tools"].format(tools="ffmpeg 8.1.2"),
+                         it["mdl_hw_disk"].format(free="266.8")):
+                self.assertIn(line, text)
+            self.assertIn("[sys] " + it["log_sys_screen"].split(":")[0], text)
             # raw pipeline lines get their level too
             print("[!] Voicebox not available")
             self.assertRegex(self._panel(app), it["log_level_warn"] + r" +\[app\] Voicebox not")

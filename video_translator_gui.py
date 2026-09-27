@@ -9495,6 +9495,10 @@ class App(tk.Tk):
         self._player_backend = backend
         self._player_vo_profile = profile
         self._player_controller.attach_backend(backend)
+        with contextlib.suppress(Exception):
+            version = ".".join(str(part) for part in (backend.mpv_version or ())) or "?"
+            self._log_emit(self._s("log_sys_player").format(version=version, vo=profile),
+                           "player")
         self._video_shader_applied = None
         self._apply_video_effect()
         self._start_player_poll()
@@ -10943,25 +10947,69 @@ class App(tk.Tk):
 
         found: list = []
 
-        def probe() -> None:                  # nvidia-smi only: no torch at startup
-            try:
+        def probe() -> None:
+            # Cheap facts only: nvidia-smi and metadata, never torch at startup.
+            facts: dict = {}
+            with contextlib.suppress(Exception):
                 from videotranslator.hardware_profile import detect_hardware
-                found.append(detect_hardware(use_torch=False))
-            except Exception:                            # noqa: BLE001
-                found.append(None)
+                facts["hw"] = detect_hardware(use_torch=False)
+            with contextlib.suppress(Exception):
+                facts["os"] = _app_log.os_description()
+            with contextlib.suppress(Exception):
+                loc = locale.getlocale()
+                facts["locale"] = ".".join(part for part in loc if part) or "?"
+            with contextlib.suppress(Exception):
+                facts["libs"] = _app_log.library_versions()
+            with contextlib.suppress(Exception):
+                facts["smi"] = _app_log.parse_nvidia_smi_banner(
+                    _app_log.tool_output(["nvidia-smi"]))
+            with contextlib.suppress(Exception):
+                facts["ffmpeg"] = _app_log.ffmpeg_version(
+                    _app_log.tool_first_line(["ffmpeg", "-version"]))
+            found.append(facts)
 
         def collect(tries: int = 100) -> None:
             # The Tk thread picks the result up: the worker never touches Tk.
             if self._destroying:
                 return
             if found:
-                if found[0] is not None:
-                    self._log_hardware(found[0])
+                self._log_system(found[0])
             elif tries > 0:
                 self.after(200, collect, tries - 1)
 
         threading.Thread(target=probe, name="log-hardware", daemon=True).start()
         self.after(200, collect)
+
+    def _log_system(self, facts: dict) -> None:
+        """System lines of the session header (on the Tk thread)."""
+        s = self._s
+        with contextlib.suppress(Exception):
+            self._log_emit(s("log_sys_os").format(os=facts.get("os") or platform.platform(),
+                                                  locale=facts.get("locale", "?")), "sys")
+        with contextlib.suppress(Exception):
+            dpi = float(self.tk.call("tk", "scaling")) * 72
+            session = self.tk.call("tk", "windowingsystem")
+            if sys.platform.startswith("linux"):
+                kind = os.environ.get("XDG_SESSION_TYPE") or ""
+                desktop = os.environ.get("XDG_CURRENT_DESKTOP") or ""
+                parts = []
+                for part in (str(session), kind, desktop):
+                    if part and part.lower() not in (p.lower() for p in parts):
+                        parts.append(part)
+                session = " ".join(parts)
+            self._log_emit(s("log_sys_screen").format(
+                size=f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}",
+                scale=f"{dpi:.0f} DPI", session=session), "sys")
+        hw = facts.get("hw")
+        if hw is not None:
+            self._log_hardware(hw)
+        driver, cuda = facts.get("smi") or ("", "")
+        if driver:
+            self._log_emit(s("log_sys_gpu").format(driver=driver, cuda=cuda or "?"), "sys")
+        if facts.get("libs"):
+            self._log_emit(s("log_sys_libs").format(libs=facts["libs"]), "sys")
+        tools = [f"ffmpeg {facts['ffmpeg']}" if facts.get("ffmpeg") else "ffmpeg -"]
+        self._log_emit(s("log_sys_tools").format(tools=", ".join(tools)), "sys")
 
     def _log_hardware(self, hw) -> None:
         s = self._s
@@ -10972,8 +11020,10 @@ class App(tk.Tk):
             lines.append(s("mdl_hw_gpu").format(gpu=gpu.name, vram=vram))
         if not hw.gpus:
             lines.append(s("mdl_hw_no_gpu"))
+        if hw.disk_free_gb is not None:
+            lines.append(s("mdl_hw_disk").format(free=f"{hw.disk_free_gb:.1f}"))
         for line in lines:
-            self._log_line("app", line)
+            self._log_line("sys", line)
 
     def _remove_log_hooks(self) -> None:
         global _DEFAULT_REDIRECT
