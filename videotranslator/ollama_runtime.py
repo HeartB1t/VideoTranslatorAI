@@ -919,10 +919,10 @@ class OllamaCheck:
 
     ``state``: "ready" (answers and has the chosen model), "fallback"
     (answers, and ``model`` is the installed one a translation would use),
-    "missing" (answers, the chosen model is pulled at the first
-    translation), "stopped" (installed here but silent: started at the first
-    translation), "absent" (not installed here: installed at the first
-    translation), "unreachable" (a remote address that does not answer).
+    "missing" (answers; the app offers to pull the chosen model when Ollama
+    is needed), "stopped" (installed here but silent: the app starts it when
+    needed), "absent" (not installed here: the app offers to install it when
+    needed), "unreachable" (a remote address that does not answer).
     """
 
     state: str
