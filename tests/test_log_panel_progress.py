@@ -107,6 +107,19 @@ class LogPanelProgressTests(unittest.TestCase):
         self.assertEqual([line.split("] ", 1)[1] for line in self.panel.lines()],
                          [bar(10), "Clicked: Start", bar(20)])
 
+    def test_the_ollama_installer_download_stays_on_one_line(self):
+        # The exact pieces _ollama_install_windows logs (a Windows VM showed
+        # twenty "Download... N%" lines before they became \r rewrites).
+        self.panel._log_write("     Scaricando Ollama (~1 GB) da https://ollama.com/x...\n")
+        for pct in range(0, 101, 5):
+            self.panel._log_write(f"\r     Download... {pct}%")
+        self.panel._log_write("\n")
+        self.panel._log_write("     Avvio installer silent (richiede UAC)...\n")
+        lines = self.panel.lines()
+        self.assertEqual(len(lines), 3, lines)
+        self.assertTrue(lines[1].endswith("Download... 100%"), lines[1])
+        self.assertIn("Avvio installer", lines[2])
+
     def test_different_activities_keep_their_own_lines(self):
         self.panel._log_write(bar(10, "a.bin") + "\n")
         self.panel._log_write(bar(10, "b.bin") + "\n")

@@ -562,6 +562,7 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
     setup_path = Path(tempfile.gettempdir()) / "OllamaSetup.exe"
 
     log(f"     Scaricando Ollama (~1 GB) da {url}...\n")
+    progress_open = False        # a "\r" progress line still waits for its newline
     try:
         from urllib.request import Request, urlopen
         req = Request(url, headers={"User-Agent": "VideoTranslatorAI/2.0"})
@@ -578,11 +579,18 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
                 downloaded += len(buf)
                 if total > 0:
                     pct = min(100, downloaded * 100 // total)
-                    # Log every 5% to avoid flooding the GUI
+                    # Every 5%, on one line rewritten in place (\r) like a
+                    # terminal progress bar: the log panel keeps a single
+                    # advancing line and the log file its last state.
                     if pct // 5 != last_pct // 5:
-                        log(f"     Download... {pct}%\n")
+                        log(f"\r     Download... {pct}%")
+                        progress_open = True
                         last_pct = pct
+        if progress_open:
+            log("\n")
     except Exception as e:
+        if progress_open:
+            log("\n")
         with contextlib.suppress(Exception):
             setup_path.unlink(missing_ok=True)
         return False, f"Download fallito: {e}"

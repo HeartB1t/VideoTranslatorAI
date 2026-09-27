@@ -77,5 +77,64 @@ class StartDaemonTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 5.0)
 
 
+class _FakeDownload:
+    """What urlopen returns: a sized body read in chunks."""
+
+    def __init__(self, size: int, fail_after: int | None = None):
+        self.headers = {"Content-Length": str(size)}
+        self._left, self._sent, self._fail_after = size, 0, fail_after
+
+    def read(self, n):
+        if self._fail_after is not None and self._sent >= self._fail_after:
+            raise OSError("connection reset")
+        n = min(n, self._left)
+        self._left -= n
+        self._sent += n
+        return b"x" * n
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class InstallerDownloadProgressTests(unittest.TestCase):
+    """The ~1 GB OllamaSetup.exe download: one line rewritten in place (\\r),
+    not twenty "Download... N%" lines in the log panel and file."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.logged = []
+
+    def _install(self, body):
+        with mock.patch("tempfile.gettempdir", return_value=self.tmp.name), \
+                mock.patch("urllib.request.urlopen", return_value=body), \
+                mock.patch.object(rt.subprocess, "Popen", side_effect=OSError("stop here")):
+            return rt._ollama_install_windows(log_cb=self.logged.append)
+
+    def _progress(self):
+        return [text for text in self.logged if "Download..." in text]
+
+    def test_progress_rewrites_one_line_and_ends_it_once(self):
+        self._install(_FakeDownload(40 * 256 * 1024))
+        progress = self._progress()
+        self.assertGreater(len(progress), 5)
+        self.assertTrue(all(text.startswith("\r") for text in progress))
+        self.assertTrue(all(not text.endswith("\n") for text in progress))
+        self.assertIn("Download... 100%", progress[-1])
+        text = "".join(self.logged)
+        self.assertEqual(text.count("Download... 100%\n"), 1)
+
+    def test_a_broken_download_still_ends_the_progress_line(self):
+        ok, message = self._install(_FakeDownload(40 * 256 * 1024, fail_after=10 * 256 * 1024))
+        self.assertFalse(ok)
+        self.assertIn("Download fallito", message)
+        text = "".join(self.logged)
+        self.assertTrue(text.endswith("\n"))
+        self.assertNotIn("Download... 100%", text)
+
+
 if __name__ == "__main__":
     unittest.main()
