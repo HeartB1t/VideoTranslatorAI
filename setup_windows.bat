@@ -1015,11 +1015,14 @@ echo  [*] Upgrading pip...
 :: The upgrade itself succeeds; only the trailing cleanup whisper is hidden.
 "%PYTHON_EXE%" -m pip install --upgrade pip --quiet 2>nul
 
-:: NB: pyannote.audio<4.0 kept in its OWN variable, NOT echoed expanded.
-:: cmd.exe parses '<' as input redirection BEFORE quote handling on `echo`,
-:: so `echo !PACKAGES!` would syntax-error on the '<'. Splitting it out
-:: keeps the install line robust and the echo safe.
-set "PYANNOTE_PIN="pyannote.audio<4.0""
+:: NB: pyannote.audio<4.0 kept in its OWN variable, quoted where it is used
+:: and never echoed: cmd.exe reads an unquoted '<' as input redirection.
+:: One level of quotes only, the same pattern as MPV_PIN. With nested quotes
+:: the second '"' closed the string, '<4.0' became a redirection from a file
+:: that does not exist, the `set` failed ("cannot find the file specified")
+:: and the variable stayed empty: pyannote.audio was never installed and the
+:: GUI had to install it at first start (Windows 11 VM, 2026-09-27).
+set "PYANNOTE_PIN=pyannote.audio<4.0"
 set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses torchcodec silero-vad keyring"
 
 "%PYTHON_EXE%" -c "import sys; sys.exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
@@ -1043,7 +1046,7 @@ echo  [*] Installing ctranslate2...
 "%PYTHON_EXE%" -m pip install ctranslate2 --quiet
 
 echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)...
-"%PYTHON_EXE%" -m pip install %PYANNOTE_PIN% !PACKAGES! --quiet
+"%PYTHON_EXE%" -m pip install "%PYANNOTE_PIN%" !PACKAGES! --quiet
 if errorlevel 1 (
     echo  [!] Error installing Python packages.
     call :logfile "Step 3/6 pipeline packages: FAILED - pip install of faster-whisper, demucs, edge-tts and the rest"

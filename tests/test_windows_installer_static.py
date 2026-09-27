@@ -67,6 +67,16 @@ class WindowsInstallerStaticTests(unittest.TestCase):
                 self.assertNotIn("MPV_PIN", line)
         self.assertIn(PIN, (ROOT / "requirements-player.txt").read_text(encoding="utf-8"))
 
+    def test_the_pyannote_pin_has_one_level_of_quotes_and_is_quoted_where_used(self):
+        # Nested quotes made cmd read '<4.0' as a redirection: the set failed
+        # silently and pyannote.audio was never installed (Windows 11 VM, 2026-09-27).
+        self.assertIn('set "PYANNOTE_PIN=pyannote.audio<4.0"', self.text)
+        self.assertIn('-m pip install "%PYANNOTE_PIN%" !PACKAGES! --quiet', self.text)
+        self.assertNotRegex(self.flat, re.compile(r'^set "[A-Z_0-9]+="[^"\n]*[<>]', re.M))
+        for line in self.lines:
+            if line.lstrip().lower().startswith("echo"):
+                self.assertNotIn("PYANNOTE_PIN", line)
+
     def test_libmpv_install_runs_from_the_install_dir_and_never_fails_the_setup(self):
         self.assertIn('-m videotranslator.libmpv_runtime install --dest "%MPV_DIR%"', self.text)
         body = self._label_body("step_player", ":player_check")
