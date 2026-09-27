@@ -162,10 +162,15 @@ class LiveBar(tk.Frame):
             activebackground=pal.SURFACE, activeforeground=pal.FG,
             font="VT.Small", takefocus=1)
         self._chk_original_mute_idle.pack(side="left", padx=(0, 4))
-        self._el_wrap, self._el_button = self._make_button(
+        # Same outline as the check boxes next to it (their default 1 px frame).
+        self._el_button = tk.Button(
             row_voice, text=self._s("live_btn_elevenlabs"), font="VT.Small",
-            padx=6, pady=1, command=lambda: self._emit("elevenlabs"))
-        self._el_wrap.pack(side="left", padx=(2, 8))
+            command=lambda: self._emit("elevenlabs"), relief="flat", bd=1,
+            highlightthickness=1, padx=6, pady=1, cursor="hand2",
+            highlightbackground=self._chk_original_mute_idle.cget("highlightbackground"),
+            bg=pal.SURFACE, fg=pal.FG, activebackground=pal.BTN, activeforeground=pal.FG,
+            highlightcolor=pal.ACC)
+        self._el_button.pack(side="left", padx=(2, 8))
 
         self._voice_label = tk.Label(
             row_voice, text="", bg=pal.SURFACE, fg=pal.FG2, font="VT.Small",
@@ -439,6 +444,10 @@ class LiveBar(tk.Frame):
         for child in (*self._idle.winfo_children(), *self._running.winfo_children()):
             child.configure(bg=pal.SURFACE)
             for gc in child.winfo_children():
+                if isinstance(gc, tk.Button) and gc is self._el_button:
+                    gc.configure(bg=pal.SURFACE, fg=pal.FG, activebackground=pal.BTN,
+                                 activeforeground=pal.FG, highlightcolor=pal.ACC)
+                    continue
                 if isinstance(gc, (tk.Label, tk.Radiobutton, tk.Checkbutton)):
                     opts = {"bg": pal.SURFACE}
                     if isinstance(gc, tk.Label):
