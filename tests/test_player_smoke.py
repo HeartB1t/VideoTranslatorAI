@@ -1,10 +1,17 @@
-"""Opt-in real libmpv smoke test for the file-player adapter."""
+"""Opt-in real libmpv smoke test for the file-player adapter.
+
+Runs with VTAI_PLAYER_REAL=1 on an X11 display (Xvfb is enough). It needs
+nothing outside a clean checkout but the player's own requirements: libmpv
+with python-mpv, loaded the way the app loads them, and ffmpeg, which makes
+the clip. The clip is video only, so the test never plays a sound. Once the
+test is requested, a missing libmpv or ffmpeg fails it with the reason
+instead of skipping it.
+"""
 
 import ctypes
-import ctypes.util
-import importlib
 import os
-import sys
+import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -20,32 +27,33 @@ from videotranslator.player_engine import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
-PROBE = ROOT / "_dev" / "research" / "player-2026-09-25" / "probe"
+def _load_mpv():
+    from videotranslator import libmpv_runtime
+    return libmpv_runtime.load_mpv()       # PlayerUnavailable carries the reason
 
 
-def _load_probe_mpv():
-    wheel = PROBE / "wheel"
-    library = PROBE / "lib" / "libmpv.so.2"
-    lua = PROBE / "lib" / "liblua5.2.so.0"
-    original_find = ctypes.util.find_library
-
-    def find_library(name):
-        return str(library) if name == "mpv" else original_find(name)
-
-    ctypes.CDLL(str(lua), mode=ctypes.RTLD_GLOBAL)
-    sys.path.insert(0, str(wheel))
-    ctypes.util.find_library = find_library
-    try:
-        return importlib.import_module("mpv")
-    finally:
-        ctypes.util.find_library = original_find
-        sys.path.remove(str(wheel))
+def _make_clip(folder: Path) -> Path:
+    """Two seconds of test pattern, no audio track."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise AssertionError("VTAI_PLAYER_REAL=1 needs ffmpeg on PATH to make the clip")
+    clip = folder / "clip.mp4"
+    subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=2",
+                    "-an", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", str(clip)],
+                   check=True, capture_output=True, timeout=60)
+    return clip
 
 
 @unittest.skipUnless(os.environ.get("VTAI_PLAYER_REAL") == "1",
                      "set VTAI_PLAYER_REAL=1 for the native libmpv smoke test")
 class RealMpvSmokeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._tmp.cleanup)
+        cls.clip = _make_clip(Path(cls._tmp.name))
+
     @staticmethod
     def _close_with_tk_pump(root, backend):
         result = []
@@ -65,7 +73,7 @@ class RealMpvSmokeTests(unittest.TestCase):
             self.skipTest("an X11 display is required")
         import tkinter as tk
 
-        mpv_module = _load_probe_mpv()
+        mpv_module = _load_mpv()
         root = tk.Tk()
         root.geometry("640x400+0+0")
         host = tk.Frame(root, bg="#000000")
@@ -78,7 +86,7 @@ class RealMpvSmokeTests(unittest.TestCase):
             wid=host.winfo_id(), bridge=bridge, mixer=VolumeMixer(),
             vo_profile="x11sw", mpv_module=mpv_module, sys_platform="linux",
         )
-        media = PROBE / "media" / "clip.mp4"
+        media = self.clip
         result = []
         try:
             backend.load(str(media), paused=True)
@@ -115,7 +123,7 @@ class RealMpvSmokeTests(unittest.TestCase):
             self.skipTest("an X11 display is required")
         import tkinter as tk
 
-        mpv_module = _load_probe_mpv()
+        mpv_module = _load_mpv()
         root = tk.Tk()
         root.geometry("640x400+0+0")
         host = tk.Frame(root, bg="#000000")
@@ -135,7 +143,7 @@ class RealMpvSmokeTests(unittest.TestCase):
         failed_closed = False
         fallback_closed = False
         try:
-            failed.load(str(PROBE / "media" / "clip.mp4"), paused=True)
+            failed.load(str(self.clip), paused=True)
             lines = []
             deadline = time.monotonic() + 5.0
             detected = False
@@ -159,7 +167,7 @@ class RealMpvSmokeTests(unittest.TestCase):
                 wid=host.winfo_id(), bridge=EventBridge(), mixer=VolumeMixer(),
                 vo_profile="x11sw", mpv_module=mpv_module, sys_platform="linux",
             )
-            fallback.load(str(PROBE / "media" / "clip.mp4"), paused=True)
+            fallback.load(str(self.clip), paused=True)
             for _ in range(20):
                 root.update()
                 time.sleep(0.01)
