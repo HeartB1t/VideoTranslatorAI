@@ -114,6 +114,21 @@ class DialogTests(unittest.TestCase):
         self.assertEqual(self.applied, [])
         self.assertEqual(dlg._status.cget("text"), _s("mdl_busy"))
 
+    def test_busy_is_explained_and_apply_greys_out_until_it_ends(self):
+        dlg = self._dialog()
+        pal = dlg._pal
+        self.assertEqual(dlg._buttons["apply"].cget("bg"), pal.ACC)
+        self.busy = True
+        dlg._poll()                                  # noticed without any click
+        self.assertEqual(dlg._status.cget("text"), _s("mdl_busy"))
+        self.assertEqual(dlg._buttons["apply"].cget("bg"), pal.BTN)
+        self.assertEqual(dlg._buttons["apply"].cget("disabledforeground"), pal.FG2)
+        self.busy = False
+        dlg._poll()
+        self.assertEqual(dlg._status.cget("text"), "")
+        self.assertEqual(str(dlg._buttons["apply"].cget("state")), "normal")
+        self.assertEqual(dlg._buttons["apply"].cget("bg"), pal.ACC)
+
     def test_download_enabled_only_for_missing_whisper_models(self):
         dlg = self._dialog()
         self.assertEqual(str(dlg._buttons["download"].cget("state")), "disabled")

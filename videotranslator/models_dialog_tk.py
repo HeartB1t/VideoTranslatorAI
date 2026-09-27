@@ -110,6 +110,7 @@ class ModelsDialog:
         self._poll_after: str | None = None
         self._closed = False
         self._choice_keys: dict[str, list[str]] = {}
+        self._last_busy: bool | None = None
         pal = self._pal
 
         win = tk.Toplevel(parent, bg=pal.BG)
@@ -205,6 +206,8 @@ class ModelsDialog:
                 break
             self._handle(kind, value)
         self._poll_download()
+        if self._busy() != self._last_busy:     # a job or live session started/ended
+            self._set_buttons()
         self._schedule_poll()
 
     def _handle(self, kind: str, value: Any) -> None:
@@ -306,6 +309,19 @@ class ModelsDialog:
         }
         for name, enabled in states.items():
             self._buttons[name].configure(state="normal" if enabled else "disabled")
+        # The accent-filled Apply looks the same when disabled: grey it out.
+        pal = self._pal
+        if states["apply"]:
+            self._buttons["apply"].configure(bg=pal.ACC)
+        else:
+            self._buttons["apply"].configure(bg=pal.BTN, disabledforeground=pal.FG2)
+        # Say why the actions are off, instead of leaving grey buttons.
+        self._last_busy = busy
+        current = self._status.cget("text")
+        if ready and busy and not working and not current:
+            self._set_status(self._s("mdl_busy"))
+        elif not busy and current == self._s("mdl_busy"):
+            self._set_status("")
 
     def _set_status(self, text: str) -> None:
         self._status.configure(text=text)
