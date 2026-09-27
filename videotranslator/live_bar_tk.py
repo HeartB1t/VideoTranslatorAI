@@ -385,6 +385,9 @@ class LiveBar(tk.Frame):
 
     def show_banner(self, key: str, params: dict | None = None, *,
                     with_switch: bool = False, is_error: bool = False) -> None:
+        if (key, dict(params or {})) != (self._banner_key, self._banner_params):
+            # A new warning or error: also to the log (the bar repaints at 4 Hz).
+            self._log(self._s(key).format_map(_SafeDict(dict(params or {}))))
         self._banner_key = key
         self._banner_params = dict(params or {})
         self._banner_is_error = is_error

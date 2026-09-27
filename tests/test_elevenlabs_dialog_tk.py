@@ -176,6 +176,22 @@ class DialogTests(unittest.TestCase):
         self.assertFalse(dlg._fallback.get())
 
 
+    def test_paid_voices_are_tagged_last_and_explained_on_a_free_plan(self):
+        voices = [Voice("p", "Carmelo", paid_only=True), Voice("r", "Roger")]
+        cache = {**ed.catalog_to_cache(voices, MODELS), "tier": "free"}
+        dlg = self._dialog({"catalog": cache, "voice_id": "p",
+                            "model_id": "eleven_flash_v2_5"})
+        self.assertEqual([v.voice_id for v in dlg._voices], ["r", "p"])
+        self.assertIn(_s("el_voice_paid_tag"), dlg._voice_combo.cget("values")[1])
+        self.assertEqual(dlg._status.cget("text"), _s("el_err_paid_voice"))
+        dlg._voice_combo.current(0)
+        dlg._voice_changed()
+        self.assertEqual(dlg._status.cget("text"), "")
+        self.assertEqual(dlg.settings()["catalog"]["tier"], "free")
+        paid = {**cache, "tier": "creator"}
+        dlg = self._dialog({"catalog": paid, "voice_id": "p"})
+        self.assertNotIn(_s("el_voice_paid_tag"), " ".join(dlg._voice_combo.cget("values")))
+
     def test_no_speaker_without_a_hub(self):
         self.assertIsNone(self._dialog().speaker)
 

@@ -46,8 +46,8 @@ _LANGUAGE_CODE_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5")
 
 
 class ElevenLabsError(RuntimeError):
-    """A failed call. ``kind``: auth, quota, rate_limited, invalid, timeout,
-    unavailable (network or server)."""
+    """A failed call. ``kind``: auth, quota, paid_voice (a voice the plan may not
+    use through the API), rate_limited, invalid, timeout, unavailable."""
 
     def __init__(self, kind: str, message: str = "") -> None:
         super().__init__(message or kind)
@@ -61,6 +61,9 @@ def classify_http(status: int, body: bytes) -> str:
     except Exception:
         pass
     code = detail.get("status") if isinstance(detail, dict) else None
+    reason = detail.get("code") if isinstance(detail, dict) else None
+    if reason == "paid_plan_required":
+        return "paid_voice"
     if code in ("quota_exceeded", "insufficient_credits") or status == 402:
         return "quota"
     if status in (401, 403):
@@ -81,6 +84,7 @@ class Voice:
     languages: tuple[str, ...] = ()        # verified languages, when listed
     preview_url: str = ""                  # free sample of the voice (usually English)
     previews: tuple[tuple[str, str], ...] = ()   # (language, sample URL) per language
+    paid_only: bool = False                # a library voice: free plans cannot use it via API
 
     def sample_url(self, lang: str) -> str:
         """The free sample in ``lang`` when the voice has one, else the default."""
@@ -129,11 +133,14 @@ def parse_voices(data: dict) -> list[Voice]:
             code, url = _lang(v.get("language", "")), v.get("preview_url") or ""
             if code and url and code not in previews:
                 previews[code] = str(url)
+        # Free plans may use the default (premade) voices and their own ones;
+        # voices added from the library need a paid plan through the API.
+        paid_only = item.get("category") not in (None, "premade") and not item.get("is_owner")
         if item.get("voice_id"):
             voices.append(Voice(item["voice_id"], item.get("name") or item["voice_id"],
                                 labels.get("accent", "") or "", labels.get("gender", "") or "",
                                 langs, str(item.get("preview_url") or ""),
-                                tuple(sorted(previews.items()))))
+                                tuple(sorted(previews.items())), paid_only))
     return sorted(voices, key=lambda v: v.name.lower())
 
 
@@ -338,10 +345,10 @@ class ElevenLabsClipSynth:
                                             speed=rate_to_speed(rate_pct),
                                             timeout=max(0.5, min(remaining, 15.0)))
         except ElevenLabsError as exc:
-            if exc.kind in ("auth", "quota"):
+            if exc.kind in ("auth", "quota", "paid_voice"):
                 self.fatal = exc.kind
-            self._breaker.record_failure(kind="quota" if exc.kind in ("auth", "quota")
-                                         else "tts")
+            self._breaker.record_failure(
+                kind="quota" if exc.kind in ("auth", "quota", "paid_voice") else "tts")
             self.results.put((seg_id, gen, None, f"elevenlabs_{exc.kind}"))
             return
         except Exception as exc:                   # noqa: BLE001 - never kill the worker

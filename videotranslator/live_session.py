@@ -929,6 +929,8 @@ class LiveSession:
             elif isinstance(action, StartClip):
                 if self._voice is not None:
                     self._voice.start(action.speed)
+                self._log(f"live: voice line {getattr(action, 'seg_id', '?')} spoken "
+                          f"(speed {action.speed:.2f})")
                 self._voice_state = "playing"
                 self._lead_start_mono = self._clock()
                 self._lead_cal.on_start(self._lead_start_mono, self._preload_skip)
@@ -1305,6 +1307,8 @@ class LiveSession:
                 # An online engine whose breaker is open keeps the original text
                 # (shown in the source language) without spending a call.
                 if online and not breaker.allow():
+                    self._log(f"live: {sentence.start:.1f}s kept original ({key} paused "
+                              f"after errors): {sentence.text[:120]}")
                     self._emit_segment(sentence.start, sentence.end, sentence.text,
                                        None, italic=True, gen=sentence.gen,
                                        seg_id=None)
@@ -1313,6 +1317,14 @@ class LiveSession:
                                                timeout_s=timeout)
                 if sentence.gen != self._gen:
                     continue
+                # Every sentence to the log: what was heard, what came out, how long.
+                if outcome.ok:
+                    self._log(f"live: {sentence.start:.1f}s {sentence.text[:120]} -> "
+                              f"{outcome.text[:120]} ({outcome.latency_s:.1f} s)")
+                else:
+                    self._log(f"live: {sentence.start:.1f}s kept original "
+                              f"({outcome.error}, {outcome.latency_s:.1f} s): "
+                              f"{sentence.text[:120]}")
                 if online:
                     if outcome.ok:
                         breaker.record_success()

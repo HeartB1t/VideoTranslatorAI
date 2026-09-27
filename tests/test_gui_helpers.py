@@ -234,6 +234,7 @@ class LaunchLiveSessionConfigTests(unittest.TestCase):
             _ollama_url_var=_Var(""), _ollama_model_var=_Var(""),
             _voice_backend=None, _player_backend=Mock(), _player_clock=Mock(),
             _player_log=Mock(), _log_line=Mock(), _s=lambda key: key,
+            _log_event=Mock(), _live_voice_info_text=lambda: "voice",
             _redirecting_thread_factory=None,
             _schedule_live_poll=Mock(), _request_voice_backend=Mock(),
             _refresh_live_bar_enabled=Mock(), _live_resolving=True)

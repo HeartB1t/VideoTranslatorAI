@@ -1755,6 +1755,70 @@ _VC_T: dict[str, tuple[str, ...]] = {
     'vi': ('Chỉ dành cho dịch thời gian thực: thay giọng Edge-TTS của lồng tiếng trực tiếp. Bắt đầu dịch không dùng nó.', 'Áp dụng cho Bắt đầu dịch (lồng tiếng cả tệp). Dịch thời gian thực không dùng nó.', 'ElevenLabs…', 'Giọng lồng tiếng: Edge-TTS, {voice} (miễn phí, trực tuyến).', 'Giọng lồng tiếng: ElevenLabs, {voice} (trực tuyến, trả phí theo ký tự).', 'ElevenLabs đang bật nhưng thiếu khóa hoặc giọng: sẽ dùng Edge-TTS.', 'Đã tắt giọng lồng tiếng: chỉ phụ đề.', 'Voicebox không phản hồi tại {url}: lần dịch này dùng Edge-TTS.'),
 }
 
+# --- ElevenLabs: slow model warning for the live dub -----------------------------
+_ELS_KEYS = ('el_slow_model',)
+
+_ELS_T: dict[str, tuple[str, ...]] = {
+    'en': ('For real-time translation Flash v2.5 is the fastest model: {model} can be too slow to keep up with the video.',),
+    'it': ('Per la traduzione in tempo reale il modello più veloce è Flash v2.5: {model} può essere troppo lento per stare al passo con il video.',),
+    'ar': ('للترجمة الفورية أسرع نموذج هو Flash v2.5: قد يكون {model} أبطأ من أن يواكب الفيديو.',),
+    'zh': ('实时翻译最快的模型是 Flash v2.5：{model} 可能太慢，跟不上视频。',),
+    'cs': ('Pro překlad v reálném čase je nejrychlejší model Flash v2.5: {model} může být příliš pomalý, aby stačil videu.',),
+    'da': ('Til realtidsoversættelse er Flash v2.5 den hurtigste model: {model} kan være for langsom til at følge med videoen.',),
+    'nl': ('Voor realtime vertaling is Flash v2.5 het snelste model: {model} kan te traag zijn om de video bij te houden.',),
+    'fi': ('Reaaliaikaiseen käännökseen nopein malli on Flash v2.5: {model} voi olla liian hidas pysymään videon tahdissa.',),
+    'fr': ('Pour la traduction en temps réel, le modèle le plus rapide est Flash v2.5 : {model} peut être trop lent pour suivre la vidéo.',),
+    'de': ('Für die Echtzeitübersetzung ist Flash v2.5 das schnellste Modell: {model} kann zu langsam sein, um mit dem Video Schritt zu halten.',),
+    'el': ('Για μετάφραση σε πραγματικό χρόνο το ταχύτερο μοντέλο είναι το Flash v2.5: το {model} μπορεί να είναι πολύ αργό για να ακολουθεί το βίντεο.',),
+    'hi': ('रीयल-टाइम अनुवाद के लिए सबसे तेज़ मॉडल Flash v2.5 है: {model} वीडियो के साथ चलने के लिए बहुत धीमा हो सकता है।',),
+    'hu': ('Valós idejű fordításhoz a leggyorsabb modell a Flash v2.5: a(z) {model} túl lassú lehet ahhoz, hogy lépést tartson a videóval.',),
+    'id': ('Untuk terjemahan waktu nyata, model tercepat adalah Flash v2.5: {model} bisa terlalu lambat untuk mengikuti video.',),
+    'ja': ('リアルタイム翻訳で最も速いモデルは Flash v2.5 です：{model} は動画に追いつけないほど遅い場合があります。',),
+    'ko': ('실시간 번역에는 Flash v2.5가 가장 빠른 모델입니다: {model}은(는) 동영상을 따라가기에 너무 느릴 수 있습니다.',),
+    'no': ('For sanntidsoversettelse er Flash v2.5 den raskeste modellen: {model} kan være for treg til å holde følge med videoen.',),
+    'pl': ('Do tłumaczenia w czasie rzeczywistym najszybszy jest model Flash v2.5: {model} może być zbyt wolny, by nadążyć za wideo.',),
+    'pt': ('Para a tradução em tempo real, o modelo mais rápido é o Flash v2.5: {model} pode ser demasiado lento para acompanhar o vídeo.',),
+    'ro': ('Pentru traducerea în timp real, cel mai rapid model este Flash v2.5: {model} poate fi prea lent ca să țină pasul cu videoclipul.',),
+    'ru': ('Для перевода в реальном времени самая быстрая модель Flash v2.5: {model} может не успевать за видео.',),
+    'es': ('Para la traducción en tiempo real el modelo más rápido es Flash v2.5: {model} puede ser demasiado lento para seguir el vídeo.',),
+    'sv': ('För realtidsöversättning är Flash v2.5 den snabbaste modellen: {model} kan vara för långsam för att hänga med videon.',),
+    'tr': ("Gerçek zamanlı çeviri için en hızlı model Flash v2.5'tir: {model} videoya yetişemeyecek kadar yavaş olabilir.",),
+    'uk': ('Для перекладу в реальному часі найшвидша модель Flash v2.5: {model} може не встигати за відео.',),
+    'vi': ('Với dịch thời gian thực, mô hình nhanh nhất là Flash v2.5: {model} có thể quá chậm để theo kịp video.',),
+}
+
+# --- ElevenLabs voices that need a paid plan ---------------------------------------
+_ELP_KEYS = ('el_err_paid_voice', 'el_voice_paid_tag')
+
+_ELP_T: dict[str, tuple[str, ...]] = {
+    'en': ('This voice needs a paid ElevenLabs plan: with the free plan choose one of the default voices (Roger, Sarah, George...).', 'paid plan'),
+    'it': ('Questa voce richiede un piano ElevenLabs a pagamento: con il piano gratuito scegli una delle voci predefinite (Roger, Sarah, George...).', 'piano a pagamento'),
+    'ar': ('يتطلب هذا الصوت خطة ElevenLabs مدفوعة: مع الخطة المجانية اختر أحد الأصوات الافتراضية (Roger وSarah وGeorge...).', 'خطة مدفوعة'),
+    'zh': ('此语音需要 ElevenLabs 付费套餐：免费套餐请选择一个默认语音（Roger、Sarah、George……）。', '付费套餐'),
+    'cs': ('Tento hlas vyžaduje placený tarif ElevenLabs: s bezplatným tarifem zvolte některý z výchozích hlasů (Roger, Sarah, George...).', 'placený tarif'),
+    'da': ('Denne stemme kræver et betalt ElevenLabs-abonnement: med det gratis abonnement skal du vælge en af standardstemmerne (Roger, Sarah, George...).', 'betalt abonnement'),
+    'nl': ('Deze stem vereist een betaald ElevenLabs-abonnement: kies met het gratis abonnement een van de standaardstemmen (Roger, Sarah, George...).', 'betaald abonnement'),
+    'fi': ('Tämä ääni vaatii maksullisen ElevenLabs-tilauksen: valitse ilmaisella tilauksella jokin oletusäänistä (Roger, Sarah, George...).', 'maksullinen tilaus'),
+    'fr': ('Cette voix nécessite un forfait ElevenLabs payant : avec le forfait gratuit, choisissez une des voix par défaut (Roger, Sarah, George...).', 'forfait payant'),
+    'de': ('Diese Stimme erfordert einen kostenpflichtigen ElevenLabs-Tarif: mit dem kostenlosen Tarif eine der Standardstimmen wählen (Roger, Sarah, George...).', 'kostenpflichtiger Tarif'),
+    'el': ('Αυτή η φωνή απαιτεί συνδρομή επί πληρωμή στο ElevenLabs: με το δωρεάν πρόγραμμα επιλέξτε μία από τις προεπιλεγμένες φωνές (Roger, Sarah, George...).', 'συνδρομή επί πληρωμή'),
+    'hi': ('इस आवाज़ के लिए ElevenLabs का सशुल्क प्लान चाहिए: मुफ़्त प्लान में डिफ़ॉल्ट आवाज़ों में से कोई चुनें (Roger, Sarah, George...)।', 'सशुल्क प्लान'),
+    'hu': ('Ehhez a hanghoz fizetős ElevenLabs-csomag kell: az ingyenes csomaggal válassz az alapértelmezett hangok közül (Roger, Sarah, George...).', 'fizetős csomag'),
+    'id': ('Suara ini memerlukan paket ElevenLabs berbayar: dengan paket gratis pilih salah satu suara bawaan (Roger, Sarah, George...).', 'paket berbayar'),
+    'ja': ('この音声には ElevenLabs の有料プランが必要です：無料プランではデフォルト音声（Roger、Sarah、George など）を選んでください。', '有料プラン'),
+    'ko': ('이 음성은 ElevenLabs 유료 요금제가 필요합니다: 무료 요금제에서는 기본 음성(Roger, Sarah, George...) 중 하나를 고르세요.', '유료 요금제'),
+    'no': ('Denne stemmen krever et betalt ElevenLabs-abonnement: med gratisabonnementet velger du en av standardstemmene (Roger, Sarah, George...).', 'betalt abonnement'),
+    'pl': ('Ten głos wymaga płatnego planu ElevenLabs: w planie darmowym wybierz jeden z głosów domyślnych (Roger, Sarah, George...).', 'plan płatny'),
+    'pt': ('Esta voz precisa de um plano pago do ElevenLabs: com o plano gratuito escolha uma das vozes predefinidas (Roger, Sarah, George...).', 'plano pago'),
+    'ro': ('Această voce necesită un abonament ElevenLabs plătit: cu planul gratuit alege una dintre vocile implicite (Roger, Sarah, George...).', 'abonament plătit'),
+    'ru': ('Для этого голоса нужен платный тариф ElevenLabs: на бесплатном тарифе выберите один из стандартных голосов (Roger, Sarah, George...).', 'платный тариф'),
+    'es': ('Esta voz requiere un plan de pago de ElevenLabs: con el plan gratuito elige una de las voces predeterminadas (Roger, Sarah, George...).', 'plan de pago'),
+    'sv': ('Den här rösten kräver ett betalt ElevenLabs-abonnemang: med gratisabonnemanget väljer du en av standardrösterna (Roger, Sarah, George...).', 'betalt abonnemang'),
+    'tr': ('Bu ses ücretli bir ElevenLabs planı gerektirir: ücretsiz planda varsayılan seslerden birini seçin (Roger, Sarah, George...).', 'ücretli plan'),
+    'uk': ('Для цього голосу потрібен платний тариф ElevenLabs: на безкоштовному тарифі оберіть один зі стандартних голосів (Roger, Sarah, George...).', 'платний тариф'),
+    'vi': ('Giọng này cần gói ElevenLabs trả phí: với gói miễn phí hãy chọn một trong các giọng mặc định (Roger, Sarah, George...).', 'gói trả phí'),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
            **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
@@ -1762,7 +1826,9 @@ MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
            **dict(zip(_VP_KEYS, _VP_T.get(lang, ()))),
            **dict(zip(_SK_KEYS, _SK_T.get(lang, ()))),
            **dict(zip(_BM_KEYS, _BM_T.get(lang, ()))),
-           **dict(zip(_VC_KEYS, _VC_T.get(lang, ())))}
+           **dict(zip(_VC_KEYS, _VC_T.get(lang, ()))),
+           **dict(zip(_ELS_KEYS, _ELS_T.get(lang, ()))),
+           **dict(zip(_ELP_KEYS, _ELP_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 
@@ -1777,7 +1843,8 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
     for keys, table in ((_KEYS, _T), (_EL_KEYS, _EL_T), (_VB_KEYS, _VB_T),
                         (_GEN_KEYS, _GEN_T), (_VP_KEYS, _VP_T),
                         (_SK_KEYS, _SK_T), (_BM_KEYS, _BM_T),
-                        (_VC_KEYS, _VC_T)):
+                        (_VC_KEYS, _VC_T), (_ELS_KEYS, _ELS_T),
+                        (_ELP_KEYS, _ELP_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

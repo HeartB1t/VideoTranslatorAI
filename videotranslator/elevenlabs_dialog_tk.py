@@ -18,11 +18,16 @@ from typing import Any, Callable
 
 from .elevenlabs_tts import (ElevenLabsClient, ElevenLabsError, Model, Voice,
                              pick_live_model)
+
+# Fast enough for a live dub; the others (v3, multilingual v2) lag behind.
+LOW_LATENCY_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2",
+                      "eleven_turbo_v2")
 from .voice_preview import fetch_sample
 from .voice_preview_tk import SpeakerButton, error_key
 
 _ERROR_KEYS = {kind: f"el_err_{kind}" for kind in
                ("auth", "quota", "rate_limited", "unavailable", "timeout", "invalid")}
+_ERROR_KEYS["paid_voice"] = "el_err_paid_voice"
 
 
 def voices_from_cache(items) -> list[Voice]:
@@ -33,7 +38,8 @@ def voices_from_cache(items) -> list[Voice]:
                              (item.get("previews") or {}).items())
             out.append(Voice(item["voice_id"], item["name"], item.get("accent", ""),
                              item.get("gender", ""), tuple(item.get("languages", ())),
-                             str(item.get("preview_url") or ""), previews))
+                             str(item.get("preview_url") or ""), previews,
+                             bool(item.get("paid_only", False))))
         except (KeyError, TypeError, AttributeError):
             continue
     return out
@@ -53,7 +59,8 @@ def models_from_cache(items) -> list[Model]:
 def catalog_to_cache(voices: list[Voice], models: list[Model]) -> dict:
     return {"voices": [{"voice_id": v.voice_id, "name": v.name, "accent": v.accent,
                         "gender": v.gender, "languages": list(v.languages),
-                        "preview_url": v.preview_url, "previews": dict(v.previews)}
+                        "preview_url": v.preview_url, "previews": dict(v.previews),
+                        "paid_only": v.paid_only}
                        for v in voices],
             "models": [{"model_id": m.model_id, "name": m.name,
                         "languages": list(m.languages), "can_tts": m.can_tts}
@@ -89,7 +96,8 @@ class ElevenLabsDialog:
         self._closed = False
         self._checking = False
         catalog = settings.get("catalog") or {}
-        self._voices = voices_from_cache(catalog.get("voices"))
+        self._tier = str(catalog.get("tier") or "")          # "" = not checked yet
+        self._voices = self._usable_first(voices_from_cache(catalog.get("voices")))
         self._models = [m for m in models_from_cache(catalog.get("models")) if m.can_tts]
         pal = theme.palette
 
@@ -183,9 +191,20 @@ class ElevenLabsDialog:
         mark = "✓" if model.supports(self._lang) else "✗"
         return f"{mark} {model.name} · {self._s(key).format(lang=self._lang)}"
 
+    def _paid_only(self, voice: Voice) -> bool:
+        """A voice this account may not use: library voices on a free (or not
+        yet checked) plan."""
+        return voice.paid_only and self._tier in ("", "free")
+
+    def _usable_first(self, voices: list[Voice]) -> list[Voice]:
+        return sorted(voices, key=lambda v: (self._paid_only(v), v.name.lower()))
+
     def _voice_text(self, voice: Voice) -> str:
-        return voice.label() + (f" · {', '.join(voice.languages)}"
+        text = voice.label() + (f" · {', '.join(voice.languages)}"
                                 if voice.languages else "")
+        if self._paid_only(voice):
+            text += f" · {self._s('el_voice_paid_tag')}"
+        return text
 
     def _fill(self, model_id: str | None, voice_id: str | None) -> None:
         self._model_combo.configure(values=[self._model_text(m) for m in self._models])
@@ -206,10 +225,21 @@ class ElevenLabsDialog:
 
     def _check_language(self) -> None:
         model = self.selected_model()
+        voice = self.selected_voice()
         if model is not None and not model.supports(self._lang):
             self._set_status(self._s("el_model_no_lang").format(lang=self._lang))
-        elif self._status.cget("text") == self._s("el_model_no_lang").format(lang=self._lang):
+        elif voice is not None and self._paid_only(voice):
+            self._set_status(self._s("el_err_paid_voice"))
+        elif model is not None and model.model_id not in LOW_LATENCY_MODELS:
+            self._set_status(self._s("el_slow_model").format(model=model.name))
+        elif self._status.cget("text") in self._model_hints():
             self._set_status("")
+
+    def _model_hints(self) -> set[str]:
+        hints = {self._s("el_model_no_lang").format(lang=self._lang),
+                 self._s("el_err_paid_voice")}
+        hints.update(self._s("el_slow_model").format(model=m.name) for m in self._models)
+        return hints
 
     def selected_model(self) -> Model | None:
         index = self._model_combo.current()
@@ -248,6 +278,7 @@ class ElevenLabsDialog:
         self._hub.toggle(self._sample_key(voice, url), lambda: loader(url))
 
     def _voice_changed(self) -> None:
+        self._check_language()
         if self._hub is not None:
             self._hub.stop_if("el:")
 
@@ -324,7 +355,8 @@ class ElevenLabsDialog:
             model = self.selected_model()
             voice = self.selected_voice()
             self._models = [m for m in models if m.can_tts]
-            self._voices = list(voices)
+            self._tier = account.tier or "free"
+            self._voices = self._usable_first(list(voices))
             self._set_status("")
             self._fill(model.model_id if model else None, voice.voice_id if voice else None)
             if self._pending_preview:
@@ -344,7 +376,8 @@ class ElevenLabsDialog:
                 "voice_id": voice.voice_id if voice else "",
                 "voice_name": voice.name if voice else "",
                 "fallback": bool(self._fallback.get()),
-                "catalog": catalog_to_cache(self._voices, self._models)}
+                "catalog": {**catalog_to_cache(self._voices, self._models),
+                            "tier": self._tier}}
 
     def save(self) -> bool:
         current = self.settings()

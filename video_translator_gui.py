@@ -9277,6 +9277,11 @@ class App(tk.Tk):
             self._refresh_live_bar_enabled()
             return
         self._live_bar.clear_banner()
+        self._log_event(
+            "log_live_start", mode=raw["mode"], engine=raw["engine"],
+            asr=getattr(settings, "asr_model", "auto"),
+            voice=self._live_voice_info_text())
+        self._live_last_status = None
         self._live_startup_pending = True
         self._live_bar.set_active(True)
         self._live_bar.set_start_enabled(False)
@@ -9295,6 +9300,7 @@ class App(tk.Tk):
         if session is None or self._destroying:
             return
         status = session.status()
+        self._live_last_status = status
         self._live_bar.render(status)
         if getattr(self, "_live_startup_pending", False) and status.startup_ready:
             session.release_startup_hold()
@@ -9318,6 +9324,11 @@ class App(tk.Tk):
 
     def _finish_live_session(self) -> None:
         session = self._live_session
+        last = getattr(self, "_live_last_status", None)
+        if session is not None and last is not None:
+            self._log_event("log_live_end", spoken=getattr(last, "voiced", 0),
+                            lost=getattr(last, "voice_dropped", 0))
+        self._live_last_status = None
         self._live_session = None
         self._live_stopping = False
         if self._live_poll_after is not None:
@@ -10885,12 +10896,9 @@ class App(tk.Tk):
             return True
         return str(onvalue) == "1" and str(value).lower() in ("true", "1")
 
-    def _log_widget_activation(self, widget, *, before: bool = True) -> None:
-        """Log a button, check box or radio button being used.
-
-        Called before Tk runs the command (``before``), so a check box logs the
-        state it is switching to and a radio button the value it selects.
-        """
+    def _log_widget_activation(self, widget) -> None:
+        """Log a button (before Tk runs its command, so the click precedes its
+        result), a check box or a radio button (its value once applied)."""
         try:
             name = self._widget_context(widget)
             if str(widget.cget("state")) == "disabled":
@@ -10898,14 +10906,17 @@ class App(tk.Tk):
                 return
             cls = widget.winfo_class()
             variable = str(widget.cget("variable")) if cls in ("Checkbutton", "Radiobutton") else ""
-            if cls == "Checkbutton" and variable:
-                on = self._is_on(self.getvar(variable), widget.cget("onvalue"))
-                if before:
-                    on = not on
-                self._log_event("log_on" if on else "log_off", name=name)
-            elif cls == "Radiobutton" and variable:
-                value = widget.cget("value") if before else self.getvar(variable)
-                self._log_event("log_choice", name=name, value=value)
+            if cls in ("Checkbutton", "Radiobutton") and variable:
+                # Tk toggles a check box at a different point for mouse and
+                # keyboard: read the value once the click has been applied.
+                def log_value(w=widget, v=variable, n=name, c=cls):
+                    with contextlib.suppress(Exception):
+                        if c == "Checkbutton":
+                            on = self._is_on(self.getvar(v), w.cget("onvalue"))
+                            self._log_event("log_on" if on else "log_off", name=n)
+                        else:
+                            self._log_event("log_choice", name=n, value=self.getvar(v))
+                self.after_idle(log_value)
             else:
                 self._log_event("log_click", name=name)
         except Exception:                                # noqa: BLE001 - logging must not break a click

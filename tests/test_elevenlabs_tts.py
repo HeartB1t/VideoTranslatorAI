@@ -113,6 +113,19 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(el.pick_live_model(models, "en").model_id, "eleven_multilingual_v2")
         self.assertIsNone(el.pick_live_model(models, "ja"))
 
+    def test_library_voices_on_a_free_plan_are_paid_voice_not_quota(self):
+        body = (b'{"detail":{"type":"payment_required","code":"paid_plan_required",'
+                b'"status":"payment_required"}}')
+        self.assertEqual(el.classify_http(402, body), "paid_voice")
+        self.assertEqual(el.classify_http(402, b'{"detail":{"status":"quota_exceeded"}}'),
+                         "quota")
+        voices = el.parse_voices({"voices": [
+            {"voice_id": "a", "name": "Roger", "category": "premade"},
+            {"voice_id": "b", "name": "Carmelo", "category": "professional"},
+            {"voice_id": "c", "name": "Mine", "category": "cloned", "is_owner": True}]})
+        self.assertEqual({v.name: v.paid_only for v in voices},
+                         {"Roger": False, "Carmelo": True, "Mine": False})
+
     def test_voice_samples_prefer_the_target_language(self):
         voices = el.parse_voices({"voices": [{
             "voice_id": "v1", "name": "Adam", "preview_url": "https://s.test/en.mp3",
