@@ -6187,6 +6187,7 @@ class App(tk.Tk):
         self._ollama_setup_running = False     # _ensure_ollama_ready_async, one at a time
         self._ollama_setup_pending = []        # its callers that arrived meanwhile
         self._ollama_pull_declined = set()     # models refused this session: not asked again
+        self._ollama_memory_checked = set()    # models checked against the memory this session
         self._ollama_slot_aware  = tk.BooleanVar(
             value=_ocfg.get("ollama_slot_aware", True)
         )
@@ -8682,15 +8683,16 @@ class App(tk.Tk):
                              "ollama_pull_else_model", "ollama_pull_else_google",
                              "ollama_pull_no_disk", "ollama_pull_heavy", "ollama_pull_tight")
 
-    def _ollama_pull_fit(self, model: str):
+    def _ollama_pull_fit(self, model: str, installed: bool = False):
         """Disk (where Ollama keeps its models) and memory check before
-        offering ``model``: a model_catalog.PullFit, or None when it cannot
-        tell. Worker thread."""
+        offering ``model``, memory only when it is ``installed``: a
+        model_catalog.PullFit, or None when it cannot tell. Worker thread."""
         try:
             from videotranslator.hardware_profile import detect_hardware
             from videotranslator.model_catalog import ollama_pull_fit
             hw = detect_hardware(model_dir=_ollama_models_dir())
-            return ollama_pull_fit(model, hw, size_gb=_ollama_model_size_gb(model))
+            return ollama_pull_fit(model, hw, size_gb=_ollama_model_size_gb(model),
+                                   installed=installed)
         except Exception:                          # noqa: BLE001 - advice, never a failure
             return None
 
@@ -10266,6 +10268,8 @@ class App(tk.Tk):
                 self._post_if_alive(
                     lambda: messagebox.showwarning("Ollama", warning, parent=self))
                 ask = False
+            if fit is not None and fit.verdict in ("too_big", "tight"):
+                self._ollama_memory_checked.add(model)     # the question says it
             if ask and self._ask_yes_no_sync("Ollama",
                                              _ollama_pull_question(texts, model, fallback, fit)):
                 ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async,
@@ -10285,6 +10289,20 @@ class App(tk.Tk):
                 return False
             if resolved_model != model:
                 self._log_async(f"[!] {health_msg}\n")
+
+        # The model is there: warn once a session when it is too big for the
+        # memory (the PC would swap until it froze; seen with qwen3:32b on a
+        # 12 GB VM without a GPU).
+        if resolved_model and resolved_model not in self._ollama_memory_checked:
+            self._ollama_memory_checked.add(resolved_model)
+            heavy = self._ollama_pull_fit(resolved_model, installed=True)
+            if heavy is not None and heavy.verdict == "too_big":
+                have = "?" if heavy.have_gb is None else f"{heavy.have_gb:.1f}"
+                warning = texts["ollama_pull_heavy"].format(
+                    model=resolved_model, need=f"{heavy.need_gb:g}", have=have)
+                self._log_async(f"[!] {warning}\n")
+                self._post_if_alive(
+                    lambda: messagebox.showwarning("Ollama", warning, parent=self))
 
         self._log_async(f"[+] Ollama pronto: {resolved_model or model} @ {url}\n")
         return True

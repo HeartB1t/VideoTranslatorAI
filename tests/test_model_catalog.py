@@ -147,3 +147,8 @@ class OllamaPullFitTests(unittest.TestCase):
         self.assertEqual(ollama_pull_fit("qwen3:4b", _hw(disk=2.0), size_gb=2.5).verdict,
                          "no_disk")
         self.assertIsNone(ollama_pull_fit("somebody/custom:1b", _hw()))
+
+    def test_an_installed_model_is_judged_on_memory_only(self):
+        from videotranslator.model_catalog import ollama_pull_fit
+        fit = ollama_pull_fit("qwen3:32b", _hw(ram=12.4, disk=3.6), installed=True)
+        self.assertEqual((fit.verdict, fit.need_gb, fit.have_gb), ("too_big", 32.0, 12.4))

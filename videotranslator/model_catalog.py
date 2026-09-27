@@ -255,9 +255,10 @@ class PullFit:
     gpu: bool
 
 
-def ollama_pull_fit(model: str, hw: HardwareInfo, *,
-                    size_gb: float | None = None) -> PullFit | None:
-    """Disk and memory check before offering to pull Ollama ``model``.
+def ollama_pull_fit(model: str, hw: HardwareInfo, *, size_gb: float | None = None,
+                    installed: bool = False) -> PullFit | None:
+    """Disk and memory check before offering to pull Ollama ``model``, or
+    before using it when it is ``installed`` (memory only).
 
     Catalogue models are judged like the models window judges them
     (``assess``); another model of known ``size_gb`` on disk space only.
@@ -269,6 +270,7 @@ def ollama_pull_fit(model: str, hw: HardwareInfo, *,
             return None
         opt = ModelOption("mt", model, model, True, round(size_gb * 1024))
     gpu = hw.vram_gb is not None and opt.vram_gb > 0
-    return PullFit(assess(opt, hw), opt.download_mb / 1024, hw.disk_free_gb,
+    cached = {model} if installed else frozenset()
+    return PullFit(assess(opt, hw, cached=cached), opt.download_mb / 1024, hw.disk_free_gb,
                    opt.vram_gb if gpu else opt.ram_gb,
                    hw.vram_gb if gpu else hw.ram_gb, gpu)

@@ -47,7 +47,8 @@ class SetupWorkerTests(unittest.TestCase):
             _destroying=False, _ollama_pull_declined=set(),
             _log_async=self.logged.append,
             _ask_yes_no_sync=self._ask,
-            _ollama_pull_fit=lambda model: self.fit,
+            _ollama_pull_fit=lambda model, installed=False: self.fit,
+            _ollama_memory_checked=set(),
             _post_if_alive=self.posted.append)
 
     def _ask(self, title, message):
@@ -137,6 +138,32 @@ class SetupWorkerTests(unittest.TestCase):
         self._run("qwen3:14b", [(True, "using qwen3:8b", "qwen3:8b")])
         self.assertIn(TEXTS["ollama_pull_tight"].format(model="qwen3:14b", need="16", have="16.0"),
                       self.questions[0])
+
+    def test_an_installed_model_too_big_for_the_memory_is_warned_once_a_session(self):
+        # qwen3:32b ended up installed on the VM: the next translation would
+        # have loaded 20 GB into 12 GB of RAM.
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("too_big", 20000 / 1024, 3.6, 32.0, 12.4, False)
+        ok, _pull = self._run("qwen3:32b", [(True, "", "qwen3:32b")])
+        self.assertTrue(ok)
+        warning = TEXTS["ollama_pull_heavy"].format(model="qwen3:32b", need="32", have="12.4")
+        self.assertIn(warning, "".join(self.logged))
+        self.assertEqual(len(self.posted), 1)
+        self._run("qwen3:32b", [(True, "", "qwen3:32b")])
+        self.assertEqual(len(self.posted), 1)                     # once a session
+
+    def test_a_model_that_fits_is_not_warned(self):
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("ok", 5.0, 3.6, 10.0, 12.4, False)
+        self._run("qwen3:8b", [(True, "", "qwen3:8b")])
+        self.assertEqual(self.posted, [])
+
+    def test_saying_yes_to_a_heavy_download_is_not_warned_again(self):
+        from videotranslator.model_catalog import PullFit
+        self.fit = PullFit("too_big", 20000 / 1024, 100.0, 32.0, 12.4, False)
+        self.answers = [True]
+        self._run("qwen3:32b", [(True, "using qwen3:8b", "qwen3:8b"), (True, "", "qwen3:32b")])
+        self.assertEqual(self.posted, [])        # the question already said it
 
     def test_an_unreachable_daemon_is_not_a_missing_model(self):
         ok, pull = self._run("qwen3:8b", [(False, "Ollama daemon not reachable at x", "")])
