@@ -747,8 +747,10 @@ class LiveSession:
             if clip is None:
                 detail = str(reason or "TTS synthesis failed")
                 self._log(f"live: voice line {seg_id} lost (tts_failed: {detail})")
-                self._set_warning("tts_unavailable",
-                                  getattr(self._synth, "name", self._cfg.tts_name))
+                warn = {"elevenlabs_paid_voice": "el_paid_voice",
+                        "elevenlabs_quota": "el_quota",
+                        "elevenlabs_auth": "el_auth"}.get(detail, "tts_unavailable")
+                self._set_warning(warn, getattr(self._synth, "name", self._cfg.tts_name))
             if accepted:
                 seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
                 if seg is not None:

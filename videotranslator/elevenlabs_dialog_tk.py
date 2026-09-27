@@ -174,6 +174,10 @@ class ElevenLabsDialog:
 
         self._fill(settings.get("model_id"), settings.get("voice_id"))
         self._schedule_poll()
+        # A catalogue saved before the plan was known cannot tell which voices
+        # need a paid plan: reload it (free, no characters used).
+        if api_key and not self._tier:
+            self.verify()
 
     def _set_status(self, text: str) -> None:
         """Show a result under the buttons and write it to the app log."""

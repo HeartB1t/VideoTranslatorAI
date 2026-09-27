@@ -180,6 +180,10 @@ WARN_KEYS: dict[str, str] = {
     "quota": "live_warn_quota",
     "engine_slow": "live_warn_engine_slow",
     "tts_unavailable": "live_warn_tts_unavailable",
+    # ElevenLabs refusals that will not go away by themselves: say which.
+    "el_paid_voice": "live_warn_el_paid_voice",
+    "el_quota": "live_warn_el_quota",
+    "el_auth": "live_warn_el_auth",
     "cpu_fallback": "live_warn_cpu_fallback",
     "falling_behind": "live_warn_falling_behind",
     "skipped": "live_warn_skipped",

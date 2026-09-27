@@ -1831,6 +1831,11 @@ MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
            **dict(zip(_ELP_KEYS, _ELP_T.get(lang, ())))}
     for lang, values in _T.items()
 }
+# The real-time bar shows the same ElevenLabs refusals as the settings window.
+for _bucket in MODELS_UI_STRINGS.values():
+    _bucket["live_warn_el_paid_voice"] = _bucket["el_err_paid_voice"]
+    _bucket["live_warn_el_quota"] = _bucket["el_err_quota"]
+    _bucket["live_warn_el_auth"] = _bucket["el_err_auth"]
 
 
 def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:

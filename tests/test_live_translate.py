@@ -251,8 +251,11 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
             sent.append((json, timeout))
             return Resp()
 
+        import sys
+        import types
+        fake_requests = types.SimpleNamespace(post=post)
         tr = OllamaLiveTranslator(model="qwen3:32b", health_check=self._ok_health)
-        with mock.patch("requests.post", side_effect=post):
+        with mock.patch.dict(sys.modules, {"requests": fake_requests}):
             tr.prepare("en", "it")
             out = tr.translate("Hello", timeout_s=3.0)
         self.assertTrue(out.ok)

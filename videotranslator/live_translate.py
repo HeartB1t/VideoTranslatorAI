@@ -17,7 +17,8 @@ from videotranslator.translation import _marian_normalize_lang
 TIMEOUTS_S: dict[str, float] = {
     "marian": 5.0,
     "ollama_delayed": 8.0,
-    "ollama_live": 3.0,
+    # 3 s left long sentences untranslated with a 32B model (measured 3.0+ s).
+    "ollama_live": 5.0,
     "google": 5.0,
     "deepl": 5.0,
 }
