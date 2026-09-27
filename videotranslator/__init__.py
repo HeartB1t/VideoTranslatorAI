@@ -6,8 +6,12 @@ gradually moved into importable, testable modules.
 """
 
 from .startup_env import apply_startup_env as _apply_startup_env
+from .startup_env import harden_std_streams as _harden_std_streams
 
 __version__ = "2.1.1"
 
 # Before any ML library is imported (they read the environment at import).
 _apply_startup_env()
+# Before anything is printed: a redirected cp1252 stdout on Windows must not
+# stop the pipeline on the first character it lacks.
+_harden_std_streams()
