@@ -377,7 +377,8 @@ class ModelsDialog:
                 model=label, done=f"{dl.progress_mb():.0f}", total=dl.expected_mb), progress=True)
             return
         if dl.state == "verifying":
-            self._set_status(self._s("mdl_dl_verifying").format(model=label))
+            # Polled several times a second: a progress status, logged once.
+            self._set_status(self._s("mdl_dl_verifying").format(model=label), progress=True)
             return
         self._download = None
         if dl.state == "done":

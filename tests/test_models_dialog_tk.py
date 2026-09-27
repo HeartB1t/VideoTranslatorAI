@@ -181,6 +181,21 @@ class DialogTests(unittest.TestCase):
         self.assertEqual(dlg.choices()["asr"], "large-v3")      # selection kept
         self.assertEqual(dlg._missing_whisper(), [])
 
+    def test_verifying_is_logged_once_however_often_it_is_polled(self):
+        # A Windows VM logged "Verifying Whisper large-v3..." 43 times: the
+        # status was re-set at every poll during the check.
+        dlg = self._dialog()
+        dlg._set_choice("asr", "large-v3")
+        fake = mock.Mock(key="large-v3", expected_mb=3090, state="verifying", error="")
+        with mock.patch.object(md, "WhisperDownload", return_value=fake):
+            dlg._start_download()
+        count = len(self.logged)
+        for _ in range(10):
+            dlg._poll_download()
+        verifying = _s("mdl_dl_verifying").format(model=md.WHISPER["large-v3"].label)
+        self.assertEqual(self.logged[count:], [verifying])
+        self.assertEqual(dlg._status.cget("text"), verifying)
+
     def test_benchmark_without_media_asks_for_a_file(self):
         dlg = self._dialog()
         dlg._start_benchmark()
