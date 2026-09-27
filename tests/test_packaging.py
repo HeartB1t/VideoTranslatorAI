@@ -29,6 +29,15 @@ class PackagingMetadataTests(unittest.TestCase):
         self.assertEqual(data["tool"]["setuptools"]["dynamic"]["version"]["attr"], "videotranslator.__version__")
         self.assertRegex(videotranslator.__version__, r"^\d+\.\d+\.\d+$")
 
+    def test_the_windows_installer_shows_the_package_version(self):
+        # setup_windows.bat prints SCRIPT_VERSION in its banners and setup log:
+        # a release that forgot it would announce the previous version.
+        import re
+        text = (ROOT / "setup_windows.bat").read_text(encoding="utf-8")
+        match = re.search(r'^set "SCRIPT_VERSION=([^"]+)"', text, re.M)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), videotranslator.__version__)
+
 
 class ModuleEntryPointSmokeTests(unittest.TestCase):
     def test_python_m_videotranslator_help_uses_legacy_cli(self):
