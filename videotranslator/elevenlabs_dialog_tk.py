@@ -111,11 +111,9 @@ class ElevenLabsDialog:
         check_opts = dict(bg=pal.BG, fg=pal.FG, selectcolor=pal.SEL,
                           activebackground=pal.BG, activeforeground=pal.FG,
                           highlightbackground=pal.BG, font="VT.Base", anchor="w")
-        tk.Checkbutton(body, text=ui_s("el_use"), variable=self._enabled,
-                       **check_opts).pack(fill="x")
-
+        # Key, model and voice first; the switch that turns it on comes after them.
         grid = tk.Frame(body, bg=pal.BG)
-        grid.pack(fill="x", pady=(10, 4))
+        grid.pack(fill="x", pady=(0, 4))
         label(grid, "el_key").grid(row=0, column=0, sticky="w")
         self._key_var = tk.StringVar(value=api_key)
         self._key_entry = tk.Entry(grid, textvariable=self._key_var, show="•", width=44,
@@ -148,8 +146,10 @@ class ElevenLabsDialog:
                                               command=self.verify)
         wrap.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
 
+        tk.Checkbutton(body, text=ui_s("el_use"), variable=self._enabled,
+                       **check_opts).pack(fill="x", pady=(10, 0))
         tk.Checkbutton(body, text=ui_s("el_fallback"), variable=self._fallback,
-                       **check_opts).pack(fill="x", pady=(8, 0))
+                       **check_opts).pack(fill="x", pady=(2, 0))
         label(body, "el_note", fg=pal.FG2, font="VT.Small",
               wraplength=620).pack(fill="x", pady=(8, 4))
         self._status = label(body, "el_checking", font="VT.Small", wraplength=620)
