@@ -303,6 +303,24 @@ class VoiceboxCheckTests(unittest.TestCase):
 
 
 
+
+class ButtonSymbolTests(unittest.TestCase):
+    """Symbols in the UI texts must be in the base UI fonts: Tk borrows a
+    missing glyph from another font, and on a Windows VM that failed for
+    "⬇ Scarica e Traduci" (an empty box), while ▶ and ▲ always showed."""
+
+    def test_no_ui_text_uses_the_arrows_segoe_ui_lacks(self):
+        offenders = [(lang, key) for lang, table in gui.UI_STRINGS.items()
+                     for key, text in table.items()
+                     if any(0x2B00 <= ord(char) <= 0x2BFF for char in str(text))]
+        self.assertEqual(offenders, [])
+
+    def test_the_download_button_keeps_a_plain_arrow_in_every_language(self):
+        wrong = [lang for lang, table in gui.UI_STRINGS.items()
+                 if not table["btn_download"].startswith("↓ ")]
+        self.assertEqual(wrong, [])
+
+
 class OllamaCheckTests(unittest.TestCase):
     URL = "http://localhost:11434"
 
