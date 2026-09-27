@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,7 +58,8 @@ class InputSourceTests(unittest.TestCase):
     def test_url_and_path_helpers(self):
         self.assertTrue(is_probable_url("https://youtu.be/example"))
         self.assertFalse(is_probable_url("~/Videos/input.mp4"))
-        self.assertTrue(normalize_input_path("~/Videos/input.mp4").endswith("Videos/input.mp4"))
+        self.assertTrue(normalize_input_path("~/Videos/input.mp4")
+                        .endswith(os.path.join("Videos", "input.mp4")))
 
     def test_download_url_uses_injected_ytdlp_and_logs_final_path(self):
         with tempfile.TemporaryDirectory() as tmp_str:

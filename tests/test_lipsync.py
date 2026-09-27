@@ -24,7 +24,7 @@ class LipsyncHelperTests(unittest.TestCase):
 
         self.assertEqual(cmd[0], "/python")
         self.assertIn("--checkpoint_path", cmd)
-        self.assertIn("/model.pth", cmd)
+        self.assertIn(str(Path("/model.pth")), cmd)
         self.assertIn("--nosmooth", cmd)
 
     def test_build_wav2lip_env_routes_temp_to_work_dir(self):
@@ -34,10 +34,11 @@ class LipsyncHelperTests(unittest.TestCase):
             {"PYTHONPATH": "/existing", "OTHER": "1"},
         )
 
-        self.assertEqual(env["TMPDIR"], "/work")
-        self.assertEqual(env["TEMP"], "/work")
-        self.assertEqual(env["TMP"], "/work")
-        self.assertEqual(env["PYTHONPATH"], "/repo" + os.pathsep + "/existing")
+        work = str(Path("/work"))              # "\\work" on Windows
+        self.assertEqual(env["TMPDIR"], work)
+        self.assertEqual(env["TEMP"], work)
+        self.assertEqual(env["TMP"], work)
+        self.assertEqual(env["PYTHONPATH"], str(Path("/repo")) + os.pathsep + "/existing")
         self.assertEqual(env["OTHER"], "1")
 
 

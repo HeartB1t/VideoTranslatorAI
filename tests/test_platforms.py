@@ -246,7 +246,7 @@ class ProcessStartTokenTests(unittest.TestCase):
     def test_reveal_uses_platform_native_file_manager_commands(self):
         calls = []
         reveal_in_file_manager(
-            Path("/tmp/a b/video.mp4"), sys_platform="linux",
+            PurePosixPath("/tmp/a b/video.mp4"), sys_platform="linux",
             popen=lambda command: calls.append(command),
         )
         self.assertEqual(calls, [["xdg-open", "/tmp/a b"]])

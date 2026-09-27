@@ -133,7 +133,7 @@ class EdgeTtsAllTests(unittest.TestCase):
             log=lambda *args, **kwargs: logs.append(" ".join(str(arg) for arg in args)),
         )
 
-        self.assertEqual(files, ["/tmp/work/seg_0000.mp3"])
+        self.assertEqual(files, [os.path.join("/tmp/work", "seg_0000.mp3")])
         self.assertTrue(any("Generating TTS" in item for item in logs))
 
 

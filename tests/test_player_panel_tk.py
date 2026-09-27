@@ -3,6 +3,8 @@
 Tk tests: they skip without a display (CI) and run locally under Xvfb.
 """
 
+import dataclasses
+import sys
 import tkinter as tk
 import time
 import unittest
@@ -21,6 +23,9 @@ from videotranslator.ui_strings_player import PLAYER_UI_STRINGS
 ROOT = Path(__file__).resolve().parents[1]
 LOGO = ROOT / "assets" / "icon_256.png"
 CMD = "sudo apt install libmpv2"
+# What the app's missing-libmpv message shows on this system: the command on
+# Linux; on Windows it points to setup_windows.bat, with no command to paste.
+MISSING_HINT = "setup_windows.bat" if sys.platform == "win32" else CMD
 MISSING = LibmpvStatus(ok=False, reason="libmpv-missing", detail="no libmpv.so in ldconfig -p")
 TOO_OLD = LibmpvStatus(ok=False, reason="libmpv-too-old", api_version=(1, 109), mpv_version=(0, 32))
 READY = LibmpvStatus(ok=True, reason="ok", api_version=(2, 5), mpv_version=(0, 41),
@@ -463,7 +468,7 @@ class GuiPlayerWiringTests(unittest.TestCase):
             app._batch_listbox.insert("end", "first.mp4")
             app._batch_listbox.selection_set(0)
             app._on_input_select()
-            self.assertIn(CMD, app._player_panel.message_label.cget("text"))
+            self.assertIn(MISSING_HINT, app._player_panel.message_label.cget("text"))
             self.assertIsNone(app._player_backend)
 
     def test_remove_and_clear_release_loaded_source_before_mutating_the_list(self):
@@ -528,8 +533,14 @@ class GuiPlayerWiringTests(unittest.TestCase):
     def test_video_output_failure_recreates_backend_with_the_next_profile(self):
         with built_app({"ui_lang": "en"}) as (gui, app, _):
             old = self._attach_backend(app)
-            app._player_status = READY
-            app._player_vo_profile = "x11egl"
+            # The fallback follows this system's profile chain.
+            if sys.platform == "win32":
+                status, current, expected = (dataclasses.replace(
+                    READY, vo_profiles_ok=("auto", "d3d11-warp")), "auto", "d3d11-warp")
+            else:
+                status, current, expected = READY, "x11egl", "x11sw"
+            app._player_status = status
+            app._player_vo_profile = current
             app._player_guard = SimpleNamespace(captured=True, restore=mock.Mock())
             item = MediaItem("/tmp/a.mp4", "source", "a.mp4")
             app._player_controller.load(item, paused=True, start=3.0)
@@ -555,7 +566,7 @@ class GuiPlayerWiringTests(unittest.TestCase):
                 app.update()
             self.assertTrue(old.terminated)
             self.assertIs(app._player_backend, replacement)
-            self.assertEqual(app._player_vo_profile, "x11sw")
+            self.assertEqual(app._player_vo_profile, expected)
             self.assertIn(("load", item.path, True, 3.0, {}), replacement.calls)
 
     def test_a_new_load_does_not_reuse_stale_video_params(self):
@@ -592,7 +603,7 @@ class GuiPlayerWiringTests(unittest.TestCase):
             self.assertEqual(app._player_badge_dot.cget("fg"), gui.FG2)
             app._on_player_status(MISSING, PlayerInstallRequest(manual_command=CMD))
             self.assertEqual(app._player_badge_dot.cget("fg"), gui.WARN)
-            self.assertIn(CMD, app._player_panel.message_label.cget("text"))
+            self.assertIn(MISSING_HINT, app._player_panel.message_label.cget("text"))
             self.assertEqual(app._player_status_text(), app._player_panel.status_text())
             app._on_player_status(TOO_OLD, PlayerInstallRequest())
             self.assertEqual(app._player_badge_dot.cget("fg"), gui.ERR)
@@ -670,7 +681,7 @@ class GuiPlayerWiringTests(unittest.TestCase):
         with built_app({"ui_lang": "en"}) as (gui, app, _):
             _, _, refresh = self._run_install(app, InstallResult(False, False, "system"))
             refresh.assert_not_called()
-            self.assertIn(CMD, app._player_panel.message_label.cget("text"))
+            self.assertIn(MISSING_HINT, app._player_panel.message_label.cget("text"))
             self.assertEqual(app._player_panel.install_label.cget("text"),
                              gui.UI_STRINGS["en"]["player_install_failed"])
             self.assertEqual(app._player_panel._install_wrap.winfo_manager(), "pack")

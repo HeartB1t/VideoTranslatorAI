@@ -1,3 +1,4 @@
+import os
 import subprocess
 import unittest
 
@@ -50,11 +51,12 @@ class TtsReferenceTests(unittest.TestCase):
             run=fake_run,
         )
 
-        self.assertEqual(out, "/tmp/work/ref_A_B.wav")
+        expected = os.path.join("/tmp/work", "ref_A_B.wav")
+        self.assertEqual(out, expected)
         cmd = calls[0][0]
         self.assertEqual(cmd[:4], ["ffmpeg", "-y", "-i", "/tmp/vocals.wav"])
         self.assertIn("-filter_complex", cmd)
-        self.assertIn("/tmp/work/ref_A_B.wav", cmd)
+        self.assertIn(expected, cmd)
 
     def test_extract_speaker_reference_returns_none_without_turns(self):
         self.assertIsNone(extract_speaker_reference("/tmp/in.wav", [], "A", "/tmp/work"))

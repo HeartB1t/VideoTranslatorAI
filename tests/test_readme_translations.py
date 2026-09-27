@@ -67,7 +67,7 @@ def links(path, text):
             raise AssertionError(f"Link escapes repository: {path.name}: {target}")
         if not resolved.exists():
             raise AssertionError(f"Broken link: {path.name}: {target}")
-        result.append(str(resolved.relative_to(ROOT)) + "#" + parsed.fragment)
+        result.append(resolved.relative_to(ROOT).as_posix() + "#" + parsed.fragment)
     return collections.Counter(result)
 
 
