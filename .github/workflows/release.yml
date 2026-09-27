@@ -1,0 +1,77 @@
+name: release
+
+# Pushing a vX.Y.Z tag publishes the GitHub release that the Windows updater
+# installs (docs/superpowers/specs/2026-09-27-windows-updater-design.md):
+# VideoTranslatorAI-vX.Y.Z.zip plus sha256.txt.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: The tag must equal "v" + __version__
+        run: |
+          version=$(python - <<'PY'
+          import re, pathlib
+          text = pathlib.Path("videotranslator/__init__.py").read_text(encoding="utf-8")
+          print(re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', text, re.M).group(1))
+          PY
+          )
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match __version__ $version"
+            exit 1
+          fi
+
+      - name: Run the unit tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          python -m unittest discover -s tests
+
+      - name: Build the release zip
+        run: |
+          name="VideoTranslatorAI-$GITHUB_REF_NAME"
+          git archive --format=zip --prefix="$name/" -o "$name.zip" "$GITHUB_REF_NAME"
+          sha256sum "$name.zip" > sha256.txt
+          cat sha256.txt
+
+      - name: Check the zip exactly as the updater will
+        run: |
+          python - <<'PY'
+          import os, sys, tempfile
+          from pathlib import Path
+          from videotranslator import updater
+          tag = os.environ["GITHUB_REF_NAME"]
+          archive = Path(f"VideoTranslatorAI-{tag}.zip")
+          with tempfile.TemporaryDirectory() as tmp:
+              root = updater.safe_extract(archive, Path(tmp), updater.parse_version(tag))
+              bat = (root / "setup_windows.bat").read_bytes()
+              if bat.count(b"\n") != bat.count(b"\r\n"):
+                  sys.exit("setup_windows.bat inside the zip has bare LF line endings")
+          print(f"{archive}: {archive.stat().st_size} bytes, accepted by the updater")
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "VideoTranslatorAI-$GITHUB_REF_NAME.zip" sha256.txt \
+            --title "Video Translator AI $GITHUB_REF_NAME" \
+            --generate-notes

@@ -7,6 +7,7 @@ on:
       - "videotranslator/**"
       - "tests/**"
       - "video_translator_gui.py"
+      - "setup_windows.bat"
       - "requirements*.txt"
       - "README.md"
       - "docs/i18n/**"

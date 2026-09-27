@@ -38,8 +38,10 @@ class WindowsInstallerStaticTests(unittest.TestCase):
     def test_player_step_runs_after_ffmpeg_in_install_and_repair(self):
         self.assertRegex(self.flat, r'call :step_ffmpeg "4/6" "0"\s+call :step_player "5/6"\s+'
                                     r'call :step_shortcut "6/6"')
-        self.assertRegex(self.flat, r'call :step_ffmpeg "4/6" "1"\s+call :step_player "5/6"')
-        self.assertIn('echo [6/6] Desktop shortcut already present, skipping.', self.text)
+        # Repair always re-creates the shortcuts: an older install gets the
+        # Start Menu entries too (comment lines may sit in between).
+        self.assertRegex(self.flat, r'call :step_ffmpeg "4/6" "1"\s+call :step_player "5/6"\s+'
+                                    r'(?:::[^\n]*\n\s*)*call :step_shortcut "6/6"')
         self.assertNotRegex(self.flat, r'"\d/5"')
         self.assertNotIn("[5/5]", self.text)
 
@@ -141,6 +143,61 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         self.assertEqual(len(downloads), 6)
         for n in downloads:
             self.assertIn("$ProgressPreference = 'SilentlyContinue';", lines[n - 1])
+
+    # -- updater hand-over (docs/superpowers/specs/2026-09-27-windows-updater-design.md) --
+
+    def _mode_repair(self):
+        return self.flat[self.flat.index("\n:mode_repair\n"):self.flat.index("\n:mode_uninstall\n")]
+
+    def test_the_handover_flag_is_read_once_and_cleared_before_dispatch(self):
+        head = self.flat[:self.flat.index("\n:dispatch\n")]
+        self.assertIn('set "VTAI_HANDED_OVER=%VTAI_UPDATE_HANDOFF%"\nset "VTAI_UPDATE_HANDOFF="\n'
+                      'set "VTAI_NEW_SETUP="', head)
+
+    def test_the_handover_is_a_top_level_line_without_delayed_expansion(self):
+        body = self._mode_repair()
+        self.assertIn('set "VTAI_UPDATE_HANDOFF=1"\nsetlocal DisableDelayedExpansion\n'
+                      '"%VTAI_NEW_SETUP%" repair', body)
+        # reached by goto, never inside parentheses or a called subroutine
+        self.assertIn("if defined VTAI_NEW_SETUP goto repair_handover", body)
+        self.assertNotIn("call :repair_handover", self.text)
+        before = body[:body.index('"%VTAI_NEW_SETUP%" repair')]
+        depth = 0
+        for line in before.split("\n"):
+            code = re.sub(r'"[^"]*"', "", line)
+            if not code.strip().startswith("::"):
+                depth += code.count("(") - code.count(")")
+        self.assertEqual(depth, 0)
+
+    def test_the_update_is_staged_in_program_files_and_handed_over_only_on_10(self):
+        self.assertIn(r'set "UPDATE_DIR=%INSTALL_DIR%\_update"', self.text)
+        body = self._label_body("update_prepare", ":update_prepare_ready")
+        self.assertIn('-m videotranslator.updater download --local "%SCRIPT_DIR%." '
+                      '--dest "%UPDATE_DIR%" --log "%VTAI_SETUP_LOG%"', body)
+        self.assertIn('if "%UPDATE_RC%"=="10" goto update_prepare_ready', body)
+        self.assertNotIn("%TEMP%", body)
+
+    def test_the_installer_is_kept_and_never_copied_onto_itself(self):
+        body = self.flat[self.flat.index("\n:step_copy_files\n"):self.flat.index("\n:step_install_deps\n")]
+        self.assertIn("os.path.samefile", body)
+        self.assertLess(body.index("os.path.samefile"), body.index("Copying script"))
+        self.assertIn(r'copy /Y "%SCRIPT_DIR%setup_windows.bat" "%INSTALL_DIR%\setup_windows.bat"', body)
+
+    def test_the_update_entry_runs_elevated_through_cmd(self):
+        self.assertIn(r'set "START_MENU_DIR=%ProgramData%\Microsoft\Windows\Start Menu\Programs'
+                      r'\Video Translator AI"', self.text)
+        self.assertIn("$upd.TargetPath = $env:ComSpec;", self.text)
+        self.assertIn("$b[0] -eq 0x4C) { $b[0x15] = $b[0x15] -bor 0x20;", self.text)
+        self.assertIn('rmdir /S /Q "%START_MENU_DIR%"', self.text)
+
+    def test_uninstall_never_deletes_the_running_script_early(self):
+        body = self._label_body("remove_app", "exit /b 0\n\n:remove_shortcut_public")
+        self.assertIn('if /i not "%%~nxF"=="setup_windows.bat" del /F /Q "%%~F"', body)
+        # the install folder is never removed recursively: only a plain rmdir,
+        # which succeeds when the folder is empty
+        self.assertNotIn('rmdir /S /Q "%INSTALL_DIR%"', self.text)
+        done = self.flat[self.flat.index("\n:uninst_done\n"):]
+        self.assertIn('rmdir "%INSTALL_DIR%" 2>nul', done)
 
 
 if __name__ == "__main__":

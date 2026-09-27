@@ -18,12 +18,25 @@ set "WAV2LIP_REPO=%WAV2LIP_DIR%\Wav2Lip"
 set "WAV2LIP_MODEL=%WAV2LIP_DIR%\wav2lip_gan.pth"
 set "WAV2LIP_SHA256=ca9ab7b7b812c0e80a6e70a5977c545a1e8a365a6c49d5e533023c034d7ac3d8"
 set "PUBLIC_SHORTCUT=%PUBLIC%\Desktop\Video Translator AI.lnk"
+set "START_MENU_DIR=%ProgramData%\Microsoft\Windows\Start Menu\Programs\Video Translator AI"
 set "ICON_PATH=%INSTALL_DIR%\assets\icon.ico"
 set "SCRIPT_DIR=%~dp0"
+:: A new release is unpacked here before the hand-over. Program Files, never
+:: %TEMP%: only administrators can write it, so a non-elevated process cannot
+:: swap the verified files before this elevated script runs them.
+set "UPDATE_DIR=%INSTALL_DIR%\_update"
 :: Setup log: one timestamped line per step and per outcome, for install,
 :: repair and uninstall. Lives in the profile root so an uninstall (which
 :: wipes AppData, Temp and the install folder) never deletes it.
 set "VTAI_SETUP_LOG=%USERPROFILE%\VideoTranslatorAI-setup.log"
+
+:: Update hand-over (see :update_prepare). The previous run sets
+:: VTAI_UPDATE_HANDOFF=1 just before starting this script: read it once and
+:: clear it at once. It only stops a second update check and the Proceed
+:: prompt; it never proves that anything was verified.
+set "VTAI_HANDED_OVER=%VTAI_UPDATE_HANDOFF%"
+set "VTAI_UPDATE_HANDOFF="
+set "VTAI_NEW_SETUP="
 
 :: Per-user paths resolved at runtime for the CURRENT console user
 set "USER_CONFIG=%USERPROFILE%\.videotranslatorai_config.json"
@@ -46,6 +59,7 @@ call :check_admin
 set "MODE="
 if /i "%~1"=="install"   set "MODE=install"
 if /i "%~1"=="repair"    set "MODE=repair"
+if /i "%~1"=="update"    set "MODE=repair"
 if /i "%~1"=="uninstall" set "MODE=uninstall"
 if /i "%~1"=="/?"        goto show_help
 if /i "%~1"=="-h"        goto show_help
@@ -70,7 +84,7 @@ if "%IS_ADMIN%"=="1" (
 )
 echo.
 echo   [1] Install         (first-time setup)
-echo   [2] Repair / Update (keep config, refresh script + deps)
+echo   [2] Repair / Update (latest release from GitHub, keep config)
 echo   [3] Uninstall       (granular menu inside)
 echo   [Q] Quit
 echo.
@@ -113,6 +127,7 @@ echo  Usage:
 echo    setup_windows.bat              Interactive menu
 echo    setup_windows.bat install      First-time install
 echo    setup_windows.bat repair       Repair / update an existing install
+echo    setup_windows.bat update       Same as repair: gets the latest release first
 echo    setup_windows.bat uninstall    Uninstall (granular menu)
 echo    setup_windows.bat /?           This help
 echo.
@@ -165,12 +180,18 @@ exit /b 0
 color 0E
 call :print_banner "Video Translator AI - Repair / Update"
 call :log_session "REPAIR"
+if "%VTAI_HANDED_OVER%"=="1" (
+    echo  [*] Continuing the update with the installer of the new release.
+    call :logfile "Update: this run is the installer of the new release, from %SCRIPT_DIR%"
+    goto repair_confirmed
+)
 echo.
 echo  This will:
-echo    - Re-copy the latest video_translator_gui.py and assets
+echo    - Check GitHub for a newer release and install it
+echo    - Re-copy the application files and assets
 echo    - Re-run pip install to pick up new/missing packages
 echo    - Install or re-check the integrated video player (optional)
-echo    - Re-create the Public Desktop shortcut if missing
+echo    - Re-create the Desktop shortcut and the Start Menu entries
 echo    - Skip Python / Git / ffmpeg if already installed
 echo    - Keep your config (HF token in keyring stays intact)
 echo.
@@ -182,6 +203,7 @@ if /i not "%CONFIRM%"=="Y" (
     pause
     goto end
 )
+:repair_confirmed
 
 if not exist "%INSTALL_DIR%" (
     echo.
@@ -198,6 +220,9 @@ call :logfile "Preflight Internet: ok"
 call :step_python   "1/6"
 if errorlevel 1 ( call :logfile "Step 1/6 Python: FAILED - repair stopped" & pause & exit /b 1 )
 
+if not "%VTAI_HANDED_OVER%"=="1" call :update_prepare
+if defined VTAI_NEW_SETUP goto repair_handover
+
 call :step_copy_files "2/6"
 if errorlevel 1 ( call :logfile "Step 2/6 copy files: FAILED - repair stopped" & pause & exit /b 1 )
 
@@ -207,13 +232,8 @@ call :step_ffmpeg "4/6" "1"
 
 call :step_player "5/6"
 
-if exist "%PUBLIC_SHORTCUT%" (
-    echo.
-    echo [6/6] Desktop shortcut already present, skipping.
-    call :logfile "Step 6/6 shortcut: already present"
-) else (
-    call :step_shortcut "6/6"
-)
+:: Always: an older install gets the new Start Menu entries too.
+call :step_shortcut "6/6"
 
 call :validate_install
 if errorlevel 1 ( call :logfile "RESULT: repair incomplete" & pause & exit /b 1 )
@@ -222,6 +242,21 @@ call :logfile "RESULT: repair complete"
 call :print_done "Repair complete"
 pause
 exit /b 0
+
+:: Hand-over to the installer of the new release, verified and unpacked by
+:: :update_prepare. This MUST stay a top-level line of this flow, reached by
+:: goto: outside any parentheses and outside any called subroutine. A batch
+:: file started without `call` replaces this one and cmd never reads this
+:: file again, so the new installer may overwrite it; a pending `call` frame
+:: would send cmd back into the overwritten file. Delayed expansion goes off
+:: first so a path with ! stays intact.
+:repair_handover
+echo.
+echo  [*] Starting the installer of the new release...
+call :logfile "Update: handing over to the installer of the new release"
+set "VTAI_UPDATE_HANDOFF=1"
+setlocal DisableDelayedExpansion
+"%VTAI_NEW_SETUP%" repair
 
 
 :: ============================================================================
@@ -268,7 +303,7 @@ echo  ============================================
 echo    WARNING: this will remove EVERYTHING
 echo  ============================================
 echo  - Application folder: %INSTALL_DIR%
-echo  - Public Desktop shortcut
+echo  - Desktop shortcut and Start Menu entries
 echo  - ffmpeg from machine PATH
 echo  - All users' HF model caches (Whisper, XTTS, MarianMT)
 echo  - All users' VTAI config, logs, player/JS runtimes and temp files
@@ -351,7 +386,7 @@ set /p "Q_APP=Remove application folder %INSTALL_DIR% ? [Y/N]: "
 if /i "!Q_APP!"=="Y" call :remove_app
 
 set "Q_SC="
-set /p "Q_SC=Remove Public Desktop shortcut ? [Y/N]: "
+set /p "Q_SC=Remove the Desktop shortcut and Start Menu entries ? [Y/N]: "
 if /i "!Q_SC!"=="Y" call :remove_shortcut_public
 
 set "Q_PATH="
@@ -462,6 +497,16 @@ goto uninst_done
 
 
 :uninst_done
+:: :remove_app left at most this script in the install folder. A plain
+:: (non-recursive) rmdir removes the folder only when it is empty; when this
+:: script runs from there, the folder stays and the user is told.
+if "%VTAI_REMOVE_INSTALL_DIR%"=="1" rmdir "%INSTALL_DIR%" 2>nul
+if "%VTAI_REMOVE_INSTALL_DIR%"=="1" if exist "%INSTALL_DIR%" (
+    echo.
+    echo  [!] %INSTALL_DIR% still holds this uninstaller:
+    echo      delete that folder by hand after closing this window.
+    call :logfile "Remove application folder: only setup_windows.bat is left, to delete by hand"
+)
 call :logfile "RESULT: uninstall complete"
 echo.
 echo  ============================================
@@ -849,12 +894,71 @@ set "PYTHON_EXE=!_CAND!"
 exit /b 0
 
 
+:: Ask the updater (videotranslator\updater.py next to this script) for a
+:: newer GitHub release. On success VTAI_NEW_SETUP holds the installer of that
+:: release, verified and unpacked in %UPDATE_DIR%, and the caller hands over
+:: from a top-level line (:repair_handover). Any failure leaves VTAI_NEW_SETUP
+:: empty and the repair goes on with the local files: an update never blocks
+:: a repair. Exit codes: 10 new release ready, 0 up to date, 2 cannot check,
+:: 3 refused (checksum or archive).
+:update_prepare
+set "VTAI_NEW_SETUP="
+echo.
+echo  [*] Checking GitHub for a newer release...
+if not exist "%SCRIPT_DIR%videotranslator\updater.py" (
+    echo  [-] These files have no updater, skipping the check.
+    call :logfile "Update check: skipped, the files next to the installer have no updater"
+    goto :eof
+)
+pushd "%SCRIPT_DIR%" >nul 2>&1
+if errorlevel 1 (
+    call :logfile "Update check: skipped, cannot enter the installer folder"
+    goto :eof
+)
+:: The trailing dot keeps the backslash of %SCRIPT_DIR% from escaping the quote.
+"%PYTHON_EXE%" -m videotranslator.updater download --local "%SCRIPT_DIR%." --dest "%UPDATE_DIR%" --log "%VTAI_SETUP_LOG%"
+set "UPDATE_RC=%ERRORLEVEL%"
+popd >nul 2>&1
+if "%UPDATE_RC%"=="10" goto update_prepare_ready
+if "%UPDATE_RC%"=="0" (
+    echo  [+] Already the latest release.
+) else (
+    echo  [-] No update installed, code %UPDATE_RC%: repairing with the local files.
+)
+call :logfile "Update check: no hand-over, code %UPDATE_RC%"
+goto :eof
+
+:update_prepare_ready
+if exist "%UPDATE_DIR%\handoff.txt" set /p "VTAI_NEW_SETUP=" < "%UPDATE_DIR%\handoff.txt"
+if not defined VTAI_NEW_SETUP goto update_prepare_lost
+if not exist "!VTAI_NEW_SETUP!" goto update_prepare_lost
+echo  [+] New release verified.
+call :logfile "Update check: new release verified, ready to hand over"
+goto :eof
+
+:update_prepare_lost
+set "VTAI_NEW_SETUP="
+echo  [!] The new release is missing after the download: repairing with the local files.
+call :logfile "Update check: hand-over file missing, repairing with the local files"
+goto :eof
+
+
 :: %~1 = step label
 :step_copy_files
 echo.
 echo [%~1] Preparing installation folder...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 echo  [+] Folder: %INSTALL_DIR%
+:: Running from the install folder itself (the Start Menu update entry runs
+:: the copy kept there): the files are already in place, and copying a file
+:: onto itself fails. os.path.samefile sees through 8.3 names and junctions,
+:: which a text comparison of the two paths would not.
+"%PYTHON_EXE%" -c "import os,sys;sys.exit(0 if os.path.samefile(sys.argv[1],sys.argv[2]) else 1)" "%SCRIPT_DIR%." "%INSTALL_DIR%" >nul 2>&1
+if not errorlevel 1 (
+    echo  [+] Running from the install folder: the files are already in place.
+    call :logfile "Step 2/6 copy files: running from the install folder, nothing to copy"
+    exit /b 0
+)
 echo  [*] Copying script...
 copy /Y "%SCRIPT_DIR%video_translator_gui.py" "%INSTALL_DIR%\video_translator_gui.py" >nul
 if errorlevel 1 (
@@ -885,6 +989,15 @@ if exist "%SCRIPT_DIR%assets" (
         copy /Y "%SCRIPT_DIR%assets\fonts\*.*" "%INSTALL_DIR%\assets\fonts\" >nul 2>&1
     )
     echo  [+] Assets copied.
+)
+:: Keep a copy of this installer in the install folder: the Start Menu
+:: "Update" entry runs it, even after the user deletes the download.
+copy /Y "%SCRIPT_DIR%setup_windows.bat" "%INSTALL_DIR%\setup_windows.bat" >nul
+if errorlevel 1 (
+    echo  [!] Could not keep a copy of setup_windows.bat: the Start Menu update will not work.
+    call :logfile "Step 2/6 copy files: setup_windows.bat NOT kept - the Start Menu update will not work"
+) else (
+    echo  [+] Installer kept for future updates.
 )
 call :logfile "Step 2/6 copy files: ok - %INSTALL_DIR%"
 exit /b 0
@@ -1401,6 +1514,42 @@ if exist "%PUBLIC_SHORTCUT%" (
     echo      python "%INSTALL_DIR%\video_translator_gui.py"
     call :logfile "Step 6/6 shortcut: NOT created - pythonw was %PYTHONW%"
 )
+
+:: Start Menu folder: the application and "Update Video Translator AI". The
+:: update entry runs the installer kept in %INSTALL_DIR% through the absolute
+:: cmd.exe, as administrator: the documented LinkFlags bit RunAsUser (byte
+:: 0x15 |= 0x20), set after the last Save() and only on a real shell link
+:: header (size 0x4C). $Q is a double quote: cmd.exe would end the string.
+powershell -NoProfile -Command ^
+    "$Q = [char]34;" ^
+    "$dir = '%START_MENU_DIR%';" ^
+    "New-Item -ItemType Directory -Force -Path $dir | Out-Null;" ^
+    "$ws = New-Object -ComObject WScript.Shell;" ^
+    "$app = $ws.CreateShortcut($dir + '\Video Translator AI.lnk');" ^
+    "$app.TargetPath = '%PYTHONW%';" ^
+    "$app.Arguments = $Q + '%INSTALL_DIR%\video_translator_gui.py' + $Q;" ^
+    "$app.WorkingDirectory = '%INSTALL_DIR%';" ^
+    "$app.Description = 'Video Translator AI';" ^
+    "if (Test-Path '%ICON_PATH%') { $app.IconLocation = '%ICON_PATH%' };" ^
+    "$app.Save();" ^
+    "$lnk = $dir + '\Update Video Translator AI.lnk';" ^
+    "$upd = $ws.CreateShortcut($lnk);" ^
+    "$upd.TargetPath = $env:ComSpec;" ^
+    "$upd.Arguments = '/d /s /c ' + $Q + $Q + '%INSTALL_DIR%\setup_windows.bat' + $Q + ' update' + $Q;" ^
+    "$upd.WorkingDirectory = '%INSTALL_DIR%';" ^
+    "$upd.Description = 'Update Video Translator AI from GitHub';" ^
+    "if (Test-Path '%ICON_PATH%') { $upd.IconLocation = '%ICON_PATH%' };" ^
+    "$upd.Save();" ^
+    "$b = [IO.File]::ReadAllBytes($lnk);" ^
+    "if ($b.Length -gt 21 -and $b[0] -eq 0x4C) { $b[0x15] = $b[0x15] -bor 0x20; [IO.File]::WriteAllBytes($lnk, $b) }"
+
+if exist "%START_MENU_DIR%\Update Video Translator AI.lnk" (
+    echo  [+] Start Menu entries created: Video Translator AI, Update Video Translator AI.
+    call :logfile "Step 6/6 Start Menu: ok - application and update entries"
+) else (
+    echo  [!] Start Menu entries not created.
+    call :logfile "Step 6/6 Start Menu: NOT created"
+)
 exit /b 0
 
 
@@ -1431,30 +1580,46 @@ goto :eof
 
 :remove_app
 echo  [*] Removing %INSTALL_DIR% ...
-if exist "%INSTALL_DIR%" (
-    rmdir /S /Q "%INSTALL_DIR%" 2>nul
-    if exist "%INSTALL_DIR%" (
-        echo  [!] Some files could not be removed. Close any running Video Translator AI and retry.
-        call :logfile "Remove application folder: PARTIAL - some files are in use, close the app and retry"
-    ) else (
-        echo  [+] Removed.
-        call :logfile "Remove application folder: ok - %INSTALL_DIR%"
-    )
-) else (
+if not exist "%INSTALL_DIR%" (
     echo  [-] Not found, skipping.
     call :logfile "Remove application folder: not found, skipped"
+    exit /b 0
+)
+:: This script may be the copy kept in the install folder (Start Menu update
+:: entry), and cmd reads a batch file while it runs: removing it now would
+:: stop the uninstall halfway. Everything else goes now; :uninst_done removes
+:: the folder when it is empty.
+for /d %%D in ("%INSTALL_DIR%\*") do rmdir /S /Q "%%~D" 2>nul
+for %%F in ("%INSTALL_DIR%\*") do if /i not "%%~nxF"=="setup_windows.bat" del /F /Q "%%~F" 2>nul
+set "VTAI_REMOVE_INSTALL_DIR=1"
+set "_LEFT="
+for /d %%D in ("%INSTALL_DIR%\*") do set "_LEFT=1"
+for %%F in ("%INSTALL_DIR%\*") do if /i not "%%~nxF"=="setup_windows.bat" set "_LEFT=1"
+if defined _LEFT (
+    echo  [!] Some files could not be removed. Close any running Video Translator AI and retry.
+    call :logfile "Remove application folder: PARTIAL - some files are in use, close the app and retry"
+) else (
+    echo  [+] Removed.
+    call :logfile "Remove application folder: ok - %INSTALL_DIR%"
 )
 exit /b 0
 
 :remove_shortcut_public
-echo  [*] Removing Public Desktop shortcut ...
+echo  [*] Removing the Desktop shortcut and the Start Menu entries ...
 if exist "%PUBLIC_SHORTCUT%" (
     del /Q "%PUBLIC_SHORTCUT%" 2>nul
-    echo  [+] Removed.
+    echo  [+] Desktop shortcut removed.
     call :logfile "Remove Desktop shortcut: ok"
 ) else (
-    echo  [-] Not found, skipping.
+    echo  [-] Desktop shortcut not found, skipping.
     call :logfile "Remove Desktop shortcut: not found, skipped"
+)
+if exist "%START_MENU_DIR%" (
+    rmdir /S /Q "%START_MENU_DIR%" 2>nul
+    echo  [+] Start Menu entries removed.
+    call :logfile "Remove Start Menu entries: ok"
+) else (
+    call :logfile "Remove Start Menu entries: not found, skipped"
 )
 exit /b 0
 
