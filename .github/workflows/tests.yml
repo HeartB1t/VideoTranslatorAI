@@ -116,6 +116,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      # The runner's desktop is 1024x768 and Windows keeps a window within the
+      # screen: the layout tests need a 1100x780 window.
+      - name: Use a 1920x1080 desktop
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
       - name: Compile every Python file
         run: |
           python -m py_compile video_translator_gui.py
