@@ -140,9 +140,31 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         # PowerShell 5.1 redraws the bar per chunk: a 416 MB file took minutes.
         lines = self.flat.split("\n")
         downloads = [n for n, line in enumerate(lines) if "Invoke-WebRequest" in line]
-        self.assertEqual(len(downloads), 6)
+        self.assertEqual(len(downloads), 7)
         for n in downloads:
             self.assertIn("$ProgressPreference = 'SilentlyContinue';", lines[n - 1])
+
+    # -- Visual C++ runtime: torch\lib\c10.dll fails with WinError 126 without it --
+
+    def test_the_vc_runtime_comes_before_pytorch_in_install_and_repair(self):
+        body = self.flat[self.flat.index("\n:step_install_deps\n"):]
+        self.assertLess(body.index("call :step_vc_runtime"), body.index("Installing PyTorch cu124"))
+
+    def test_the_vc_runtime_is_verified_and_run_from_an_admin_only_folder(self):
+        body = self._label_body("step_vc_runtime", ":step_vc_runtime_manual")
+        self.assertIn(r'set "VC_DIR=%INSTALL_DIR%\_downloads"', body)
+        self.assertNotIn("%TEMP%", body)
+        self.assertIn("https://aka.ms/vs/17/release/vc_redist.x64.exe", body)
+        # the signature is checked before the installer runs
+        self.assertLess(body.index("Get-AuthenticodeSignature"), body.index("Start-Process"))
+        self.assertIn("-notlike '*O=Microsoft Corporation*'", body)
+        for dll in ("msvcp140.dll", "vcruntime140_1.dll"):
+            self.assertIn(dll, body)
+
+    def test_the_uninstaller_never_removes_the_shared_vc_runtime(self):
+        uninstall = self.flat[self.flat.index("\n:remove_app\n"):]
+        self.assertNotIn("vc_redist", uninstall)
+        self.assertNotIn("msvcp140", uninstall)
 
     # -- updater hand-over (docs/superpowers/specs/2026-09-27-windows-updater-design.md) --
 

@@ -1007,6 +1007,7 @@ exit /b 0
 :step_install_deps
 echo.
 echo [%~1] Installing Python dependencies...
+call :step_vc_runtime
 echo  [*] Upgrading pip...
 :: 2>nul suppresses the cosmetic "Impossibile trovare il file specificato."
 :: that pip on Windows emits when cleaning up its own .exe during self-update
@@ -1136,6 +1137,59 @@ call :logfile "Step 3/6 voice cloning coqui-tts: ok"
 call :step_wav2lip "%~2"
 echo  [+] Python packages installed.
 call :logfile "Step 3/6 Python packages: done"
+exit /b 0
+
+
+:: PyTorch's DLLs (torch\lib\c10.dll) need the Microsoft Visual C++ 2015-2022
+:: runtime: msvcp140.dll and vcruntime140_1.dll. A PC with games or Office has
+:: it; a clean Windows does not, and `import torch` then fails with
+:: WinError 126 (found on a fresh Windows 11 VM, 2026-09-27). Installed when
+:: missing, in install and repair; never removed by the uninstaller, other
+:: programs share it. The download goes to an administrators-only folder and
+:: must carry a valid Microsoft Authenticode signature before it runs.
+:step_vc_runtime
+if exist "%SystemRoot%\System32\msvcp140.dll" if exist "%SystemRoot%\System32\vcruntime140_1.dll" (
+    echo  [+] Microsoft Visual C++ runtime already installed.
+    call :logfile "Step 3/6 Visual C++ runtime: already installed"
+    exit /b 0
+)
+echo  [*] Installing the Microsoft Visual C++ runtime, needed by PyTorch...
+call :logfile "Step 3/6 Visual C++ runtime: missing, downloading vc_redist.x64.exe from Microsoft"
+set "VC_DIR=%INSTALL_DIR%\_downloads"
+if not exist "%VC_DIR%" mkdir "%VC_DIR%"
+powershell -NoProfile -Command ^
+    "$url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';" ^
+    "$out = '%VC_DIR%\vc_redist.x64.exe';" ^
+    "try {" ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+    "$ProgressPreference = 'SilentlyContinue';" ^
+    "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing -ErrorAction Stop;" ^
+    "$sig = Get-AuthenticodeSignature $out;" ^
+    "if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notlike '*O=Microsoft Corporation*') { Remove-Item $out -Force; exit 97 };" ^
+    "$p = Start-Process -FilePath $out -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru;" ^
+    "Remove-Item $out -Force;" ^
+    "exit $p.ExitCode" ^
+    "} catch { exit 98 }"
+set "VC_RC=%ERRORLEVEL%"
+rmdir /S /Q "%VC_DIR%" 2>nul
+:: 0 installed, 3010 installed (restart later), 1638 a newer one is present,
+:: 97 not signed by Microsoft (refused), 98 download or launch failed
+if "%VC_RC%"=="97" (
+    echo  [!] The downloaded runtime is not signed by Microsoft: not installed.
+    call :logfile "Step 3/6 Visual C++ runtime: REFUSED - the download has no valid Microsoft signature"
+    goto step_vc_runtime_manual
+)
+if exist "%SystemRoot%\System32\msvcp140.dll" if exist "%SystemRoot%\System32\vcruntime140_1.dll" (
+    echo  [+] Microsoft Visual C++ runtime installed.
+    if "%VC_RC%"=="3010" echo      Windows asks for a restart: if PyTorch does not start, restart the PC.
+    call :logfile "Step 3/6 Visual C++ runtime: ok, installer code %VC_RC%"
+    exit /b 0
+)
+call :logfile "Step 3/6 Visual C++ runtime: install FAILED, code %VC_RC% (98 = download or launch failed)"
+:step_vc_runtime_manual
+echo      PyTorch will not start without it. Install it by hand from
+echo      https://aka.ms/vs/17/release/vc_redist.x64.exe
+echo      then run setup_windows.bat again and choose [2] Repair / Update.
 exit /b 0
 
 
