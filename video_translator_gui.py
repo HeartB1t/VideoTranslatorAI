@@ -340,6 +340,7 @@ from videotranslator.ui_layout import WheelAccumulator as _WheelAccumulator  # n
 from videotranslator.ui_theme_tk import GLOBAL_ALIASES as _GLOBAL_ALIASES  # noqa: E402
 from videotranslator.ui_theme_tk import ThemeManager as _ThemeManager  # noqa: E402
 from videotranslator import app_log as _app_log  # noqa: E402
+from videotranslator import bevel_tk as _bevel_tk  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
 from videotranslator import live_session as _live_session_module  # noqa: E402
@@ -6732,11 +6733,15 @@ class App(tk.Tk):
         return f
 
     def _flat_btn(self, parent, primary=False, **kwargs):
-        """Flat button with a 1 px border. Returns (wrap_frame, button).
+        """Button drawn as a raised key. Returns (wrap_frame, button).
 
-        ``primary`` renders the accent-filled call-to-action variant. Hover
-        colours are read from the module globals at event time, so they
-        follow live theme changes.
+        ``wrap_frame`` carries the key's edge (``bevel_tk``) and is what the
+        caller places. ``primary`` renders the accent-filled call-to-action
+        variant. Hover colours are read from the module globals at event
+        time, so they follow live theme changes; the edge repaints itself
+        from the face, and turns into the focus ring (accent, or the text
+        colour on the accent-filled key) while the button has the keyboard
+        focus.
         """
         kwargs.pop("bg", None)
         kwargs.pop("activebackground", None)
@@ -6745,21 +6750,19 @@ class App(tk.Tk):
         kwargs.pop("glow", None)
         fg = kwargs.pop("fg", ACC_FG if primary else FG)
         cursor = kwargs.pop("cursor", "hand2")
-        wrap = tk.Frame(parent, bg=ACC if primary else BORDER, padx=1, pady=1)
-        btn = tk.Button(
-            wrap,
+        btn = _bevel_tk.BevelButton(
+            parent, palette_fn=lambda: self._theme.palette,
+            scale_fn=lambda: self._theme.scale, primary=primary,
             bg=ACC if primary else BTN,
             fg=fg,
             activebackground=ACC_HOVER if primary else BORDER,
             activeforeground=ACC_FG if primary else FG,
             disabledforeground=ACC_FG if primary else FG2,
-            relief="flat", bd=0, highlightthickness=0,
             cursor=cursor,
             font=kwargs.pop("font", "VT.Bold" if primary else "VT.Base"),
             padx=kwargs.pop("padx", 10), pady=kwargs.pop("pady", 4),
             **kwargs,
         )
-        btn.pack(fill="both", expand=True)
 
         def _enter(_e, b=btn, p=primary):
             if str(b.cget("state")) != "disabled":
@@ -6770,15 +6773,7 @@ class App(tk.Tk):
             enabled = str(b.cget("state")) != "disabled"
             b.configure(bg=ACC if p and enabled else BTN)
 
-        # Keyboard focus ring: the 1 px wrap turns to the accent (or to the
-        # text colour on the accent-filled primary button) while focused, and
         # Return activates it like the space bar already does.
-        def _focus_in(_e, w=wrap, p=primary):
-            w.configure(bg=FG if p else ACC)
-
-        def _focus_out(_e, w=wrap, p=primary):
-            w.configure(bg=ACC if p else BORDER)
-
         def _return(_e, b=btn):
             self._log_widget_activation(b)
             if str(b.cget("state")) != "disabled":
@@ -6787,11 +6782,9 @@ class App(tk.Tk):
 
         btn.bind("<Enter>", _enter)
         btn.bind("<Leave>", _leave)
-        btn.bind("<FocusIn>", _focus_in)
-        btn.bind("<FocusOut>", _focus_out)
         btn.bind("<Return>", _return)
         btn.bind("<KP_Enter>", _return)
-        return wrap, btn
+        return btn.outer, btn
 
     @staticmethod
     def _hover_bg():
@@ -7054,12 +7047,9 @@ class App(tk.Tk):
         }
         active = self._active_profile.get()
         for name, btn in self._profile_btns.items():
-            if name == active:
-                btn.configure(bg=ACC_SOFT, fg=FG,
-                              highlightthickness=1, highlightbackground=ACC)
-            else:
-                btn.configure(bg=BTN, fg=FG,
-                              highlightthickness=1, highlightbackground=BORDER)
+            # The chosen profile is a sunk key, the others stand raised.
+            btn.configure(bg=ACC_SOFT if name == active else BTN, fg=FG)
+            btn.set_selected(name == active)
         if hasattr(self, "_lbl_profile_hint"):
             self._lbl_profile_hint.configure(
                 text=_HINTS.get(active, ""))
@@ -7677,13 +7667,15 @@ class App(tk.Tk):
         }
         self._profile_btns = {}
         for name, label in _PROFILE_LABELS.items():
-            btn = tk.Button(
-                btn_row, text=label,
+            btn = _bevel_tk.BevelButton(
+                btn_row, palette_fn=lambda: self._theme.palette,
+                scale_fn=lambda: self._theme.scale,
+                text=label,
                 bg=BTN, fg=FG,
                 font="VT.Base",
-                relief="flat", padx=6, pady=6,
+                padx=6, pady=6,
                 cursor="hand2",
-                highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+                highlightcolor=ACC,
                 activebackground=ACC_SOFT, activeforeground=FG,
                 command=lambda n=name: self._apply_profile(n),
             )
@@ -8274,6 +8266,8 @@ class App(tk.Tk):
                 frame.configure(highlightthickness=BORDER_PX)
                 alive.append(frame)
         self._card_frames = alive
+        # Last: the loops above may repaint a key's frames with a plain colour.
+        _bevel_tk.repaint_all()
         speaker = getattr(self, "_voice_speaker", None)
         if speaker is not None:
             speaker.apply_palette(self._theme.palette, self._theme.scale)
@@ -8463,24 +8457,24 @@ class App(tk.Tk):
             self._voice_preview_hub.stop_if("edge:")
             self._refresh_live_voice_info()
             for btn_v, btn_w in _pill_map.items():
-                if btn_v == cur:
-                    btn_w.configure(bg=ACC_SOFT, fg=FG, highlightbackground=ACC)
-                else:
-                    btn_w.configure(bg=BTN, fg=FG, highlightbackground=BORDER)
+                btn_w.configure(bg=ACC_SOFT if btn_v == cur else BTN, fg=FG)
+                btn_w.set_selected(btn_v == cur)
 
         _pill_map = {}
         for v in voices:
             label = v.split("-")[2].replace("Neural", "").replace("Multilingual", "ML")
-            btn = tk.Radiobutton(
-                self._voice_frame, text=label,
+            btn = _bevel_tk.BevelRadiobutton(
+                self._voice_frame, palette_fn=lambda: self._theme.palette,
+                scale_fn=lambda: self._theme.scale,
+                text=label,
                 variable=self._voice, value=v,
                 indicatoron=False,
                 bg=BTN, fg=FG,
                 selectcolor=ACC_SOFT,
                 activebackground=ACC_SOFT, activeforeground=FG,
                 font="VT.Base",
-                relief="flat", padx=10, pady=4,
-                highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACC,
+                padx=10, pady=4,
+                highlightcolor=ACC,
                 cursor="hand2",
                 command=_refresh_pills,
             )

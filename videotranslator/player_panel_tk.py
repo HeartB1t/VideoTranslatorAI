@@ -33,7 +33,10 @@ from .player_core import (
     playlist_groups,
     x_to_seconds,
 )
-from .ui_theme import ChipColors, player_chip_colors, player_icon_colors, resolve_palette
+from .bevel_tk import BevelButton
+from .ui_theme import (
+    ChipColors, bevel_edges, player_chip_colors, player_icon_colors, resolve_palette,
+)
 
 VIDEO_BG = "#000000"
 TEXT_FG = "#a3a3a3"
@@ -383,12 +386,13 @@ class PlayerPanel(_P1PlayerPanel):
             bg=palette.SURFACE, fg=palette.FG2, font="VT.Small", width=1,
         )
         self.now_playing_label.pack(side="left", fill="x", expand=True)
-        self.playlist_button = tk.Button(
-            info, text=self._ui_s("player_btn_playlist"), command=lambda: self._activate("playlist"),
-            relief="flat", bd=0, padx=7, pady=2, font="VT.Small",
+        # Raised keys (bevel_tk), like the transport keys below them.
+        self.playlist_button = BevelButton(
+            info, palette_fn=lambda: self._palette, scale_fn=lambda: self._scale,
+            text=self._ui_s("player_btn_playlist"), command=lambda: self._activate("playlist"),
+            padx=7, pady=2, font="VT.Small",
             bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
-            activeforeground=palette.ACC_FG, highlightthickness=2,
-            highlightbackground=palette.SURFACE, highlightcolor=palette.ACC,
+            activeforeground=palette.ACC_FG, highlightcolor=palette.ACC,
         )
         self.playlist_button.pack(side="right", padx=(6, 0))
         self._keyboard_operable(self.playlist_button, lambda: self._activate("playlist"))
@@ -396,16 +400,18 @@ class PlayerPanel(_P1PlayerPanel):
             self.playlist_button, lambda: self._ui_s("player_btn_playlist"),
             colors_fn=self._tip_colors,
         ))
-        self.audio_button = tk.Button(
-            info, text="A/B", command=lambda: self._activate("toggle_audio"),
-            relief="flat", bd=0, padx=5, pady=2, font="VT.Small",
+        self.audio_button = BevelButton(
+            info, palette_fn=lambda: self._palette, scale_fn=lambda: self._scale,
+            text="A/B", command=lambda: self._activate("toggle_audio"),
+            padx=5, pady=2, font="VT.Small",
             bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
             activeforeground=palette.ACC_FG, state="disabled",
         )
         self.audio_button.pack(side="right", padx=(4, 0))
-        self.subtitles_button = tk.Button(
-            info, text="CC", command=lambda: self._activate("toggle_subtitles"),
-            relief="flat", bd=0, padx=5, pady=2, font="VT.Small",
+        self.subtitles_button = BevelButton(
+            info, palette_fn=lambda: self._palette, scale_fn=lambda: self._scale,
+            text="CC", command=lambda: self._activate("toggle_subtitles"),
+            padx=5, pady=2, font="VT.Small",
             bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
             activeforeground=palette.ACC_FG, state="disabled",
         )
@@ -482,20 +488,25 @@ class PlayerPanel(_P1PlayerPanel):
         canvas = self._icon_controls[control]
         canvas.delete("chip", "icon")
         size = max(14, round(16 * self._scale))
-        extent = size + 8
-        canvas.configure(width=extent, height=extent)
-        offset = 4.0
+        edge, depth = bevel_edges(self._palette, self._scale)
+        # Taller than wide by the key's extra depth, so the icon stays centred
+        # on the face between the upper edge and the thicker lower one.
+        width, height = size + 8, size + 8 + depth - edge
+        canvas.configure(width=width, height=height)
         icon = self._icon_name(control)
         enabled = self._icon_enabled(control)
+        pressed = self._pressed_icon == control and enabled
         state = {"enabled": enabled, "hovered": self._hovered_icon == control,
-                 "pressed": self._pressed_icon == control}
+                 "pressed": pressed}
         color, _face = player_icon_colors(self._palette, icon, **state)
         surface = self._palette.SURFACE
         canvas.configure(bg=surface, highlightbackground=surface,
                          cursor="hand2" if enabled else "arrow")
-        self._draw_chip(canvas, extent, player_chip_colors(self._palette, icon, **state))
+        self._draw_chip(canvas, width, height, player_chip_colors(self._palette, icon, **state))
+        # A pressed key sinks: its icon moves down one pixel with it.
+        dx, dy = 4.0, 4.0 + (1 if pressed else 0)
         for kind, raw in icon_shapes(icon, size):
-            coords = [value + offset for value in raw]
+            coords = [value + (dy if index % 2 else dx) for index, value in enumerate(raw)]
             if kind == "line":
                 canvas.create_line(*coords, fill=color, width=max(1, round(1.5 * self._scale)),
                                    capstyle="round", joinstyle="round", tags="icon")
@@ -507,21 +518,20 @@ class PlayerPanel(_P1PlayerPanel):
             else:
                 canvas.create_polygon(*coords, fill=color, outline=color, tags="icon")
 
-    def _draw_chip(self, canvas: tk.Canvas, extent: int, chip: ChipColors) -> None:
-        """The raised chip under an icon: face, then a bevel of ``edge`` pixels
-        (lit top and left, shaded bottom and right; the theme swaps them
-        while pressed and flattens them when disabled)."""
-        edge = max(1, round(1.2 * self._scale))
+    def _draw_chip(self, canvas: tk.Canvas, width: int, height: int, chip: ChipColors) -> None:
+        """The raised key under an icon, like every button (``bevel_tk``):
+        face, upper edge on top and left, lower edge on the right and, thicker,
+        at the bottom (the key's depth). Pressing swaps the two edges; a
+        disabled key keeps them faded."""
+        edge, depth = bevel_edges(self._palette, self._scale)
         face = {"fill": chip.face, "outline": chip.face}
-        canvas.create_rectangle(0, 0, extent, extent, tags=("chip", "chip_face"), **face)
-        if chip.top_left == chip.face == chip.bottom_right:
-            return
-        lit = {"fill": chip.top_left, "width": 0, "tags": ("chip", "chip_bevel")}
-        shade = {"fill": chip.bottom_right, "width": 0, "tags": ("chip", "chip_bevel")}
-        canvas.create_rectangle(0, 0, extent, edge, **lit)
-        canvas.create_rectangle(0, 0, edge, extent, **lit)
-        canvas.create_rectangle(0, extent - edge, extent, extent, **shade)
-        canvas.create_rectangle(extent - edge, 0, extent, extent, **shade)
+        canvas.create_rectangle(0, 0, width, height, tags=("chip", "chip_face"), **face)
+        upper = {"fill": chip.top_left, "width": 0, "tags": ("chip", "chip_bevel")}
+        lower = {"fill": chip.bottom_right, "width": 0, "tags": ("chip", "chip_bevel")}
+        canvas.create_rectangle(0, 0, width, edge, **upper)
+        canvas.create_rectangle(0, 0, edge, height - depth, **upper)
+        canvas.create_rectangle(0, height - depth, width, height, **lower)
+        canvas.create_rectangle(width - edge, 0, width, height, **lower)
 
     def _icon_enabled(self, control: str) -> bool:
         # Playlist navigation can load another item even after Stop clears it.
@@ -648,8 +658,8 @@ class PlayerPanel(_P1PlayerPanel):
         self._state = state
         self.audio_button.configure(state="normal" if state.ab_available else "disabled")
         self.subtitles_button.configure(state="normal" if state.subs_available else "disabled")
-        self.subtitles_button.configure(
-            relief="sunken" if state.subs_available and state.subs_visible else "flat")
+        # Subtitles on: the CC key stays sunk (a relief on a bd=0 button showed nothing).
+        self.subtitles_button.set_selected(bool(state.subs_available and state.subs_visible))
         if not self._dragging:
             self._position = position
         hours = bool(state.duration is not None and state.duration >= 3600)
@@ -760,8 +770,7 @@ class PlayerPanel(_P1PlayerPanel):
                                    highlightcolor=palette.ACC)
         self.playlist_button.configure(
             bg=palette.BTN, fg=palette.FG, activebackground=palette.ACC_HOVER,
-            activeforeground=palette.ACC_FG, highlightbackground=palette.SURFACE,
-            highlightcolor=palette.ACC,
+            activeforeground=palette.ACC_FG, highlightcolor=palette.ACC,
         )
         for button in (self.audio_button, self.subtitles_button):
             button.configure(bg=palette.BTN, fg=palette.FG,
@@ -770,6 +779,9 @@ class PlayerPanel(_P1PlayerPanel):
         self.now_playing_label.configure(bg=palette.SURFACE, fg=palette.FG2)
         self.elapsed_label.configure(bg=palette.SURFACE, fg=palette.FG2)
         self.duration_label.configure(bg=palette.SURFACE, fg=palette.FG2)
+        # The loop above paints the keys' edge frames SURFACE: repaint them.
+        for button in (self.playlist_button, self.audio_button, self.subtitles_button):
+            button.repaint()
         self._redraw_icons()
         self._draw_seek()
 

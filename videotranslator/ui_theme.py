@@ -318,41 +318,68 @@ def _player_action_color(palette: Palette, icon: str) -> str:
     return _PLAYER_ACTION_COLORS[palette.dark].get(role, palette.FG)
 
 
+# Relative luminance from which a key face counts as light (bevel_colors).
+_LIGHT_FACE = 0.35
+
+
 @dataclass(frozen=True)
 class ChipColors:
-    """Colours of the raised chip drawn under a transport icon."""
+    """Colours of a raised key: its face and the two sides of its edge."""
 
     face: str
-    top_left: str       # lit edge when raised, shaded when pressed
-    bottom_right: str   # shaded edge when raised, lit when pressed
+    top_left: str       # upper edge when raised, lower edge when pressed
+    bottom_right: str   # the key's depth when raised, upper edge when pressed
+
+
+def bevel_colors(face: str, *, enabled: bool = True, pressed: bool = False) -> ChipColors:
+    """The edge that makes a flat ``face`` read as a raised key.
+
+    Chosen from the face, not from the theme: a dark face (most dark themes,
+    an accent key on a light theme) gets a lit upper edge and a deep shadow
+    below; a light face (light themes, a bright accent on a dark theme)
+    would lose a lighter edge, so its upper edge is a soft darker outline
+    and the shadow below is darker still. Either way the upper edge is
+    lighter than the lower one, and pressing (or a selected key) swaps them:
+    the key looks sunk. A disabled key keeps its shape with the edge faded
+    half way to the face, so it still reads as a button.
+    """
+    if relative_luminance(face) < _LIGHT_FACE:
+        upper, lower = lighten(face, 0.28), darken(face, 0.65)
+    else:
+        upper, lower = darken(face, 0.14), darken(face, 0.42)
+    if not enabled:
+        upper, lower = mix(upper, face, 0.5), mix(lower, face, 0.5)
+    if pressed:
+        upper, lower = lower, upper
+    return ChipColors(face, upper, lower)
+
+
+def bevel_edges(palette: Palette, scale: float = 1.0) -> tuple[int, int]:
+    """``(edge, depth)`` in pixels: the upper, left and right edges are
+    ``edge`` wide, the lower one ``depth`` (the key's thickness). The chunky
+    skins (``border_px`` 3) get chunkier keys, matching their card frames."""
+    unit = max(1, round(scale))
+    edge = unit + (1 if palette.border_px >= 3 else 0)
+    return edge, edge + 2 * unit
 
 
 def player_chip_colors(palette: Palette, icon: str, *, enabled: bool = True,
                        hovered: bool = False, pressed: bool = False) -> ChipColors:
-    """The chip under a transport icon, from palette roles only.
+    """The key under a transport icon, from palette roles only.
 
-    The face is the theme's button surface (BTN), with a bevel: lit edge top
-    and left, shaded edge bottom and right, swapped (and the face sunk a
-    little) while pressed. Hovering tints the face with the action colour of
-    the icon. A disabled chip is flat and sits between BTN and SURFACE: the
-    missing relief tells the state. Mixes of palette roles only, so every
-    theme (dark or light) and accent gets a consistent relief.
+    The face is the theme's button surface (BTN), sunk a little while
+    pressed; hovering tints it with the action colour of the icon. A
+    disabled key sits between BTN and SURFACE and ignores the pointer, with
+    the faded edge of ``bevel_colors``.
     """
     if not enabled:
-        face = mix(palette.BTN, palette.SURFACE, 0.5)
-        return ChipColors(face, face, face)
+        return bevel_colors(mix(palette.BTN, palette.SURFACE, 0.5), enabled=False)
     face = palette.BTN
     if hovered:
         face = mix(_player_action_color(palette, icon), face, 0.15)
     if pressed:
         face = darken(face, 0.08 if palette.dark else 0.05)
-    if palette.dark:
-        lit, shade = lighten(face, 0.22), darken(face, 0.45)
-    else:
-        lit, shade = lighten(face, 0.7), darken(face, 0.2)
-    if pressed:
-        lit, shade = shade, lit
-    return ChipColors(face, lit, shade)
+    return bevel_colors(face, pressed=pressed)
 
 
 def player_icon_colors(palette: Palette, icon: str, *, enabled: bool = True,

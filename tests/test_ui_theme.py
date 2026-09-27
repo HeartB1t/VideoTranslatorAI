@@ -83,7 +83,7 @@ class PlayerChipColorsTests(unittest.TestCase):
 
     ICONS = ("play", "pause", "stop", "next", "snapshot", "open_folder", "volume", "fullscreen")
 
-    def test_raised_chip_is_lit_top_left_and_shaded_bottom_right_and_inverts_when_pressed(self):
+    def test_raised_chip_has_its_upper_edge_lighter_and_inverts_when_pressed(self):
         lum = ui_theme.relative_luminance
         for theme, accent, hovered in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES,
                                                          (False, True)):
@@ -91,12 +91,11 @@ class PlayerChipColorsTests(unittest.TestCase):
             for icon in self.ICONS:
                 with self.subTest(theme=theme, accent=accent, icon=icon, hovered=hovered):
                     chip = ui_theme.player_chip_colors(palette, icon, hovered=hovered)
-                    self.assertGreater(lum(chip.top_left), lum(chip.face))
+                    self.assertGreater(lum(chip.top_left), lum(chip.bottom_right))
                     self.assertGreater(lum(chip.face), lum(chip.bottom_right))
                     pressed = ui_theme.player_chip_colors(palette, icon, hovered=hovered,
                                                           pressed=True)
-                    self.assertLess(lum(pressed.top_left), lum(pressed.face))
-                    self.assertLess(lum(pressed.face), lum(pressed.bottom_right))
+                    self.assertLess(lum(pressed.top_left), lum(pressed.bottom_right))
                     self.assertNotEqual(pressed.face, chip.face)
                     for value in (chip.face, chip.top_left, chip.bottom_right,
                                   pressed.face, pressed.top_left, pressed.bottom_right):
@@ -119,18 +118,73 @@ class PlayerChipColorsTests(unittest.TestCase):
                 self.assertNotEqual(
                     hover, ui_theme.player_chip_colors(palette, "stop", hovered=True).face)
 
-    def test_disabled_chip_is_flat_and_close_to_the_surface_whatever_the_pointer_does(self):
+    def test_disabled_chip_keeps_a_faded_relief_and_ignores_the_pointer(self):
+        # Flat disabled keys read as "not a button" (a Windows VM showed six of
+        # the eight transport keys flat with no video loaded): the relief stays,
+        # faded, on a face between BTN and SURFACE.
         lum = ui_theme.relative_luminance
         for theme in CONCRETE_THEMES:
             palette = resolve_palette(theme)
             with self.subTest(theme=theme):
                 chip = ui_theme.player_chip_colors(palette, "play", enabled=False)
-                self.assertEqual((chip.top_left, chip.bottom_right), (chip.face, chip.face))
+                self.assertGreater(lum(chip.top_left), lum(chip.bottom_right))
+                self.assertNotIn(chip.face, (chip.top_left, chip.bottom_right))
+                enabled = ui_theme.bevel_colors(chip.face)
+                self.assertLess(contrast_ratio(chip.top_left, chip.bottom_right),
+                                contrast_ratio(enabled.top_left, enabled.bottom_right))
                 low, high = sorted((lum(palette.BTN), lum(palette.SURFACE)))
                 self.assertTrue(low <= lum(chip.face) <= high)
                 for hovered, pressed in ((True, False), (False, True), (True, True)):
                     self.assertEqual(ui_theme.player_chip_colors(
                         palette, "play", enabled=False, hovered=hovered, pressed=pressed), chip)
+
+
+class BevelTests(unittest.TestCase):
+    """The raised-key edge shared by the transport keys and every button."""
+
+    ROLES = ("BTN", "ACC", "ACC_SOFT", "BORDER", "SEL")
+
+    def test_every_key_face_of_every_theme_gets_a_clearly_visible_edge(self):
+        lum = ui_theme.relative_luminance
+        for theme, accent in itertools.product(CONCRETE_THEMES, ACCENT_CHOICES):
+            palette = resolve_palette(theme, accent)
+            for role in self.ROLES:
+                face = getattr(palette, role)
+                with self.subTest(theme=theme, accent=accent, role=role):
+                    raised = ui_theme.bevel_colors(face)
+                    self.assertEqual(raised.face, face)
+                    self.assertGreaterEqual(
+                        contrast_ratio(raised.top_left, raised.bottom_right), 1.8)
+                    self.assertGreater(lum(raised.top_left), lum(raised.bottom_right))
+                    self.assertLess(lum(raised.bottom_right), lum(face))
+                    sunk = ui_theme.bevel_colors(face, pressed=True)
+                    self.assertEqual((sunk.top_left, sunk.bottom_right),
+                                     (raised.bottom_right, raised.top_left))
+
+    def test_dark_faces_get_a_lit_upper_edge_and_light_faces_an_outline(self):
+        lum = ui_theme.relative_luminance
+        for face in ("#15152e", "#393b40", "#0f3810"):
+            with self.subTest(face=face):
+                self.assertGreater(lum(ui_theme.bevel_colors(face).top_left), lum(face))
+        for face in ("#f6f7f9", "#ffe9a8", "#00ff88"):
+            with self.subTest(face=face):
+                self.assertLess(lum(ui_theme.bevel_colors(face).top_left), lum(face))
+
+    def test_disabled_edge_is_fainter_but_still_there(self):
+        for face in ("#393b40", "#f6f7f9", "#3574f0"):
+            with self.subTest(face=face):
+                on = ui_theme.bevel_colors(face)
+                off = ui_theme.bevel_colors(face, enabled=False)
+                self.assertLess(contrast_ratio(off.top_left, off.bottom_right),
+                                contrast_ratio(on.top_left, on.bottom_right))
+                self.assertGreater(contrast_ratio(off.top_left, off.bottom_right), 1.2)
+
+    def test_edges_are_one_pixel_with_a_thicker_bottom_and_scale(self):
+        graphite, dex = resolve_palette("graphite"), resolve_palette("dex")
+        self.assertEqual(ui_theme.bevel_edges(graphite), (1, 3))
+        self.assertEqual(ui_theme.bevel_edges(graphite, 0.9), (1, 3))
+        self.assertEqual(ui_theme.bevel_edges(graphite, 2.0), (2, 6))
+        self.assertEqual(ui_theme.bevel_edges(dex), (2, 4))       # chunky skin
 
 
 class DeriveAccentTests(unittest.TestCase):

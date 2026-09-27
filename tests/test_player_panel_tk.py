@@ -140,14 +140,36 @@ class PlayerPanelTests(unittest.TestCase):
         self.panel._release_icon("stop")
         self.assertEqual(self._chip(canvas)[0], raised.face)
         self.assertEqual(self.commands, [("stop", {})])
-        # A disabled control: flat chip, no relief, no command.
+        # A disabled control: a faded key that does not sink, no command.
         self.panel.render(self._state(item=None, status="idle"), position=None)
         disabled = player_chip_colors(self.theme.palette, "stop", enabled=False)
         self.panel._press_icon("stop")
         face, bevel = self._chip(canvas)
-        self.assertEqual((face, bevel), (disabled.face, []))
+        self.assertEqual((face, bevel), (disabled.face, [
+            disabled.top_left, disabled.top_left, disabled.bottom_right,
+            disabled.bottom_right]))
         self.panel._release_icon("stop")
         self.assertEqual(self.commands, [("stop", {})])
+
+    def test_transport_keys_have_a_thicker_lower_edge_and_sink_their_icon(self):
+        from videotranslator.ui_theme import bevel_edges
+
+        self.panel.render(self._state(status="paused"), position=12.0)
+        canvas = self.panel._icon_controls["stop"]
+        edge, depth = bevel_edges(self.theme.palette)
+        self.assertGreater(depth, edge)
+        width, height = int(canvas.cget("width")), int(canvas.cget("height"))
+        self.assertEqual(height - width, depth - edge)
+        bands = [canvas.coords(item) for item in canvas.find_withtag("chip_bevel")]
+        top, left, bottom, right = bands
+        self.assertEqual(top[3] - top[1], edge)
+        self.assertEqual(bottom[3] - bottom[1], depth)
+        self.assertEqual(right[2] - right[0], edge)
+        raised_y = min(canvas.coords(item)[1] for item in canvas.find_withtag("icon"))
+        self.panel._press_icon("stop")
+        sunk_y = min(canvas.coords(item)[1] for item in canvas.find_withtag("icon"))
+        self.assertEqual(sunk_y - raised_y, 1)
+        self.panel._release_icon("stop")
 
     def test_empty_player_transport_is_neutral_and_does_not_dispatch(self):
         self.panel.render(self._state(item=None, status="idle"), position=None)
