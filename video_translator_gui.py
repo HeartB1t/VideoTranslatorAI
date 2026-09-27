@@ -5182,7 +5182,7 @@ def _install_wav2lip_base_stack() -> None:
     print(f"     Installing Wav2Lip base deps: {', '.join(missing)}", flush=True)
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "--quiet",
-         "--break-system-packages"] + missing,
+         "--break-system-packages", *_system_packages.pip_constraint_args()] + missing,
         check=False,
     )
     if result.returncode != 0:
@@ -5210,7 +5210,7 @@ def _install_wav2lip_face_stack_linux() -> None:
         print(f"     Installing Wav2Lip face deps: {', '.join(light_pkgs)}", flush=True)
         res = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--quiet",
-             "--break-system-packages"] + light_pkgs,
+             "--break-system-packages", *_system_packages.pip_constraint_args()] + light_pkgs,
             check=False,
         )
         if res.returncode != 0:
@@ -5235,7 +5235,8 @@ def _install_wav2lip_face_stack_linux() -> None:
 
     print("     Installing dlib (compiling from source, may take a few minutes)...", flush=True)
     res = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--break-system-packages", "dlib"],
+        [sys.executable, "-m", "pip", "install", "--break-system-packages",
+         *_system_packages.pip_constraint_args(), "dlib"],
         check=False,
     )
     if res.returncode != 0:
@@ -6589,8 +6590,9 @@ class App(tk.Tk):
         self._log_write(f"[*] Installing: {', '.join(packages)}\n")
 
         def do():
-            cmd = [sys.executable, "-m", "pip", "install",
-                   "--break-system-packages", "--no-color"] + packages
+            # Profiles as constraints: this install cannot upgrade the tested
+            # torch, numpy or transformers (system_packages.pip_install_command).
+            cmd = _system_packages.pip_install_command(sys.executable, packages)
             # encoding="utf-8" + errors="replace" is critical on Windows:
             # without it, text=True falls back to locale.getpreferredencoding()
             # (cp1252 on Italian/English installs) and pip's tqdm progress bars
@@ -6692,7 +6694,8 @@ class App(tk.Tk):
             try:
                 result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--upgrade",
-                     "--break-system-packages", "--no-color", "yt-dlp"],
+                     "--break-system-packages", "--no-color",
+                     *_system_packages.pip_constraint_args(), "yt-dlp"],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                     timeout=120,
                 )

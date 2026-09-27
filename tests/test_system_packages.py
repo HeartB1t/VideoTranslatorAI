@@ -90,9 +90,29 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(sp.manual_command(None, ()), sp.GENERIC_PACKAGE_HINT)
 
     def test_pip_command_uses_the_flags_of_install_deps(self):
-        self.assertEqual(sp.pip_install_command("py", [PYTHON_MPV_REQUIREMENT]),
+        self.assertEqual(sp.pip_install_command("py", [PYTHON_MPV_REQUIREMENT], constraints=()),
                          ["py", "-m", "pip", "install", "--break-system-packages", "--no-color",
                           "mpv>=1.0.6,<2"])
+
+    def test_pip_command_keeps_the_profiles_bounds(self):
+        # An install the app makes must not upgrade the tested torch, numpy
+        # or transformers: the installer's profiles go in as constraints.
+        cmd = sp.pip_install_command("py", ["sacremoses"])
+        root = Path(__file__).resolve().parents[1]
+        for name in ("requirements-core.txt", "requirements-optional.txt",
+                     "requirements-gpu-cu124.txt"):
+            with self.subTest(profile=name):
+                index = cmd.index(str(root / name))
+                self.assertEqual(cmd[index - 1], "-c")
+        self.assertEqual(cmd[-1], "sacremoses")
+
+    def test_constraints_list_only_the_profiles_that_are_there(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(sp.pip_constraint_args(Path(tmp)), [])     # an installed wheel
+            (Path(tmp) / "requirements-optional.txt").write_text("keyring\n", encoding="utf-8")
+            self.assertEqual(sp.pip_constraint_args(Path(tmp)),
+                             ["-c", str(Path(tmp) / "requirements-optional.txt")])
 
 
 class _FakePopen:
@@ -235,8 +255,9 @@ class ComponentInstallerTests(unittest.TestCase):
                            ["pkexec", "apt-get", "install", "-y", "libmpv2"]]],
             expect_modules=["mpv"])
         self.assertEqual(result, sp.InstallResult(ok=True, restart_required=False, failed_step=None))
-        self.assertEqual(self.commands[0], ["py", "-m", "pip", "install", "--break-system-packages",
-                                            "--no-color", "mpv>=1.0.6,<2"])
+        # The same command as the app's other installs, profiles as constraints.
+        self.assertEqual(self.commands[0], sp.pip_install_command("py", ["mpv>=1.0.6,<2"]))
+        self.assertIn("-c", self.commands[0])
         self.assertEqual(self.commands[1:], [["pkexec", "apt-get", "update"],
                                              ["pkexec", "apt-get", "install", "-y", "libmpv2"]])
         self.assertEqual(self.refreshed, [True])

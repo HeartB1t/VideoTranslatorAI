@@ -167,9 +167,35 @@ def run_plan(plan: Sequence[Sequence[str]], *, runner: Callable[[Sequence[str]],
     return True
 
 
-def pip_install_command(python: str, packages: Sequence[str]) -> list[str]:
-    """The flags of App._install_deps, so the package lands where today's installs land."""
-    return [python, "-m", "pip", "install", "--break-system-packages", "--no-color", *packages]
+# The requirement profiles the Windows installer installs from. They sit
+# next to the package in the repository, the release ZIP and the Windows
+# installation (not in a wheel), and every install the app makes passes them
+# as constraints: a missing package, the MarianMT tokenizers or the Wav2Lip
+# stack cannot then upgrade the tested torch, numpy or transformers.
+CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",
+                       "requirements-gpu-cu124.txt")
+APP_DIR = Path(__file__).resolve().parents[1]
+
+
+def pip_constraint_args(app_dir: Path | None = None) -> list[str]:
+    """``-c`` flags for the profiles present in ``app_dir`` (default: the app's)."""
+    base = APP_DIR if app_dir is None else Path(app_dir)
+    args: list[str] = []
+    for name in CONSTRAINT_PROFILES:
+        path = base / name
+        if path.is_file():
+            args += ["-c", str(path)]
+    return args
+
+
+def pip_install_command(python: str, packages: Sequence[str], *,
+                        constraints: Sequence[str] | None = None) -> list[str]:
+    """The pip command of every install the app makes: the flags that put the
+    package where today's installs land, and the profiles as constraints
+    (``constraints`` overrides them, ``()`` for none)."""
+    extra = pip_constraint_args() if constraints is None else list(constraints)
+    return [python, "-m", "pip", "install", "--break-system-packages", "--no-color",
+            *extra, *packages]
 
 
 def refresh_import_paths(*, importlib_module: Any = importlib, site_module: Any = site,
