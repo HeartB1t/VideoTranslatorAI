@@ -906,7 +906,8 @@ class TalkingLogTests(unittest.TestCase):
             app.deiconify()
             host = tk.Toplevel(app)
             host.title("Voicebox")
-            button = tk.Button(host, text="Verifica")
+            button = tk.Button(host, text="Verifica",
+                               command=lambda: app._log_line("voicebox", "RESULT"))
             check_var = tk.BooleanVar(value=False)
             check = tk.Checkbutton(host, text="Voicebox", variable=check_var)
             off = tk.Button(host, text="Scarica", state="disabled")
@@ -919,7 +920,12 @@ class TalkingLogTests(unittest.TestCase):
                 w.event_generate("<Key-space>")
             text = self._panel(app)
             self.assertIn(it["log_click"].format(name="Voicebox > Verifica"), text)
+            # the click comes before its result
+            self.assertTrue(check_var.get())
+            self.assertLess(text.index(it["log_click"].format(name="Voicebox > Verifica")),
+                            text.index("RESULT"))
             self.assertIn(it["log_on"].format(name="Voicebox > Voicebox"), text)
+            self.assertTrue(check_var.get())
             self.assertIn(it["log_click_disabled"].format(name="Voicebox > Scarica"), text)
             host.destroy()
             # print() from the Tk thread reaches the panel (it used to go to the terminal)

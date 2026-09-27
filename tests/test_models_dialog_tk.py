@@ -64,6 +64,8 @@ class DialogTests(unittest.TestCase):
         self.root.withdraw()
         self.applied = []
         self.logged = []
+        self.asked = []
+        self.picked = ""
         self.busy = False
         self.media = None
         self.previous = {"asr": "small", "asr_live": "small", "mt": "google", "tts": "edge"}
@@ -79,7 +81,8 @@ class DialogTests(unittest.TestCase):
             on_apply=self.applied.append, on_revert=lambda: self.previous,
             media_path=lambda: self.media, busy=lambda: self.busy,
             detect=lambda: hw or _hw(), cached=lambda: {"small", "medium"},
-            log=self.logged.append)
+            log=self.logged.append,
+            ask_media=lambda parent, title: (self.asked.append(title), self.picked)[1])
         self.addCleanup(dlg.close)
         for _ in range(100):
             self.root.update()
@@ -124,10 +127,10 @@ class DialogTests(unittest.TestCase):
         self.assertIn("asr=", self.logged[-1])
         count = len(self.logged)
         dlg._set_status("same")
-        dlg._set_status("same")                       # repeated text is logged once
+        dlg._set_status("same")                       # a repeated result is logged again
         dlg._set_status("progress 1", progress=True)
-        dlg._set_status("progress 2", progress=True)  # within 5 s: not logged
-        self.assertEqual(self.logged[count:], ["same", "progress 1"])
+        dlg._set_status("progress 2", progress=True)  # progress within 5 s: not logged
+        self.assertEqual(self.logged[count:], ["same", "same", "progress 1"])
 
     def test_busy_is_explained_and_apply_greys_out_until_it_ends(self):
         dlg = self._dialog()
@@ -168,10 +171,28 @@ class DialogTests(unittest.TestCase):
         self.assertEqual(dlg.choices()["asr"], "large-v3")      # selection kept
         self.assertEqual(dlg._missing_whisper(), [])
 
-    def test_benchmark_needs_local_media(self):
+    def test_benchmark_without_media_asks_for_a_file(self):
         dlg = self._dialog()
         dlg._start_benchmark()
-        self.assertEqual(dlg._status.cget("text"), _s("mdl_bench_no_media"))
+        self.assertEqual(self.asked, [_s("mdl_bench_pick")])
+        self.assertEqual(dlg._status.cget("text"), _s("mdl_bench_no_file"))
+        dlg._start_benchmark()                        # a new click logs its result again
+        self.assertEqual(self.logged[-2:], [_s("mdl_bench_no_file")] * 2)
+        self.picked = "/clips/speech.mp4"
+        seen = []
+        with mock.patch.object(md, "benchmark_whisper",
+                               side_effect=lambda key, media, **kw: seen.append(media)), \
+                mock.patch.object(md.threading, "Thread",
+                                  side_effect=lambda target, **kw: mock.Mock(
+                                      start=target)):
+            dlg._start_benchmark()
+        self.assertEqual(seen, ["/clips/speech.mp4"])
+
+    def test_benchmark_is_explained_in_the_window(self):
+        dlg = self._dialog()
+        texts = [w.cget("text") for w in dlg.win.winfo_children()[0].winfo_children()
+                 if isinstance(w, tk.Label)]
+        self.assertIn(_s("mdl_bench_hint"), texts)
 
     def test_benchmark_result_is_shown(self):
         from videotranslator.model_manager import BenchmarkResult

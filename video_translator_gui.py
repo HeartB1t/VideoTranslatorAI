@@ -10746,9 +10746,15 @@ class App(tk.Tk):
         threading.excepthook = self._log_thread_exception
         self._lib_log_handler = _LogPanelHandler(self)
         logging.getLogger().addHandler(self._lib_log_handler)
+        # The log line goes BEFORE Tk's own class binding, which runs the
+        # command: the click then precedes its result in the log.
         for cls in ("Button", "Checkbutton", "Radiobutton"):
-            self.bind_class(cls, "<ButtonRelease-1>", self._log_widget_click, add="+")
-            self.bind_class(cls, "<Key-space>", self._log_widget_key, add="+")
+            for sequence, handler in (("<ButtonRelease-1>", self._log_widget_click),
+                                      ("<Key-space>", self._log_widget_key)):
+                original = self.bind_class(cls, sequence)
+                self.bind_class(cls, sequence, handler)
+                if original:
+                    self.tk.call("bind", cls, sequence, "+" + original)
         self.bind_class("TCombobox", "<<ComboboxSelected>>", self._log_combo_choice, add="+")
         self.bind_class("TScale", "<ButtonRelease-1>", self._log_scale_choice, add="+")
         self._log_event("log_started", py=platform.python_version(),
@@ -10800,8 +10806,18 @@ class App(tk.Tk):
     def _log_widget_key(self, event) -> None:
         self._log_widget_activation(event.widget)
 
-    def _log_widget_activation(self, widget) -> None:
-        """Log a button, check box or radio button just used (value after the change)."""
+    @staticmethod
+    def _is_on(value, onvalue) -> bool:
+        if str(value) == str(onvalue):
+            return True
+        return str(onvalue) == "1" and str(value).lower() in ("true", "1")
+
+    def _log_widget_activation(self, widget, *, before: bool = True) -> None:
+        """Log a button, check box or radio button being used.
+
+        Called before Tk runs the command (``before``), so a check box logs the
+        state it is switching to and a radio button the value it selects.
+        """
         try:
             name = self._widget_context(widget)
             if str(widget.cget("state")) == "disabled":
@@ -10810,10 +10826,13 @@ class App(tk.Tk):
             cls = widget.winfo_class()
             variable = str(widget.cget("variable")) if cls in ("Checkbutton", "Radiobutton") else ""
             if cls == "Checkbutton" and variable:
-                on = str(self.getvar(variable)) == str(widget.cget("onvalue"))
+                on = self._is_on(self.getvar(variable), widget.cget("onvalue"))
+                if before:
+                    on = not on
                 self._log_event("log_on" if on else "log_off", name=name)
             elif cls == "Radiobutton" and variable:
-                self._log_event("log_choice", name=name, value=self.getvar(variable))
+                value = widget.cget("value") if before else self.getvar(variable)
+                self._log_event("log_choice", name=name, value=value)
             else:
                 self._log_event("log_click", name=name)
         except Exception:                                # noqa: BLE001 - logging must not break a click

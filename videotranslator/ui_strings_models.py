@@ -1691,12 +1691,45 @@ _SK_T: dict[str, tuple[str, ...]] = {
     'vi': ('Giao diện vui nhộn',),
 }
 
+# --- benchmark explanation and file picker -------------------------------------
+_BM_KEYS = ('mdl_bench_hint', 'mdl_bench_pick', 'mdl_bench_no_file')
+
+_BM_T: dict[str, tuple[str, ...]] = {
+    'en': ('Benchmark: times the chosen speech recognition model (files) on this PC, on 30 s of the loaded video or of a file you pick: loading, first sentence and speed compared with real time.', 'Pick a video or audio file with speech for the benchmark', 'No file picked: the benchmark needs a video or audio file with speech.'),
+    'it': ('Benchmark: misura su questo PC il modello di riconoscimento vocale (file) scelto, su 30 s del video caricato o di un file che scegli: caricamento, prima frase e velocità rispetto al tempo reale.', 'Scegli un video o un audio con parlato per il benchmark', 'Nessun file scelto: il benchmark ha bisogno di un video o di un audio con parlato.'),
+    'ar': ('القياس: يقيس على هذا الحاسوب نموذج التعرّف على الكلام (الملفات) المختار، على 30 ثانية من الفيديو المحمّل أو من ملف تختاره: التحميل وأول جملة والسرعة مقارنة بالوقت الفعلي.', 'اختر ملف فيديو أو صوت فيه كلام للقياس', 'لم يُختر أي ملف: يحتاج القياس إلى ملف فيديو أو صوت فيه كلام.'),
+    'zh': ('基准测试：在这台电脑上用已加载视频或你选择的文件的 30 秒，测量所选语音识别模型（文件）的加载时间、第一句的时间以及相对实时的速度。', '为基准测试选择一个含有语音的视频或音频文件', '未选择文件：基准测试需要一个含有语音的视频或音频文件。'),
+    'cs': ('Benchmark: změří na tomto PC zvolený model rozpoznávání řeči (soubory) na 30 s načteného videa nebo souboru, který vyberete: načtení, první větu a rychlost oproti reálnému času.', 'Vyberte video nebo zvuk s řečí pro benchmark', 'Nebyl vybrán žádný soubor: benchmark potřebuje video nebo zvuk s řečí.'),
+    'da': ('Benchmark: måler den valgte talegenkendelsesmodel (filer) på denne pc på 30 s af den indlæste video eller en fil, du vælger: indlæsning, første sætning og hastighed i forhold til realtid.', 'Vælg en video- eller lydfil med tale til benchmark', 'Ingen fil valgt: benchmark kræver en video- eller lydfil med tale.'),
+    'nl': ('Benchmark: meet op deze pc het gekozen spraakherkenningsmodel (bestanden) op 30 s van de geladen video of van een bestand dat je kiest: laden, eerste zin en snelheid ten opzichte van realtime.', 'Kies een video- of audiobestand met spraak voor de benchmark', 'Geen bestand gekozen: de benchmark heeft een video- of audiobestand met spraak nodig.'),
+    'fi': ('Suorituskykytesti: mittaa valitun puheentunnistusmallin (tiedostot) tällä koneella 30 sekunnista ladattua videota tai valitsemaasi tiedostoa: latauksen, ensimmäisen lauseen ja nopeuden reaaliaikaan verrattuna.', 'Valitse puhetta sisältävä video- tai äänitiedosto testiä varten', 'Tiedostoa ei valittu: testi tarvitsee puhetta sisältävän video- tai äänitiedoston.'),
+    'fr': ("Benchmark : mesure sur ce PC le modèle de reconnaissance vocale (fichiers) choisi, sur 30 s de la vidéo chargée ou d'un fichier que vous choisissez : chargement, première phrase et vitesse par rapport au temps réel.", 'Choisissez un fichier vidéo ou audio avec de la parole pour le benchmark', "Aucun fichier choisi : le benchmark a besoin d'un fichier vidéo ou audio avec de la parole."),
+    'de': ('Benchmark: misst auf diesem PC das gewählte Spracherkennungsmodell (Dateien) an 30 s des geladenen Videos oder einer Datei Ihrer Wahl: Laden, erster Satz und Geschwindigkeit im Vergleich zur Echtzeit.', 'Video- oder Audiodatei mit Sprache für den Benchmark wählen', 'Keine Datei gewählt: der Benchmark braucht eine Video- oder Audiodatei mit Sprache.'),
+    'el': ('Μέτρηση επιδόσεων: μετρά σε αυτόν τον υπολογιστή το επιλεγμένο μοντέλο αναγνώρισης ομιλίας (αρχεία) σε 30 δευτερόλεπτα του φορτωμένου βίντεο ή ενός αρχείου που επιλέγετε: φόρτωση, πρώτη πρόταση και ταχύτητα σε σχέση με τον πραγματικό χρόνο.', 'Επιλέξτε αρχείο βίντεο ή ήχου με ομιλία για τη μέτρηση', 'Δεν επιλέχθηκε αρχείο: η μέτρηση χρειάζεται αρχείο βίντεο ή ήχου με ομιλία.'),
+    'hi': ('बेंचमार्क: इस पीसी पर चुने गए वाक् पहचान मॉडल (फ़ाइलें) को लोड किए गए वीडियो या आपकी चुनी फ़ाइल के 30 सेकंड पर मापता है: लोड होना, पहला वाक्य और रीयल-टाइम की तुलना में गति।', 'बेंचमार्क के लिए बोलचाल वाली वीडियो या ऑडियो फ़ाइल चुनें', 'कोई फ़ाइल नहीं चुनी गई: बेंचमार्क को बोलचाल वाली वीडियो या ऑडियो फ़ाइल चाहिए।'),
+    'hu': ('Teljesítményteszt: ezen a gépen méri a kiválasztott beszédfelismerő modellt (fájlok) a betöltött videó vagy egy általad választott fájl 30 másodpercén: betöltés, első mondat és sebesség a valós időhöz képest.', 'Válassz beszédet tartalmazó videó- vagy hangfájlt a teszthez', 'Nincs kiválasztott fájl: a teszthez beszédet tartalmazó videó- vagy hangfájl kell.'),
+    'id': ('Benchmark: mengukur model pengenalan suara (berkas) yang dipilih di PC ini, pada 30 detik video yang dimuat atau berkas yang Anda pilih: pemuatan, kalimat pertama, dan kecepatan dibanding waktu nyata.', 'Pilih berkas video atau audio berisi ucapan untuk benchmark', 'Tidak ada berkas dipilih: benchmark memerlukan berkas video atau audio berisi ucapan.'),
+    'ja': ('ベンチマーク：読み込んだ動画または選んだファイルの 30 秒を使って、選択した音声認識モデル（ファイル用）をこの PC で測定します：読み込み時間、最初の文までの時間、実時間に対する速度。', 'ベンチマーク用に音声を含む動画または音声ファイルを選択', 'ファイルが選択されていません：ベンチマークには音声を含む動画または音声ファイルが必要です。'),
+    'ko': ('벤치마크: 불러온 동영상 또는 선택한 파일의 30초로 이 PC에서 선택한 음성 인식 모델(파일)을 측정합니다: 로딩, 첫 문장, 실시간 대비 속도.', '벤치마크에 쓸 음성이 있는 동영상 또는 오디오 파일 선택', '선택한 파일이 없습니다: 벤치마크에는 음성이 있는 동영상 또는 오디오 파일이 필요합니다.'),
+    'no': ('Ytelsestest: måler den valgte talegjenkjenningsmodellen (filer) på denne PC-en på 30 s av den innlastede videoen eller en fil du velger: innlasting, første setning og hastighet sammenlignet med sanntid.', 'Velg en video- eller lydfil med tale for ytelsestesten', 'Ingen fil valgt: ytelsestesten trenger en video- eller lydfil med tale.'),
+    'pl': ('Test wydajności: mierzy na tym komputerze wybrany model rozpoznawania mowy (pliki) na 30 s wczytanego wideo lub wybranego pliku: wczytanie, pierwsze zdanie i szybkość względem czasu rzeczywistego.', 'Wybierz plik wideo lub audio z mową do testu', 'Nie wybrano pliku: test potrzebuje pliku wideo lub audio z mową.'),
+    'pt': ('Benchmark: mede neste PC o modelo de reconhecimento de voz (ficheiros) escolhido, em 30 s do vídeo carregado ou de um ficheiro que escolher: carregamento, primeira frase e velocidade em relação ao tempo real.', 'Escolha um ficheiro de vídeo ou áudio com fala para o benchmark', 'Nenhum ficheiro escolhido: o benchmark precisa de um ficheiro de vídeo ou áudio com fala.'),
+    'ro': ('Benchmark: măsoară pe acest PC modelul de recunoaștere vocală (fișiere) ales, pe 30 s din videoclipul încărcat sau dintr-un fișier ales de tine: încărcare, prima propoziție și viteza față de timpul real.', 'Alege un fișier video sau audio cu vorbire pentru benchmark', 'Niciun fișier ales: benchmarkul are nevoie de un fișier video sau audio cu vorbire.'),
+    'ru': ('Тест производительности: измеряет на этом ПК выбранную модель распознавания речи (файлы) на 30 с загруженного видео или выбранного файла: загрузка, первая фраза и скорость относительно реального времени.', 'Выберите видео- или аудиофайл с речью для теста', 'Файл не выбран: для теста нужен видео- или аудиофайл с речью.'),
+    'es': ('Benchmark: mide en este PC el modelo de reconocimiento de voz (archivos) elegido, sobre 30 s del vídeo cargado o de un archivo que elijas: carga, primera frase y velocidad respecto al tiempo real.', 'Elige un archivo de vídeo o audio con voz para el benchmark', 'No se eligió ningún archivo: el benchmark necesita un archivo de vídeo o audio con voz.'),
+    'sv': ('Prestandatest: mäter den valda taligenkänningsmodellen (filer) på den här datorn på 30 s av den inlästa videon eller en fil du väljer: inläsning, första meningen och hastighet jämfört med realtid.', 'Välj en video- eller ljudfil med tal för testet', 'Ingen fil vald: testet behöver en video- eller ljudfil med tal.'),
+    'tr': ('Karşılaştırma testi: seçilen konuşma tanıma modelini (dosyalar) bu bilgisayarda, yüklü videonun ya da seçtiğiniz bir dosyanın 30 saniyesinde ölçer: yükleme, ilk cümle ve gerçek zamana göre hız.', 'Test için konuşma içeren bir video veya ses dosyası seçin', 'Dosya seçilmedi: test için konuşma içeren bir video veya ses dosyası gerekir.'),
+    'uk': ('Тест продуктивності: вимірює на цьому ПК обрану модель розпізнавання мовлення (файли) на 30 с завантаженого відео або обраного файлу: завантаження, перша фраза й швидкість відносно реального часу.', 'Оберіть відео- або аудіофайл із мовленням для тесту', 'Файл не обрано: для тесту потрібен відео- або аудіофайл із мовленням.'),
+    'vi': ('Đo hiệu năng: đo trên máy này mô hình nhận dạng giọng nói (tệp) đã chọn, trên 30 giây của video đã tải hoặc tệp bạn chọn: thời gian tải, câu đầu tiên và tốc độ so với thời gian thực.', 'Chọn tệp video hoặc âm thanh có lời nói để đo hiệu năng', 'Chưa chọn tệp: phép đo cần một tệp video hoặc âm thanh có lời nói.'),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
            **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
            **dict(zip(_GEN_KEYS, _GEN_T.get(lang, ()))),
            **dict(zip(_VP_KEYS, _VP_T.get(lang, ()))),
-           **dict(zip(_SK_KEYS, _SK_T.get(lang, ())))}
+           **dict(zip(_SK_KEYS, _SK_T.get(lang, ()))),
+           **dict(zip(_BM_KEYS, _BM_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 
@@ -1710,7 +1743,7 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
     problems: list[str] = []
     for keys, table in ((_KEYS, _T), (_EL_KEYS, _EL_T), (_VB_KEYS, _VB_T),
                         (_GEN_KEYS, _GEN_T), (_VP_KEYS, _VP_T),
-                        (_SK_KEYS, _SK_T)):
+                        (_SK_KEYS, _SK_T), (_BM_KEYS, _BM_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

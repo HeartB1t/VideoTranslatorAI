@@ -81,6 +81,14 @@ def reason_text(reasons, ui_s: Callable[[str], str]) -> str:
     return "; ".join(out)
 
 
+def _ask_media_file(parent: tk.Misc, title: str) -> str:
+    from tkinter import filedialog
+    return filedialog.askopenfilename(
+        parent=parent, title=title,
+        filetypes=[("Video / audio", "*.mp4 *.mkv *.webm *.mov *.avi *.mp3 *.wav *.m4a *.flac "
+                                     "*.ogg *.opus"), ("*", "*")]) or ""
+
+
 class ModelsDialog:
     """The window. ``on_apply(choices)`` gets {stage: option key} on Apply;
     ``on_revert()`` restores the previous choices and returns them (or None);
@@ -94,8 +102,10 @@ class ModelsDialog:
                  media_path: Callable[[], str | None], busy: Callable[[], bool],
                  detect: Callable[[], HardwareInfo] = detect_hardware,
                  cached: Callable[[], set[str]] = cached_whisper_models,
-                 log: Callable[[str], None] | None = None) -> None:
+                 log: Callable[[str], None] | None = None,
+                 ask_media: Callable[[tk.Misc, str], str] | None = None) -> None:
         self._s = ui_s
+        self._ask_media = ask_media or _ask_media_file
         self._log = log
         self._last_logged = ""
         self._last_progress_log = 0.0
@@ -183,6 +193,8 @@ class ModelsDialog:
             wrap, btn = make_button(buttons, text=ui_s(key), command=cmd, primary=primary)
             wrap.pack(side="left", padx=(0, 6))
             self._buttons[name] = btn
+        tk.Label(body, text=ui_s("mdl_bench_hint"), bg=pal.BG, fg=pal.FG2, font="VT.Small",
+                 justify="left", anchor="w", wraplength=640).pack(fill="x", pady=(8, 0))
         self._set_buttons()
 
         threading.Thread(target=self._probe, name="models-probe", daemon=True).start()
@@ -333,11 +345,12 @@ class ModelsDialog:
 
     def _set_status(self, text: str, *, progress: bool = False) -> None:
         self._status.configure(text=text)
-        # Every message goes to the app log; download progress at most every 5 s.
-        if self._log is None or not text or text == self._last_logged:
+        # Every message goes to the app log (again if a new click repeats it);
+        # download progress only when it changes, at most every 5 s.
+        if self._log is None or not text:
             return
         now = time.monotonic()
-        if progress and now - self._last_progress_log < 5.0:
+        if progress and (text == self._last_logged or now - self._last_progress_log < 5.0):
             return
         self._last_progress_log = now if progress else 0.0
         self._last_logged = text
@@ -388,8 +401,11 @@ class ModelsDialog:
             return
         media = self._media_path()
         if not media:
-            self._set_status(self._s("mdl_bench_no_media"))
-            return
+            # Nothing loaded in the player: let the user pick a file instead.
+            media = self._ask_media(self.win, self._s("mdl_bench_pick"))
+            if not media:
+                self._set_status(self._s("mdl_bench_no_file"))
+                return
         key = self.choices().get("asr", "small")
         cancel = threading.Event()
         self._bench_cancel = cancel
