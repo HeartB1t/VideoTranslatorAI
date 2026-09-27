@@ -5,4 +5,9 @@ This package is introduced as a migration layer. The legacy
 gradually moved into importable, testable modules.
 """
 
+from .startup_env import apply_startup_env as _apply_startup_env
+
 __version__ = "2.0.0"
+
+# Before any ML library is imported (they read the environment at import).
+_apply_startup_env()
