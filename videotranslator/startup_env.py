@@ -36,6 +36,11 @@ def apply_startup_env(environ: MutableMapping[str, str] | None = None) -> dict[s
     return applied
 
 
+# Error handlers that never raise on an unencodable character.
+_NEVER_RAISE = frozenset({"backslashreplace", "replace", "ignore",
+                          "xmlcharrefreplace", "namereplace"})
+
+
 def harden_std_streams(streams: Iterable | None = None) -> list:
     """Never stop on printing a character the output encoding lacks.
 
@@ -43,15 +48,18 @@ def harden_std_streams(streams: Iterable | None = None) -> list:
     in the ANSI code page, cp1252 in Western Europe: the first "\u2192" the
     pipeline printed raised UnicodeEncodeError and stopped the job halfway.
     Such a stream now writes the character as an escape (``\\u2192``) and
-    keeps its encoding. UTF streams, streams with an error policy already
-    chosen and objects that cannot be reconfigured stay as they are.
-    ``streams`` defaults to stdout and stderr; returns the streams changed.
+    keeps its encoding. A piped stdout on Windows uses "surrogateescape",
+    which raises the same way, so only a handler that never raises counts
+    as a choice to respect. UTF streams and objects that cannot be
+    reconfigured stay as they are too. ``streams`` defaults to stdout and
+    stderr; returns the streams changed.
     """
     changed = []
     for stream in (sys.stdout, sys.stderr) if streams is None else streams:
         reconfigure = getattr(stream, "reconfigure", None)
         encoding = getattr(stream, "encoding", None)
-        if reconfigure is None or not encoding or getattr(stream, "errors", "strict") != "strict":
+        if (reconfigure is None or not encoding
+                or getattr(stream, "errors", "strict") in _NEVER_RAISE):
             continue
         try:
             if codecs.lookup(encoding).name.startswith("utf"):

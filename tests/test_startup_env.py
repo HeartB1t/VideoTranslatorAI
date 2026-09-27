@@ -61,11 +61,14 @@ class HardenStdStreamsTests(unittest.TestCase):
         return io.TextIOWrapper(io.BytesIO(), encoding=encoding, errors=errors)
 
     def test_a_legacy_code_page_escapes_a_character_it_lacks(self):
-        stream = self._stream("cp1252")
-        self.assertEqual(startup_env.harden_std_streams([stream]), [stream])
-        stream.write("[6/6] voce \u2192 mix")
-        stream.flush()
-        self.assertEqual(stream.buffer.getvalue(), b"[6/6] voce \\u2192 mix")
+        # "surrogateescape" is what a piped stdout gets on Windows: it raises too.
+        for errors in ("strict", "surrogateescape"):
+            with self.subTest(errors=errors):
+                stream = self._stream("cp1252", errors=errors)
+                self.assertEqual(startup_env.harden_std_streams([stream]), [stream])
+                stream.write("[6/6] voce \u2192 mix")
+                stream.flush()
+                self.assertEqual(stream.buffer.getvalue(), b"[6/6] voce \\u2192 mix")
 
     def test_utf8_a_chosen_error_policy_and_plain_objects_are_left_alone(self):
         utf8 = self._stream("utf-8")
