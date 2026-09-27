@@ -155,6 +155,10 @@ class ControllerTests(unittest.TestCase):
         self.wait_for(("a", "idle", None))
         self.assertEqual([e[1] for e in self.events], ["loading", "playing", "idle"])
         self.assertEqual(player.calls[0], ("play", b"mp3"))
+        # The worker removes the file right after it reports idle.
+        deadline = time.monotonic() + 5
+        while list(Path(self.tmp.name).iterdir()) and time.monotonic() < deadline:
+            time.sleep(0.01)
         self.assertEqual(list(Path(self.tmp.name).iterdir()), [])
         self.assertIsNone(preview.active_key())
         preview.close()
