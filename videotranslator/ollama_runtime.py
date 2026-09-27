@@ -709,24 +709,114 @@ def _ollama_install(log_cb=None) -> tuple[bool, str]:
     return _ollama_install_linux(log_cb=log_cb)
 
 
+def _ollama_pull_via_api(api_url: str, model: str, log, timeout_s: float) -> tuple[bool, str] | None:
+    """Pull ``model`` through the daemon's `POST /api/pull` JSON stream.
+
+    Returns None when the API cannot be reached, so the caller falls back to
+    the CLI. The download is one line rewritten with \\r (every layer
+    together, in GB), like a terminal progress bar; every other status
+    ("pulling manifest", "verifying sha256 digest", "writing manifest",
+    "success") is logged once, however often the daemon repeats it.
+    """
+    import json
+    import time
+    import requests
+    try:
+        resp = requests.post(f"{api_url.rstrip('/')}/api/pull",
+                             json={"model": model, "name": model, "stream": True},
+                             stream=True, timeout=(10, 120))
+    except requests.RequestException:
+        return None
+    totals: dict[str, int] = {}
+    done: dict[str, int] = {}
+    progress_open = False
+    last_status = ""
+    last_pct = -1
+    deadline = time.monotonic() + timeout_s
+
+    def close_progress() -> None:
+        nonlocal progress_open
+        if progress_open:
+            log("\n")
+            progress_open = False
+
+    try:
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json().get("error") or resp.status_code
+            except Exception:
+                detail = resp.status_code
+            return False, f"ollama pull {model}: {detail}"
+        for raw in resp.iter_lines():
+            if time.monotonic() > deadline:
+                close_progress()
+                return False, f"ollama pull {model}: timeout dopo {timeout_s:.0f}s"
+            if not raw:
+                continue
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue
+            if event.get("error"):
+                close_progress()
+                return False, f"ollama pull {model}: {event['error']}"
+            digest, total = event.get("digest"), event.get("total")
+            if digest:
+                if total:
+                    totals[digest] = int(total)
+                    done[digest] = int(event.get("completed") or 0)
+                    all_total = sum(totals.values())
+                    pct = min(100, sum(done.values()) * 100 // all_total)
+                    if pct != last_pct:
+                        log(f"\r     Scaricamento {model}: {pct}% "
+                            f"({sum(done.values()) / 1e9:.1f} / {all_total / 1e9:.1f} GB)")
+                        progress_open = True
+                        last_pct = pct
+                continue
+            status = str(event.get("status") or "")
+            if status and status != last_status:
+                close_progress()
+                log(f"     {status}\n")
+                last_status = status
+        close_progress()
+    except requests.RequestException as exc:
+        close_progress()
+        return False, f"ollama pull {model}: {exc}"
+    finally:
+        with contextlib.suppress(Exception):
+            resp.close()
+    if last_status != "success":
+        return False, f"ollama pull {model}: interrotto prima della fine"
+    return True, ""
+
+
 def _ollama_pull_model(
     model: str,
     binary: str | None = None,
     log_cb=None,
     timeout_s: int = 1200,
+    api_url: str = "http://localhost:11434",
 ) -> tuple[bool, str]:
-    """Run `ollama pull <model>`, streaming the output to the GUI.
+    """Download ``model`` into Ollama, with its progress in the log.
+
+    Through the daemon's API first (`_ollama_pull_via_api`): `ollama pull`
+    redraws a block of lines with cursor codes, which a log turns into
+    hundreds of repeated lines (seen on a Windows VM). The CLI remains the
+    fallback when the API cannot be reached.
 
     `timeout_s` is generous (20 min default) because models are large
-    (~4 GB) and connections can be slow. The subprocess is registered in
-    the global registry for cleanup on `_on_close`.
+    (~4 GB) and connections can be slow. The CLI subprocess is registered
+    in the global registry for cleanup on `_on_close`.
     """
     log = log_cb or (lambda s: None)
+    log(f"     Scaricando modello {model} (può richiedere diversi minuti)...\n")
+    via_api = _ollama_pull_via_api(api_url, model, log, timeout_s)
+    if via_api is not None:
+        return via_api
+
     ollama_bin = binary or _ollama_find_binary()
     if not ollama_bin:
         return False, "ollama binary non trovato"
-
-    log(f"     Scaricando modello {model} (può richiedere diversi minuti)...\n")
     # CREATE_NO_WINDOW (0x08000000) prevents Windows from popping a visible
     # console window for the ollama.exe child process (Go binary, console
     # subsystem). Without this the user sees a black cmd window pop up over

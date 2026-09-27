@@ -10172,7 +10172,8 @@ class App(tk.Tk):
             ):
                 self._log_async(f"[i] Pull rifiutato per {model}. Fallback Google.\n")
                 return False
-            ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async)
+            ok, msg = _ollama_pull_model(model, binary=binary, log_cb=self._log_async,
+                                         api_url=url)
             if not ok:
                 self._log_async(f"[x] ollama pull fallito: {msg}\n")
                 return False
