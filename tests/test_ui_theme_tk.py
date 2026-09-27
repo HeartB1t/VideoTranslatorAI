@@ -4,6 +4,7 @@ import threading
 import time
 import tkinter as tk
 import re
+import sys
 import unittest
 import weakref
 from tkinter import font as tkfont, ttk
@@ -704,7 +705,11 @@ class AutoThemeStartupTests(unittest.TestCase):
 class KeyboardAccessTests(unittest.TestCase):
     """M6: the header gear and the accent dots work without a mouse."""
 
-    ACTIVATE_KEYS = ("<Return>", "<KP_Enter>", "<space>")
+    # Tk for Windows has no keysym for the keypad Enter: it reports that key
+    # as Return ("event generate" finds no keycode for KP_Enter), so there
+    # the Return case covers it.
+    ACTIVATE_KEYS = (("<Return>", "<space>") if sys.platform == "win32"
+                     else ("<Return>", "<KP_Enter>", "<space>"))
 
     def _show(self, window):
         """Map ``window``: only a mapped window can take the keyboard focus."""
@@ -868,7 +873,13 @@ class KeyboardAccessTests(unittest.TestCase):
                            app._chk_keep_original_audio, app._btn_settings_reset,
                            app._btn_settings_close])
 
+            def mapped(order):
+                # Tab skips a widget not mapped yet, and on Windows a window's
+                # widgets appear a moment after the window itself.
+                return _pump_until(app, lambda: all(w.winfo_viewable() for w in order))
+
             order = expected()
+            self.assertTrue(mapped(order))
             self.assertEqual(self._tab_walk(order[0], len(order)), order + [order[0]])
             # A UI language change rebuilds the two segmented rows: they must
             # keep their place in the Tab order, not move after the dots.
@@ -877,6 +888,7 @@ class KeyboardAccessTests(unittest.TestCase):
             app._on_ui_lang_change()
             app.update()
             order = expected()
+            self.assertTrue(mapped(order))
             self.assertEqual(self._tab_walk(order[0], len(order)), order + [order[0]])
 
 
@@ -900,14 +912,19 @@ class SkinTests(unittest.TestCase):
             selected = app._seg_skin.winfo_children()[0]
             self.assertEqual(selected.cget("bg"), p.ACC_SOFT)
             self.assertEqual(app._hover_bg(), p.SEL)      # dark text on red is hard to read
-            wrap, button = app._flat_btn(app._settings_win, text="x")
+            # A window of its own: packed below the settings, the key may find
+            # no room (Windows keeps that window's size) and stay unmapped.
+            host = tk.Toplevel(app)
+            wrap, button = app._flat_btn(host, text="x")
             wrap.pack()
-            app._settings_win.deiconify()
-            app.update()
+            # A widget not mapped yet drops the <Enter> (on Windows the button
+            # appears a moment after its window).
+            self.assertTrue(_pump_until(app, button.winfo_viewable))
             # The binding runs inside event_generate: no event loop turn before
             # the check, or the real pointer's <Leave> would undo the hover.
             button.event_generate("<Enter>")
             self.assertEqual(button.cget("bg"), p.SEL)
+            host.destroy()
             app._seg_theme.winfo_children()[1].invoke()         # back to Graphite
             self.assertEqual((app._theme.palette.name, gui.BORDER_PX), ("graphite", 1))
             self.assertTrue(all(int(f.cget("highlightthickness")) == 1 for f in cards))
