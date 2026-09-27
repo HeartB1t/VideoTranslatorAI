@@ -347,7 +347,7 @@ it), leave the URL field empty, choose the same live settings, and click
 - **Delay:** on a file in delayed mode, how many seconds of translation are buffered before the picture resumes after a pause (at least 8 s with the voice, 4 s with subtitles only). When the picture keeps stopping, the buffer grows by 4 s up to 30 s and the bar says so.
 - **Voice dubbing:** experimental Edge-TTS speech playback through a second mpv
   instance. It requires internet access and is separate from batch voice cloning.
-- **ElevenLabs voice:** optional, in Advanced settings > Voice cloning > **ElevenLabs live voice**. Enter your API key, check it, pick a model that speaks the target language and a voice. The translated text is sent to ElevenLabs (paid per character); the key stays in the system keyring. If the key or the quota fails, Edge-TTS continues.
+- **ElevenLabs voice:** optional, in Advanced settings > Voice cloning > **ElevenLabs live voice**. Enter your API key, check it, pick a model that speaks the target language and a voice. The translated text is sent to ElevenLabs (paid per character); the key stays in the system keyring. If the key or the quota fails, Edge-TTS continues. It also opens from the **ElevenLabs…** button of the real-time bar, whose line tells which voice the dub will use.
 - **Mute original audio:** available both before starting and during translation.
   It silences the entire original soundtrack, including music and effects, but
   leaves the translated voice audible. It does not isolate the original speaker.
