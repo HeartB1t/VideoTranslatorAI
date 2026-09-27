@@ -21,6 +21,11 @@ set "PUBLIC_SHORTCUT=%PUBLIC%\Desktop\Video Translator AI.lnk"
 set "START_MENU_DIR=%ProgramData%\Microsoft\Windows\Start Menu\Programs\Video Translator AI"
 set "ICON_PATH=%INSTALL_DIR%\assets\icon.ico"
 set "SCRIPT_DIR=%~dp0"
+:: Profiles are copied beside the installed application for offline repair.
+set "CORE_REQUIREMENTS=%INSTALL_DIR%\requirements-core.txt"
+set "OPTIONAL_REQUIREMENTS=%INSTALL_DIR%\requirements-optional.txt"
+set "GPU_REQUIREMENTS=%INSTALL_DIR%\requirements-gpu-cu124.txt"
+set "PLAYER_REQUIREMENTS=%INSTALL_DIR%\requirements-player.txt"
 :: A new release is unpacked here before the hand-over. Program Files, never
 :: %TEMP%: only administrators can write it, so a non-elevated process cannot
 :: swap the verified files before this elevated script runs them.
@@ -572,7 +577,7 @@ goto :eof
 echo.
 echo  [*] Validating installation...
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
-"%PYTHON_EXE%" -c "import torch, faster_whisper, demucs, edge_tts, soundfile, numpy" >nul 2>&1
+"%PYTHON_EXE%" -c "import torch, faster_whisper, demucs, edge_tts, soundfile, numpy, requests" >nul 2>&1
 if errorlevel 1 (
     echo.
     echo  ============================================
@@ -590,12 +595,13 @@ if errorlevel 1 (
     call :check_module edge_tts "edge-tts"
     call :check_module soundfile "soundfile"
     call :check_module numpy "numpy"
+    call :check_module requests "requests"
     echo.
     pause
     exit /b 1
 )
 echo  [+] All core modules importable.
-call :logfile "Validation: core modules torch, faster_whisper, demucs, edge_tts, soundfile, numpy import ok"
+call :logfile "Validation: core modules torch, faster_whisper, demucs, edge_tts, soundfile, numpy, requests import ok"
 pushd "%INSTALL_DIR%" >nul 2>&1
 "%PYTHON_EXE%" -c "import video_translator_gui" >nul 2>&1
 set "APP_IMPORT_RC=%ERRORLEVEL%"
@@ -946,6 +952,15 @@ goto :eof
 :: %~1 = step label
 :step_copy_files
 echo.
+:: Refuse an incomplete source before changing the installed files, including
+:: when repair runs directly from the installation folder.
+for %%F in (requirements-core.txt requirements-optional.txt requirements-gpu-cu124.txt requirements-player.txt) do (
+    if not exist "%SCRIPT_DIR%%%F" (
+        echo  [ERROR] Missing %%F. Extract the complete release archive before running setup.
+        call :logfile "Step 2/6 copy files: missing dependency profile %%F"
+        exit /b 1
+    )
+)
 echo [%~1] Preparing installation folder...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 echo  [+] Folder: %INSTALL_DIR%
@@ -959,6 +974,15 @@ if not errorlevel 1 (
     call :logfile "Step 2/6 copy files: running from the install folder, nothing to copy"
     exit /b 0
 )
+for %%F in (requirements-core.txt requirements-optional.txt requirements-gpu-cu124.txt requirements-player.txt) do (
+    copy /Y "%SCRIPT_DIR%%%F" "%INSTALL_DIR%\%%F" >nul
+    if errorlevel 1 (
+        echo  [ERROR] Could not copy dependency profile %%F.
+        call :logfile "Step 2/6 copy files: dependency profile %%F not copied"
+        exit /b 1
+    )
+)
+
 echo  [*] Copying script...
 copy /Y "%SCRIPT_DIR%video_translator_gui.py" "%INSTALL_DIR%\video_translator_gui.py" >nul
 if errorlevel 1 (
@@ -1013,40 +1037,29 @@ echo  [*] Upgrading pip...
 :: that pip on Windows emits when cleaning up its own .exe during self-update
 :: (file-lock workaround leaves a .deleteme that vanishes before the cleanup).
 :: The upgrade itself succeeds; only the trailing cleanup whisper is hidden.
-"%PYTHON_EXE%" -m pip install --upgrade pip --quiet 2>nul
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" --upgrade pip --quiet 2>nul
 
-:: NB: pyannote.audio<4.0 kept in its OWN variable, quoted where it is used
-:: and never echoed: cmd.exe reads an unquoted '<' as input redirection.
-:: One level of quotes only, the same pattern as MPV_PIN. With nested quotes
-:: the second '"' closed the string, '<4.0' became a redirection from a file
-:: that does not exist, the `set` failed ("cannot find the file specified")
-:: and the variable stayed empty: pyannote.audio was never installed and the
-:: GUI had to install it at first start (Windows 11 VM, 2026-09-27).
-set "PYANNOTE_PIN=pyannote.audio<4.0"
-set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub yt-dlp pyloudnorm sentencepiece sacremoses torchcodec silero-vad keyring"
-
-"%PYTHON_EXE%" -c "import sys; sys.exit(0 if sys.version_info >= (3,13) else 1)" >nul 2>&1
-if not errorlevel 1 (
-    set "PACKAGES=!PACKAGES! audioop-lts"
-)
+:: Requirements and constraints come from the shipped profiles. Constraints
+:: also apply to every later optional install, so it cannot upgrade the core
+:: ML stack outside the tested range. They do not install optional packages.
 
 echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
-"%PYTHON_EXE%" -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet ^
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo  [!] PyTorch cu124 failed, trying CPU version...
     call :logfile "Step 3/6 PyTorch: cu124 build failed, trying the CPU build"
-    "%PYTHON_EXE%" -m pip install "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --quiet
+    "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet
     if errorlevel 1 call :logfile "Step 3/6 PyTorch: CPU build failed too"
 ) else (
     call :logfile "Step 3/6 PyTorch 2.6.0 cu124: ok"
 )
 
 echo  [*] Installing ctranslate2...
-"%PYTHON_EXE%" -m pip install ctranslate2 --quiet
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" ctranslate2 --quiet
 
 echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)...
-"%PYTHON_EXE%" -m pip install "%PYANNOTE_PIN%" !PACKAGES! --quiet
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%CORE_REQUIREMENTS%" pyannote.audio sentencepiece sacremoses silero-vad keyring --quiet
 if errorlevel 1 (
     echo  [!] Error installing Python packages.
     call :logfile "Step 3/6 pipeline packages: FAILED - pip install of faster-whisper, demucs, edge-tts and the rest"
@@ -1058,29 +1071,29 @@ call :logfile "Step 3/6 pipeline packages: ok"
 if errorlevel 1 (
     echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
     call :logfile "Step 3/6 PyTorch: a dependency replaced the cu124 build, reinstalling cu124"
-    "%PYTHON_EXE%" -m pip install --upgrade --force-reinstall --no-deps "torch==2.6.0" "torchaudio==2.6.0" "torchvision==0.21.0" --index-url https://download.pytorch.org/whl/cu124 --quiet
+    "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" --upgrade --force-reinstall -r "%GPU_REQUIREMENTS%" --index-url https://download.pytorch.org/whl/cu124 --quiet
     if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
     if errorlevel 1 call :logfile "Step 3/6 PyTorch: cu124 reinstall FAILED - GPU acceleration may be unavailable"
 )
 
 echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
-"%PYTHON_EXE%" -m pip install "transformers>=4.40.0,<5.1" --quiet
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" transformers --quiet
 if errorlevel 1 (
     echo  [!] transformers install failed.
     call :logfile "Step 3/6 transformers: FAILED"
     exit /b 1
 )
 
-"%PYTHON_EXE%" -m pip install Cython setuptools wheel --quiet
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" Cython setuptools wheel --quiet
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
 call :find_vcvarsall
 
 echo  [*] Installing coqui-tts fork (voice cloning)...
-"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --quiet 2>nul
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" coqui-tts transformers --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
-"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" coqui-tts transformers --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
 if "%~2"=="1" (
@@ -1111,7 +1124,7 @@ if errorlevel 1 (
 )
 
 call :find_vcvarsall
-"%PYTHON_EXE%" -m pip install coqui-tts "transformers<5.1" --no-build-isolation --quiet 2>nul
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" coqui-tts transformers --no-build-isolation --quiet 2>nul
 if not errorlevel 1 goto step_tts_ok
 
 :step_tts_failed
@@ -1238,19 +1251,19 @@ set "_DLIB_OK="
 
 if defined DLIB_WHEEL_URL (
     echo  [*] Trying pre-built dlib wheel for cp%PY_TAG% ^(mirror^)...
-    "%PYTHON_EXE%" -m pip install "%DLIB_WHEEL_URL%" --quiet
+    "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" "%DLIB_WHEEL_URL%" --quiet
     if not errorlevel 1 set "_DLIB_OK=1"
 )
 
 if not defined _DLIB_OK (
     echo  [*] Mirror unavailable or absent. Trying official PyPI: pip install dlib ...
-    "%PYTHON_EXE%" -m pip install dlib --quiet
+    "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" dlib --quiet
     if not errorlevel 1 set "_DLIB_OK=1"
 )
 
 if not defined _DLIB_OK (
     echo  [*] PyPI build failed. Trying community wheel: pip install dlib-bin ...
-    "%PYTHON_EXE%" -m pip install dlib-bin --quiet
+    "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" dlib-bin --quiet
     if not errorlevel 1 set "_DLIB_OK=1"
 )
 
@@ -1278,7 +1291,7 @@ if defined _DLIB_OK (
 :: basicsr 1.4.2 -- abandoned 2022, fails to build on Python 3.13 with
 :: KeyError '__version__' (PEP 667 broke its setup.py exec/locals pattern).
 :: new-basicsr installs the SAME 'basicsr' module so all imports stay valid.
-"%PYTHON_EXE%" -m pip install new-basicsr facexlib --quiet
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" new-basicsr facexlib --quiet
 :: NB: parens inside `echo` inside an `if () else ()` block prematurely
 :: close the else branch in cmd's parser. Use ^( ^) to escape, or drop them.
 if errorlevel 1 (
@@ -1487,10 +1500,8 @@ exit /b 0
 :step_player
 echo.
 echo [%~1] Installing the integrated video player (optional)...
-:: The pin lives in its own variable, quoted where it is used and never
-:: echoed: cmd.exe would read the comparison signs as redirections.
-set "MPV_PIN=mpv>=1.0.6,<2"
-"%PYTHON_EXE%" -m pip install "%MPV_PIN%" --quiet
+:: Use the same player profile as the command-line installation.
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%PLAYER_REQUIREMENTS%" --quiet
 if errorlevel 1 (
     call :logfile "Step 5/6 player: pip install of the mpv package FAILED"
     goto step_player_disabled
