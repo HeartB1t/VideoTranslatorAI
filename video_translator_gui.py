@@ -344,6 +344,7 @@ from videotranslator import bevel_tk as _bevel_tk  # noqa: E402
 from videotranslator import gear_icon as _gear_icon  # noqa: E402
 from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
+from videotranslator.resource_paths import assets_dir as _assets_dir  # noqa: E402
 from videotranslator import live_session as _live_session_module  # noqa: E402
 from videotranslator import player_core as _player_core  # noqa: E402
 from videotranslator import player_engine as _player_engine  # noqa: E402
@@ -6324,9 +6325,10 @@ class App(tk.Tk):
         from a source checkout without the assets committed yet.
         """
         here = Path(__file__).resolve().parent
-        candidates_ico = [here / "assets" / "icon.ico", here / "icon.ico"]
-        candidates_png = [here / "assets" / "icon.png",
-                          here / "assets" / "icon_256.png",
+        assets = _assets_dir()
+        candidates_ico = [assets / "icon.ico", here / "icon.ico"]
+        candidates_png = [assets / "icon.png",
+                          assets / "icon_256.png",
                           here / "icon.png"]
 
         # Windows honours .ico best via iconbitmap
@@ -7829,7 +7831,7 @@ class App(tk.Tk):
         self._player_panel = _PlayerPanel(
             self._player_area, ui_s=self._s, make_button=self._flat_btn,
             on_command=self._on_player_command,
-            logo_path=Path(__file__).resolve().parent / "assets" / "icon_256.png",
+            logo_path=_assets_dir() / "icon_256.png",
             theme=self._theme, keyboard_operable=self._keyboard_operable,
             log=self._player_log)
         # Live-translation strip under the player transport (spec 5.9). It sits

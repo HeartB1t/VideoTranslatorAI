@@ -3,4 +3,5 @@ include LICENSE
 include requirements*.txt
 include setup_windows.bat
 recursive-include assets *.ico *.png
+recursive-include assets/fonts *.ttf OFL-*.txt
 recursive-include docs *.md

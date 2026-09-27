@@ -97,9 +97,19 @@ Issues = "https://github.com/HeartB1t/VideoTranslatorAI/issues"
 [tool.setuptools]
 py-modules = ["video_translator_gui"]
 include-package-data = true
+# The icons and fonts stay in assets/ in the repository (release ZIP, Windows
+# installer); the wheel carries them inside the package as
+# videotranslator/assets, found by videotranslator.resource_paths. The list
+# is explicit because of that mapping: add new subpackages here.
+packages = ["videotranslator", "videotranslator.assets", "videotranslator.assets.fonts"]
+package-dir = { "videotranslator.assets" = "assets" }
 
-[tool.setuptools.packages.find]
-include = ["videotranslator*"]
+[tool.setuptools.package-data]
+"videotranslator.assets" = ["icon.ico", "icon.png", "icon_256.png"]
+"videotranslator.assets.fonts" = ["*.ttf", "OFL-*.txt"]
+
+[tool.setuptools.exclude-package-data]
+"videotranslator.assets" = ["screenshot.png"]
 
 [tool.setuptools.dynamic]
 version = { attr = "videotranslator.__version__" }

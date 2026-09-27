@@ -22,8 +22,9 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-FONTS_DIR = PACKAGE_ROOT / "assets" / "fonts"
+from .resource_paths import assets_dir
+
+FONTS_DIR = assets_dir() / "fonts"
 FONT_FILES = ("PixelifySans.ttf", "VT323-Regular.ttf")
 FR_PRIVATE = 0x10
 USER_FONT_SUBDIR = "VideoTranslatorAI"
