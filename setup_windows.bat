@@ -174,7 +174,6 @@ if errorlevel 1 ( call :logfile "RESULT: installation incomplete" & pause & exit
 call :player_check
 call :logfile "RESULT: installation complete"
 call :print_done "Installation complete"
-pause
 exit /b 0
 
 
@@ -212,7 +211,7 @@ if /i not "%CONFIRM%"=="Y" (
 
 if not exist "%INSTALL_DIR%" (
     echo.
-    echo  [!] %INSTALL_DIR% not found.
+    echo  [^^!] %INSTALL_DIR% not found.
     echo      Repair requires an existing install. Use the Install mode instead.
     call :logfile "Repair stopped: %INSTALL_DIR% not found, use Install instead"
     pause
@@ -245,7 +244,6 @@ if errorlevel 1 ( call :logfile "RESULT: repair incomplete" & pause & exit /b 1 
 call :player_check
 call :logfile "RESULT: repair complete"
 call :print_done "Repair complete"
-pause
 exit /b 0
 
 :: Hand-over to the installer of the new release, verified and unpacked by
@@ -432,7 +430,7 @@ echo.
 echo  --- Python AI packages (installed system-wide) ---
 where python >nul 2>&1
 if errorlevel 1 (
-    echo  [!] python not found in PATH, skipping package removal.
+    echo  [^^!] python not found in PATH, skipping package removal.
     goto uninst_custom_tools
 )
 if not defined PYTHON_EXE (
@@ -502,13 +500,13 @@ goto uninst_done
 
 
 :uninst_done
-:: :remove_app left at most this script in the install folder. A plain
-:: (non-recursive) rmdir removes the folder only when it is empty; when this
-:: script runs from there, the folder stays and the user is told.
+:: :remove_app left at most this script in the install folder, and only when
+:: it runs from there. A plain (non-recursive) rmdir removes the folder only
+:: when it is empty; otherwise the folder stays and the user is told.
 if "%VTAI_REMOVE_INSTALL_DIR%"=="1" rmdir "%INSTALL_DIR%" 2>nul
 if "%VTAI_REMOVE_INSTALL_DIR%"=="1" if exist "%INSTALL_DIR%" (
     echo.
-    echo  [!] %INSTALL_DIR% still holds this uninstaller:
+    echo  [^^!] %INSTALL_DIR% still holds this uninstaller:
     echo      delete that folder by hand after closing this window.
     call :logfile "Remove application folder: only setup_windows.bat is left, to delete by hand"
 )
@@ -784,7 +782,7 @@ if not defined PYTHON_EXE (
 
 if defined PYTHON_EXE goto step_python_found
 
-echo  [!] No usable Python found ^(Microsoft Store stub does not count^).
+echo  [^^!] No usable Python found ^(Microsoft Store stub does not count^).
 echo      Downloading and installing Python 3.11.9 silently...
 powershell -Command ^
     "$url = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe';" ^
@@ -799,7 +797,7 @@ powershell -Command ^
     "Write-Host '  [+] Python 3.11 installed successfully.'"
 
 if errorlevel 1 (
-    echo  [!] Auto-install failed. Download manually from:
+    echo  [^^!] Auto-install failed. Download manually from:
     echo      https://www.python.org/downloads/
     echo      Check "Add Python to PATH" during installation, then re-run this bat.
     call :logfile "Step 1/6 Python: FAILED - download or silent install of Python 3.11.9"
@@ -848,14 +846,14 @@ powershell -Command ^
     "Remove-Item $out -Force;" ^
     "Write-Host '  [+] Python 3.11 installed alongside.'"
 if errorlevel 1 (
-    echo  [!] Bundled Python 3.11.9 install failed. Aborting.
+    echo  [^^!] Bundled Python 3.11.9 install failed. Aborting.
     echo      Install Python 3.10-3.13 manually from https://www.python.org/downloads/
     exit /b 1
 )
 
 set "PYTHON_EXE=%ProgramFiles%\Python311\python.exe"
 if not exist "%PYTHON_EXE%" (
-    echo  [!] Bundled Python 3.11.9 not found at "%PYTHON_EXE%" after install. Aborting.
+    echo  [^^!] Bundled Python 3.11.9 not found at "%PYTHON_EXE%" after install. Aborting.
     exit /b 1
 )
 
@@ -944,7 +942,7 @@ goto :eof
 
 :update_prepare_lost
 set "VTAI_NEW_SETUP="
-echo  [!] The new release is missing after the download: repairing with the local files.
+echo  [^^!] The new release is missing after the download: repairing with the local files.
 call :logfile "Update check: hand-over file missing, repairing with the local files"
 goto :eof
 
@@ -986,7 +984,7 @@ for %%F in (requirements-core.txt requirements-optional.txt requirements-gpu-cu1
 echo  [*] Copying script...
 copy /Y "%SCRIPT_DIR%video_translator_gui.py" "%INSTALL_DIR%\video_translator_gui.py" >nul
 if errorlevel 1 (
-    echo  [!] Error copying script. Make sure video_translator_gui.py is in the same folder as this .bat
+    echo  [^^!] Error copying script. Make sure video_translator_gui.py is in the same folder as this .bat
     call :logfile "Step 2/6 copy files: video_translator_gui.py not copied from %SCRIPT_DIR%"
     exit /b 1
 )
@@ -996,7 +994,7 @@ if exist "%SCRIPT_DIR%videotranslator" (
     if not exist "%INSTALL_DIR%\videotranslator" mkdir "%INSTALL_DIR%\videotranslator"
     copy /Y "%SCRIPT_DIR%videotranslator\*.py" "%INSTALL_DIR%\videotranslator\" >nul
     if errorlevel 1 (
-        echo  [!] Error copying Python package folder. Make sure videotranslator\*.py is next to this .bat
+        echo  [^^!] Error copying Python package folder. Make sure videotranslator\*.py is next to this .bat
         call :logfile "Step 2/6 copy files: videotranslator package not copied from %SCRIPT_DIR%"
         exit /b 1
     )
@@ -1018,7 +1016,7 @@ if exist "%SCRIPT_DIR%assets" (
 :: "Update" entry runs it, even after the user deletes the download.
 copy /Y "%SCRIPT_DIR%setup_windows.bat" "%INSTALL_DIR%\setup_windows.bat" >nul
 if errorlevel 1 (
-    echo  [!] Could not keep a copy of setup_windows.bat: the Start Menu update will not work.
+    echo  [^^!] Could not keep a copy of setup_windows.bat: the Start Menu update will not work.
     call :logfile "Step 2/6 copy files: setup_windows.bat NOT kept - the Start Menu update will not work"
 ) else (
     echo  [+] Installer kept for future updates.
@@ -1047,7 +1045,7 @@ echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
-    echo  [!] PyTorch cu124 failed, trying CPU version...
+    echo  [^^!] PyTorch cu124 failed, trying CPU version...
     call :logfile "Step 3/6 PyTorch: cu124 build failed, trying the CPU build"
     "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet
     if errorlevel 1 call :logfile "Step 3/6 PyTorch: CPU build failed too"
@@ -1061,7 +1059,7 @@ echo  [*] Installing ctranslate2...
 echo  [*] Installing pipeline packages (faster-whisper, demucs, edge-tts, ...)...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%CORE_REQUIREMENTS%" pyannote.audio sentencepiece sacremoses silero-vad keyring --quiet
 if errorlevel 1 (
-    echo  [!] Error installing Python packages.
+    echo  [^^!] Error installing Python packages.
     call :logfile "Step 3/6 pipeline packages: FAILED - pip install of faster-whisper, demucs, edge-tts and the rest"
     exit /b 1
 )
@@ -1069,17 +1067,17 @@ call :logfile "Step 3/6 pipeline packages: ok"
 
 "%PYTHON_EXE%" -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo  [!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
+    echo  [^^!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
     call :logfile "Step 3/6 PyTorch: a dependency replaced the cu124 build, reinstalling cu124"
     "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" --upgrade --force-reinstall -r "%GPU_REQUIREMENTS%" --index-url https://download.pytorch.org/whl/cu124 --quiet
-    if errorlevel 1 echo  [!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
+    if errorlevel 1 echo  [^^!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
     if errorlevel 1 call :logfile "Step 3/6 PyTorch: cu124 reinstall FAILED - GPU acceleration may be unavailable"
 )
 
 echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" transformers --quiet
 if errorlevel 1 (
-    echo  [!] transformers install failed.
+    echo  [^^!] transformers install failed.
     call :logfile "Step 3/6 transformers: FAILED"
     exit /b 1
 )
@@ -1097,7 +1095,7 @@ if not errorlevel 1 goto step_tts_ok
 if not errorlevel 1 goto step_tts_ok
 
 if "%~2"=="1" (
-    echo  [!] coqui-tts not installed and repair mode does not auto-install VS Build Tools.
+    echo  [^^!] coqui-tts not installed and repair mode does not auto-install VS Build Tools.
     echo      Re-run setup_windows.bat install if you need voice cloning.
     call :logfile "Step 3/6 voice cloning coqui-tts: not installed - repair mode skips VS Build Tools"
     goto step_tts_end
@@ -1118,7 +1116,7 @@ powershell -Command ^
     "Write-Host '  [+] VS Build Tools installed.'"
 
 if errorlevel 1 (
-    echo  [!] VS Build Tools auto-install failed. Voice cloning skipped.
+    echo  [^^!] VS Build Tools auto-install failed. Voice cloning skipped.
     call :logfile "Step 3/6 voice cloning: VS C++ Build Tools install FAILED"
     goto step_tts_failed
 )
@@ -1191,7 +1189,7 @@ rmdir /S /Q "%VC_DIR%" 2>nul
 :: 0 installed, 3010 installed (restart later), 1638 a newer one is present,
 :: 97 not signed by Microsoft (refused), 98 download or launch failed
 if "%VC_RC%"=="97" (
-    echo  [!] The downloaded runtime is not signed by Microsoft: not installed.
+    echo  [^^!] The downloaded runtime is not signed by Microsoft: not installed.
     call :logfile "Step 3/6 Visual C++ runtime: REFUSED - the download has no valid Microsoft signature"
     goto step_vc_runtime_manual
 )
@@ -1295,7 +1293,7 @@ if defined _DLIB_OK (
 :: NB: parens inside `echo` inside an `if () else ()` block prematurely
 :: close the else branch in cmd's parser. Use ^( ^) to escape, or drop them.
 if errorlevel 1 (
-    echo  [!] new-basicsr/facexlib install failed. Lip Sync may not work.
+    echo  [^^!] new-basicsr/facexlib install failed. Lip Sync may not work.
     call :logfile "Step 3/6 lip sync new-basicsr and facexlib: FAILED - lip sync may not work"
 ) else (
     echo  [+] new-basicsr ^(drop-in basicsr^) and facexlib installed.
@@ -1308,7 +1306,7 @@ if exist "%WAV2LIP_REPO%\inference.py" goto step_wav2lip_repo_done
 where git >nul 2>&1
 if not errorlevel 1 goto step_wav2lip_clone
 
-echo  [!] git not found. Downloading and installing Git for Windows silently...
+echo  [^^!] git not found. Downloading and installing Git for Windows silently...
 powershell -Command ^
     "$url = 'https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe';" ^
     "$out = $env:TEMP + '\git_installer.exe';" ^
@@ -1321,7 +1319,7 @@ powershell -Command ^
     "Remove-Item $out -Force;" ^
     "Write-Host '  [+] Git for Windows installed.'"
 if errorlevel 1 (
-    echo  [!] Git auto-install failed. Install manually from https://git-scm.com/download/win
+    echo  [^^!] Git auto-install failed. Install manually from https://git-scm.com/download/win
     call :logfile "Step 3/6 lip sync: Git for Windows install FAILED - Wav2Lip repo not cloned"
     goto step_wav2lip_repo_done
 )
@@ -1336,7 +1334,7 @@ if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "PATH=%LOCALAPPDATA%\Prog
 
 where git >nul 2>&1
 if errorlevel 1 (
-    echo  [!] git still not found after install. Lip Sync disabled.
+    echo  [^^!] git still not found after install. Lip Sync disabled.
     call :logfile "Step 3/6 lip sync: git still not found after install - lip sync disabled"
     goto step_wav2lip_repo_done
 )
@@ -1345,7 +1343,7 @@ if errorlevel 1 (
 echo  [*] Cloning Wav2Lip repo...
 git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git "%WAV2LIP_REPO%"
 if errorlevel 1 (
-    echo  [!] Wav2Lip clone failed. Lip Sync disabled.
+    echo  [^^!] Wav2Lip clone failed. Lip Sync disabled.
     call :logfile "Step 3/6 lip sync: Wav2Lip repo clone FAILED - lip sync disabled"
 ) else (
     call :logfile "Step 3/6 lip sync: Wav2Lip repo cloned"
@@ -1369,14 +1367,14 @@ if not errorlevel 1 goto step_wav2lip_sha
 call :wav2lip_try_mirror "https://huggingface.co/rippertnt/wav2lip/resolve/main/wav2lip_gan.pth" "fallback mirror 2 (rippertnt)"
 if not errorlevel 1 goto step_wav2lip_sha
 
-echo  [!] All Wav2Lip model mirrors failed. Lip Sync disabled.
-echo  [!] Rest of the installation will continue normally.
+echo  [^^!] All Wav2Lip model mirrors failed. Lip Sync disabled.
+echo  [^^!] Rest of the installation will continue normally.
 call :logfile "Step 3/6 lip sync model: all 3 mirrors FAILED - lip sync disabled"
 goto step_wav2lip_model_done
 
 :step_wav2lip_sha
 if not defined WAV2LIP_SHA256 (
-    echo  [!] WAV2LIP_SHA256 not set - skipping integrity check.
+    echo  [^^!] WAV2LIP_SHA256 not set - skipping integrity check.
     call :logfile "Step 3/6 lip sync model: no SHA256 to check against, integrity check skipped"
     goto step_wav2lip_model_done
 )
@@ -1387,7 +1385,7 @@ if /i "!GOT_SHA256!"=="!WAV2LIP_SHA256!" (
     call :logfile "Step 3/6 lip sync model: SHA256 verified"
     goto step_wav2lip_model_done
 )
-echo  [!] Wav2Lip model SHA256 mismatch. Expected !WAV2LIP_SHA256!, got !GOT_SHA256!.
+echo  [^^!] Wav2Lip model SHA256 mismatch. Expected !WAV2LIP_SHA256!, got !GOT_SHA256!.
 call :logfile "Step 3/6 lip sync model: SHA256 MISMATCH - file deleted, lip sync disabled. Got !GOT_SHA256!"
 del /Q "%WAV2LIP_MODEL%" >nul 2>&1
 
@@ -1414,7 +1412,7 @@ if not errorlevel 1 (
     exit /b 0
 )
 :wav2lip_try_fail
-echo  [!] %~2 failed.
+echo  [^^!] %~2 failed.
 call :logfile "Step 3/6 lip sync model: %~2 FAILED"
 if exist "%WAV2LIP_MODEL%" del /Q "%WAV2LIP_MODEL%" >nul 2>&1
 exit /b 1
@@ -1433,7 +1431,7 @@ if exist "%FFMPEG_DIR%\ffmpeg.exe" (
 
 powershell -Command "exit 0" >nul 2>&1
 if errorlevel 1 (
-    echo  [!] PowerShell not available. Download ffmpeg manually from:
+    echo  [^^!] PowerShell not available. Download ffmpeg manually from:
     echo      https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
     echo      and extract it to: %FFMPEG_DIR%
     goto step_ffmpeg_skip
@@ -1461,7 +1459,7 @@ powershell -Command ^
     "Write-Host '  [+] ffmpeg installed.'"
 
 if errorlevel 1 (
-    echo  [!] ffmpeg download failed. You can download it manually from:
+    echo  [^^!] ffmpeg download failed. You can download it manually from:
     echo      https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
     echo      and extract ffmpeg.exe and ffprobe.exe to: %FFMPEG_DIR%
     call :logfile "Step 4/6 ffmpeg: download or extraction FAILED"
@@ -1487,7 +1485,7 @@ powershell -Command ^
 exit /b 0
 
 :step_ffmpeg_skip
-echo  [!] ffmpeg not installed - translation will not work without it.
+echo  [^^!] ffmpeg not installed - translation will not work without it.
 call :logfile "Step 4/6 ffmpeg: NOT installed - translation will not work without it"
 exit /b 0
 
@@ -1546,7 +1544,7 @@ if "%MPV_CHECK_RC%"=="0" (
     echo  [+] Integrated video player check passed.
     call :logfile "Player load check: ok"
 ) else (
-    echo  [!] Integrated video player check failed, code %MPV_CHECK_RC%. The application works without it.
+    echo  [^^!] Integrated video player check failed, code %MPV_CHECK_RC%. The application works without it.
     call :logfile "Player load check: FAILED, code %MPV_CHECK_RC% - the application works without it"
 )
 goto :eof
@@ -1578,7 +1576,7 @@ if exist "%PUBLIC_SHORTCUT%" (
     echo  [+] Desktop shortcut created.
     call :logfile "Step 6/6 shortcut: ok - %PUBLIC_SHORTCUT%"
 ) else (
-    echo  [!] Shortcut not created. You can launch the GUI with:
+    echo  [^^!] Shortcut not created. You can launch the GUI with:
     echo      python "%INSTALL_DIR%\video_translator_gui.py"
     call :logfile "Step 6/6 shortcut: NOT created - pythonw was %PYTHONW%"
 )
@@ -1615,7 +1613,7 @@ if exist "%START_MENU_DIR%\Update Video Translator AI.lnk" (
     echo  [+] Start Menu entries created: Video Translator AI, Update Video Translator AI.
     call :logfile "Step 6/6 Start Menu: ok - application and update entries"
 ) else (
-    echo  [!] Start Menu entries not created.
+    echo  [^^!] Start Menu entries not created.
     call :logfile "Step 6/6 Start Menu: NOT created"
 )
 exit /b 0
@@ -1657,14 +1655,28 @@ if not exist "%INSTALL_DIR%" (
 :: entry), and cmd reads a batch file while it runs: removing it now would
 :: stop the uninstall halfway. Everything else goes now; :uninst_done removes
 :: the folder when it is empty.
+:: The installer copy is kept only when it is this very script: a marker
+:: written next to this script shows up in the install folder when both are
+:: the same folder (8.3 names and junctions included). Run from elsewhere
+:: (the release folder) it goes too, so the folder does not stay behind.
+:: If the marker cannot be written, the copy is kept: never delete a running
+:: script by mistake.
+set "_KEEP_SELF=1"
+set "_SELF_MARK=vtai_self_%RANDOM%%RANDOM%.tmp"
+type nul > "%SCRIPT_DIR%%_SELF_MARK%" 2>nul
+if exist "%SCRIPT_DIR%%_SELF_MARK%" (
+    if not exist "%INSTALL_DIR%\%_SELF_MARK%" set "_KEEP_SELF="
+    del /Q "%SCRIPT_DIR%%_SELF_MARK%" 2>nul
+)
 for /d %%D in ("%INSTALL_DIR%\*") do rmdir /S /Q "%%~D" 2>nul
 for %%F in ("%INSTALL_DIR%\*") do if /i not "%%~nxF"=="setup_windows.bat" del /F /Q "%%~F" 2>nul
+if not defined _KEEP_SELF del /F /Q "%INSTALL_DIR%\setup_windows.bat" 2>nul
 set "VTAI_REMOVE_INSTALL_DIR=1"
 set "_LEFT="
 for /d %%D in ("%INSTALL_DIR%\*") do set "_LEFT=1"
 for %%F in ("%INSTALL_DIR%\*") do if /i not "%%~nxF"=="setup_windows.bat" set "_LEFT=1"
 if defined _LEFT (
-    echo  [!] Some files could not be removed. Close any running Video Translator AI and retry.
+    echo  [^^!] Some files could not be removed. Close any running Video Translator AI and retry.
     call :logfile "Remove application folder: PARTIAL - some files are in use, close the app and retry"
 ) else (
     echo  [+] Removed.
@@ -1817,7 +1829,7 @@ exit /b 0
 echo  [*] Removing saved keys (HF token, ElevenLabs) for %USERNAME% ...
 where python >nul 2>&1
 if errorlevel 1 (
-    echo  [!] python not found in PATH, skipping. Remove them in Credential Manager.
+    echo  [^^!] python not found in PATH, skipping. Remove them in Credential Manager.
     call :logfile "Remove saved keys for %USERNAME%: SKIPPED - python not found, check Credential Manager"
     exit /b 0
 )
@@ -1828,7 +1840,7 @@ if not defined PYTHON_EXE (
 )
 if not defined PYTHON_EXE set "PYTHON_EXE=python"
 "%PYTHON_EXE%" -c "import keyring;[print('  [+] removed '+u) for u in ('hf_token','elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI',u) is not None and keyring.delete_password('VideoTranslatorAI',u) is None]" 2>nul
-if errorlevel 1 echo  [!] Could not reach the keyring. Remove them in Credential Manager if present.
+if errorlevel 1 echo  [^^!] Could not reach the keyring. Remove them in Credential Manager if present.
 if errorlevel 1 (
     call :logfile "Remove saved keys for %USERNAME%: keyring NOT reachable, check Credential Manager"
 ) else (
@@ -1841,7 +1853,7 @@ exit /b 0
 echo  [*] Removing all Python AI packages ...
 where python >nul 2>&1
 if errorlevel 1 (
-    echo  [!] python not found in PATH, skipping.
+    echo  [^^!] python not found in PATH, skipping.
     call :logfile "Remove Python AI packages: SKIPPED - python not found"
     exit /b 0
 )
@@ -1876,6 +1888,7 @@ call :logfile "Uninstalling Python 3.11"
 :: block now exits 2 in that case so we can fall back to winget, then to a
 :: forced rmdir of any leftover %ProgramFiles%\Python311.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$W = '[' + [char]33 + ']';" ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Python 3\.11' -and ($_.QuietUninstallString -or $_.UninstallString) } } };" ^
     "if (-not $found) { Write-Host '  [-] Python 3.11 not found in uninstall registry.'; exit 2 };" ^
@@ -1883,7 +1896,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "    Write-Host ('  [*] ' + $u.DisplayName);" ^
     "    $cmd = if ($u.QuietUninstallString) { $u.QuietUninstallString } else { $u.UninstallString + ' /quiet' };" ^
     "    try { Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmd -Wait -NoNewWindow; Write-Host '  [+] Done.' }" ^
-    "    catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
+    "    catch { Write-Host ('  ' + $W + ' Failed: ' + $_.Exception.Message) }" ^
     "}"
 
 if errorlevel 2 (
@@ -1900,7 +1913,7 @@ if exist "%ProgramFiles%\Python311" (
     echo  [*] Removing leftover folder "%ProgramFiles%\Python311" ...
     rmdir /S /Q "%ProgramFiles%\Python311" 2>nul
     if exist "%ProgramFiles%\Python311" (
-        echo  [!] Could not remove leftover folder. Please remove it manually.
+        echo  [^^!] Could not remove leftover folder. Please remove it manually.
         call :logfile "Uninstall Python 3.11: leftover folder could NOT be removed"
     ) else (
         echo  [+] Leftover folder removed.
@@ -1913,6 +1926,7 @@ exit /b 0
 echo  [*] Uninstalling Git for Windows ...
 call :logfile "Uninstalling Git for Windows"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$W = '[' + [char]33 + ']';" ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Git( |$)' -and $_.DisplayName -notmatch 'LFS|Extensions' -and $_.UninstallString } } };" ^
     "if (-not $found) { Write-Host '  [-] Git for Windows not found.'; exit 0 };" ^
@@ -1921,8 +1935,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "    $exe = $u.UninstallString.Trim([char]34).Trim();" ^
     "    if (Test-Path $exe) {" ^
     "        try { Start-Process -FilePath $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait; Write-Host '  [+] Done.' }" ^
-    "        catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
-    "    } else { Write-Host ('  [!] Uninstaller not found at ' + $exe) }" ^
+    "        catch { Write-Host ('  ' + $W + ' Failed: ' + $_.Exception.Message) }" ^
+    "    } else { Write-Host ('  ' + $W + ' Uninstaller not found at ' + $exe) }" ^
     "}"
 exit /b 0
 
@@ -1948,6 +1962,7 @@ taskkill /F /IM Update.exe       >nul 2>&1
 :: :remove_git) and parse UninstallString character-by-character with
 :: StartsWith / IndexOf / Substring so no quote ever appears in the regex.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$W = '[' + [char]33 + ']';" ^
     "$Q = [char]34;" ^
     "$roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall';" ^
     "$found = foreach ($r in $roots) { if (Test-Path $r) { Get-ChildItem $r -ErrorAction SilentlyContinue | ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -match '^Ollama' -and $_.UninstallString } } };" ^
@@ -1964,12 +1979,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "      if ($sp -gt 0) { $exe = $raw.Substring(0, $sp); $extra = $raw.Substring($sp + 1).Trim() }" ^
     "      else { $exe = $raw; $extra = '' }" ^
     "    };" ^
-    "    if (-not (Test-Path $exe)) { Write-Host ('  [!] Uninstaller not found at ' + $exe); continue };" ^
+    "    if (-not (Test-Path $exe)) { Write-Host ('  ' + $W + ' Uninstaller not found at ' + $exe); continue };" ^
     "    if ($exe -match 'Update\.exe$') { $argsArr = @('--uninstall','-s') }" ^
     "    elseif ($extra -match '--uninstall') { $argsArr = ($extra -split '\s+') + @('-s') }" ^
     "    else { $argsArr = @('/S') };" ^
     "    try { Start-Process -FilePath $exe -ArgumentList $argsArr -Wait -WindowStyle Hidden; Write-Host '  [+] Done.' }" ^
-    "    catch { Write-Host ('  [!] Failed: ' + $_.Exception.Message) }" ^
+    "    catch { Write-Host ('  ' + $W + ' Failed: ' + $_.Exception.Message) }" ^
     "  }" ^
     "}"
 :: Force-remove leftover directories for every Windows user (binaries, model cache).

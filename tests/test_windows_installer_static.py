@@ -26,6 +26,48 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         self.assertIn('"import video_translator_gui"', self.text)
         self.assertIn("Application importable.", self.text)
 
+    def test_every_exclamation_mark_survives_delayed_expansion(self):
+        # The script runs with delayed expansion: a bare "!" vanished ("[!]"
+        # printed "[]"), and two on one command deleted everything between
+        # them, down to the Start-Process of the Ollama uninstaller. Only
+        # !VAR! references and the escaped "^^!" may carry one; PowerShell
+        # code builds the marker with [char]33.
+        reference = re.compile(r"![A-Za-z_][A-Za-z0-9_]*!")
+        for number, line in enumerate(self.lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("::") or stripped.lower().startswith("rem "):
+                continue
+            with self.subTest(line=number, text=stripped[:80]):
+                self.assertNotIn("!", reference.sub("", line.replace("^^!", "")))
+
+    def test_the_uninstallers_powershell_builds_its_marker_from_char_33(self):
+        for label, end in (("remove_python", ":remove_git"), ("remove_git", ":remove_ollama"),
+                           ("remove_ollama", ":end")):
+            body = self._label_body(label, end)
+            with self.subTest(label=label):
+                self.assertIn("$W = '[' + [char]33 + ']';", body)
+                self.assertIn("Start-Process -FilePath", body)
+
+    def test_a_finished_run_asks_for_a_key_once(self):
+        # :print_done already ends with a pause: another one after it made
+        # the user press a key twice at the end of an install or repair.
+        self.assertTrue(self._label_body("print_done", ":pause_exit").rstrip().endswith("pause\ngoto :eof"))
+        for done in ("Installation complete", "Repair complete"):
+            with self.subTest(done=done):
+                self.assertIn(f'call :print_done "{done}"\nexit /b 0\n', self.flat)
+
+    def test_the_installer_copy_stays_only_when_it_is_the_running_script(self):
+        # Run from the release folder, the uninstaller left the install folder
+        # behind with only setup_windows.bat in it. A marker written next to
+        # the running script tells whether the two folders are the same.
+        body = self._label_body("remove_app", ":remove_shortcut_public")
+        self.assertIn('set "_KEEP_SELF=1"', body)
+        self.assertIn('type nul > "%SCRIPT_DIR%%_SELF_MARK%" 2>nul', body)
+        self.assertIn('if not exist "%INSTALL_DIR%\\%_SELF_MARK%" set "_KEEP_SELF="', body)
+        self.assertIn('if not defined _KEEP_SELF del /F /Q "%INSTALL_DIR%\\setup_windows.bat" 2>nul', body)
+        # The marker check comes before anything is deleted.
+        self.assertLess(body.index("_SELF_MARK%"), body.index("rmdir /S /Q"))
+
     def test_every_line_ends_with_crlf(self):
         lf_only = [number for number, line in enumerate(self.raw.split(b"\n")[:-1], 1)
                    if not line.endswith(b"\r")]
