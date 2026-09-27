@@ -160,6 +160,16 @@ def recolor_widget_tree(root: tk.Misc, mapping: dict[str, str]) -> int:
     return changed
 
 
+def _probe_system_dark(answers: "queue.Queue[bool | None]") -> None:
+    """Worker thread of the dark-mode probe: no Tk call here, the answer goes
+    through the queue that the Tk thread polls."""
+    try:
+        value = detect_system_dark()
+    except Exception:
+        value = None
+    answers.put(value)
+
+
 class ThemeManager:
     """Applies UI settings to a Tk root; see the module docstring.
 
@@ -244,19 +254,15 @@ class ThemeManager:
         """Probe the OS in a background thread; a running probe is reused."""
         if self._closed or (self._detector is not None and self._detector.is_alive()):
             return
+        # The thread gets the answer queue, not the manager: holding it, the
+        # thread could drop the last reference to the root, and the Tk
+        # interpreter would be released outside the thread that created it.
         self._detector = threading.Thread(
-            target=self._probe_system_dark, name="vt-system-dark", daemon=True)
+            target=_probe_system_dark, args=(self._detected,),
+            name="vt-system-dark", daemon=True)
         self._detector.start()
         if self._poll_id is None:
             self._poll_id = self.root.after(SYSTEM_DARK_POLL_MS, self._poll_system_dark)
-
-    def _probe_system_dark(self) -> None:
-        # Worker thread: no Tk call here, the answer goes through the queue.
-        try:
-            value = detect_system_dark()
-        except Exception:
-            value = None
-        self._detected.put(value)
 
     def _poll_system_dark(self) -> None:
         """Tk thread: take in the probe answers, keep polling while one runs."""

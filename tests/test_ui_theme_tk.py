@@ -1,9 +1,11 @@
 import contextlib
+import gc
 import threading
 import time
 import tkinter as tk
 import re
 import unittest
+import weakref
 from tkinter import font as tkfont, ttk
 from unittest import mock
 
@@ -271,6 +273,27 @@ class AutoThemeDetectionTests(unittest.TestCase):
         tm._detector.join(5)
         self.assertEqual(len(detector.threads), 1)
         self.assertIsNot(detector.threads[0], threading.main_thread())
+
+    def test_a_running_probe_keeps_neither_the_manager_nor_the_root(self):
+        # If the probe thread held the manager, it could drop the last
+        # reference to the root, and the Tk interpreter would be released
+        # outside the thread that created it.
+        detector = self._gated(False)
+        patcher = mock.patch.object(self.mod, "detect_system_dark", detector)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        tm = self.mod.ThemeManager(self.root, module_globals={})
+        tm.apply({"ui_theme": "auto"}, recolor=False)
+        probe = tm._detector
+        self.assertTrue(detector.entered.wait(5))
+        tm.close()
+        manager = weakref.ref(tm)
+        del tm
+        gc.collect()
+        self.assertTrue(probe.is_alive())
+        self.assertIsNone(manager(), "the probe thread keeps the theme manager alive")
+        detector.released.set()
+        probe.join(5)
 
     def test_cached_value_paints_first(self):
         for cached, expected in ((False, "light"), (True, "graphite"), ("yes", "graphite")):

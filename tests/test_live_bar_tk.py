@@ -46,6 +46,11 @@ class LiveBarTests(unittest.TestCase):
 
     def tearDown(self):
         self.root.destroy()
+        # The on_command lambda holds this test: while the test also holds the
+        # bar and the root, the gc.collect cleanup cannot free them, and they
+        # wait for a later collection, which can run in another test's worker
+        # thread (Variable.__del__ then fails outside the Tk main loop).
+        del self.bar, self.root
 
     def test_starts_in_idle_row(self):
         self.assertTrue(self.bar._idle.winfo_manager())
