@@ -1819,6 +1819,38 @@ _ELP_T: dict[str, tuple[str, ...]] = {
     'vi': ('Giọng này cần gói ElevenLabs trả phí: với gói miễn phí hãy chọn một trong các giọng mặc định (Roger, Sarah, George...).', 'gói trả phí'),
 }
 
+# --- ElevenLabs refusals by service code (voice/model gone, plan, language) ----------
+_ELR_KEYS = ('el_err_voice_not_found', 'el_err_model_not_found', 'el_err_plan', 'el_err_language')
+
+_ELR_T: dict[str, tuple[str, ...]] = {
+    'en': ('This ElevenLabs voice no longer exists: press Refresh catalogue and choose another.', 'This ElevenLabs model does not exist: press Refresh catalogue and choose another.', 'Your ElevenLabs plan does not include this model or feature.', 'The chosen ElevenLabs model does not speak the target language: choose one marked with ✓.'),
+    'it': ("Questa voce ElevenLabs non esiste più: premi Aggiorna catalogo e scegline un'altra.", 'Questo modello ElevenLabs non esiste: premi Aggiorna catalogo e scegline un altro.', 'Il tuo piano ElevenLabs non include questo modello o questa funzione.', 'Il modello ElevenLabs scelto non parla la lingua di destinazione: scegline uno con ✓.'),
+    'ar': ('لم يعد صوت ElevenLabs هذا موجودًا: اضغط تحديث الفهرس واختر صوتًا آخر.', 'نموذج ElevenLabs هذا غير موجود: اضغط تحديث الفهرس واختر نموذجًا آخر.', 'لا تشمل خطة ElevenLabs الخاصة بك هذا النموذج أو هذه الميزة.', 'نموذج ElevenLabs المختار لا يتحدث اللغة الهدف: اختر نموذجًا عليه ✓.'),
+    'zh': ('此 ElevenLabs 语音已不存在：请点击“刷新目录”并另选一个。', '此 ElevenLabs 模型不存在：请点击“刷新目录”并另选一个。', '你的 ElevenLabs 套餐不包含此模型或功能。', '所选 ElevenLabs 模型不支持目标语言：请选择标有 ✓ 的模型。'),
+    'cs': ('Tento hlas ElevenLabs už neexistuje: stiskněte Obnovit katalog a zvolte jiný.', 'Tento model ElevenLabs neexistuje: stiskněte Obnovit katalog a zvolte jiný.', 'Váš tarif ElevenLabs tento model nebo funkci nezahrnuje.', 'Zvolený model ElevenLabs nemluví cílovým jazykem: vyberte model označený ✓.'),
+    'da': ('Denne ElevenLabs-stemme findes ikke længere: tryk på Opdater katalog og vælg en anden.', 'Denne ElevenLabs-model findes ikke: tryk på Opdater katalog og vælg en anden.', 'Dit ElevenLabs-abonnement omfatter ikke denne model eller funktion.', 'Den valgte ElevenLabs-model taler ikke målsproget: vælg en markeret med ✓.'),
+    'nl': ('Deze ElevenLabs-stem bestaat niet meer: druk op Catalogus vernieuwen en kies een andere.', 'Dit ElevenLabs-model bestaat niet: druk op Catalogus vernieuwen en kies een ander.', 'Je ElevenLabs-abonnement omvat dit model of deze functie niet.', 'Het gekozen ElevenLabs-model spreekt de doeltaal niet: kies er een met ✓.'),
+    'fi': ('Tätä ElevenLabs-ääntä ei enää ole: paina Päivitä luettelo ja valitse toinen.', 'Tätä ElevenLabs-mallia ei ole: paina Päivitä luettelo ja valitse toinen.', 'ElevenLabs-tilauksesi ei sisällä tätä mallia tai toimintoa.', 'Valittu ElevenLabs-malli ei puhu kohdekieltä: valitse ✓-merkitty malli.'),
+    'fr': ("Cette voix ElevenLabs n'existe plus : cliquez sur Actualiser le catalogue et choisissez-en une autre.", "Ce modèle ElevenLabs n'existe pas : cliquez sur Actualiser le catalogue et choisissez-en un autre.", "Votre forfait ElevenLabs n'inclut pas ce modèle ou cette fonction.", 'Le modèle ElevenLabs choisi ne parle pas la langue cible : choisissez-en un marqué ✓.'),
+    'de': ('Diese ElevenLabs-Stimme gibt es nicht mehr: Katalog aktualisieren drücken und eine andere wählen.', 'Dieses ElevenLabs-Modell gibt es nicht: Katalog aktualisieren drücken und ein anderes wählen.', 'Ihr ElevenLabs-Tarif enthält dieses Modell oder diese Funktion nicht.', 'Das gewählte ElevenLabs-Modell spricht die Zielsprache nicht: eines mit ✓ wählen.'),
+    'el': ('Αυτή η φωνή ElevenLabs δεν υπάρχει πλέον: πατήστε Ανανέωση καταλόγου και επιλέξτε άλλη.', 'Αυτό το μοντέλο ElevenLabs δεν υπάρχει: πατήστε Ανανέωση καταλόγου και επιλέξτε άλλο.', 'Η συνδρομή σας στο ElevenLabs δεν περιλαμβάνει αυτό το μοντέλο ή τη λειτουργία.', 'Το επιλεγμένο μοντέλο ElevenLabs δεν μιλά τη γλώσσα προορισμού: επιλέξτε ένα με ✓.'),
+    'hi': ('यह ElevenLabs आवाज़ अब मौजूद नहीं है: कैटलॉग ताज़ा करें दबाएँ और दूसरी चुनें।', 'यह ElevenLabs मॉडल मौजूद नहीं है: कैटलॉग ताज़ा करें दबाएँ और दूसरा चुनें।', 'आपके ElevenLabs प्लान में यह मॉडल या सुविधा शामिल नहीं है।', 'चुना गया ElevenLabs मॉडल लक्ष्य भाषा नहीं बोलता: ✓ वाला मॉडल चुनें।'),
+    'hu': ('Ez az ElevenLabs-hang már nem létezik: nyomd meg a Katalógus frissítése gombot, és válassz másikat.', 'Ez az ElevenLabs-modell nem létezik: nyomd meg a Katalógus frissítése gombot, és válassz másikat.', 'Az ElevenLabs-csomagod nem tartalmazza ezt a modellt vagy funkciót.', 'A választott ElevenLabs-modell nem beszéli a célnyelvet: válassz ✓-vel jelöltet.'),
+    'id': ('Suara ElevenLabs ini sudah tidak ada: tekan Muat ulang katalog lalu pilih yang lain.', 'Model ElevenLabs ini tidak ada: tekan Muat ulang katalog lalu pilih yang lain.', 'Paket ElevenLabs Anda tidak mencakup model atau fitur ini.', 'Model ElevenLabs yang dipilih tidak berbicara dalam bahasa tujuan: pilih yang bertanda ✓.'),
+    'ja': ('この ElevenLabs 音声はもう存在しません：「カタログを更新」を押して別の音声を選んでください。', 'この ElevenLabs モデルは存在しません：「カタログを更新」を押して別のモデルを選んでください。', 'ご利用の ElevenLabs プランにはこのモデルまたは機能が含まれていません。', '選択した ElevenLabs モデルは対象言語を話せません：✓ の付いたモデルを選んでください。'),
+    'ko': ('이 ElevenLabs 음성은 더 이상 없습니다: 카탈로그 새로 고침을 누르고 다른 음성을 고르세요.', '이 ElevenLabs 모델은 없습니다: 카탈로그 새로 고침을 누르고 다른 모델을 고르세요.', '사용 중인 ElevenLabs 요금제에는 이 모델이나 기능이 포함되지 않습니다.', '선택한 ElevenLabs 모델은 대상 언어를 지원하지 않습니다: ✓ 표시된 모델을 고르세요.'),
+    'no': ('Denne ElevenLabs-stemmen finnes ikke lenger: trykk Oppdater katalog og velg en annen.', 'Denne ElevenLabs-modellen finnes ikke: trykk Oppdater katalog og velg en annen.', 'ElevenLabs-abonnementet ditt omfatter ikke denne modellen eller funksjonen.', 'Den valgte ElevenLabs-modellen snakker ikke målspråket: velg en merket med ✓.'),
+    'pl': ('Ten głos ElevenLabs już nie istnieje: naciśnij Odśwież katalog i wybierz inny.', 'Ten model ElevenLabs nie istnieje: naciśnij Odśwież katalog i wybierz inny.', 'Twój plan ElevenLabs nie obejmuje tego modelu ani tej funkcji.', 'Wybrany model ElevenLabs nie obsługuje języka docelowego: wybierz oznaczony ✓.'),
+    'pt': ('Esta voz do ElevenLabs já não existe: carregue em Atualizar catálogo e escolha outra.', 'Este modelo do ElevenLabs não existe: carregue em Atualizar catálogo e escolha outro.', 'O seu plano ElevenLabs não inclui este modelo ou esta funcionalidade.', 'O modelo ElevenLabs escolhido não fala o idioma de destino: escolha um marcado com ✓.'),
+    'ro': ('Această voce ElevenLabs nu mai există: apasă Actualizează catalogul și alege alta.', 'Acest model ElevenLabs nu există: apasă Actualizează catalogul și alege altul.', 'Planul tău ElevenLabs nu include acest model sau această funcție.', 'Modelul ElevenLabs ales nu vorbește limba țintă: alege unul marcat cu ✓.'),
+    'ru': ('Этого голоса ElevenLabs больше нет: нажмите «Обновить каталог» и выберите другой.', 'Такой модели ElevenLabs нет: нажмите «Обновить каталог» и выберите другую.', 'Ваш тариф ElevenLabs не включает эту модель или функцию.', 'Выбранная модель ElevenLabs не поддерживает целевой язык: выберите отмеченную ✓.'),
+    'es': ('Esta voz de ElevenLabs ya no existe: pulsa Actualizar catálogo y elige otra.', 'Este modelo de ElevenLabs no existe: pulsa Actualizar catálogo y elige otro.', 'Tu plan de ElevenLabs no incluye este modelo o esta función.', 'El modelo de ElevenLabs elegido no habla el idioma de destino: elige uno marcado con ✓.'),
+    'sv': ('Den här ElevenLabs-rösten finns inte längre: tryck på Uppdatera katalogen och välj en annan.', 'Den här ElevenLabs-modellen finns inte: tryck på Uppdatera katalogen och välj en annan.', 'Ditt ElevenLabs-abonnemang omfattar inte den här modellen eller funktionen.', 'Den valda ElevenLabs-modellen talar inte målspråket: välj en märkt med ✓.'),
+    'tr': ("Bu ElevenLabs sesi artık yok: Kataloğu yenile'ye basıp başka bir ses seçin.", "Bu ElevenLabs modeli yok: Kataloğu yenile'ye basıp başka bir model seçin.", 'ElevenLabs planınız bu modeli veya özelliği içermiyor.', 'Seçilen ElevenLabs modeli hedef dili konuşmuyor: ✓ işaretli bir model seçin.'),
+    'uk': ('Цього голосу ElevenLabs більше немає: натисніть «Оновити каталог» і оберіть інший.', 'Такої моделі ElevenLabs немає: натисніть «Оновити каталог» і оберіть іншу.', 'Ваш тариф ElevenLabs не містить цієї моделі чи функції.', 'Обрана модель ElevenLabs не підтримує цільову мову: оберіть позначену ✓.'),
+    'vi': ('Giọng ElevenLabs này không còn nữa: nhấn Làm mới danh mục và chọn giọng khác.', 'Mô hình ElevenLabs này không tồn tại: nhấn Làm mới danh mục và chọn mô hình khác.', 'Gói ElevenLabs của bạn không bao gồm mô hình hoặc tính năng này.', 'Mô hình ElevenLabs đã chọn không nói ngôn ngữ đích: hãy chọn mô hình có dấu ✓.'),
+}
+
 MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
     lang: {**dict(zip(_KEYS, values)), **dict(zip(_EL_KEYS, _EL_T.get(lang, ()))),
            **dict(zip(_VB_KEYS, _VB_T.get(lang, ()))),
@@ -1828,7 +1860,8 @@ MODELS_UI_STRINGS: dict[str, dict[str, str]] = {
            **dict(zip(_BM_KEYS, _BM_T.get(lang, ()))),
            **dict(zip(_VC_KEYS, _VC_T.get(lang, ()))),
            **dict(zip(_ELS_KEYS, _ELS_T.get(lang, ()))),
-           **dict(zip(_ELP_KEYS, _ELP_T.get(lang, ())))}
+           **dict(zip(_ELP_KEYS, _ELP_T.get(lang, ()))),
+           **dict(zip(_ELR_KEYS, _ELR_T.get(lang, ())))}
     for lang, values in _T.items()
 }
 # The real-time bar shows the same ElevenLabs refusals as the settings window.
@@ -1836,6 +1869,10 @@ for _bucket in MODELS_UI_STRINGS.values():
     _bucket["live_warn_el_paid_voice"] = _bucket["el_err_paid_voice"]
     _bucket["live_warn_el_quota"] = _bucket["el_err_quota"]
     _bucket["live_warn_el_auth"] = _bucket["el_err_auth"]
+    _bucket["live_warn_el_plan"] = _bucket["el_err_plan"]
+    _bucket["live_warn_el_voice_not_found"] = _bucket["el_err_voice_not_found"]
+    _bucket["live_warn_el_model_not_found"] = _bucket["el_err_model_not_found"]
+    _bucket["live_warn_el_language"] = _bucket["el_err_language"]
 
 
 def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
@@ -1849,7 +1886,7 @@ def merge_into(ui_strings: dict[str, dict[str, str]]) -> list[str]:
                         (_GEN_KEYS, _GEN_T), (_VP_KEYS, _VP_T),
                         (_SK_KEYS, _SK_T), (_BM_KEYS, _BM_T),
                         (_VC_KEYS, _VC_T), (_ELS_KEYS, _ELS_T),
-                        (_ELP_KEYS, _ELP_T)):
+                        (_ELP_KEYS, _ELP_T), (_ELR_KEYS, _ELR_T)):
         for lang in _T:
             values = table.get(lang, ())
             if len(values) != len(keys):

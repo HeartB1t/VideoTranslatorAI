@@ -54,25 +54,71 @@ class ElevenLabsError(RuntimeError):
         self.kind = kind
 
 
+def service_message(body: bytes) -> str:
+    """The human message ElevenLabs puts in an error body (never the key)."""
+    try:
+        detail = json.loads(body.decode("utf-8", "replace")).get("detail")
+    except Exception:
+        return ""
+    if isinstance(detail, dict):
+        detail = detail.get("message") or detail.get("status") or ""
+    elif isinstance(detail, list):                 # 422 from request validation
+        detail = "; ".join(str(item.get("msg", item)) if isinstance(item, dict) else str(item)
+                           for item in detail)
+    return " ".join(str(detail or "").split())[:240]
+
+
+# ElevenLabs error codes (detail.code, and the older detail.status) -> our kind.
+# Checked against the live API on 2026-09-27 (see the tests for the bodies).
+_CODE_KINDS = {
+    "paid_plan_required": "paid_voice", "voice_access_denied": "paid_voice",
+    "subscription_required": "plan", "feature_not_available": "plan",
+    "model_access_denied": "plan",
+    "quota_exceeded": "quota", "insufficient_credits": "quota",
+    "invalid_api_key": "auth", "missing_api_key": "auth", "needs_authorization": "auth",
+    "invalid_authorization_header": "auth", "unauthorized": "auth",
+    "voice_not_found": "voice_not_found", "model_not_found": "model_not_found",
+    "unsupported_language": "language",
+    "concurrent_limit_exceeded": "rate_limited", "too_many_concurrent_requests": "rate_limited",
+    "rate_limit_exceeded": "rate_limited", "system_busy": "rate_limited",
+    "service_unavailable": "unavailable", "maintenance": "unavailable",
+    "internal_error": "unavailable",
+}
+
+
 def classify_http(status: int, body: bytes) -> str:
+    """Our error kind for an HTTP error: the service's code first (the HTTP
+    status alone misleads: a wrong output format comes back as 403)."""
     detail: Any = None
     try:
         detail = json.loads(body.decode("utf-8", "replace")).get("detail")
     except Exception:
         pass
-    code = detail.get("status") if isinstance(detail, dict) else None
-    reason = detail.get("code") if isinstance(detail, dict) else None
-    if reason == "paid_plan_required":
-        return "paid_voice"
-    if code in ("quota_exceeded", "insufficient_credits") or status == 402:
+    if isinstance(detail, dict):
+        for field in ("code", "status"):
+            kind = _CODE_KINDS.get(str(detail.get(field) or ""))
+            if kind:
+                return kind
+        if detail.get("type") == "authentication_error":
+            return "auth"
+        if detail.get("type") in ("validation_error", "invalid_request"):
+            return "invalid"
+    if status == 402:
         return "quota"
-    if status in (401, 403):
+    if status == 401:
         return "auth"
+    if status == 403:
+        return "plan"
     if status == 429:
         return "rate_limited"
-    if status in (400, 404, 422):
+    if status in (400, 404, 409, 413, 422):
         return "invalid"
     return "unavailable"
+
+
+# Refusals that will not change during a session: stop asking, use the fallback.
+FATAL_KINDS = ("auth", "quota", "paid_voice", "plan", "voice_not_found",
+               "model_not_found", "language")
 
 
 @dataclass(frozen=True)
@@ -200,7 +246,9 @@ class ElevenLabsClient:
             except Exception:
                 payload = b""
             kind = classify_http(exc.code, payload)
-            raise ElevenLabsError(kind, f"HTTP {exc.code}") from None
+            message = service_message(payload)
+            raise ElevenLabsError(kind, f"HTTP {exc.code}" + (f": {message}" if message else "")
+                                  ) from None
         except TimeoutError:
             raise ElevenLabsError("timeout", "timed out") from None
         except (urllib.error.URLError, OSError) as exc:
@@ -254,8 +302,11 @@ class ElevenLabsClipSynth:
                  language: str | None = None, client: ElevenLabsClient | None = None,
                  av_module=None, max_concurrent: int = 2, max_in_flight: int = 8,
                  clock: Callable[[], float] | None = None,
-                 thread_factory=threading.Thread, sanitize=None) -> None:
+                 thread_factory=threading.Thread, sanitize=None,
+                 log: Callable[[str], None] | None = None) -> None:
         self._client = client or ElevenLabsClient(api_key)
+        self._log = log
+        self._last_logged_error = ""
         self._has_key = bool((api_key or "").strip()) or client is not None
         self._voice_id = voice_id
         self._model_id = model_id
@@ -345,10 +396,17 @@ class ElevenLabsClipSynth:
                                             speed=rate_to_speed(rate_pct),
                                             timeout=max(0.5, min(remaining, 15.0)))
         except ElevenLabsError as exc:
-            if exc.kind in ("auth", "quota", "paid_voice"):
+            # ElevenLabs' own words to the log, once per different refusal.
+            message = f"live: ElevenLabs refused the voice line ({exc.kind}): {exc}"
+            if self._log is not None and message != self._last_logged_error:
+                self._last_logged_error = message
+                try:
+                    self._log(message)
+                except Exception:              # noqa: BLE001
+                    pass
+            if exc.kind in FATAL_KINDS:
                 self.fatal = exc.kind
-            self._breaker.record_failure(
-                kind="quota" if exc.kind in ("auth", "quota", "paid_voice") else "tts")
+            self._breaker.record_failure(kind="quota" if exc.kind in FATAL_KINDS else "tts")
             self.results.put((seg_id, gen, None, f"elevenlabs_{exc.kind}"))
             return
         except Exception as exc:                   # noqa: BLE001 - never kill the worker

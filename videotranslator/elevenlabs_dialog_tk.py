@@ -20,15 +20,20 @@ from .elevenlabs_tts import (ElevenLabsClient, ElevenLabsError, Model, Voice,
                              pick_live_model)
 
 # Fast enough for a live dub; the others (v3, multilingual v2) lag behind.
-LOW_LATENCY_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2",
-                      "eleven_turbo_v2")
+# Measured 2026-09-27, first audio byte for a short sentence: Flash v2.5 0.18 s,
+# Turbo v2.5 0.23 s, v3 Conversational 0.4 s; Multilingual v2 0.9 s, v3 1.2-2 s.
+LOW_LATENCY_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3_conversational",
+                      "eleven_flash_v2", "eleven_turbo_v2")
 from .voice_preview import fetch_sample
 from .player_panel_tk import HoverTip
 from .voice_preview_tk import SpeakerButton, error_key
 
 _ERROR_KEYS = {kind: f"el_err_{kind}" for kind in
                ("auth", "quota", "rate_limited", "unavailable", "timeout", "invalid")}
-_ERROR_KEYS["paid_voice"] = "el_err_paid_voice"
+_ERROR_KEYS.update({"paid_voice": "el_err_paid_voice", "plan": "el_err_plan",
+                    "voice_not_found": "el_err_voice_not_found",
+                    "model_not_found": "el_err_model_not_found",
+                    "language": "el_err_language"})
 
 
 def voices_from_cache(items) -> list[Voice]:

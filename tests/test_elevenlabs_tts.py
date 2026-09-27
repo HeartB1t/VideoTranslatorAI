@@ -113,6 +113,44 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(el.pick_live_model(models, "en").model_id, "eleven_multilingual_v2")
         self.assertIsNone(el.pick_live_model(models, "ja"))
 
+    def test_real_error_bodies_are_classified_by_their_code(self):
+        # Bodies recorded from the live API on 2026-09-27.
+        def body(**detail):
+            import json
+            return json.dumps({"detail": detail}).encode()
+        cases = [
+            (401, body(type="authentication_error", code="unauthorized",
+                       status="invalid_api_key"), "auth"),
+            (401, body(type="authentication_error", code="unauthorized",
+                       status="needs_authorization"), "auth"),
+            (402, body(type="payment_required", code="paid_plan_required",
+                       status="payment_required"), "paid_voice"),
+            (403, body(type="validation_error", code="invalid_output_format",
+                       status="invalid_output_format"), "invalid"),
+            (404, body(type="not_found", code="voice_not_found", status="voice_not_found"),
+             "voice_not_found"),
+            (400, body(status="model_not_found"), "model_not_found"),
+            (400, body(type="validation_error", code="invalid_parameters",
+                       status="unsupported_language"), "language"),
+            (400, body(type="validation_error", code="invalid_voice_settings",
+                       status="invalid_voice_settings"), "invalid"),
+            (400, body(type="validation_error", code="text_too_long",
+                       status="max_character_limit_exceeded"), "invalid"),
+            (429, body(type="rate_limit_error", code="concurrent_limit_exceeded",
+                       status="too_many_concurrent_requests"), "rate_limited"),
+            (422, b'{"detail":[{"type":"missing","msg":"Field required"}]}', "invalid"),
+            (404, b"Not Found", "invalid"),
+            (503, body(code="maintenance"), "unavailable"),
+            (402, body(code="insufficient_credits"), "quota"),
+            (403, body(code="model_access_denied"), "plan"),
+        ]
+        for status, raw, kind in cases:
+            with self.subTest(status=status, raw=raw[:60]):
+                self.assertEqual(el.classify_http(status, raw), kind)
+        self.assertEqual(el.service_message(b'{"detail":[{"msg":"Field required"}]}'),
+                         "Field required")
+        self.assertTrue({"paid_voice", "voice_not_found", "language"} <= set(el.FATAL_KINDS))
+
     def test_library_voices_on_a_free_plan_are_paid_voice_not_quota(self):
         body = (b'{"detail":{"type":"payment_required","code":"paid_plan_required",'
                 b'"status":"payment_required"}}')
@@ -216,6 +254,25 @@ class SynthTests(unittest.TestCase):
             self.assertEqual(synth.fatal, "quota")
             self.assertEqual(breaker.failures, ["quota"])
             self.assertFalse(synth.submit(2, 0, "b", 0, time.monotonic() + 10))
+
+    def test_refusal_is_logged_once_with_the_service_message(self):
+        logged = []
+        with tempfile.TemporaryDirectory() as tmp:
+            error = el.ElevenLabsError("rate_limited", "HTTP 429: Too many concurrent requests")
+            synth, _ = self._synth(tmp, error, log=logged.append)
+            for seg in (1, 2):
+                synth.submit(seg, 0, "a", 0, time.monotonic() + 10)
+                _wait_result(synth.results)
+        self.assertEqual(logged, ["live: ElevenLabs refused the voice line (rate_limited): "
+                                  "HTTP 429: Too many concurrent requests"])
+
+    def test_service_message_is_read_from_the_error_body(self):
+        body = (b'{"detail":{"code":"paid_plan_required","message":"Free users cannot use '
+                b'library voices via the API."}}')
+        self.assertEqual(el.service_message(body),
+                         "Free users cannot use library voices via the API.")
+        self.assertEqual(el.service_message(b'{"detail":"Not found"}'), "Not found")
+        self.assertEqual(el.service_message(b"<html>"), "")
 
     def test_transient_error_is_not_fatal(self):
         with tempfile.TemporaryDirectory() as tmp:

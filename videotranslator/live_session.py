@@ -161,7 +161,7 @@ def build_live_factories(cfg: LiveConfig,
         primary = ElevenLabsClipSynth(
             opts.get("api_key", ""), opts.get("voice_id", ""), opts.get("model_id", ""),
             out_dir, breaker=breaker, language=cfg.lang_target, av_module=av_module,
-            clock=clock, thread_factory=thread_factory)
+            clock=clock, thread_factory=thread_factory, log=log)
         if not opts.get("fallback", True):
             return primary
 
@@ -747,9 +747,11 @@ class LiveSession:
             if clip is None:
                 detail = str(reason or "TTS synthesis failed")
                 self._log(f"live: voice line {seg_id} lost (tts_failed: {detail})")
-                warn = {"elevenlabs_paid_voice": "el_paid_voice",
-                        "elevenlabs_quota": "el_quota",
-                        "elevenlabs_auth": "el_auth"}.get(detail, "tts_unavailable")
+                kind = detail[len("elevenlabs_"):] if detail.startswith("elevenlabs_") else ""
+                warn = {"paid_voice": "el_paid_voice", "quota": "el_quota", "auth": "el_auth",
+                        "plan": "el_plan", "voice_not_found": "el_voice_not_found",
+                        "model_not_found": "el_model_not_found",
+                        "language": "el_language"}.get(kind, "tts_unavailable")
                 self._set_warning(warn, getattr(self._synth, "name", self._cfg.tts_name))
             if accepted:
                 seg = self._scheduler.segment_for_clip(seg_id, gen, clip)
