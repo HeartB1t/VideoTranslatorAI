@@ -10255,12 +10255,30 @@ class App(tk.Tk):
 
         threading.Thread(target=run, daemon=True).start()
 
+    def _input_start_dir(self) -> str:
+        """Where "Add" opens: the output folder (configured or default), where
+        the translated videos are; else the system Videos folder; else home."""
+        candidates = []
+        with contextlib.suppress(Exception):
+            candidates.append(_platforms.resolve_output_dir(
+                self._output_dir_var.get().strip() or None))
+        with contextlib.suppress(Exception):
+            candidates.append(_platforms.default_videos_dir())
+        candidates.append(Path.home())
+        for folder in candidates:
+            with contextlib.suppress(OSError):
+                if folder.is_dir():
+                    return str(folder)
+        return str(Path.home())
+
     def _add_files(self):
+        start = self._input_start_dir()
         paths = filedialog.askopenfilenames(
-            title=self._s("label_video"),
+            title=self._s("label_video"), initialdir=start,
             filetypes=[("Video", "*.mp4 *.mkv *.webm *.avi *.mov"), ("All", "*.*")]
         )
         for p in paths:
+            self._log_event("log_choice", name=self._s("label_video").rstrip(": "), value=p)
             if p not in self._batch_files:
                 self._batch_files.append(p)
                 self._batch_listbox.insert("end", Path(p).name)

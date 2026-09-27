@@ -670,6 +670,22 @@ class NoisyX11LogTests(unittest.TestCase):
         ):
             self.assertFalse(gui._is_noisy_x11_log(line), line)
 
+class InputStartDirTests(unittest.TestCase):
+    def test_add_opens_in_the_output_folder_then_videos_then_home(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            app = SimpleNamespace(_output_dir_var=_Var(tmp))
+            self.assertEqual(gui.App._input_start_dir(app), tmp)
+            missing = str(Path(tmp) / "missing")
+            app = SimpleNamespace(_output_dir_var=_Var(missing))
+            with mock.patch.object(gui._platforms, "default_videos_dir",
+                                   return_value=Path(tmp)):
+                self.assertEqual(gui.App._input_start_dir(app), tmp)
+            with mock.patch.object(gui._platforms, "default_videos_dir",
+                                   return_value=Path(missing)):
+                self.assertEqual(gui.App._input_start_dir(app), str(Path.home()))
+
 
 if __name__ == "__main__":
     unittest.main()
