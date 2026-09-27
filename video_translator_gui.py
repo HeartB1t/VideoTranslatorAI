@@ -3902,6 +3902,7 @@ from videotranslator.voice_preview import synthesize_edge as _synthesize_edge_pr
 from videotranslator.voice_preview_tk import PreviewHub as _PreviewHub  # noqa: E402
 from videotranslator.voice_preview_tk import SpeakerButton as _SpeakerButton  # noqa: E402
 from videotranslator.voice_preview_tk import error_key as _preview_error_key  # noqa: E402
+from videotranslator.video_effects import shader_for_theme as _shader_for_theme  # noqa: E402
 _PLAYER_STRING_PROBLEMS += _merge_models_strings(UI_STRINGS)
 
 
@@ -6725,7 +6726,8 @@ class App(tk.Tk):
                 b.configure(bg=hover, activebackground=hover)
 
         def _leave(_e, b=btn, p=primary):
-            b.configure(bg=ACC if p else BTN)
+            enabled = str(b.cget("state")) != "disabled"
+            b.configure(bg=ACC if p and enabled else BTN)
 
         # Keyboard focus ring: the 1 px wrap turns to the accent (or to the
         # text colour on the accent-filled primary button) while focused, and
@@ -8217,6 +8219,7 @@ class App(tk.Tk):
         speaker = getattr(self, "_voice_speaker", None)
         if speaker is not None:
             speaker.apply_palette(self._theme.palette, self._theme.scale)
+        self._apply_video_effect()
         # Another text size changes the cards' width, and a large shrink can
         # leave the view below the content without any <Configure>.
         self.after_idle(self._sync_right_column)
@@ -9363,7 +9366,28 @@ class App(tk.Tk):
         self._player_backend = backend
         self._player_vo_profile = profile
         self._player_controller.attach_backend(backend)
+        self._video_shader_applied = None
+        self._apply_video_effect()
         self._start_player_poll()
+
+    def _apply_video_effect(self) -> None:
+        """The CRT skins also give the video an 80s monitor look (mpv shader).
+
+        Sent only when it changes for the current backend: a new backend (VO
+        fallback) starts without shaders, so it gets it again.
+        """
+        backend = getattr(self, "_player_backend", None)
+        if backend is None or self._theme.palette is None:
+            return
+        path = _shader_for_theme(self._theme.palette.name)
+        if getattr(self, "_video_shader_applied", None) == (backend, path):
+            return
+        if path is None and getattr(self, "_video_shader_applied", None) is None:
+            self._video_shader_applied = (backend, None)     # nothing to clear
+            return
+        with contextlib.suppress(Exception):
+            backend.set_shader(path)
+        self._video_shader_applied = (backend, path)
 
     def _live_voice_for(self, tgt: str) -> str:
         """Pick the edge-tts voice for the live dub: the user's if it fits the

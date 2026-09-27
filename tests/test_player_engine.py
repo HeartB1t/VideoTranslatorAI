@@ -424,6 +424,19 @@ class MpvBackendTests(unittest.TestCase):
         })
         self.assertTrue(backend.terminate(1.0))
 
+    def test_set_shader_sets_and_clears_the_glsl_list(self):
+        backend, player, _bridge = self.make_backend()
+        self.assertTrue(backend.set_shader("/c/crt.glsl"))
+        _wait_for(lambda: ("command", "change-list", "glsl-shaders", "set", "/c/crt.glsl")
+                  in player.actions)
+        self.assertTrue(backend.set_shader(None))
+        _wait_for(lambda: ("command", "change-list", "glsl-shaders", "clr", "")
+                  in player.actions)
+        memory = pe.InMemoryBackend()
+        memory.set_shader(None)
+        self.assertEqual(memory.calls, [("set_shader", None)])
+        self.assertTrue(backend.terminate(1.0))
+
     def test_load_writes_properties_before_raw_loadfile_and_restores_next_time(self):
         backend, player, _bridge = self.make_backend()
         backend.load("/one.mp4", paused=True, start=3.5,

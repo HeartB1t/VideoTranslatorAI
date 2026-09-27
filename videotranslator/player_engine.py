@@ -680,6 +680,14 @@ class MpvBackend:
     def set_af(self, value: str) -> bool:
         return self._enqueue(lambda: self._player.command("set", "af", value), key="af")
 
+    def set_shader(self, path: str | None) -> bool:
+        """Apply one GLSL shader to the video output, or remove it (None)."""
+        if path:
+            return self._enqueue(lambda: self._player.command(
+                "change-list", "glsl-shaders", "set", str(path)), key="shaders")
+        return self._enqueue(lambda: self._player.command(
+            "change-list", "glsl-shaders", "clr", ""), key="shaders")
+
     def register_stream_protocol(self, name: str, open_adapter: Callable) -> None:
         self._enqueue(lambda: self._player.register_stream_protocol(name, open_adapter))
 
@@ -822,6 +830,10 @@ class InMemoryBackend:
     def set_af(self, value: str) -> bool:
         self._record("set_af", value)
         return self.af_supported
+
+    def set_shader(self, path: str | None) -> bool:
+        self._record("set_shader", path)
+        return True
 
     def register_stream_protocol(self, name: str, open_adapter: Callable) -> None:
         self._record("register_stream_protocol", name, open_adapter)

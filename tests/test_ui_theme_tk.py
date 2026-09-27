@@ -864,6 +864,29 @@ class SkinTests(unittest.TestCase):
             self.assertEqual(app._hover_bg(), app._theme.palette.BORDER)
 
 
+    def test_crt_skins_put_the_monitor_shader_on_the_video(self):
+        from videotranslator.player_engine import InMemoryBackend
+        with built_app({"ui_theme": "graphite", "ui_lang": "en"}) as (gui, app, _):
+            backend = InMemoryBackend()
+            app._player_backend = backend
+            app._video_shader_applied = None
+            app._apply_video_effect()
+            self.assertEqual(backend.calls, [])          # nothing to clear
+            app._ui_theme_var.set("crt")
+            app._apply_ui_settings()
+            self.assertEqual(backend.calls[-1][0], "set_shader")
+            self.assertTrue(backend.calls[-1][1].endswith("crt.glsl"))
+            app._apply_ui_settings()                     # unchanged: not sent again
+            self.assertEqual(len(backend.calls), 1)
+            app._ui_theme_var.set("crt_amber")
+            app._apply_ui_settings()
+            self.assertTrue(backend.calls[-1][1].endswith("crt_amber.glsl"))
+            app._ui_theme_var.set("dex")
+            app._apply_ui_settings()
+            self.assertEqual(backend.calls[-1], ("set_shader", None))
+            app._player_backend = None
+
+
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class LogToggleStartupTests(unittest.TestCase):
     def test_visible_log_at_startup_shows_hide_label(self):
