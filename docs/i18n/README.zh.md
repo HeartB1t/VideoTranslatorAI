@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] 仅限当前用户** | ❌ | 仅删除正在运行的用户的 VTAI 配置、HF/XTTS 缓存和旧版每用户安装。 **保持系统范围内的安装完好无损**，以便 PC 上的其他 Windows 帐户可以继续使用该应用程序。 |
 | **[3] 自定义 - 粒度** | ✅ 对于系统项目，❌ 对于用户项目 | 每个类别的是/否提示：应用程序文件夹、快捷方式、计算机路径、每用户旧版安装、每用户配置/缓存，然后分组 Python 包（TTS、PyTorch 堆栈、Whisper+ctranslate2、Demucs、Wav2Lip deps、pyannote、管道实用程序），最后是可选的 Python 3.11 和 Git。 |
 
+每种模式还会删除程序为用户保存的内容：配置和每日日志（`%APPDATA%\VideoTranslatorAI`）、包含播放器、JavaScript 和 Wav2Lip 运行时的程序数据（`%LOCALAPPDATA%\VideoTranslatorAI`）、实时功能的临时文件（`%TEMP%\VideoTranslatorAI`）、MarianMT 模型，以及 Windows 凭据管理器中保存的密钥（HF 令牌、ElevenLabs）。密钥按 Windows 账户保存：每个账户用 `[2]` 删除自己的密钥。
+
 **永远不会自动删除：** Visual Studio C++ 构建工具（如果在较旧的运行中存在）。如果需要，请使用 Windows 设置中的“应用程序和功能”手动删除它们。
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # 配置（主题、面板顺序、设置）
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # 皮肤使用的字体
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT 翻译模型
+rm -rf ~/.local/share/VideoTranslatorAI                          # 程序数据（yt-dlp 的 JavaScript 运行时）
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # 实时功能的临时文件
+# 保存的密钥（HF 令牌、ElevenLabs）
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # 版本 <= 1.9 的旧配置（如果存在）
 ```
 

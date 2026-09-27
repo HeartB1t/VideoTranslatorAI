@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] केवल वर्तमान उपयोगकर्ता** | ❌ | केवल चल रहे उपयोगकर्ता के VTAI कॉन्फ़िगरेशन, HF/XTTS कैश और लीगेसी प्रति-उपयोगकर्ता इंस्टॉल को हटाता है। **सिस्टम-व्यापी इंस्टॉलेशन को बरकरार रखता है** ताकि पीसी पर अन्य विंडोज खाते ऐप का उपयोग जारी रख सकें। |
 | **[3] कस्टम - दानेदार** | ✅ सिस्टम आइटम के लिए, ❌ उपयोगकर्ता आइटम के लिए | प्रत्येक श्रेणी के लिए Y/N प्रॉम्प्ट: ऐप फ़ोल्डर, शॉर्टकट, मशीन PATH, प्रति-उपयोगकर्ता लीगेसी इंस्टॉल, प्रति-उपयोगकर्ता कॉन्फ़िगरेशन/कैश, फिर समूहीकृत Python पैकेज (TTS, PyTorch स्टैक, Whisper+ctranslate2, Demucs, Wav2Lip deps, piannote, पाइपलाइन उपयोगिताएँ), और अंत में वैकल्पिक Python 3.11 और Git। |
 
+हर मोड वह भी हटाता है जो प्रोग्राम उपयोगकर्ता के लिए रखता है: कॉन्फ़िगरेशन और रोज़ाना लॉग (`%APPDATA%\VideoTranslatorAI`), प्लेयर, JavaScript और Wav2Lip रनटाइम सहित प्रोग्राम डेटा (`%LOCALAPPDATA%\VideoTranslatorAI`), रीयल-टाइम की अस्थायी फ़ाइलें (`%TEMP%\VideoTranslatorAI`), MarianMT मॉडल, और Windows क्रेडेंशियल मैनेजर से सहेजी गई कुंजियाँ (HF टोकन, ElevenLabs)। कुंजियाँ हर Windows खाते की अलग होती हैं: हर खाता `[2]` से अपनी कुंजियाँ हटाता है।
+
 **स्वचालित रूप से कभी नहीं हटाया गया:** विज़ुअल स्टूडियो सी++ बिल्ड टूल्स (यदि पुराने रन से मौजूद हैं)। यदि चाहें तो उन्हें मैन्युअल रूप से हटाने के लिए विंडोज़ सेटिंग्स में *ऐप्स और फीचर्स* का उपयोग करें।
 
 ### लिनक्स/मैकओएस
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # कॉन्फिग (थीम, पैनल ऑर्डर, सेटिंग्स)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # स्किन के फ़ॉन्ट
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT अनुवाद मॉडल
+rm -rf ~/.local/share/VideoTranslatorAI                          # प्रोग्राम डेटा (yt-dlp के लिए JavaScript रनटाइम)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # रीयल-टाइम की अस्थायी फ़ाइलें
+# सहेजी गई कुंजियाँ (HF टोकन, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # संस्करणों का लीगेसी कॉन्फिगरेशन <= 1.9, यदि मौजूद है
 ```
 

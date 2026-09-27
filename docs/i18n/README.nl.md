@@ -224,6 +224,8 @@ Voer `setup_windows.bat` uit (klik met de rechtermuisknop → **Als administrato
 | **[2] Alleen huidige gebruiker** | ❌ | Verwijdert alleen de VTAI-configuratie, de HF/XTTS-cache en de verouderde installatie per gebruiker van de huidige gebruiker. **Laat de systeembrede installatie intact** zodat andere Windows-accounts op de pc de app kunnen blijven gebruiken. |
 | **[3] Aangepast - gedetailleerd** | ✅ voor systeemitems, ❌ voor gebruikersitems | J/N-prompt voor elke categorie: app-map, snelkoppeling, machine-PATH, verouderde installaties per gebruiker, configuraties/caches per gebruiker, vervolgens gegroepeerde Python-pakketten (TTS, PyTorch-stack, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, pijplijnhulpprogramma's) en ten slotte optionele Python 3.11 en Git. |
 
+Elke modus verwijdert ook wat het programma voor de gebruiker bewaart: configuratie en dagelijkse logboeken (`%APPDATA%\VideoTranslatorAI`), programmagegevens met de runtimes van speler, JavaScript en Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), tijdelijke bestanden van realtime (`%TEMP%\VideoTranslatorAI`), de MarianMT-modellen en de opgeslagen sleutels (HF-token, ElevenLabs) uit Windows Referentiebeheer. Sleutels horen bij elk Windows-account: elk account verwijdert de eigen sleutels met `[2]`.
+
 **Nooit automatisch verwijderd:** Visual Studio C++ Build Tools (indien aanwezig in oudere versies). Gebruik *Apps en functies* in Windows-instellingen om ze desgewenst handmatig te verwijderen.
 
 ### Linux/macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (thema's, paneelvolgorde, instellingen)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # lettertypen van de skins
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT-vertaalmodellen
+rm -rf ~/.local/share/VideoTranslatorAI                          # programmagegevens (JavaScript-runtime voor yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # tijdelijke bestanden van realtime
+# opgeslagen sleutels (HF-token, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # verouderde configuratie van versies <= 1.9, indien aanwezig
 ```
 

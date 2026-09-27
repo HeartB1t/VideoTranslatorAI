@@ -224,6 +224,8 @@ Jalankan `setup_windows.bat` (klik kanan → **Run as administrator**) dan pilih
 | **[2] Khusus pengguna saat ini** | ❌ | Hanya menghapus konfigurasi VTAI pengguna yang sedang berjalan, cache HF/XTTS, dan instalasi lama per pengguna. **Membiarkan penginstalan seluruh sistem tetap utuh** sehingga akun Windows lain di PC dapat tetap menggunakan aplikasi. |
 | **[3] Khusus - terperinci** | ✅ untuk item sistem, ❌ untuk item pengguna | Y/N prompt untuk setiap kategori: folder aplikasi, pintasan, PATH mesin, instalasi lama per pengguna, konfigurasi/cache per pengguna, lalu mengelompokkan paket Python (TTS, tumpukan PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, utilitas pipa), dan terakhir opsional Python 3.11 dan Git. |
 
+Setiap mode juga menghapus apa yang disimpan program untuk pengguna: konfigurasi dan log harian (`%APPDATA%\VideoTranslatorAI`), data program beserta runtime pemutar, JavaScript, dan Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), berkas sementara waktu nyata (`%TEMP%\VideoTranslatorAI`), model MarianMT, serta kunci tersimpan (token HF, ElevenLabs) dari Credential Manager Windows. Kunci disimpan per akun Windows: setiap akun menghapus kuncinya sendiri dengan `[2]`.
+
 **Tidak pernah dihapus secara otomatis:** Visual Studio C++ Build Tools (jika ada dari proses yang lebih lama). Gunakan *Aplikasi dan fitur* di Pengaturan Windows untuk menghapusnya secara manual jika diinginkan.
 
 ### Linux/macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (tema, urutan panel, pengaturan)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # font untuk skin
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # model terjemahan MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # data program (runtime JavaScript untuk yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # berkas sementara waktu nyata
+# kunci tersimpan (token HF, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # konfigurasi lama versi <= 1.9, jika ada
 ```
 

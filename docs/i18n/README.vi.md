@@ -224,6 +224,8 @@ Chạy `setup_windows.bat` (nhấp chuột phải → **Chạy với tư cách q
 | **[2] Chỉ người dùng hiện tại** | ❌ | Chỉ xóa cấu hình VTAI, bộ đệm HF/XTTS của người dùng đang chạy và cài đặt cũ cho mỗi người dùng. **Giữ nguyên cài đặt trên toàn hệ thống** để các tài khoản Windows khác trên PC có thể tiếp tục sử dụng ứng dụng. |
 | **[3] Tùy chỉnh - chi tiết** | ✅ cho các mục hệ thống, ❌ cho các mục người dùng | Lời nhắc Y/N cho từng danh mục: thư mục ứng dụng, lối tắt, PATH của máy, số lượt cài đặt cũ của mỗi người dùng, cấu hình/bộ nhớ đệm của mỗi người dùng, sau đó nhóm các gói Python (TTS, ngăn xếp PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, các tiện ích đường ống) và cuối cùng là Python 3.11 và Git tùy chọn. |
 
+Mọi chế độ cũng xóa những gì chương trình lưu cho người dùng: cấu hình và nhật ký hằng ngày (`%APPDATA%\VideoTranslatorAI`), dữ liệu chương trình gồm runtime của trình phát, JavaScript và Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), tệp tạm của chế độ thời gian thực (`%TEMP%\VideoTranslatorAI`), các mô hình MarianMT và các khóa đã lưu (token HF, ElevenLabs) trong Trình quản lý thông tin xác thực của Windows. Khóa được lưu theo từng tài khoản Windows: mỗi tài khoản tự xóa khóa của mình bằng `[2]`.
+
 **Không bao giờ bị xóa tự động:** Công cụ xây dựng Visual Studio C++ (nếu có từ các lần chạy cũ hơn). Sử dụng *Ứng dụng và tính năng* trong Cài đặt Windows để xóa chúng theo cách thủ công nếu muốn.
 
 ### Linux/macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (chủ đề, thứ tự bảng điều khiển, cài đặt)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # phông chữ của giao diện vui nhộn
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # mô hình dịch MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # dữ liệu chương trình (runtime JavaScript cho yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # tệp tạm của thời gian thực
+# khóa đã lưu (token HF, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # cấu hình cũ của phiên bản <= 1.9, nếu có
 ```
 

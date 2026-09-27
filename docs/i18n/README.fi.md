@@ -224,6 +224,8 @@ Suorita `setup_windows.bat` (napsauta hiiren kakkospainikkeella → **Suorita j�
 | **[2] Vain nykyinen käyttäjä** | ❌ | Poistaa vain käynnissä olevan käyttäjän VTAI-määrityksen, HF/XTTS-välimuistin ja vanhan käyttäjäkohtaisen asennuksen. **Jättää järjestelmän laajuisen asennuksen ennalleen**, jotta muut tietokoneen Windows-tilit voivat jatkaa sovelluksen käyttöä. |
 | **[3] Muokattu - rakeinen** | ✅ järjestelmäkohteille, ❌ käyttäjäkohteille | Y/N-kysymys jokaisesta luokasta: sovelluskansio, pikakuvake, järjestelmän PATH, vanhat käyttäjäkohtaiset asennukset, käyttäjien asetukset ja välimuistit, sitten Python-pakettiryhmät (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-riippuvuudet, pyannote ja käsittelyketjun aputyökalut) sekä lopuksi valinnainen Python 3.11:n ja Gitin poisto. |
 
+Jokainen tila poistaa myös sen, mitä ohjelma säilyttää käyttäjälle: asetukset ja päivittäiset lokit (`%APPDATA%\VideoTranslatorAI`), ohjelman tiedot soittimen, JavaScriptin ja Wav2Lipin ajoympäristöineen (`%LOCALAPPDATA%\VideoTranslatorAI`), reaaliajan väliaikaistiedostot (`%TEMP%\VideoTranslatorAI`), MarianMT-mallit sekä tallennetut avaimet (HF-tunnus, ElevenLabs) Windowsin tunnistetietojen hallinnasta. Avaimet ovat Windows-tilikohtaisia: kukin tili poistaa omansa valinnalla `[2]`.
+
 **Ei koskaan poistettu automaattisesti:** Visual Studio C++ Build Tools (jos olemassa vanhemmista ajoista). Voit poistaa ne manuaalisesti Windowsin asetuksissa käyttämällä *Sovelluksia ja ominaisuuksia*.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # konfiguraatio (teemat, paneelien järjestys, asetukset)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # teemojen fontit
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT-käännösmallit
+rm -rf ~/.local/share/VideoTranslatorAI                          # ohjelman tiedot (JavaScript-ajoympäristö yt-dlp:lle)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # reaaliajan väliaikaistiedostot
+# tallennetut avaimet (HF-tunnus, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # versioiden <= 1.9 vanha konfiguraatio, jos sellainen on
 ```
 

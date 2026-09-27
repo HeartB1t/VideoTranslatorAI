@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | ***[2] Μόνο τρέχων χρήστης** | ❌ | Καταργεί μόνο τη διαμόρφωση VTAI του τρέχοντος χρήστη, την κρυφή μνήμη HF/XTTS και την εγκατάσταση παλαιού τύπου ανά χρήστη. **Αφήνει ανέπαφη την εγκατάσταση σε όλο το σύστημα**, ώστε άλλοι λογαριασμοί Windows στον υπολογιστή να μπορούν να συνεχίσουν να χρησιμοποιούν την εφαρμογή. |
 | **[3] Προσαρμοσμένο - κοκκώδες** | ✅ για στοιχεία συστήματος, ❌ για στοιχεία χρήστη | Ερώτηση Y/N για κάθε κατηγορία: φάκελος εφαρμογής, συντόμευση, PATH συστήματος, παλαιές εγκαταστάσεις ανά χρήστη, ρυθμίσεις και κρυφές μνήμες ανά χρήστη, έπειτα ομάδες πακέτων Python (TTS, PyTorch, Whisper+ctranslate2, Demucs, εξαρτήσεις Wav2Lip, pyannote και βοηθητικά εργαλεία της ροής επεξεργασίας) και τέλος προαιρετική αφαίρεση των Python 3.11 και Git. |
 
+Κάθε λειτουργία αφαιρεί επίσης ό,τι κρατά το πρόγραμμα για τον χρήστη: ρυθμίσεις και ημερήσια αρχεία καταγραφής (`%APPDATA%\VideoTranslatorAI`), δεδομένα του προγράμματος με τα περιβάλλοντα εκτέλεσης του προγράμματος αναπαραγωγής, της JavaScript και του Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), προσωρινά αρχεία του πραγματικού χρόνου (`%TEMP%\VideoTranslatorAI`), τα μοντέλα MarianMT και τα αποθηκευμένα κλειδιά (token HF, ElevenLabs) από τη Διαχείριση διαπιστευτηρίων των Windows. Τα κλειδιά είναι ανά λογαριασμό Windows: κάθε λογαριασμός αφαιρεί τα δικά του με `[2]`.
+
 **Δεν καταργήθηκε ποτέ αυτόματα:** Εργαλεία δημιουργίας Visual Studio C++ (εάν υπάρχουν από παλαιότερες εκτελέσεις). Χρησιμοποιήστε *Εφαρμογές και δυνατότητες* στις Ρυθμίσεις των Windows για να τις αφαιρέσετε με μη αυτόματο τρόπο, εάν θέλετε.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (θέματα, σειρά πίνακα, ρυθμίσεις)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # γραμματοσειρές των εμφανίσεων
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # μοντέλα μετάφρασης MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # δεδομένα προγράμματος (περιβάλλον JavaScript για το yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # προσωρινά αρχεία του πραγματικού χρόνου
+# αποθηκευμένα κλειδιά (token HF, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # παραμετροποίηση παλαιού τύπου των εκδόσεων <= 1.9, εάν υπάρχουν
 ```
 

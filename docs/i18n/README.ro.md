@@ -224,6 +224,8 @@ Rulați `setup_windows.bat` (clic dreapta → **Run ca administrator**) și aleg
 | **[2] Numai utilizatorul actual** | ❌ | Elimină numai configurația VTAI a utilizatorului care rulează, memoria cache HF/XTTS și instalarea moștenită per utilizator. **Lasă intactă instalarea la nivelul întregului sistem**, astfel încât alte conturi Windows de pe computer să poată continua să folosească aplicația. |
 | **[3] Personalizat - granular** | ✅ pentru elementele de sistem, ❌ pentru articolele utilizator | Întrebare Y/N pentru fiecare categorie: folderul aplicației, comanda rapidă, PATH de sistem, instalări vechi per utilizator, configurări și memorii cache per utilizator, apoi grupuri de pachete Python (TTS, PyTorch, Whisper+ctranslate2, Demucs, dependențe Wav2Lip, pyannote și utilitare ale fluxului de procesare), iar la final eliminarea opțională a Python 3.11 și Git. |
 
+Fiecare mod elimină și ce păstrează programul pentru utilizator: configurația și jurnalele zilnice (`%APPDATA%\VideoTranslatorAI`), datele programului cu mediile de rulare ale playerului, JavaScript și Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), fișierele temporare ale timpului real (`%TEMP%\VideoTranslatorAI`), modelele MarianMT și cheile salvate (token HF, ElevenLabs) din Managerul de acreditări Windows. Cheile sunt per cont Windows: fiecare cont își elimină cheile cu `[2]`.
+
 **Nu a fost niciodată eliminat automat:** Instrumente de compilare Visual Studio C++ (dacă sunt prezente din versiuni mai vechi). Folosiți *Aplicații și funcții* în Setările Windows pentru a le elimina manual dacă doriți.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (teme, ordinea panoului, setări)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # fonturile skinurilor
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # modelele de traducere MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # datele programului (mediu JavaScript pentru yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # fișierele temporare ale timpului real
+# cheile salvate (token HF, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # configurație moștenită a versiunilor <= 1.9, dacă există
 ```
 

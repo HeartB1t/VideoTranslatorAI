@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] 현재 사용자만 해당** | ❌ | 실행 중인 사용자의 VTAI 구성, HF/XTTS 캐시 및 레거시 사용자별 설치만 제거합니다. **시스템 전체 설치를 그대로 유지**하므로 PC의 다른 Windows 계정이 앱을 계속 사용할 수 있습니다. |
 | **[3] 사용자 정의 - 세분화됨** | ✅ 시스템 항목의 경우, ❌ 사용자 항목의 경우 | 각 범주에 대한 Y/N 프롬프트: 앱 폴더, 바로가기, 컴퓨터 PATH, 사용자별 레거시 설치, 사용자별 구성/캐시, 그룹화된 Python 패키지(TTS, PyTorch 스택, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, 파이프라인 유틸리티), 마지막으로 선택적 Python 3.11 및 Git. |
 
+모든 모드는 프로그램이 사용자를 위해 보관하는 항목도 삭제합니다: 설정과 일별 로그(`%APPDATA%\VideoTranslatorAI`), 플레이어·JavaScript·Wav2Lip 런타임이 포함된 프로그램 데이터(`%LOCALAPPDATA%\VideoTranslatorAI`), 실시간 기능의 임시 파일(`%TEMP%\VideoTranslatorAI`), MarianMT 모델, 그리고 Windows 자격 증명 관리자에 저장된 키(HF 토큰, ElevenLabs). 키는 Windows 계정마다 저장되므로 각 계정은 `[2]`(으)로 자신의 키를 삭제합니다.
+
 **자동으로 제거되지 않음:** Visual Studio C++ 빌드 도구(이전 실행에 있는 경우). 원하는 경우 Windows 설정에서 *앱 및 기능*을 사용하여 수동으로 제거하세요.
 
 ### 리눅스/맥OS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # 구성(테마, 패널 순서, 설정)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # 스킨용 글꼴
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT 번역 모델
+rm -rf ~/.local/share/VideoTranslatorAI                          # 프로그램 데이터(yt-dlp용 JavaScript 런타임)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # 실시간 기능의 임시 파일
+# 저장된 키(HF 토큰, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # 버전 <= 1.9의 레거시 구성(있는 경우)
 ```
 

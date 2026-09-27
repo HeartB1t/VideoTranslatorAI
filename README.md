@@ -231,6 +231,8 @@ Run `setup_windows.bat` (right-click → **Run as administrator**) and pick `[3]
 | **[2] Current user only** | ❌ | Removes only the running user's VTAI config, HF/XTTS cache, and legacy per-user install. **Leaves the system-wide installation intact** so other Windows accounts on the PC can keep using the app. |
 | **[3] Custom - granular** | ✅ for system items, ❌ for user items | Y/N prompt for each category: app folder, shortcut, machine PATH, per-user legacy installs, per-user configs/caches, then grouped Python packages (TTS, PyTorch stack, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, pipeline utilities), and finally optional Python 3.11 and Git. |
 
+Every mode also removes what the app keeps for the user: config and daily logs (`%APPDATA%\VideoTranslatorAI`), app data with the player, JavaScript and Wav2Lip runtimes (`%LOCALAPPDATA%\VideoTranslatorAI`), temporary files of real time (`%TEMP%\VideoTranslatorAI`), the MarianMT models, and the saved keys (HF token, ElevenLabs) from Windows Credential Manager. Keys are stored per Windows account: each account removes its own with `[2]`.
+
 **Never removed automatically:** Visual Studio C++ Build Tools (if present from older runs). Use *Apps and features* in Windows Settings to remove them manually if desired.
 
 ### Linux / macOS
@@ -247,9 +249,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (themes, panel order, settings)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # fonts of the skins
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT translation models
+rm -rf ~/.local/share/VideoTranslatorAI                          # app data (JavaScript runtime for yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # temporary files of real time
+# saved keys (HF token, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # legacy config of versions <= 1.9, if present
 ```
 

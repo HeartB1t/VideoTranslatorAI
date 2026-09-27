@@ -224,6 +224,8 @@ Kør `setup_windows.bat` (højreklik → **Kør som administrator**) og vælg `[
 | **[2] Kun nuværende bruger** | ❌ | Fjerner kun den kørende brugers VTAI-konfiguration, HF/XTTS-cache og ældre installation pr. bruger. **Efterlader installationen for hele systemet intakt**, så andre Windows-konti på pc'en kan blive ved med at bruge appen. |
 | **[3] Brugerdefineret - granulær** | ✅ for systemelementer, ❌ for brugerelementer | Y/N-spørgsmål for hver kategori: appmappe, genvej, systemets PATH, ældre installationer pr. bruger, brugerkonfigurationer og caches, derefter grupper af Python-pakker (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-afhængigheder, pyannote og pipelineværktøjer) og til sidst valgfri fjernelse af Python 3.11 og Git. |
 
+Hver tilstand fjerner også det, programmet gemmer for brugeren: konfiguration og daglige logfiler (`%APPDATA%\VideoTranslatorAI`), programdata med afspiller-, JavaScript- og Wav2Lip-runtimes (`%LOCALAPPDATA%\VideoTranslatorAI`), midlertidige filer fra realtid (`%TEMP%\VideoTranslatorAI`), MarianMT-modellerne og de gemte nøgler (HF-token, ElevenLabs) fra Windows Legitimationsstyring. Nøgler gemmes pr. Windows-konto: hver konto fjerner sine egne med `[2]`.
+
 **Aldrig fjernet automatisk:** Visual Studio C++ Build Tools (hvis de findes fra ældre kørsler). Brug *Apps og funktioner* i Windows-indstillinger til at fjerne dem manuelt, hvis det ønskes.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (temaer, panelrækkefølge, indstillinger)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # skrifttyper til skins
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT-oversættelsesmodeller
+rm -rf ~/.local/share/VideoTranslatorAI                          # programdata (JavaScript-runtime til yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # midlertidige filer fra realtid
+# gemte nøgler (HF-token, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # ældre konfiguration af versioner <= 1.9, hvis den findes
 ```
 

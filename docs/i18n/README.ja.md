@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] 現在のユーザーのみ** | ❌ | 実行中のユーザーの VTAI 構成、HF/XTTS キャッシュ、および従来のユーザーごとのインストールのみを削除します。 **システム全体のインストールはそのまま残る**ため、PC 上の他の Windows アカウントはアプリを使い続けることができます。 |
 | **[3] カスタム - 詳細** | ✅ システム項目の場合、 ❌ ユーザー項目の場合 | カテゴリごとに Y/N プロンプト: アプリ フォルダー、ショートカット、マシン PATH、ユーザーごとのレガシー インストール、ユーザーごとの構成/キャッシュ、次にグループ化された Python パッケージ (TTS、PyTorch スタック、Whisper+ctranslate2、Demucs、Wav2Lip deps、pyannote、パイプライン ユーティリティ)、最後にオプションの Python 3.11 と Git。 |
 
+どのモードでも、プログラムがユーザーのために保存しているものも削除します：設定と日ごとのログ（`%APPDATA%\VideoTranslatorAI`）、プレーヤー・JavaScript・Wav2Lip のランタイムを含むプログラムデータ（`%LOCALAPPDATA%\VideoTranslatorAI`）、リアルタイム機能の一時ファイル（`%TEMP%\VideoTranslatorAI`）、MarianMT モデル、そして Windows 資格情報マネージャーに保存されたキー（HF トークン、ElevenLabs）。キーは Windows アカウントごとに保存されるため、各アカウントは `[2]` で自分のキーを削除します。
+
 **自動的に削除されることはありません:** Visual Studio C++ ビルド ツール (古い実行で存在する場合)。必要に応じて、Windows 設定の *アプリと機能* を使用して手動で削除します。
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # config (テーマ、パネルの順序、設定)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # スキン用フォント
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT 翻訳モデル
+rm -rf ~/.local/share/VideoTranslatorAI                          # プログラムデータ（yt-dlp 用 JavaScript ランタイム）
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # リアルタイム機能の一時ファイル
+# 保存したキー（HF トークン、ElevenLabs）
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # バージョン 1.9 以下のレガシー構成 (存在する場合)
 ```
 

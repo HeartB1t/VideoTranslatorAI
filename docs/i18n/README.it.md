@@ -224,6 +224,8 @@ Esegui `setup_windows.bat` (fai clic con il pulsante destro del mouse → **Eseg
 | **[2] Solo utente attuale** | ❌ | Rimuove solo la configurazione VTAI dell'utente corrente, la cache HF/XTTS e l'installazione legacy per utente. **Lascia intatta l'installazione a livello di sistema** in modo che altri account Windows sul PC possano continuare a utilizzare l'app. |
 | **[3] Personalizzato - granulare** | ✅ per gli componenti di sistema, ❌ per gli componenti dell'utente | Richiesta Y/N per ogni categoria: cartella dell'app, collegamento, PATH di sistema, installazioni legacy per utente, configurazioni/cache per utente, quindi pacchetti Python raggruppati (TTS, stack PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, utilità pipeline) e infine Python 3.11 e Git opzionali. |
 
+Ogni modalità rimuove anche ciò che il programma conserva per l'utente: configurazione e log giornalieri (`%APPDATA%\VideoTranslatorAI`), dati del programma con i runtime del player, di JavaScript e di Wav2Lip (`%LOCALAPPDATA%\VideoTranslatorAI`), file temporanei del tempo reale (`%TEMP%\VideoTranslatorAI`), i modelli MarianMT e le chiavi salvate (token HF, ElevenLabs) dal Gestore credenziali di Windows. Le chiavi sono per account Windows: ogni account rimuove le proprie con `[2]`.
+
 **Mai rimosso automaticamente:** Visual Studio C++ Build Tools (se presente nelle versioni precedenti). Utilizza *App e funzionalità* nelle Impostazioni di Windows per rimuoverle manualmente, se lo desideri.
 
 ### Linux/macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # configurazione (temi, ordine dei pannelli, impostazioni)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # font delle skin
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # modelli di traduzione MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # dati del programma (runtime JavaScript per yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # file temporanei del tempo reale
+# chiavi salvate (token HF, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # configurazione legacy delle versioni <= 1.9, se presente
 ```
 

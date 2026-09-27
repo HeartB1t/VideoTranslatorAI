@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] Yalnızca mevcut kullanıcı** | ❌ | Yalnızca çalışan kullanıcının VTAI yapılandırmasını, HF/XTTS önbelleğini ve kullanıcı başına eski yüklemeyi kaldırır. **Sistem genelindeki kurulumu olduğu gibi bırakır**, böylece bilgisayardaki diğer Windows hesapları uygulamayı kullanmaya devam edebilir. |
 | **[3] Özel - ayrıntılı** | ✅ sistem öğeleri için, ❌ kullanıcı öğeleri için | Her kategori için E/H istemi: uygulama klasörü, kısayol, makine PATH'i, kullanıcı başına eski yüklemeler, kullanıcı başına yapılandırmalar/önbellekler, ardından gruplandırılmış Python paketleri (TTS, PyTorch yığını, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, ardışık düzen yardımcı programları) ve son olarak isteğe bağlı Python 3.11 ve Git. |
 
+Her mod, programın kullanıcı için sakladıklarını da kaldırır: yapılandırma ve günlük kayıtlar (`%APPDATA%\VideoTranslatorAI`), oynatıcı, JavaScript ve Wav2Lip çalışma ortamlarını içeren program verileri (`%LOCALAPPDATA%\VideoTranslatorAI`), gerçek zamanın geçici dosyaları (`%TEMP%\VideoTranslatorAI`), MarianMT modelleri ve Windows Kimlik Bilgisi Yöneticisi'nde kayıtlı anahtarlar (HF belirteci, ElevenLabs). Anahtarlar her Windows hesabına aittir: her hesap kendi anahtarlarını `[2]` ile kaldırır.
+
 **Asla otomatik olarak kaldırılmaz:** Visual Studio C++ Derleme Araçları (daha eski çalıştırmalarda mevcutsa). İsterseniz bunları manuel olarak kaldırmak için Windows Ayarlarında *Uygulamalar ve özellikler* seçeneğini kullanın.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # yapılandırma (temalar, panel sırası, ayarlar)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # görünümlerin yazı tipleri
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT çeviri modelleri
+rm -rf ~/.local/share/VideoTranslatorAI                          # program verileri (yt-dlp için JavaScript çalışma ortamı)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # gerçek zamanın geçici dosyaları
+# kayıtlı anahtarlar (HF belirteci, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # <= 1.9 sürümlerinin eski yapılandırması (varsa)
 ```
 

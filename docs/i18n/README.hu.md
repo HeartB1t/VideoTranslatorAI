@@ -224,6 +224,8 @@ Futtassa a `setup_windows.bat`-t (jobb gombbal kattintson → **Futtatás rendsz
 | **[2] Csak jelenlegi felhasználó** | ❌ | Csak a futó felhasználó VTAI konfigurációját, HF/XTTS gyorsítótárát és a régi felhasználónkénti telepítést távolítja el. **Érintetlenül hagyja a rendszerszintű telepítést**, így a számítógépen lévő többi Windows-fiók továbbra is használhatja az alkalmazást. |
 | **[3] Egyéni - szemcsés** | ✅ rendszerelemekhez, ❌ felhasználói elemekhez | Y/N-kérdés minden kategóriához: alkalmazásmappa, parancsikon, rendszerszintű PATH, régi felhasználónkénti telepítések, felhasználói beállítások és gyorsítótárak, majd Python-csomagcsoportok (TTS, PyTorch, Whisper+ctranslate2, Demucs, Wav2Lip-függőségek, pyannote és a feldolgozási folyamat segédprogramjai), végül a Python 3.11 és a Git opcionális eltávolítása. |
 
+Minden mód azt is eltávolítja, amit a program a felhasználónak megőriz: a beállításokat és a napi naplókat (`%APPDATA%\VideoTranslatorAI`), a program adatait a lejátszó, a JavaScript és a Wav2Lip futtatókörnyezetével (`%LOCALAPPDATA%\VideoTranslatorAI`), a valós idejű mód ideiglenes fájljait (`%TEMP%\VideoTranslatorAI`), a MarianMT-modelleket és a mentett kulcsokat (HF-token, ElevenLabs) a Windows Hitelesítőadat-kezelőből. A kulcsok Windows-fiókonként tárolódnak: minden fiók a sajátjait a `[2]` móddal törli.
+
 **Soha nem távolítják el automatikusan:** Visual Studio C++ Build Tools (ha van régebbi futtatásokból). Használja az *Alkalmazásokat és funkciókat* a Windows beállításaiban, ha kívánja, kézzel távolítsa el őket.
 
 ### Linux / macOS
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # konfiguráció (témák, panelek sorrendje, beállítások)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # a skinek betűtípusai
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # MarianMT fordítási modellek
+rm -rf ~/.local/share/VideoTranslatorAI                          # programadatok (JavaScript-futtatókörnyezet a yt-dlp-hez)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # a valós idejű mód ideiglenes fájljai
+# mentett kulcsok (HF-token, ElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # <= 1.9-es verziók örökölt konfigurációja, ha van
 ```
 

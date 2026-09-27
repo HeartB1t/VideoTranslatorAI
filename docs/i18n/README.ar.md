@@ -224,6 +224,8 @@ videotranslatorai --preflight
 | **[2] المستخدم الحالي فقط** | ❌ | يزيل فقط تكوين VTAI الخاص بالمستخدم قيد التشغيل، وذاكرة التخزين المؤقت HF/XTTS، والتثبيت القديم لكل مستخدم. **يترك التثبيت على مستوى النظام سليمًا** حتى تتمكن حسابات Windows الأخرى الموجودة على جهاز الكمبيوتر من الاستمرار في استخدام التطبيق. |
 | **[3] مخصص - تفصيلي** | ✅ لعناصر النظام، ❌ لعناصر المستخدم | المطالبة Y/N لكل فئة: مجلد التطبيق، الاختصار، PATH للجهاز، عمليات التثبيت القديمة لكل مستخدم، التكوينات/ذاكرة التخزين المؤقت لكل مستخدم، ثم حزم Python المجمعة (TTS، PyTorch stack، Whisper+ctranslate2، Demucs، Wav2Lip deps، pyannote، أدوات خط الأنابيب)، وأخيرًا Python 3.11 وGit الاختياريين. |
 
+تزيل كل الأوضاع أيضًا ما يحفظه البرنامج للمستخدم: الإعدادات والسجلات اليومية (`%APPDATA%\VideoTranslatorAI`)، وبيانات البرنامج مع بيئات تشغيل المشغّل وJavaScript وWav2Lip ‏(`%LOCALAPPDATA%\VideoTranslatorAI`)، والملفات المؤقتة للوقت الفعلي (`%TEMP%\VideoTranslatorAI`)، ونماذج MarianMT، والمفاتيح المحفوظة (رمز HF وElevenLabs) من مدير بيانات الاعتماد في Windows. المفاتيح خاصة بكل حساب Windows: يزيل كل حساب مفاتيحه عبر `[2]`.
+
 **لا تتم الإزالة تلقائيًا مطلقًا:** أدوات إنشاء Visual Studio C++ (إذا كانت موجودة من عمليات التشغيل الأقدم). استخدم *التطبيقات والميزات* في إعدادات Windows لإزالتها يدويًا إذا رغبت في ذلك.
 
 ### لينكس / ماك
@@ -240,9 +242,14 @@ pip uninstall -y faster-whisper demucs soundfile edge-tts deep-translator pydub 
 rm -rf ~/.cache/huggingface/hub/models--*whisper*
 rm -rf ~/.cache/huggingface/hub/models--*XTTS* ~/.cache/huggingface/hub/models--*coqui*
 rm -rf ~/.cache/huggingface/hub/models--*pyannote*
-rm -rf ~/.local/share/tts ~/.local/share/wav2lip
+rm -rf ~/.local/share/tts ~/.local/share/wav2lip ~/.cache/wav2lip
 rm -rf ~/.config/videotranslatorai          # التكوين (الموضوعات، ترتيب اللوحات، الإعدادات)
 rm -rf ~/.local/share/fonts/VideoTranslatorAI   # خطوط الأشكال المرحة
+rm -rf ~/.cache/huggingface/hub/models--Helsinki-NLP--opus-mt*   # نماذج الترجمة MarianMT
+rm -rf ~/.local/share/VideoTranslatorAI                          # بيانات البرنامج (بيئة JavaScript لـ yt-dlp)
+rm -rf "${TMPDIR:-/tmp}/VideoTranslatorAI"                       # الملفات المؤقتة للوقت الفعلي
+# المفاتيح المحفوظة (رمز HF وElevenLabs)
+python3 -c "import keyring; [keyring.delete_password('VideoTranslatorAI', u) for u in ('hf_token', 'elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI', u)]"
 rm -f  ~/.videotranslatorai_config.json     # التكوين القديم للإصدارات <= 1.9، إذا كان موجودًا
 ```
 

@@ -77,11 +77,35 @@ class WindowsInstallerStaticTests(unittest.TestCase):
                       "soundfile sacremoses sentencepiece 2>nul", self.flat)
         self.assertIn('if /i "!Q_MPV!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y mpv python-mpv', self.text)
 
-    def test_per_user_cleanup_removes_only_the_player_runtime(self):
-        self.assertIn('rmdir /S /Q "%USER_MPV_RUNTIME%"', self.text)
-        self.assertIn(r'rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI\mpv-runtime"', self.text)
-        self.assertNotIn(r'rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI"', self.text)
-        self.assertNotIn(r'rmdir /S /Q "%LOCALAPPDATA%\VideoTranslatorAI"', self.text)
+    def test_per_user_cleanup_removes_every_app_folder_and_nothing_else(self):
+        # The app's own per-user folders: config + logs (Roaming), data with the
+        # player, JS and Wav2Lip runtimes (Local), live cache and shaders (Temp).
+        self.assertIn(r'set "USER_APP_DATA=%APPDATA%\VideoTranslatorAI"', self.text)
+        self.assertIn(r'set "USER_LOCAL_DATA=%LOCALAPPDATA%\VideoTranslatorAI"', self.text)
+        self.assertIn(r'set "USER_TEMP_DATA=%TEMP%\VideoTranslatorAI"', self.text)
+        for var in ("USER_APP_DATA", "USER_LOCAL_DATA", "USER_TEMP_DATA"):
+            self.assertIn(f'rmdir /S /Q "%{var}%"', self.text)
+        for sub in (r"AppData\Roaming\VideoTranslatorAI", r"AppData\Local\VideoTranslatorAI",
+                    r"AppData\Local\Temp\VideoTranslatorAI"):
+            self.assertIn(f'rmdir /S /Q "%%~U\\{sub}"', self.text)
+        # never a parent folder shared with other programs
+        for parent in ("%APPDATA%", "%LOCALAPPDATA%", "%TEMP%", r"%%~U\AppData\Local",
+                       r"%%~U\AppData\Roaming", r"%%~U\AppData\Local\Temp"):
+            self.assertNotIn(f'rmdir /S /Q "{parent}"', self.text)
+
+    def test_uninstall_removes_the_saved_keys_before_the_packages(self):
+        self.assertIn(":remove_saved_keys", self.text)
+        self.assertIn("keyring.delete_password('VideoTranslatorAI',u)", self.text)
+        for user in ("'hf_token'", "'elevenlabs_api_key'"):
+            self.assertIn(user, self.text)
+        full = self.text[self.text.index(":uninst_full"):self.text.index(":uninst_user")]
+        self.assertLess(full.index("call :remove_saved_keys"),
+                        full.index("call :remove_python_packages_all"))
+        self.assertIn("call :remove_saved_keys", self.text[self.text.index(":uninst_user"):
+                                                           self.text.index(":uninst_custom")])
+
+    def test_model_cache_filter_covers_marian(self):
+        self.assertEqual(self.text.count("whisper XTTS coqui wav2vec pyannote opus-mt"), 2)
 
     def test_pipeline_packages_line_is_unchanged(self):
         self.assertIn('set "PACKAGES=faster-whisper demucs soundfile edge-tts deep-translator pydub '

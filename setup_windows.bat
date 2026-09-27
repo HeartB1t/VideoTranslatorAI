@@ -26,6 +26,11 @@ set "USER_CONFIG=%USERPROFILE%\.videotranslatorai_config.json"
 set "USER_HF_CACHE=%USERPROFILE%\.cache\huggingface"
 set "USER_XTTS_CACHE=%LOCALAPPDATA%\tts"
 set "USER_MPV_RUNTIME=%LOCALAPPDATA%\VideoTranslatorAI\mpv-runtime"
+:: Current data locations: config + daily logs (Roaming), player and JS
+:: runtimes (Local), live-mode cache and shaders (Temp).
+set "USER_APP_DATA=%APPDATA%\VideoTranslatorAI"
+set "USER_LOCAL_DATA=%LOCALAPPDATA%\VideoTranslatorAI"
+set "USER_TEMP_DATA=%TEMP%\VideoTranslatorAI"
 set "USER_LEGACY_DIR=%USERPROFILE%\VideoTranslatorAI"
 set "USER_LEGACY_WAV2LIP=%USERPROFILE%\.local\share\wav2lip"
 set "USER_LEGACY_SHORTCUT=%USERPROFILE%\Desktop\Video Translator AI.lnk"
@@ -250,8 +255,9 @@ echo  ============================================
 echo  - Application folder: %INSTALL_DIR%
 echo  - Public Desktop shortcut
 echo  - ffmpeg from machine PATH
-echo  - All users' HF model caches (Whisper, XTTS)
-echo  - All users' VTAI config (HF token)
+echo  - All users' HF model caches (Whisper, XTTS, MarianMT)
+echo  - All users' VTAI config, logs, player/JS runtimes and temp files
+echo  - Your saved keys (HF token, ElevenLabs) in Windows Credential Manager
 echo  - All legacy per-user installs
 echo  - All Python AI packages (coqui-tts, torch, demucs, ...)
 echo.
@@ -280,6 +286,7 @@ call :remove_ffmpeg_path
 call :remove_legacy_all_users
 call :remove_user_configs_all
 call :remove_user_caches_all
+call :remove_saved_keys
 call :remove_python_packages_all
 if /i "%Q_PY_FULL%"=="Y" call :remove_python
 if /i "%Q_GIT_FULL%"=="Y" call :remove_git
@@ -292,8 +299,9 @@ echo.
 echo  ============================================
 echo    Current user only ( %USERNAME% )
 echo  ============================================
-echo  - VTAI config file ( %USER_CONFIG% )
-echo  - HF model cache (Whisper, XTTS)
+echo  - VTAI config and logs ( %USER_APP_DATA% )
+echo  - HF model cache (Whisper, XTTS, MarianMT), player/JS runtimes, temp files
+echo  - Saved keys (HF token, ElevenLabs) in Windows Credential Manager
 echo  - Legacy per-user install, if present
 echo.
 echo  The system-wide installation will stay intact for other users.
@@ -308,6 +316,7 @@ if /i not "%CONFIRM%"=="Y" (
 echo.
 call :remove_user_config_current
 call :remove_user_cache_current
+call :remove_saved_keys
 call :remove_legacy_current_user
 goto uninst_done
 
@@ -334,21 +343,25 @@ set /p "Q_LEG=Remove legacy per-user installs for ALL users ? [Y/N]: "
 if /i "!Q_LEG!"=="Y" call :remove_legacy_all_users
 
 set "Q_CFG_ALL="
-set /p "Q_CFG_ALL=Remove VTAI config file (HF token) for ALL users ? [Y/N]: "
+set /p "Q_CFG_ALL=Remove VTAI config and logs for ALL users ? [Y/N]: "
 if /i "!Q_CFG_ALL!"=="Y" call :remove_user_configs_all
 
 set "Q_CACHE_ALL="
-set /p "Q_CACHE_ALL=Remove HF model cache (Whisper+XTTS, ~3-5 GB) for ALL users ? [Y/N]: "
+set /p "Q_CACHE_ALL=Remove model caches (Whisper, XTTS, MarianMT, ~3-5 GB), runtimes and temp files for ALL users ? [Y/N]: "
 if /i "!Q_CACHE_ALL!"=="Y" call :remove_user_caches_all
 
 echo.
 echo  --- Items for the current user ( %USERNAME% ) ---
 set "Q_CFG="
-set /p "Q_CFG=Remove your VTAI config file (HF token) ? [Y/N]: "
+set /p "Q_CFG=Remove your VTAI config and logs ? [Y/N]: "
 if /i "!Q_CFG!"=="Y" call :remove_user_config_current
 
+set "Q_KEYS="
+set /p "Q_KEYS=Remove your saved keys (HF token, ElevenLabs) from Credential Manager ? [Y/N]: "
+if /i "!Q_KEYS!"=="Y" call :remove_saved_keys
+
 set "Q_CACHE="
-set /p "Q_CACHE=Remove your HF model cache (Whisper, XTTS) ? [Y/N]: "
+set /p "Q_CACHE=Remove your model caches (Whisper, XTTS, MarianMT), runtimes and temp files ? [Y/N]: "
 if /i "!Q_CACHE!"=="Y" call :remove_user_cache_current
 
 set "Q_LEG_ME="
@@ -1354,55 +1367,86 @@ echo  [+] Done.
 exit /b 0
 
 :remove_user_configs_all
-echo  [*] Removing VTAI config files for all users ...
+echo  [*] Removing VTAI config and logs for all users ...
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\.videotranslatorai_config.json" (
-        echo      - %%~nxU
+        echo      - %%~nxU : legacy config file
         del /Q "%%~U\.videotranslatorai_config.json" 2>nul
+    )
+    if exist "%%~U\AppData\Roaming\VideoTranslatorAI" (
+        echo      - %%~nxU : config and logs
+        rmdir /S /Q "%%~U\AppData\Roaming\VideoTranslatorAI" 2>nul
     )
 )
 echo  [+] Done.
 exit /b 0
 
 :remove_user_config_current
-echo  [*] Removing VTAI config for %USERNAME% ...
-if exist "%USER_CONFIG%" (
-    del /Q "%USER_CONFIG%" 2>nul
-    echo  [+] Removed.
+echo  [*] Removing VTAI config and logs for %USERNAME% ...
+if exist "%USER_CONFIG%" del /Q "%USER_CONFIG%" 2>nul
+if exist "%USER_APP_DATA%" (
+    rmdir /S /Q "%USER_APP_DATA%" 2>nul
+    echo  [+] Removed %USER_APP_DATA%
 ) else (
     echo  [-] Not found.
 )
 exit /b 0
 
 :remove_user_caches_all
-echo  [*] Removing HF + XTTS model caches and the player runtime for all users ...
+echo  [*] Removing model caches, runtimes and temp files for all users ...
 for /d %%U in ("%SystemDrive%\Users\*") do (
     if exist "%%~U\.cache\huggingface\hub" (
         for /d %%M in ("%%~U\.cache\huggingface\hub\models--*") do (
-            echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote" >nul && rmdir /S /Q "%%~M" 2>nul
+            echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote opus-mt" >nul && rmdir /S /Q "%%~M" 2>nul
         )
     )
     if exist "%%~U\AppData\Local\tts" (
         echo      - %%~nxU : XTTS cache
         rmdir /S /Q "%%~U\AppData\Local\tts" 2>nul
     )
-    if exist "%%~U\AppData\Local\VideoTranslatorAI\mpv-runtime" (
-        echo      - %%~nxU : player runtime
-        rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI\mpv-runtime" 2>nul
+    if exist "%%~U\AppData\Local\VideoTranslatorAI" (
+        echo      - %%~nxU : player and JS runtimes
+        rmdir /S /Q "%%~U\AppData\Local\VideoTranslatorAI" 2>nul
+    )
+    if exist "%%~U\AppData\Local\Temp\VideoTranslatorAI" (
+        echo      - %%~nxU : temp files
+        rmdir /S /Q "%%~U\AppData\Local\Temp\VideoTranslatorAI" 2>nul
     )
 )
 echo  [+] Done.
 exit /b 0
 
 :remove_user_cache_current
-echo  [*] Removing HF + XTTS model cache and the player runtime for %USERNAME% ...
+echo  [*] Removing model caches, runtimes and temp files for %USERNAME% ...
 if exist "%USER_HF_CACHE%\hub" (
     for /d %%M in ("%USER_HF_CACHE%\hub\models--*") do (
-        echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote" >nul && rmdir /S /Q "%%~M" 2>nul
+        echo %%~nxM | findstr /i "whisper XTTS coqui wav2vec pyannote opus-mt" >nul && rmdir /S /Q "%%~M" 2>nul
     )
 )
 if exist "%USER_XTTS_CACHE%" rmdir /S /Q "%USER_XTTS_CACHE%" 2>nul
-if exist "%USER_MPV_RUNTIME%" rmdir /S /Q "%USER_MPV_RUNTIME%" 2>nul
+if exist "%USER_LOCAL_DATA%" rmdir /S /Q "%USER_LOCAL_DATA%" 2>nul
+if exist "%USER_TEMP_DATA%" rmdir /S /Q "%USER_TEMP_DATA%" 2>nul
+echo  [+] Done.
+exit /b 0
+
+:remove_saved_keys
+:: Windows Credential Manager entries written through the keyring package
+:: (service VideoTranslatorAI). Per Windows account: only the current user's
+:: can be removed from here. Runs before the Python packages are removed.
+echo  [*] Removing saved keys (HF token, ElevenLabs) for %USERNAME% ...
+where python >nul 2>&1
+if errorlevel 1 (
+    echo  [!] python not found in PATH, skipping. Remove them in Credential Manager.
+    exit /b 0
+)
+if not defined PYTHON_EXE (
+    for /f "tokens=*" %%i in ('where python 2^>nul') do (
+        if not defined PYTHON_EXE set "PYTHON_EXE=%%i"
+    )
+)
+if not defined PYTHON_EXE set "PYTHON_EXE=python"
+"%PYTHON_EXE%" -c "import keyring;[print('  [+] removed '+u) for u in ('hf_token','elevenlabs_api_key') if keyring.get_password('VideoTranslatorAI',u) is not None and keyring.delete_password('VideoTranslatorAI',u) is None]" 2>nul
+if errorlevel 1 echo  [!] Could not reach the keyring. Remove them in Credential Manager if present.
 echo  [+] Done.
 exit /b 0
 
