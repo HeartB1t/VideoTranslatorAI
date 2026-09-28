@@ -73,6 +73,43 @@ class WindowsInstallerStaticTests(unittest.TestCase):
                    if not line.endswith(b"\r")]
         self.assertEqual(lf_only, [])
 
+    # -- console code page: PowerShell at 65001 turned the font into raster "Terminal" --
+
+    def test_the_console_keeps_its_own_code_page(self):
+        head = self.flat[:self.flat.index('set "SCRIPT_VERSION=')]
+        # after setlocal: the variables stay out of the calling console
+        self.assertLess(head.index("setlocal enabledelayedexpansion"), head.index('set "VTAI_CP="'))
+        self.assertIn('set "VTAI_CHCP=%SystemRoot%\\System32\\chcp.com"', head)
+        self.assertIn("""for /f "tokens=*" %%a in ('"%VTAI_CHCP%"') do set "VTAI_CP=%%a\"""", head)
+        switches = [line.strip() for line in self.lines if "65001" in line and not line.lstrip().startswith("::")]
+        self.assertEqual(len(switches), 3)  # :logfile, :log_session, :reload_path
+        for line in switches:
+            self.assertEqual(line, 'if defined VTAI_CP "%VTAI_CHCP%" 65001 >nul')
+        # every chcp by full path: :reload_path empties PATH around its switch
+        self.assertNotRegex(self.flat, re.compile(r"^[^:\n]*(?<![\\\"])\bchcp\b(?!\.com)", re.M))
+
+    def test_no_powershell_runs_while_the_console_is_at_utf8(self):
+        utf8 = False
+        for number, line in enumerate(self.lines, 1):
+            if line.lstrip().startswith("::"):
+                continue
+            if "65001" in line:
+                self.assertFalse(utf8, number)
+                utf8 = True
+            elif utf8 and 'chcp.com' not in line and '"%VTAI_CHCP%" %VTAI_CP%' not in line:
+                self.assertNotIn("powershell", line.lower(), number)
+                self.assertFalse(line.startswith(":"), f"line {number}: a label inside a UTF-8 section")
+            elif '"%VTAI_CHCP%" %VTAI_CP%' in line:
+                self.assertTrue(utf8, number)
+                utf8 = False
+        self.assertFalse(utf8)
+
+    def test_the_log_keeps_the_callers_errorlevel(self):
+        # chcp.com resets ERRORLEVEL; callers test it after logging a failure.
+        body = self._label_body("logfile", "exit /b %VTAI_LOG_RC%")
+        self.assertTrue(body.startswith('set "VTAI_LOG_RC=%ERRORLEVEL%"\n'))
+        self.assertIn('>>"%VTAI_SETUP_LOG%" echo [%TIME%] %~1', body)
+
     def test_player_runtime_paths(self):
         self.assertIn(r'set "MPV_DIR=%INSTALL_DIR%\mpv-runtime"', self.text)
         self.assertIn(r'set "USER_MPV_RUNTIME=%LOCALAPPDATA%\VideoTranslatorAI\mpv-runtime"', self.text)

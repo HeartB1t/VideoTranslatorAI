@@ -3,8 +3,22 @@
 ::  Video Translator AI - Unified Windows Setup
 ::  Modes: install | repair | uninstall (interactive menu or CLI argument)
 :: ============================================================================
-chcp 65001 >nul
 setlocal enabledelayedexpansion
+:: The console keeps its own code page. powershell.exe, started while the
+:: console is at 65001 (UTF-8), turns the default TrueType font into the
+:: raster "Terminal" (measured on Windows 11: Consolas became Terminal 8x12 at
+:: the first powershell.exe, with any flags or redirections; chcp alone and
+:: other programs kept the font). UTF-8 is set only while the script writes
+:: the setup log or reads the PATH file of :reload_path, both UTF-8, so user
+:: names and folders outside ASCII stay intact there. VTAI_CP is the number
+:: at the end of chcp's localized line ("Active code page: 850", "Aktive
+:: Codepage: 850."); when it cannot be read, nothing is switched.
+set "VTAI_CHCP=%SystemRoot%\System32\chcp.com"
+set "VTAI_CP="
+for /f "tokens=*" %%a in ('"%VTAI_CHCP%"') do set "VTAI_CP=%%a"
+for %%t in (%VTAI_CP%) do set "VTAI_CP=%%t"
+if defined VTAI_CP set "VTAI_CP=%VTAI_CP:.=%"
+echo(%VTAI_CP%| findstr /r /x "[0-9][0-9]*" >nul || set "VTAI_CP="
 
 set "SCRIPT_VERSION=2.1.2"
 title Video Translator AI - Setup v%SCRIPT_VERSION%
@@ -552,13 +566,17 @@ goto :eof
 :: Always pass the message as ONE quoted argument. Inside the quotes
 :: parentheses are safe; never use < > | ^ or a double quote in it.
 :logfile
+set "VTAI_LOG_RC=%ERRORLEVEL%"
+if defined VTAI_CP "%VTAI_CHCP%" 65001 >nul
 >>"%VTAI_SETUP_LOG%" echo [%TIME%] %~1
-goto :eof
+if defined VTAI_CP "%VTAI_CHCP%" %VTAI_CP% >nul
+exit /b %VTAI_LOG_RC%
 
 
 :: %~1 = mode name. Writes the session header and tells the user where the
 :: log is. Runs append-only, so repeated runs keep their history.
 :log_session
+if defined VTAI_CP "%VTAI_CHCP%" 65001 >nul
 >>"%VTAI_SETUP_LOG%" echo(
 >>"%VTAI_SETUP_LOG%" echo ================================================================
 >>"%VTAI_SETUP_LOG%" echo  Video Translator AI - Setup v%SCRIPT_VERSION% - %~1
@@ -567,6 +585,7 @@ goto :eof
 for /f "delims=" %%v in ('ver') do >>"%VTAI_SETUP_LOG%" echo  %%v
 >>"%VTAI_SETUP_LOG%" echo  Script folder: %SCRIPT_DIR%
 >>"%VTAI_SETUP_LOG%" echo ================================================================
+if defined VTAI_CP "%VTAI_CHCP%" %VTAI_CP% >nul
 echo  [*] Setup log: %VTAI_SETUP_LOG%
 goto :eof
 
@@ -664,7 +683,9 @@ exit /b %~1
 :: `where` lookup on that entry.
 powershell -NoProfile -Command "$p = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User'); [System.IO.File]::WriteAllText($env:TEMP + '\vtai_path.txt', $p, (New-Object System.Text.UTF8Encoding($false)))"
 set "PATH="
+if defined VTAI_CP "%VTAI_CHCP%" 65001 >nul
 for /f "usebackq delims=" %%i in ("%TEMP%\vtai_path.txt") do set "PATH=!PATH!%%i"
+if defined VTAI_CP "%VTAI_CHCP%" %VTAI_CP% >nul
 del /Q "%TEMP%\vtai_path.txt" >nul 2>&1
 goto :eof
 
