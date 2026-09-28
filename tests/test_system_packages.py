@@ -401,6 +401,23 @@ class PythonSupportTests(unittest.TestCase):
         self.assertEqual(found, ("/usr/bin/python3.11", True))
         self.assertIsNone(sp.find_supported_python(which=_which(), run=run, sys_platform="linux"))
 
+    def test_only_a_python_311_is_offered_when_it_has_pip(self):
+        # python3 is 3.14 and a python3.11 was installed by hand: without pip
+        # the app could not install anything there, so it is not offered.
+        def run_with(pip):
+            def run(cmd, **kw):
+                code = cmd[-1]
+                if "torch" in code or ("pip" in code and not pip):
+                    return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="No module")
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"{cmd[0]}\n")
+            return run
+        which = _which("python3.14", "python3.11")
+        self.assertEqual(sp.find_supported_python(which=which, run=run_with(pip=True),
+                                                  sys_platform="linux"),
+                         ("/usr/bin/python3.11", False))
+        self.assertIsNone(sp.find_supported_python(which=which, run=run_with(pip=False),
+                                                   sys_platform="linux"))
+
     def test_a_hanging_or_broken_interpreter_is_skipped(self):
         def run(cmd, **kw):
             if "python3.13" in cmd[0]:

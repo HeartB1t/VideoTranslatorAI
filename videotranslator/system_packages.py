@@ -212,8 +212,8 @@ def find_supported_python(*, which: Callable[[str], str | None] = shutil.which,
 
     Looks for python3.13 .. python3.9 on PATH and, on Windows, asks the py
     launcher for each version; the path is the interpreter's own. One that
-    already imports torch wins; otherwise the newest supported one, for which
-    the app will install its packages. None when there is none.
+    already imports torch wins; otherwise the newest supported one that has
+    pip, for which the app will install its packages. None when there is none.
     """
     launcher = which("py") if sys_platform == "win32" else None
     fallback: str | None = None
@@ -229,7 +229,9 @@ def find_supported_python(*, which: Callable[[str], str | None] = shutil.which,
             if path:
                 return path, True
             if fallback is None:
-                fallback = _probe_python(base, "import sys; print(sys.executable)", run)
+                # Without pip the app could install nothing there (a python3.11
+                # added by hand on some distributions comes without it).
+                fallback = _probe_python(base, "import sys, pip; print(sys.executable)", run)
     return (fallback, False) if fallback else None
 
 
