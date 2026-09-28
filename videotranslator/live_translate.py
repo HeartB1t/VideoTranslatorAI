@@ -8,6 +8,7 @@ logic live here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
@@ -282,14 +283,23 @@ class MarianLiveTranslator:
 
 
 def _classify_online_error(exc: Exception) -> str:
-    """Map a translator client exception to an Outcome error kind."""
+    """Map a translator client exception to an Outcome error kind.
+
+    Timeouts and refused connections come first and rate limits match whole
+    words: the Ollama URL ends in /api/generate, and a bare "rate" turned a
+    connect timeout on a swapping PC into "rate_limited".
+    """
     text = f"{type(exc).__name__} {exc}".lower()
-    if "toomanyrequests" in text or "429" in text or "rate" in text:
-        return "rate_limited"
-    if "quota" in text or "456" in text:
-        return "quota"
     if "timeout" in text or "timed out" in text:
         return "timeout"
+    if ("connectionerror" in text or "failed to establish" in text
+            or "connection refused" in text or "connection aborted" in text):
+        return "unavailable"
+    if ("toomanyrequests" in text or "too many requests" in text
+            or re.search(r"\b429\b|\brate[ _-]?limit", text)):
+        return "rate_limited"
+    if "quota" in text or re.search(r"\b456\b", text):
+        return "quota"
     return "error"
 
 

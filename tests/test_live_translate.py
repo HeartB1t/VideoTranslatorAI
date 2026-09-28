@@ -434,6 +434,51 @@ class MarianIsCachedTests(unittest.TestCase):
         self.assertFalse(marian_is_cached(route, loader=_cached("a")))
 
 
+class ClassifyOnlineErrorTests(unittest.TestCase):
+    """The texts requests really raises, reproduced against local sockets.
+
+    The Ollama URL ends in /api/generate: a bare "rate" in the text turned a
+    connect timeout on a swapping PC into "rate_limited" (seen on the Windows VM
+    with qwen3:32b, 28/09/2026).
+    """
+
+    def _kind(self, name, message):
+        from videotranslator.live_translate import _classify_online_error
+        return _classify_online_error(type(name, (Exception,), {})(message))
+
+    def test_a_connect_timeout_is_a_timeout(self):
+        self.assertEqual(self._kind("ConnectTimeout", (
+            "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: "
+            "/api/generate (Caused by ConnectTimeoutError(<HTTPConnection(host='localhost', "
+            "port=11434) at 0x1>, 'Connection to localhost timed out. (connect timeout=3.05)'))")),
+            "timeout")
+
+    def test_a_refused_connection_is_unavailable(self):
+        self.assertEqual(self._kind("ConnectionError", (
+            "HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url: "
+            "/api/generate (Caused by NewConnectionError(\"HTTPConnection(host='127.0.0.1', "
+            "port=11434): Failed to establish a new connection: [WinError 10061]\"))")),
+            "unavailable")
+
+    def test_a_read_timeout_is_a_timeout(self):
+        self.assertEqual(self._kind("ReadTimeout", (
+            "HTTPConnectionPool(host='localhost', port=11434): Read timed out. "
+            "(read timeout=3.0)")), "timeout")
+
+    def test_real_rate_limits_and_quotas_keep_their_kind(self):
+        for name, message, kind in (
+                ("TooManyRequests", "You made too many requests to the server.", "rate_limited"),
+                ("HTTPError", "429 Client Error: Too Many Requests for url: /translate",
+                 "rate_limited"),
+                ("RuntimeError", "rate limit exceeded", "rate_limited"),
+                ("HTTPError", "456 Client Error: Quota Exceeded", "quota")):
+            with self.subTest(message=message):
+                self.assertEqual(self._kind(name, message), kind)
+
+    def test_numbers_inside_ports_and_urls_are_not_statuses(self):
+        self.assertEqual(self._kind("RuntimeError", "port=14290 closed the stream"), "error")
+
+
 class TimeoutsTests(unittest.TestCase):
     def test_expected_keys(self):
         self.assertEqual(set(TIMEOUTS_S),
