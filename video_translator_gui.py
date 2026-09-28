@@ -6439,30 +6439,53 @@ class App(tk.Tk):
         elif missing_pkgs:
             self._install_deps(missing_pkgs)
 
+    _PYTHON_RELAUNCH_KEY = "python_relaunch"    # config: the interpreter a Yes chose
+
     def _explain_unsupported_python(self, missing: list[str]) -> None:
-        """Tk thread: this Python is outside the pinned torch's range."""
+        """Tk thread: this Python is outside the pinned torch's range.
+
+        A Yes given once is remembered: the next launch from the wrong Python
+        restarts by itself, as long as that interpreter still imports torch.
+        """
         version = f"{sys.version_info[0]}.{sys.version_info[1]}"
         text = self._s("msg_python_unsupported").format(
             version=version, torch=_system_packages.TORCH_RANGE_LABEL,
             supported=_system_packages.PYTHON_RANGE_LABEL)
         self._log_line("app", text)
         self._log_line("app", f"missing: {', '.join(missing)}; no pip install attempted")
+        remembered = str(load_config().get(self._PYTHON_RELAUNCH_KEY) or "")
 
         def work():
             # Subprocesses (one per candidate interpreter): off the Tk thread.
-            found = _system_packages.find_python_with_torch()
+            if remembered and _system_packages.python_imports_torch(remembered):
+                if not self._destroying:
+                    self.after(0, self._relaunch_with, remembered)
+                return
+            if remembered and not self._destroying:
+                self.after(0, self._forget_python_relaunch)
+            found = _system_packages.find_supported_python()
             if not self._destroying:
-                self.after(0, self._offer_python_relaunch, text, found)
+                if found is None:
+                    self.after(0, self._offer_python_relaunch, text, None)
+                else:
+                    self.after(0, self._offer_python_relaunch, text, found[0], found[1])
 
         threading.Thread(target=work, name="python-probe", daemon=True).start()
 
-    def _offer_python_relaunch(self, text: str, python: str | None) -> None:
-        """Tk thread: restart with ``python`` on a Yes; else say what to install."""
+    def _forget_python_relaunch(self) -> None:
+        save_config({self._PYTHON_RELAUNCH_KEY: None})
+
+    def _offer_python_relaunch(self, text: str, python: str | None,
+                               has_torch: bool = True) -> None:
+        """Tk thread: restart with ``python`` on a Yes (remembered); else say
+        what to install. Without torch, the app installs its packages there."""
         if self._destroying:
             return
         if python:
-            question = text + "\n\n" + self._s("ask_python_relaunch").format(python=python)
+            key = "ask_python_relaunch" if has_torch else "ask_python_relaunch_install"
+            question = text + "\n\n" + self._s(key).format(python=python)
             if self._ask_yes_no_now("Python", question):
+                save_config({self._PYTHON_RELAUNCH_KEY: python})
                 self._relaunch_with(python)
             return
         messagebox.showwarning(

@@ -378,6 +378,29 @@ class PythonSupportTests(unittest.TestCase):
         self.assertEqual(found, "C:\\Python311\\python.exe")
         self.assertIn(["/usr/bin/py", "-3.13"], seen)
 
+    def test_one_interpreter_can_be_asked_whether_it_imports_torch(self):
+        self.assertTrue(sp.python_imports_torch("/usr/bin/python3.13", run=self._run(["3.13"])))
+        self.assertFalse(sp.python_imports_torch("/usr/bin/python3.13", run=self._run([])))
+
+        def boom(cmd, **kw):
+            raise OSError("gone")
+        self.assertFalse(sp.python_imports_torch("/gone/python3.13", run=boom))
+
+    def test_a_supported_interpreter_without_torch_is_offered_when_none_has_it(self):
+        def run(cmd, **kw):
+            code = cmd[-1]
+            if "torch" in code:
+                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="No module named torch")
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{cmd[0]}\n")
+        found = sp.find_supported_python(which=_which("python3.14", "python3.13", "python3.11"),
+                                         run=run, sys_platform="linux")
+        self.assertEqual(found, ("/usr/bin/python3.13", False))
+        # one with torch wins even when an older one comes first without it
+        found = sp.find_supported_python(which=_which("python3.13", "python3.11"),
+                                         run=self._run(["python3.11"]), sys_platform="linux")
+        self.assertEqual(found, ("/usr/bin/python3.11", True))
+        self.assertIsNone(sp.find_supported_python(which=_which(), run=run, sys_platform="linux"))
+
     def test_a_hanging_or_broken_interpreter_is_skipped(self):
         def run(cmd, **kw):
             if "python3.13" in cmd[0]:

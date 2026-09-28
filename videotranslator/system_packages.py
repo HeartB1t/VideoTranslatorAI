@@ -189,16 +189,34 @@ def python_supported(version_info: Sequence[int] = sys.version_info) -> bool:
     return TORCH_PYTHON_MIN <= tuple(version_info[:2]) < TORCH_PYTHON_END
 
 
-def find_python_with_torch(*, which: Callable[[str], str | None] = shutil.which,
-                           run: Callable[..., Any] = subprocess.run,
-                           sys_platform: str = sys.platform) -> str | None:
-    """The newest other interpreter on this PC that imports torch, or None.
+def _probe_python(base: Sequence[str], code: str, run: Callable[..., Any]) -> str | None:
+    """Last stdout line of ``base -c code`` when it exits 0, else None."""
+    try:
+        result = run([*base, "-c", code], capture_output=True, text=True, timeout=30)
+    except Exception:                       # noqa: BLE001 - a hung or broken interpreter
+        return None
+    lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    return lines[-1] if result.returncode == 0 and lines else None
+
+
+def python_imports_torch(python: str, *, run: Callable[..., Any] = subprocess.run) -> bool:
+    """True when ``python`` starts and imports torch."""
+    return _probe_python([python], "import torch", run) is not None or (
+        _probe_python([python], "import torch; print(1)", run) == "1")
+
+
+def find_supported_python(*, which: Callable[[str], str | None] = shutil.which,
+                          run: Callable[..., Any] = subprocess.run,
+                          sys_platform: str = sys.platform) -> tuple[str, bool] | None:
+    """``(path, imports_torch)`` for the best other interpreter on this PC.
 
     Looks for python3.13 .. python3.9 on PATH and, on Windows, asks the py
-    launcher for each version; the answer is that interpreter's own path.
+    launcher for each version; the path is the interpreter's own. One that
+    already imports torch wins; otherwise the newest supported one, for which
+    the app will install its packages. None when there is none.
     """
-    probe = "import sys, torch; print(sys.executable)"
     launcher = which("py") if sys_platform == "win32" else None
+    fallback: str | None = None
     for version in TORCH_PYTHON_VERSIONS:
         candidates: list[list[str]] = []
         exe = which(f"python{version}")
@@ -207,14 +225,18 @@ def find_python_with_torch(*, which: Callable[[str], str | None] = shutil.which,
         if launcher:
             candidates.append([launcher, f"-{version}"])
         for base in candidates:
-            try:
-                result = run([*base, "-c", probe], capture_output=True, text=True, timeout=30)
-            except Exception:               # noqa: BLE001 - a hung or broken interpreter
-                continue
-            lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
-            if result.returncode == 0 and lines:
-                return lines[-1]
-    return None
+            path = _probe_python(base, "import sys, torch; print(sys.executable)", run)
+            if path:
+                return path, True
+            if fallback is None:
+                fallback = _probe_python(base, "import sys; print(sys.executable)", run)
+    return (fallback, False) if fallback else None
+
+
+def find_python_with_torch(**kw) -> str | None:
+    """The newest other interpreter that imports torch, or None."""
+    found = find_supported_python(**kw)
+    return found[0] if found and found[1] else None
 
 
 CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",
