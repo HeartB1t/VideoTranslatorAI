@@ -9102,6 +9102,11 @@ class App(tk.Tk):
                 self._models_choice_restored = True
             except Exception as exc:                 # noqa: BLE001
                 print(f"     ! Could not restore the chosen models: {exc}", flush=True)
+                return
+            # The session header logged the job before this restore: log what
+            # it is now, or the log names an engine the job will not use.
+            with contextlib.suppress(Exception):
+                self._log_line("job", self._summary_var.get())
 
     def _benchmark_media_path(self) -> str | None:
         """Local media for the model benchmark: the player's, else the first file."""

@@ -223,6 +223,17 @@ class ModelChoicesTests(unittest.TestCase):
                          ("tiny", "deepl"))
         self.assertTrue(self.app._models_choice_restored)
 
+    def test_startup_logs_the_job_summary_again_after_the_restore(self):
+        # The session header logs the job summary before the restore, which
+        # runs 1 s later: on the Windows VM it said "Google Translate" while
+        # the restored choice was Ollama qwen3:32b.
+        self.app._summary_var, self.app._log_line = _Var("DeepL, tiny"), Mock()
+        gui.App._restore_model_choices(self.app)
+        self.app._log_line.assert_not_called()          # nothing saved, nothing new
+        self.config[gui._MODELS_CHOICE_KEY] = {"asr": "tiny", "mt": "deepl"}
+        gui.App._restore_model_choices(self.app)
+        self.app._log_line.assert_called_once_with("job", "DeepL, tiny")
+
     def test_a_preset_click_forgets_the_window_choice(self):
         self.config[gui._MODELS_CHOICE_KEY] = {"asr": "tiny"}
         app = SimpleNamespace(**vars(self.app), _no_demucs=_Var(False),
