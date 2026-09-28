@@ -6,7 +6,7 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-set "SCRIPT_VERSION=2.1.1"
+set "SCRIPT_VERSION=2.1.2"
 title Video Translator AI - Setup v%SCRIPT_VERSION%
 
 :: -- Centralised paths (single source of truth) ------------------------------
