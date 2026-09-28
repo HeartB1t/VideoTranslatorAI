@@ -432,10 +432,61 @@ class OllamaCheckTests(unittest.TestCase):
     def _app(self, lang="en"):
         app = SimpleNamespace(_destroying=False, _lbl_ollama_status=Mock(),
                               _btn_ollama_check=Mock(), _log_line=Mock(),
+                              _set_ollama_badge=Mock(),
                               _OLLAMA_CHECK_TEXTS=gui.App._OLLAMA_CHECK_TEXTS,
+                              _OLLAMA_BADGE_LEVELS=gui.App._OLLAMA_BADGE_LEVELS,
                               _s=lambda key: gui.UI_STRINGS[lang][key])
         app._ollama_status = lambda text, level="info": gui.App._ollama_status(app, text, level)
+        app._ollama_check_text = lambda url, model, result: gui.App._ollama_check_text(
+            app, url, model, result)
         return app
+
+    # -- the header dot: grey on Windows and Linux even with "Ollama pronto" in the log --
+
+    def test_the_verify_answer_lights_the_header_dot(self):
+        from videotranslator.ollama_runtime import OllamaCheck
+        for state, level in (("ready", "ok"), ("fallback", "warn"), ("missing", None),
+                             ("stopped", None), ("absent", None), ("unreachable", None)):
+            with self.subTest(state=state):
+                app = self._app("en")
+                gui.App._show_ollama_check(app, self.URL, "qwen3:8b",
+                                           OllamaCheck(state, "0.34.4", "qwen3:8b"))
+                text = app._log_line.call_args.args[1]
+                app._set_ollama_badge.assert_called_once_with(level, text)
+
+    def test_the_dot_takes_the_colour_of_its_level_and_keeps_the_text_for_the_tip(self):
+        app = SimpleNamespace(_ollama_badge_dot=Mock(), _ollama_badge_text="")
+        gui.App._set_ollama_badge(app, "ok", "Ollama 0.34.4 answers")
+        app._ollama_badge_dot.configure.assert_called_with(fg=gui.OK)
+        self.assertEqual(app._ollama_badge_text, "Ollama 0.34.4 answers")
+        gui.App._set_ollama_badge(app, "warn", "other model")
+        app._ollama_badge_dot.configure.assert_called_with(fg=gui.WARN)
+        gui.App._set_ollama_badge(app, None, "")
+        app._ollama_badge_dot.configure.assert_called_with(fg=gui.FG2)
+        # before the header exists (a check that answers very early): no error
+        gui.App._set_ollama_badge(SimpleNamespace(), "ok", "x")
+
+    def test_the_startup_check_lights_the_dot_without_a_log_line(self):
+        from videotranslator.ollama_runtime import OllamaCheck
+        app = self._app("it")
+        gui.App._ollama_badge_from_check(app, self.URL, "qwen3:32b",
+                                         OllamaCheck("ready", "0.34.4", "qwen3:32b"))
+        app._set_ollama_badge.assert_called_once_with(
+            "ok", "Ollama 0.34.4 risponde su http://localhost:11434: il modello qwen3:32b è pronto.")
+        app._log_line.assert_not_called()
+        app._lbl_ollama_status.configure.assert_not_called()
+
+    def test_the_preparation_before_a_translation_sets_the_dot(self):
+        app = SimpleNamespace(_ollama_setup_running=True, _ollama_setup_pending=[],
+                              _set_ollama_badge=Mock(), _s=lambda key: gui.UI_STRINGS["en"][key],
+                              _ollama_ready_note=(self.URL, "qwen3:8b"))
+        gui.App._ollama_setup_done(app, True, None)
+        app._set_ollama_badge.assert_called_once_with(
+            "ok", gui.UI_STRINGS["en"]["ollama_ready"].format(ollama="Ollama", url=self.URL,
+                                                             model="qwen3:8b"))
+        app._set_ollama_badge.reset_mock()
+        gui.App._ollama_setup_done(app, False, None)    # unreachable, refused, not pulled
+        app._set_ollama_badge.assert_called_once_with(None, "")
 
     def test_ready_names_version_address_and_model(self):
         from videotranslator.ollama_runtime import OllamaCheck

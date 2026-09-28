@@ -7222,7 +7222,17 @@ class App(tk.Tk):
         gpu_ok = bool(shutil.which("nvidia-smi"))
         self._status_badge(badges, "GPU" if gpu_ok else "CPU",
                            OK if gpu_ok else FG2).pack(side="left", padx=(0, 12))
-        self._status_badge(badges, "Ollama", FG2).pack(side="left", padx=(0, 12))
+        # Ollama: grey until something answers for it (the startup check, the
+        # preparation before a translation, the Verify button); the tip
+        # carries the last answer. It stayed grey forever on Windows and
+        # Linux with "Ollama pronto" in the log: nothing ever set it.
+        self._ollama_badge = self._status_badge(badges, "Ollama", FG2)
+        self._ollama_badge.pack(side="left", padx=(0, 12))
+        self._ollama_badge_dot = self._ollama_badge.winfo_children()[0]
+        self._ollama_badge_text = ""
+        self._ollama_badge_tip = _HoverTip(self._ollama_badge,
+                                           lambda: self._ollama_badge_text or "Ollama",
+                                           colors_fn=lambda: (SEL, FG))
         has_wav2lip = importlib.util.find_spec("dlib") is not None
         self._status_badge(badges, "Wav2Lip",
                            OK if has_wav2lip else FG2).pack(side="left", padx=(0, 4))
@@ -8767,6 +8777,13 @@ class App(tk.Tk):
     def _ollama_setup_done(self, ok: bool, on_ready) -> None:
         """Tk thread: the preparation ended; run the one that waited, if any."""
         self._ollama_setup_running = False
+        note = getattr(self, "_ollama_ready_note", None)
+        if ok and note:
+            url, model = note
+            self._set_ollama_badge("ok", self._s("ollama_ready").format(
+                ollama="Ollama", url=url, model=model))
+        elif not ok:
+            self._set_ollama_badge(None, "")
         if on_ready is not None:
             on_ready(ok)
         pending, self._ollama_setup_pending = self._ollama_setup_pending, []
@@ -9264,16 +9281,40 @@ class App(tk.Tk):
 
         threading.Thread(target=work, name="ollama-check", daemon=True).start()
 
-    def _show_ollama_check(self, url: str, model: str, result) -> None:
-        if self._destroying:
-            return
+    # Header dot per check state: ready lights it, another model answers in
+    # amber, anything else leaves it off (the tip says why).
+    _OLLAMA_BADGE_LEVELS = {"ready": "ok", "fallback": "warn"}
+
+    def _ollama_check_text(self, url: str, model: str, result) -> tuple[str, str, str]:
+        """(state, text, level) for a check_ollama answer, in the UI language. Tk thread."""
         state = result.state if result is not None else "unreachable"
         key, level = self._OLLAMA_CHECK_TEXTS.get(state, ("ollama_unreachable", "warn"))
         version = getattr(result, "version", "")
         text = self._s(key).format(
             ollama=f"Ollama {version}" if version else "Ollama", url=url, model=model,
             other=getattr(result, "model", "") or model)
+        return state, text, level
+
+    def _set_ollama_badge(self, level: str | None, text: str) -> None:
+        """Tk thread: colour the header dot ("ok", "warn", None = off) and keep
+        ``text`` for its tip. Safe before the header exists."""
+        dot = getattr(self, "_ollama_badge_dot", None)
+        if dot is None:
+            return
+        dot.configure(fg={"ok": OK, "warn": WARN}.get(level, FG2))
+        self._ollama_badge_text = text
+
+    def _ollama_badge_from_check(self, url: str, model: str, result) -> None:
+        """Tk thread: the startup check reaches the header dot only, no log line."""
+        state, text, _level = self._ollama_check_text(url, model, result)
+        self._set_ollama_badge(self._OLLAMA_BADGE_LEVELS.get(state), text)
+
+    def _show_ollama_check(self, url: str, model: str, result) -> None:
+        if self._destroying:
+            return
+        state, text, level = self._ollama_check_text(url, model, result)
         self._ollama_status(text, level)
+        self._set_ollama_badge(self._OLLAMA_BADGE_LEVELS.get(state), text)
         self._btn_ollama_check.configure(state="normal")
 
     def _ollama_status(self, text: str, level: str = "info") -> None:
@@ -10383,6 +10424,7 @@ class App(tk.Tk):
                     lambda: messagebox.showwarning("Ollama", warning, parent=self))
 
         self._log_async(f"[+] Ollama pronto: {resolved_model or model} @ {url}\n")
+        self._ollama_ready_note = (url, resolved_model or model)   # the header dot, in _ollama_setup_done
         return True
 
     def _ask_yes_no_now(self, title: str, message: str) -> bool:
@@ -11243,9 +11285,16 @@ class App(tk.Tk):
 
         found: list = []
 
+        ollama_url = self._ollama_url_var.get().strip() or "http://localhost:11434"
+        ollama_model = self._ollama_model_var.get().strip() or "qwen3:8b"
+
         def probe() -> None:
             # Cheap facts only: nvidia-smi and metadata, never torch at startup.
             facts: dict = {}
+            with contextlib.suppress(Exception):
+                # Read only (starts, installs and pulls nothing): the header dot.
+                facts["ollama"] = (ollama_url, ollama_model,
+                                   _check_ollama_status(ollama_url, ollama_model, timeout=3.0))
             with contextlib.suppress(Exception):
                 from videotranslator.hardware_profile import detect_hardware
                 facts["hw"] = detect_hardware(use_torch=False)
@@ -11270,6 +11319,9 @@ class App(tk.Tk):
                 return
             if found:
                 self._log_system(found[0])
+                if found[0].get("ollama"):
+                    with contextlib.suppress(Exception):
+                        self._ollama_badge_from_check(*found[0]["ollama"])
             elif tries > 0:
                 self.after(200, collect, tries - 1)
 
