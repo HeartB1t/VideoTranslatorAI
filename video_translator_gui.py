@@ -6231,6 +6231,11 @@ class App(tk.Tk):
         self._installing = False
         self._player_status = None
         self._player_install_request = None
+        # Auto-install del player: parte una sola volta per sessione quando il
+        # player manca ed e' installabile (stesso spirito di ollama_auto_install).
+        # Il flag evita loop se l'install fallisce e lo stato viene riletto; il
+        # click manuale sul bottone resta sempre attivo (non guardato dal flag).
+        self._player_auto_tried = False
         self._player_settings = _player_settings_module.normalize_player_settings(
             _ocfg, sys_platform=sys.platform)
         self._player_bridge = _player_engine.EventBridge()
@@ -8875,6 +8880,37 @@ class App(tk.Tk):
         else:
             self._player_panel.show_unavailable(status, install_cmd=request.manual_command)
 
+    def _maybe_auto_install_player(self, status) -> bool:
+        """Avvia da solo l'install del player quando l'utente mostra l'intento
+        di usarlo (seleziona/carica un media, avvia il live) e il player manca
+        ed e' installabile. Stesso spirito di ``ollama_auto_install``, che parte
+        solo quando l'utente sceglie il motore Ollama, non all'avvio. Il bottone
+        "Installa player" resta come fallback manuale.
+
+        Chiamata SEMPRE dai punti di intento (``_ensure_or_show_player_status``,
+        avvio live), MAI dal refresh del badge all'avvio: cosi' non si scarica
+        nulla ne' si lancia ``pkexec`` senza che l'utente voglia il player.
+
+        Gira sul thread Tk; l'install parte off-thread dentro ``_install_player``,
+        quindi la UI non si blocca. Ritorna True se ha avviato un install.
+        """
+        # Guardie a basso costo prima: gia' tentato o install in corso.
+        if self._player_auto_tried or self._installing:
+            return False
+        # Criterio "installabile": la stessa API che governa il bottone nel
+        # pannello (player_panel_tk._render -> offers_install). Cosi' l'auto
+        # parte esattamente nei casi in cui il bottone sarebbe cliccabile.
+        if not _libmpv_runtime.offers_install(status, sys_platform=sys.platform):
+            return False
+        if not load_config().get("player_auto_install", True):
+            return False
+        # Segna il tentativo PRIMA di avviare: una volta per sessione, anche se
+        # l'install fallisce e lo stato non-ok viene riletto (niente loop).
+        self._player_auto_tried = True
+        self._player_log("[*] Video player missing: starting automatic installation...")
+        self._install_player(auto=True)
+        return True
+
     def _update_player_badge(self) -> None:
         level = _libmpv_runtime.badge_level(self._player_status) if self._player_status else None
         self._player_badge_dot.configure(fg={"ok": OK, "warn": WARN, "error": ERR}.get(level, FG2))
@@ -9421,6 +9457,18 @@ class App(tk.Tk):
             return
         source = self._live_media_path()
         if source is not None:
+            # Il live rende i sottotitoli/voce sul player integrato: se manca,
+            # non avviare una sessione monca. Avvia (o riprendi) l'auto-install
+            # e di' all'utente di riprovare a player pronto, invece di fallire
+            # in silenzio.
+            if self._player_status is not None and not self._player_status.ok:
+                self._maybe_auto_install_player(self._player_status)
+                if self._installing:
+                    self._live_bar.show_banner("live_player_installing", is_error=False)
+                else:
+                    self._live_bar.show_banner("player_unavailable_title", is_error=True)
+                self._refresh_live_bar_enabled()
+                return
             was_paused = self._player_controller.paused
             if not was_paused:
                 self._player_controller.play_pause()
@@ -9491,7 +9539,13 @@ class App(tk.Tk):
         if unavailable or time.monotonic() >= deadline:
             self._pending_live_source = None
             self._live_resolving = False
-            self._live_bar.show_banner("player_unavailable_title", is_error=True)
+            # _on_live_resolved -> _ensure_or_show_player_status ha gia' potuto
+            # avviare l'auto-install: se e' in corso, dillo (riprova a player
+            # pronto) invece del secco "non disponibile".
+            if self._installing:
+                self._live_bar.show_banner("live_player_installing", is_error=False)
+            else:
+                self._live_bar.show_banner("player_unavailable_title", is_error=True)
             self._refresh_live_bar_enabled()
             return
         if not self._player_init_running:
@@ -9691,10 +9745,15 @@ class App(tk.Tk):
         self._ensure_or_show_player_status()
 
     def _ensure_or_show_player_status(self) -> None:
+        # Unico punto in cui un'azione dell'utente richiede il player (selezione
+        # input, load_item, preview editor, autoload di un risultato, stream live
+        # risolto): qui l'intento e' esplicito, quindi e' il posto giusto per
+        # avviare l'auto-install se il player manca (non all'avvio).
         if self._player_status is not None and not self._player_status.ok:
             request = self._player_install_request or _system_packages.PlayerInstallRequest()
             self._player_panel.show_unavailable(
                 self._player_status, install_cmd=request.manual_command)
+            self._maybe_auto_install_player(self._player_status)
             return
         self._ensure_player()
 
@@ -10234,10 +10293,15 @@ class App(tk.Tk):
             self.attributes("-fullscreen", on)
         self._player_panel.set_fullscreen_layout(on)
 
-    def _install_player(self) -> None:
+    def _install_player(self, auto: bool = False) -> None:
+        # auto=True: chiamata automatica (self-heal), salta le conferme e i
+        # popup di errore, coerente con ollama_auto_install che con il flag
+        # attivo non chiede conferma a ogni avvio. auto=False (click sul
+        # bottone) mantiene il comportamento attuale, conferma inclusa.
         if self._installing:
-            messagebox.showerror(self._s("msg_error_t"), self._s("live_err_busy_install"),
-                                 parent=self)
+            if not auto:
+                messagebox.showerror(self._s("msg_error_t"), self._s("live_err_busy_install"),
+                                     parent=self)
             return
         request = self._player_install_request
         if request is None or request.empty:
@@ -10245,9 +10309,13 @@ class App(tk.Tk):
             return
         windows_install = None
         if request.windows_dest is not None:
-            question = self._s("player_install_confirm").format(size=request.download_mb)
-            if not messagebox.askyesno(self._s("msg_confirm"), question, parent=self):
-                return
+            if not auto:
+                question = self._s("player_install_confirm").format(size=request.download_mb)
+                if not messagebox.askyesno(self._s("msg_confirm"), question, parent=self):
+                    return
+            else:
+                self._player_log(
+                    f"[*] Auto-install: downloading player components (~{request.download_mb} MB)...")
             dest = request.windows_dest
 
             def windows_install():

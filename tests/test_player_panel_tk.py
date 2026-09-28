@@ -463,6 +463,10 @@ class GuiPlayerWiringTests(unittest.TestCase):
 
     def test_selecting_while_unavailable_keeps_the_install_explanation(self):
         with built_app({"ui_lang": "en"}) as (_gui, app, _):
+            # Selezionare un input e' un punto di intento: _ensure_or_show_player_status
+            # avvierebbe l'auto-install. Qui verifichiamo solo che la spiegazione
+            # resti, quindi lo segniamo gia' tentato in sessione.
+            app._player_auto_tried = True
             app._on_player_status(MISSING, PlayerInstallRequest(manual_command=CMD))
             app._batch_files.append("/tmp/first.mp4")
             app._batch_listbox.insert("end", "first.mp4")
