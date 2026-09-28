@@ -374,6 +374,70 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(rt.classify_import_error(wrapped, sys_platform="win32",
                                                   vulkan_present=True), "libmpv-load-failed")
 
+    def test_windows_missing_dependency_message_without_winerror(self):
+        # CPython >=3.8: ctypes.CDLL raises FileNotFoundError with winerror unset
+        # (None) when a DLL dependency such as vulkan-1.dll is missing; only the
+        # "(or one of its dependencies)" text remains. This is the real mpv case.
+        exc = FileNotFoundError(
+            "Could not find module 'C:\\\\Users\\\\me\\\\mpv-runtime\\\\mpv-2.dll' "
+            "(or one of its dependencies). Try using the full path with constructor syntax.")
+        self.assertIsNone(getattr(exc, "winerror", None))
+        self.assertIsNone(exc.__cause__)
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=False), "vulkan-loader-missing")
+        # vulkan-1.dll already present: the same failure is a plain load failure.
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=True), "libmpv-load-failed")
+
+    def test_windows_dependency_signature_is_case_insensitive(self):
+        exc = FileNotFoundError("could not find module 'mpv-2.dll' (OR ONE OF ITS DEPENDENCIES).")
+        self.assertIsNone(getattr(exc, "winerror", None))
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=False), "vulkan-loader-missing")
+
+    def test_windows_direct_winerror_126_still_classified(self):
+        exc = FileNotFoundError("[WinError 126] The specified module could not be found")
+        exc.winerror = 126
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=False), "vulkan-loader-missing")
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=True), "libmpv-load-failed")
+
+    def test_windows_generic_oserror_without_signature_stays_load_failed(self):
+        # A win32 load error with neither WinError 126 nor the dependency text
+        # must NOT be mistaken for a missing Vulkan loader.
+        exc = OSError("access is denied")
+        self.assertIsNone(getattr(exc, "winerror", None))
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=False), "libmpv-load-failed")
+
+    def test_non_windows_dependency_message_is_not_vulkan(self):
+        # The dependency signature is a Windows-only heuristic: on Linux the same
+        # wording (unlikely) must never become vulkan-loader-missing.
+        exc = FileNotFoundError("libmpv.so (or one of its dependencies)")
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="linux",
+                                                  vulkan_present=False), "libmpv-load-failed")
+
+    def test_windows_other_winerror_with_signature_stays_load_failed(self):
+        # A different WinError (not 126) that happens to carry the dependency text
+        # must stay a load failure: a set winerror means code is not None, so the
+        # signature branch (guarded by code is None) does not fire.
+        exc = FileNotFoundError("mpv-2.dll (or one of its dependencies)")
+        exc.winerror = 5
+        self.assertEqual(rt.classify_import_error(exc, sys_platform="win32",
+                                                  vulkan_present=False), "libmpv-load-failed")
+
+    def test_windows_dependency_signature_on_cause_is_detected(self):
+        # winerror is None on both the error and its cause, but the dependency text
+        # lives on the chained cause: the heuristic must still find it there.
+        cause = OSError("mpv-2.dll (or one of its dependencies)")
+        wrapped = FileNotFoundError("could not load the player library")
+        wrapped.__cause__ = cause
+        self.assertIsNone(getattr(wrapped, "winerror", None))
+        self.assertIsNone(getattr(cause, "winerror", None))
+        self.assertEqual(rt.classify_import_error(wrapped, sys_platform="win32",
+                                                  vulkan_present=False), "vulkan-loader-missing")
+
 
 OK_JSON = rt.status_to_json(LibmpvStatus(
     ok=True, reason="ok", api_version=(2, 5), mpv_version=(0, 41),
