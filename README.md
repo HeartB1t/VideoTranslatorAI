@@ -246,7 +246,7 @@ Run `setup_windows.bat` (right-click → **Run as administrator**) and pick `[3]
 
 | Mode | Admin required | Scope |
 |------|----------------|-------|
-| **[1] Full uninstall - one click** | ✅ | Removes the app folder, the Desktop shortcut and the Start Menu entries, ffmpeg from machine PATH, every user's HF model cache (Whisper/XTTS) and config (`HF token`), and all Python AI packages installed by the installer. At the end it also asks (opt-in) whether to silently uninstall **Python 3.11** and **Git for Windows** via their registry quiet-uninstall strings. |
+| **[1] Full uninstall - one click** | ✅ | Removes the app folder, the Desktop shortcut and the Start Menu entries, ffmpeg from machine PATH, every user's HF model cache (Whisper/XTTS) and config (`HF token`), and all Python AI packages installed by the installer. At the end it also asks (opt-in) whether to silently uninstall **Python 3.11** and **Git for Windows** via their registry quiet-uninstall strings. Uninstalling Python 3.11 also removes the packages pip installed for it in the current user's folder (`%APPDATA%\Python\Python311`), unless another Python 3.11 is still installed. |
 | **[2] Current user only** | ❌ | Removes only the running user's VTAI config, HF/XTTS cache, and legacy per-user install. **Leaves the system-wide installation intact** so other Windows accounts on the PC can keep using the app. |
 | **[3] Custom - granular** | ✅ for system items, ❌ for user items | Y/N prompt for each category: app folder, shortcut, machine PATH, per-user legacy installs, per-user configs/caches, then grouped Python packages (TTS, PyTorch stack, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, pipeline utilities), and finally optional Python 3.11 and Git. |
 

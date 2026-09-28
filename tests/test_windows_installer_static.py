@@ -260,6 +260,30 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         self.assertLess(skip, cuda[1])
         self.assertLess(cuda[1], body.index("\n:step_torch_checked\n"))
 
+    # -- per-user packages of Python 3.11 --
+
+    def test_uninstalling_python_also_removes_its_per_user_packages(self):
+        # pip without admin rights (the app installs what it misses that way)
+        # writes to %APPDATA%\Python\Python311; the Python uninstaller left it,
+        # and the next Python 3.11 loaded those packages again.
+        self.assertIn(r'set "PY311_USER_SITE=%APPDATA%\Python\Python311"', self.text)
+        self.assertEqual(self.text.count("Uninstall Python 3.11 and its per-user packages ? [Y/N]: "), 2)
+        body = self._label_body("remove_python", ":remove_git")
+        self.assertLess(body.index("Removing leftover folder"), body.index("call :remove_python_user_site"))
+        site = self._label_body("remove_python_user_site", "exit /b 0")
+        self.assertLess(site.index("call :python311_present"), site.index('rmdir /S /Q "%PY311_USER_SITE%"'))
+
+    def test_the_per_user_packages_stay_while_a_python_311_is_left(self):
+        # Every CPython 3.11 of the account shares that folder.
+        body = self._label_body("python311_present", "exit /b 1")
+        for key in (r"HKCU:\Software\Python\PythonCore\3.11\InstallPath",
+                    r"HKLM:\Software\Python\PythonCore\3.11\InstallPath",
+                    r"HKLM:\Software\WOW6432Node\Python\PythonCore\3.11\InstallPath"):
+            self.assertIn(key, body)
+        self.assertIn("(Join-Path $d 'python.exe')", body)
+        self.assertIn("'where python 2^>nul'", body)
+        self.assertIn("sys.version_info[:2] == (3, 11)", body)
+
     def test_the_vc_runtime_is_verified_and_run_from_an_admin_only_folder(self):
         body = self._label_body("step_vc_runtime", ":step_vc_runtime_manual")
         self.assertIn(r'set "VC_DIR=%INSTALL_DIR%\_downloads"', body)

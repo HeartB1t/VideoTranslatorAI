@@ -330,7 +330,7 @@ echo  --- Optional: also uninstall Python 3.11, Git, and Ollama? ---
 set "Q_PY_FULL="
 set "Q_GIT_FULL="
 set "Q_OLL_FULL="
-set /p "Q_PY_FULL=Uninstall Python 3.11 ? [Y/N]: "
+set /p "Q_PY_FULL=Uninstall Python 3.11 and its per-user packages ? [Y/N]: "
 set /p "Q_GIT_FULL=Uninstall Git for Windows ? [Y/N]: "
 set /p "Q_OLL_FULL=Uninstall Ollama (also wipes downloaded models, can be GB) ? [Y/N]: "
 echo.
@@ -485,7 +485,7 @@ echo.
 echo  --- System-wide tools installed by setup ---
 echo  ( remove only if you do not use them for other projects )
 set "Q_PY="
-set /p "Q_PY=Uninstall Python 3.11 ? [Y/N]: "
+set /p "Q_PY=Uninstall Python 3.11 and its per-user packages ? [Y/N]: "
 if /i "!Q_PY!"=="Y" call :remove_python
 
 set "Q_GIT="
@@ -1961,7 +1961,44 @@ if exist "%ProgramFiles%\Python311" (
         call :logfile "Uninstall Python 3.11: leftover folder removed"
     )
 )
+call :remove_python_user_site
 exit /b 0
+
+:: pip run without admin rights (the app installs what it misses that way)
+:: writes to %APPDATA%\Python\Python311, which the Python uninstaller leaves:
+:: the next Python 3.11 loaded those packages again and pip reported
+:: conflicts. Every CPython 3.11 of this account shares the folder, so it
+:: goes only when none is left.
+:remove_python_user_site
+set "PY311_USER_SITE=%APPDATA%\Python\Python311"
+if not exist "%PY311_USER_SITE%" exit /b 0
+call :python311_present
+if not errorlevel 1 (
+    echo  [-] Another Python 3.11 is still installed: keeping its per-user packages in "%PY311_USER_SITE%".
+    call :logfile "Uninstall Python 3.11: per-user packages kept, another Python 3.11 is still installed"
+    exit /b 0
+)
+echo  [*] Removing the per-user packages in "%PY311_USER_SITE%" ...
+rmdir /S /Q "%PY311_USER_SITE%" 2>nul
+if exist "%PY311_USER_SITE%" (
+    echo  [^^!] Could not remove "%PY311_USER_SITE%". Please remove it manually.
+    call :logfile "Uninstall Python 3.11: per-user packages could NOT be removed"
+) else (
+    echo  [+] Per-user packages removed.
+    call :logfile "Uninstall Python 3.11: per-user packages removed"
+)
+exit /b 0
+
+:: Exit code 0 while a Python 3.11 is installed: registered for this account
+:: or for the machine (PEP 514), or found on PATH (conda, pyenv, ...).
+:python311_present
+powershell -NoProfile -Command "foreach ($k in 'HKCU:\Software\Python\PythonCore\3.11\InstallPath','HKLM:\Software\Python\PythonCore\3.11\InstallPath','HKLM:\Software\WOW6432Node\Python\PythonCore\3.11\InstallPath') { $d = (Get-ItemProperty -LiteralPath $k -ErrorAction SilentlyContinue).'(default)'; if ($d -and (Test-Path -LiteralPath (Join-Path $d 'python.exe'))) { exit 0 } }; exit 1" >nul 2>&1
+if not errorlevel 1 exit /b 0
+for /f "delims=" %%P in ('where python 2^>nul') do (
+    "%%P" -c "import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
+    if not errorlevel 1 exit /b 0
+)
+exit /b 1
 
 :remove_git
 echo  [*] Uninstalling Git for Windows ...

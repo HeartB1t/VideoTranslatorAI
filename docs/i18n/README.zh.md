@@ -239,7 +239,7 @@ pip install --break-system-packages -r requirements.txt
 
 | 模式 | 需要管理员 | 适用范围 |
 |------|----------------|-------|
-| **[1] 完全卸载 - 一键** | ✅ | 删除应用程序文件夹、桌面快捷方式和开始菜单项、计算机路径中的 ffmpeg、每个用户的 HF 模型缓存 (Whisper/XTTS) 和配置 (`HF token`) 以及安装程序安装的所有 Python AI 包。最后，它还询问（选择加入）是否通过注册表静默卸载字符串静默卸载 **Python 3.11** 和 **Git for Windows**。 |
+| **[1] 完全卸载 - 一键** | ✅ | 删除应用程序文件夹、桌面快捷方式和开始菜单项、计算机路径中的 ffmpeg、每个用户的 HF 模型缓存 (Whisper/XTTS) 和配置 (`HF token`) 以及安装程序安装的所有 Python AI 包。最后，它还询问（选择加入）是否通过注册表静默卸载字符串静默卸载 **Python 3.11** 和 **Git for Windows**。卸载 Python 3.11 时，还会删除 pip 为其安装在当前用户文件夹（`%APPDATA%\Python\Python311`）中的软件包，除非仍安装有其他 Python 3.11。 |
 | **[2] 仅限当前用户** | ❌ | 仅删除正在运行的用户的 VTAI 配置、HF/XTTS 缓存和旧版每用户安装。 **保持系统范围内的安装完好无损**，以便 PC 上的其他 Windows 帐户可以继续使用该应用程序。 |
 | **[3] 自定义 - 粒度** | ✅ 对于系统项目，❌ 对于用户项目 | 每个类别的是/否提示：应用程序文件夹、快捷方式、计算机路径、每用户旧版安装、每用户配置/缓存，然后分组 Python 包（TTS、PyTorch 堆栈、Whisper+ctranslate2、Demucs、Wav2Lip deps、pyannote、管道实用程序），最后是可选的 Python 3.11 和 Git。 |
 

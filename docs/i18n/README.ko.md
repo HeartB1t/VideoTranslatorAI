@@ -239,7 +239,7 @@ pip install --break-system-packages -r requirements.txt
 
 | 모드 | 관리자 필요 | 범위 |
 |------|----------------|-------|
-| **[1] 전체 제거 - 한 번의 클릭** | ✅ | 앱 폴더, 데스크톱 바로가기와 시작 메뉴 항목, 시스템 PATH에서 ffmpeg, 모든 사용자의 HF 모델 캐시(Whisper/XTTS) 및 구성(`HF token`), 설치 프로그램에서 설치한 모든 Python AI 패키지를 제거합니다. 마지막에는 레지스트리 자동 제거 문자열을 통해 **Python 3.11** 및 **Git for Windows**를 자동으로 제거할지 여부도 묻습니다(선택). |
+| **[1] 전체 제거 - 한 번의 클릭** | ✅ | 앱 폴더, 데스크톱 바로가기와 시작 메뉴 항목, 시스템 PATH에서 ffmpeg, 모든 사용자의 HF 모델 캐시(Whisper/XTTS) 및 구성(`HF token`), 설치 프로그램에서 설치한 모든 Python AI 패키지를 제거합니다. 마지막에는 레지스트리 자동 제거 문자열을 통해 **Python 3.11** 및 **Git for Windows**를 자동으로 제거할지 여부도 묻습니다(선택). Python 3.11을 제거하면 pip가 현재 사용자 폴더(`%APPDATA%\Python\Python311`)에 설치한 패키지도 함께 제거됩니다. 단, 다른 Python 3.11이 남아 있으면 유지됩니다. |
 | **[2] 현재 사용자만 해당** | ❌ | 실행 중인 사용자의 VTAI 구성, HF/XTTS 캐시 및 레거시 사용자별 설치만 제거합니다. **시스템 전체 설치를 그대로 유지**하므로 PC의 다른 Windows 계정이 앱을 계속 사용할 수 있습니다. |
 | **[3] 사용자 정의 - 세분화됨** | ✅ 시스템 항목의 경우, ❌ 사용자 항목의 경우 | 각 범주에 대한 Y/N 프롬프트: 앱 폴더, 바로가기, 컴퓨터 PATH, 사용자별 레거시 설치, 사용자별 구성/캐시, 그룹화된 Python 패키지(TTS, PyTorch 스택, Whisper+ctranslate2, Demucs, Wav2Lip deps, pyannote, 파이프라인 유틸리티), 마지막으로 선택적 Python 3.11 및 Git. |
 
