@@ -28,6 +28,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
+from .platforms import loopback_ipv4
 from .tts_reference import build_vad_reference_tiered, extract_speaker_reference
 from .tts_text_sanitizer import sanitize_for_tts
 
@@ -82,7 +83,7 @@ class VoiceboxClient:
     def __init__(self, base_url: str = DEFAULT_URL, *,
                  opener: Callable[..., Any] = urllib.request.urlopen,
                  timeout: float = 10.0) -> None:
-        self.base_url = (base_url or DEFAULT_URL).rstrip("/")
+        self.base_url = loopback_ipv4(base_url or DEFAULT_URL)
         if not is_local_url(self.base_url):
             raise VoiceboxError("invalid", "Voicebox must run on this PC (127.0.0.1)")
         self._open = opener

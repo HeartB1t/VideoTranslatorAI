@@ -66,6 +66,9 @@ class ClientTests(unittest.TestCase):
         self.assertFalse(vb.is_local_url("http://192.168.1.10:17493"))
         with self.assertRaises(vb.VoiceboxError):
             vb.VoiceboxClient("http://10.0.0.2:17493")
+        # accepted as localhost, sent to 127.0.0.1 (platforms.loopback_ipv4)
+        self.assertEqual(vb.VoiceboxClient("http://localhost:17600/").base_url,
+                         "http://127.0.0.1:17600")
 
     def test_language_support(self):
         self.assertTrue(vb.supports_language("it"))

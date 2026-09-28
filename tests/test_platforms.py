@@ -12,6 +12,7 @@ from videotranslator.platforms import (
     monitor_bounds_at,
     parse_xrandr_monitors,
     default_output_dir,
+    loopback_ipv4,
     default_videos_dir,
     linux_xdg_videos_dir,
     pid_alive,
@@ -182,6 +183,33 @@ class PlatformTests(unittest.TestCase):
         # The exact parent depends on the machine's videos dir; the leaf is fixed.
         self.assertEqual(resolve_output_dir(None).name, APP_OUTPUT_DIR_NAME)
         self.assertEqual(resolve_output_dir("").name, APP_OUTPUT_DIR_NAME)
+
+
+class LoopbackIpv4Tests(unittest.TestCase):
+    # Windows resolves localhost to ::1 first; Ollama and Voicebox listen on
+    # 127.0.0.1 only, and every new connection waited about 2 s for the
+    # refused IPv6 attempt (Windows 11 VM: 2.05 s against 0.016 s).
+
+    def test_localhost_becomes_127_0_0_1(self):
+        for url, expected in (
+                ("http://localhost:11434", "http://127.0.0.1:11434"),
+                ("http://localhost:11434/", "http://127.0.0.1:11434"),
+                ("http://LocalHost:17493/", "http://127.0.0.1:17493"),
+                ("http://localhost", "http://127.0.0.1"),
+                ("  http://localhost:11434  ", "http://127.0.0.1:11434"),
+                ("http://user:pw@localhost:11434", "http://user:pw@127.0.0.1:11434")):
+            with self.subTest(url=url):
+                self.assertEqual(loopback_ipv4(url), expected)
+
+    def test_other_hosts_only_lose_the_trailing_slash(self):
+        for url, expected in (
+                ("http://127.0.0.1:11434/", "http://127.0.0.1:11434"),
+                ("http://[::1]:11434", "http://[::1]:11434"),
+                ("http://192.168.1.20:11434/", "http://192.168.1.20:11434"),
+                ("http://ollama.local:11434", "http://ollama.local:11434"),
+                ("http://mylocalhost:11434", "http://mylocalhost:11434")):
+            with self.subTest(url=url):
+                self.assertEqual(loopback_ipv4(url), expected)
 
 
 class PidAliveTests(unittest.TestCase):

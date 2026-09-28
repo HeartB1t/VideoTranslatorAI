@@ -61,7 +61,7 @@ class PullTests(unittest.TestCase):
         (ok, message), post, popen = self._pull(_Stream(typical_pull()))
         self.assertEqual((ok, message), (True, ""))
         popen.assert_not_called()
-        self.assertEqual(post.call_args.args[0], f"{URL}/api/pull")
+        self.assertEqual(post.call_args.args[0], "http://127.0.0.1:11434/api/pull")
         self.assertEqual(post.call_args.kwargs["json"]["model"], "qwen3:8b")
         progress = [text for text in self.logged if "%" in text]
         self.assertTrue(all(text.startswith("\r") and not text.endswith("\n")

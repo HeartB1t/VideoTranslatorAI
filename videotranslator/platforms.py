@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
@@ -397,6 +398,24 @@ def process_start_token(pid: int, *, sys_platform: str | None = None,
 def _read_proc_stat(pid: int) -> str:
     with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
         return fh.read()
+
+
+def loopback_ipv4(url: str) -> str:
+    """``url`` without a trailing slash, with the host ``localhost`` as 127.0.0.1.
+
+    The local servers the app talks to (Ollama, Voicebox) listen on 127.0.0.1
+    only, and Windows resolves localhost to ::1 first: every new connection
+    waited about 2 s for the refused IPv6 attempt before trying IPv4 (Windows
+    11 VM: 2.05 s against 0.016 s). Other hosts only lose the trailing slash.
+    """
+    url = url.strip().rstrip("/")
+    parts = urllib.parse.urlsplit(url)
+    if (parts.hostname or "").lower() != "localhost":
+        return url
+    userinfo, _, _ = parts.netloc.rpartition("@")
+    netloc = "127.0.0.1" + (f":{parts.port}" if parts.port else "")
+    return urllib.parse.urlunsplit(parts._replace(
+        netloc=f"{userinfo}@{netloc}" if userinfo else netloc))
 
 
 def reveal_in_file_manager(

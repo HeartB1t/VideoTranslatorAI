@@ -4372,7 +4372,7 @@ def translate_with_ollama(
     """
     import re as _re
     import requests
-    base = api_url.rstrip("/")
+    base = _platforms.loopback_ipv4(api_url)
     src_name = _ollama_lang_name(source_lang)
     tgt_name = _ollama_lang_name(target_lang)
 

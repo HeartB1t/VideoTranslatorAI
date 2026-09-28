@@ -238,7 +238,7 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
     def test_http_requests_use_a_small_context_and_a_long_warm_up(self):
         from unittest import mock
         from videotranslator import live_translate as lt
-        sent = []
+        sent, urls = [], []
 
         class Resp:
             def raise_for_status(self):
@@ -249,6 +249,7 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
 
         def post(url, json, timeout):
             sent.append((json, timeout))
+            urls.append(url)
             return Resp()
 
         import sys
@@ -262,6 +263,8 @@ class OllamaLiveTranslatorTests(unittest.TestCase):
         warm, translate = sent
         self.assertEqual(warm[1], (3.05, lt.LIVE_OLLAMA_WARMUP_S))
         self.assertEqual(translate[1], (3.05, 3.0))
+        # the default http://localhost:11434 goes out as 127.0.0.1
+        self.assertEqual(set(urls), {"http://127.0.0.1:11434/api/generate"})
         for payload, _timeout in sent:
             self.assertEqual(payload["options"]["num_ctx"], lt.LIVE_OLLAMA_NUM_CTX)
             self.assertFalse(payload["think"])

@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
+from .platforms import loopback_ipv4
+
 _RegisterHook = Callable[[Any], None]
 _register_hook: _RegisterHook = lambda _proc: None
 _unregister_hook: _RegisterHook = lambda _proc: None
@@ -109,7 +111,7 @@ def _ollama_health_check(
     import requests
     from videotranslator.ollama_model_selector import select_compatible_model
 
-    base = api_url.rstrip("/")
+    base = loopback_ipv4(api_url)
     target = (model or "").strip()
     try:
         r = requests.get(f"{base}/api/tags", timeout=timeout)
@@ -350,7 +352,7 @@ def _ollama_find_binary() -> str | None:
 def _ollama_is_daemon_running(api_url: str, timeout: float = 2.0) -> bool:
     """Probe `/api/tags` with a short timeout. Returns True if the daemon responds 2xx."""
     import requests
-    base = api_url.rstrip("/")
+    base = loopback_ipv4(api_url)
     try:
         r = requests.get(f"{base}/api/tags", timeout=timeout)
         return r.status_code < 400
@@ -722,7 +724,7 @@ def _ollama_pull_via_api(api_url: str, model: str, log, timeout_s: float) -> tup
     import time
     import requests
     try:
-        resp = requests.post(f"{api_url.rstrip('/')}/api/pull",
+        resp = requests.post(f"{loopback_ipv4(api_url)}/api/pull",
                              json={"model": model, "name": model, "stream": True},
                              stream=True, timeout=(10, 120))
     except requests.RequestException:
@@ -954,7 +956,7 @@ def _ollama_version(api_url: str, timeout: float = 3.0) -> str:
     """The daemon's version from `/api/version`, or "" when it cannot say."""
     import requests
     try:
-        r = requests.get(f"{api_url.rstrip('/')}/api/version", timeout=timeout)
+        r = requests.get(f"{loopback_ipv4(api_url)}/api/version", timeout=timeout)
         r.raise_for_status()
         return str(r.json().get("version") or "")
     except Exception:

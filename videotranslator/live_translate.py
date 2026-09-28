@@ -12,6 +12,7 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from videotranslator.platforms import loopback_ipv4
 from videotranslator.translation import _marian_normalize_lang
 
 # Per-sentence hard timeouts (design 4.9).
@@ -448,7 +449,7 @@ class OllamaLiveTranslator:
                  model: str = "qwen3:8b", sync_mode: str = "delayed",
                  generate=None, health_check=None,
                  clock: Callable[[], float] | None = None) -> None:
-        self._api_url = api_url.rstrip("/")
+        self._api_url = loopback_ipv4(api_url)
         self._model_req = model or "qwen3:8b"
         self._sync_mode = sync_mode
         self._generate = generate          # (prompt, *, num_predict, timeout) -> str

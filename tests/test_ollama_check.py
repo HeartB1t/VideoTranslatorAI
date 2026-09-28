@@ -55,7 +55,8 @@ class CheckOllamaTests(unittest.TestCase):
         response.json.return_value = {"version": "0.12.3"}
         with mock.patch("requests.get", return_value=response) as get:
             self.assertEqual(rt._ollama_version(URL), "0.12.3")
-        self.assertEqual(get.call_args.args[0], f"{URL}/api/version")
+        # "localhost" goes out as 127.0.0.1 (platforms.loopback_ipv4)
+        self.assertEqual(get.call_args.args[0], "http://127.0.0.1:11434/api/version")
         with mock.patch("requests.get", side_effect=OSError("down")):
             self.assertEqual(rt._ollama_version(URL), "")
 
