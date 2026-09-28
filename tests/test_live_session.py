@@ -595,6 +595,41 @@ class LiveSessionPipelineTests(unittest.TestCase):
             self.assertEqual([t.name for t in live if t.is_alive()], [])
 
 
+class LiveTranslationWarningTests(unittest.TestCase):
+    def test_a_rate_limited_engine_says_for_how_many_seconds(self):
+        # live_warn_rate_limited reads "... for {s} s": the seconds were never
+        # passed, and the banner said "for  s." (seen on the Windows VM).
+        from dataclasses import replace
+        from videotranslator.live_asr import LanguageLock
+        from videotranslator.live_translate import Outcome
+
+        class Limited(_FakeTranslator):
+            name, online = "google", True
+
+            def translate(self, text, *, context=(), timeout_s=5.0):
+                return Outcome(text, False, 0.01, error="rate_limited")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess._langlock = LanguageLock("en")
+            sess._factories = replace(_pipeline_factories(), translator=lambda engine: Limited())
+            for n in range(3):
+                sess._mt_q.put(SimpleNamespace(gen=0, start=float(n), end=n + 1.0,
+                                               text=f"sentence {n}"))
+            worker = threading.Thread(target=sess._mt_loop)
+            worker.start()
+            try:
+                deadline = time.monotonic() + 3
+                while sess.status().warning_key is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                st = sess.status()
+            finally:
+                sess.request_stop()
+                worker.join(3)
+        self.assertEqual(st.warning_key, "live_warn_rate_limited")
+        self.assertEqual(st.warning_params, {"engine": sess._cfg.engine, "s": 30})
+
+
 class LiveSessionLifecycleTests(unittest.TestCase):
     def test_start_run_stop_is_clean(self):
         # start() spawns the file producer threads, so this drives the real

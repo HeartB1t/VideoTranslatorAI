@@ -1121,10 +1121,10 @@ class LiveSession:
         self._decode_cancel.set()
         self._stop.set()
 
-    def _set_warning(self, code: str, engine: str) -> None:
+    def _set_warning(self, code: str, engine: str, **params) -> None:
         with self._status_lock:
             self._status.warning_key = WARN_KEYS.get(code, code)
-            self._status.warning_params = {"engine": engine}
+            self._status.warning_params = {"engine": engine, **params}
             self._status.warning_action = None
 
     def _clear_warning(self) -> None:
@@ -1346,7 +1346,10 @@ class LiveSession:
                     else:
                         warn = breaker.record_failure(kind=outcome.error or "error")
                         if warn:
-                            self._set_warning(warn, self._cfg.engine)
+                            # "rate_limited" says for how long: the pause
+                            # the breaker just opened.
+                            self._set_warning(warn, self._cfg.engine,
+                                              s=int(round(breaker.retry_in_s())))
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,
                     outcome.text if outcome.ok else None, italic=not outcome.ok,
