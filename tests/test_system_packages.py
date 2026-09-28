@@ -428,6 +428,43 @@ class PythonSupportTests(unittest.TestCase):
         self.assertEqual(found, "/usr/bin/python3.12")
 
 
+class RelaunchOnUnsupportedPythonTests(unittest.TestCase):
+    """The hand-over runs before any window: one start, not two."""
+
+    def _call(self, version, *, torch_here=False, env=None, found=("/usr/bin/python3.13", True)):
+        execs, echoes = [], []
+        environ = dict(env or {})
+        result = sp.relaunch_on_unsupported_python(
+            ["/app/video_translator_gui.py", "--x"], version_info=version,
+            find_spec=lambda name: object() if torch_here else None, environ=environ,
+            execv=lambda python, args: execs.append((python, args)),
+            find=lambda: found, echo=echoes.append)
+        return result, execs, echoes, environ
+
+    def test_a_supported_python_goes_on(self):
+        result, execs, _, environ = self._call((3, 13))
+        self.assertIsNone(result)
+        self.assertEqual((execs, environ), ([], {}))
+
+    def test_an_unsupported_python_hands_over_to_the_one_found(self):
+        result, execs, echoes, environ = self._call((3, 14, 7, "final", 0))
+        self.assertEqual(result, "/usr/bin/python3.13")
+        self.assertEqual(execs, [("/usr/bin/python3.13",
+                                  ["/usr/bin/python3.13", "/app/video_translator_gui.py", "--x"])])
+        self.assertEqual(environ, {sp.RELAUNCH_ENV: "3.14"})
+        self.assertIn("restarting with /usr/bin/python3.13", echoes[0])
+
+    def test_torch_importable_anyway_means_no_hand_over(self):
+        result, execs, _, _ = self._call((3, 14), torch_here=True)
+        self.assertEqual((result, execs), (None, []))
+
+    def test_no_second_hand_over_and_no_hand_over_without_a_candidate(self):
+        result, execs, _, _ = self._call((3, 14), env={sp.RELAUNCH_ENV: "3.14"})
+        self.assertEqual((result, execs), (None, []))
+        result, execs, _, _ = self._call((3, 14), found=None)
+        self.assertEqual((result, execs), (None, []))
+
+
 class PlayerInstallRequestTests(unittest.TestCase):
     def _request(self, reason, platform, *, importable=False, which=None, env=None):
         return sp.player_install_request(

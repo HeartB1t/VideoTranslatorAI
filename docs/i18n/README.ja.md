@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> 最初の起動時に、GUI は不足しているパッケージ (faster-whisper、Demucs、Edge-TTS など) を検出し、それらを自動的にインストールし、出力をログ ウィンドウにストリーミングします。 ffmpeg は、`apt-get` / `dnf` / `pacman` (Linux) 経由で自動的にインストールされるか、GitHub (Windows) からダウンロードされます。PyTorch が対応していない Python で起動された場合、アプリはその旨を表示し、PC 上で見つかった対応版 Python での再起動を提案します。
+> 最初の起動時に、GUI は不足しているパッケージ (faster-whisper、Demucs、Edge-TTS など) を検出し、それらを自動的にインストールし、出力をログ ウィンドウにストリーミングします。 ffmpeg は、`apt-get` / `dnf` / `pacman` (Linux) 経由で自動的にインストールされるか、GitHub (Windows) からダウンロードされます。PyTorch が対応していない Python で起動された場合、アプリは PC 上で見つかった対応版 Python で自動的に再起動します。
 
 > ヘッダーには **プレイヤー** バッジが表示されます。 libmpv または python-mpv が見つからない場合、左側のペインに何が足りないのかが表示され、**プレイヤーのインストール** が表示されます。Linux では、pkexec (その後は `sudo -n`) を介してパッケージ マネージャーが使用され、どちらも機能しない場合は手動コマンドが表示されます。 Windows では、現在のユーザーの libmpv (約 32 MB) をダウンロードする前に質問されます。
 

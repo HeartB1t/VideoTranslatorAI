@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Az első indításkor a grafikus felület észleli a hiányzó csomagokat (faster-whisper, Demucs, Edge-TTS stb.), és automatikusan telepíti őket, és a kimenetet a naplóablakba továbbítja. Az ffmpeg szintén automatikusan települ a `apt-get` / `dnf` / `pacman` (Linux) keresztül, vagy letölthető a GitHubról (Windows). Ha olyan Pythonnal indul, amelyet a PyTorch nem támogat, az alkalmazás jelzi, és felajánlja az újraindítást a gépen talált támogatott Pythonnal.
+> Az első indításkor a grafikus felület észleli a hiányzó csomagokat (faster-whisper, Demucs, Edge-TTS stb.), és automatikusan telepíti őket, és a kimenetet a naplóablakba továbbítja. Az ffmpeg szintén automatikusan települ a `apt-get` / `dnf` / `pacman` (Linux) keresztül, vagy letölthető a GitHubról (Windows). Ha olyan Pythonnal indul, amelyet a PyTorch nem támogat, az alkalmazás magától újraindul a gépen talált támogatott Pythonnal.
 
 > A fejlécben egy **Játékos** jelvény látható. Ha hiányzik a libmpv vagy a python-mpv, a bal oldali ablaktáblában megjelenik, hogy mi hiányzik, és felajánlja a **Lejátszó telepítése** lehetőséget: Linuxon a csomagkezelőt használja a pkexecen keresztül (akkor `sudo -n`), és a kézi parancsot mutatja, ha egyik sem működik; Windowson rákérdez, mielőtt letölti a libmpv-t az aktuális felhasználóhoz (kb. 32 MB).
 

@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> İlk başlatmada GUI, eksik paketleri (faster-whisper, Demucs, Edge-TTS, vb.) algılar ve çıktıyı günlük penceresine aktararak bunları otomatik olarak yükler. ffmpeg ayrıca `apt-get` / `dnf` / `pacman` (Linux) aracılığıyla otomatik olarak yüklenir veya GitHub'dan (Windows) indirilir. PyTorch'un desteklemediği bir Python ile başlatılırsa uygulama bunu bildirir ve bilgisayarda bulunan desteklenen bir Python ile yeniden başlatmayı önerir.
+> İlk başlatmada GUI, eksik paketleri (faster-whisper, Demucs, Edge-TTS, vb.) algılar ve çıktıyı günlük penceresine aktararak bunları otomatik olarak yükler. ffmpeg ayrıca `apt-get` / `dnf` / `pacman` (Linux) aracılığıyla otomatik olarak yüklenir veya GitHub'dan (Windows) indirilir. PyTorch'un desteklemediği bir Python ile başlatılırsa uygulama, bilgisayarda bulunan desteklenen bir Python ile kendiliğinden yeniden başlar.
 
 > Başlıkta **Oyuncu** rozeti gösteriliyor. Libmpv veya python-mpv eksik olduğunda, sol bölmede neyin eksik olduğu belirtilir ve **Oynatıcıyı yükle** seçeneği sunulur: Linux'ta pkexec (sonra `sudo -n`) aracılığıyla paket yöneticisini kullanır ve ikisi de çalışmadığında manuel komutu gösterir; Windows'ta geçerli kullanıcı için libmpv'yi indirmeden önce sorar (yaklaşık 32 MB).
 

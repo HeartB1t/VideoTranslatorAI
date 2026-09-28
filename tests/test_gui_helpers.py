@@ -72,8 +72,9 @@ class LiveTransportRoutingTests(unittest.TestCase):
 
 
 class UnsupportedPythonTests(unittest.TestCase):
-    """Started with a Python the pinned torch has no wheels for, the app
-    explains and offers the interpreter that has torch instead of a doomed pip."""
+    """The relaunch to a supported Python happens before the window
+    (system_packages.relaunch_on_unsupported_python); the GUI only explains
+    when none was found, and logs a start that was relaunched."""
 
     def _app(self, **extra):
         return SimpleNamespace(_install_deps=Mock(), _install_ffmpeg=Mock(),
@@ -97,124 +98,27 @@ class UnsupportedPythonTests(unittest.TestCase):
         app._install_deps.assert_called_once_with(["faster-whisper"])
         app._explain_unsupported_python.assert_not_called()
 
-    def test_the_offer_restarts_with_the_interpreter_that_has_torch(self):
-        texts = {"ask_python_relaunch": "Restart with {python}?",
+    def test_without_a_supported_interpreter_the_message_says_what_to_install(self):
+        texts = {"msg_python_unsupported": "unsupported {version} {torch} {supported}",
                  "msg_python_none": "none: install {supported}"}
-        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
-                              _ask_yes_no_now=Mock(return_value=True), _relaunch_with=Mock(),
-                              _PYTHON_RELAUNCH_KEY=gui.App._PYTHON_RELAUNCH_KEY)
-        with mock.patch.object(gui, "save_config"):
-            gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
-        app._ask_yes_no_now.assert_called_once_with(
-            "Python", "unsupported\n\nRestart with /usr/bin/python3.13?")
-        app._relaunch_with.assert_called_once_with("/usr/bin/python3.13")
-        app._ask_yes_no_now.return_value = False
-        app._relaunch_with.reset_mock()
-        with mock.patch.object(gui, "save_config") as save:
-            gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
-        app._relaunch_with.assert_not_called()
-        save.assert_not_called()                        # a No is not remembered
-
-    def test_without_another_interpreter_the_message_says_what_to_install(self):
-        texts = {"ask_python_relaunch": "Restart with {python}?",
-                 "msg_python_none": "none: install {supported}"}
-        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
-                              _ask_yes_no_now=Mock(), _relaunch_with=Mock())
+        app = SimpleNamespace(_s=texts.__getitem__, _log_line=Mock())
         with mock.patch.object(gui.messagebox, "showwarning") as warn:
-            gui.App._offer_python_relaunch(app, "unsupported", None)
-        warn.assert_called_once_with("Python", "unsupported\n\nnone: install 3.9-3.13", parent=app)
-        app._relaunch_with.assert_not_called()
-
-    def test_a_yes_is_remembered_for_the_next_launch(self):
-        texts = {"ask_python_relaunch": "Restart with {python}?", "msg_python_none": "none"}
-        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
-                              _ask_yes_no_now=Mock(return_value=True), _relaunch_with=Mock(),
-                              _PYTHON_RELAUNCH_KEY=gui.App._PYTHON_RELAUNCH_KEY)
-        with mock.patch.object(gui, "save_config") as save:
-            gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
-        save.assert_called_once_with({"python_relaunch": "/usr/bin/python3.13"})
-        app._relaunch_with.assert_called_once_with("/usr/bin/python3.13")
-
-    def _explain(self, config, *, imports_torch, found=("/usr/bin/python3.12", True)):
-        class Inline:
-            def __init__(self, target=None, **kw):
-                self.target = target
-
-            def start(self):
-                self.target()
-        texts = {"msg_python_unsupported": "unsupported {version} {torch} {supported}"}
-        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__, _log_line=Mock(),
-                              after=Mock(), _offer_python_relaunch=Mock(), _relaunch_with=Mock(),
-                              _forget_python_relaunch=Mock(),
-                              _PYTHON_RELAUNCH_KEY=gui.App._PYTHON_RELAUNCH_KEY)
-        with mock.patch.object(gui, "load_config", return_value=config), \
-                mock.patch.object(gui.threading, "Thread", Inline), \
-                mock.patch.object(gui._system_packages, "python_imports_torch",
-                                  return_value=imports_torch) as check, \
-                mock.patch.object(gui._system_packages, "find_supported_python",
-                                  return_value=found) as finder:
             gui.App._explain_unsupported_python(app, ["faster-whisper"])
-        return app, check, finder
+        text = app._log_line.call_args_list[0].args[1]
+        self.assertTrue(text.startswith("unsupported 3."), text)
+        self.assertIn("3.9-3.13", text)
+        self.assertEqual(app._log_line.call_args_list[1].args[1],
+                         "missing: faster-whisper; no pip install attempted")
+        warn.assert_called_once_with("Python", text + "\n\nnone: install 3.9-3.13", parent=app)
 
-    def test_a_remembered_interpreter_restarts_the_app_without_asking(self):
-        app, check, finder = self._explain({"python_relaunch": "/usr/bin/python3.13"},
-                                           imports_torch=True)
-        check.assert_called_once_with("/usr/bin/python3.13")
-        finder.assert_not_called()
-        app.after.assert_called_once_with(0, app._relaunch_with, "/usr/bin/python3.13")
-
-    def test_a_remembered_interpreter_that_lost_torch_is_forgotten_and_the_question_returns(self):
-        app, check, finder = self._explain({"python_relaunch": "/usr/bin/python3.13"},
-                                           imports_torch=False)
-        finder.assert_called_once_with()
-        self.assertEqual(app.after.call_args_list,
-                         [mock.call(0, app._forget_python_relaunch),
-                          mock.call(0, app._offer_python_relaunch, mock.ANY,
-                                    "/usr/bin/python3.12", True)])
-
-    def test_without_a_memory_the_question_is_asked(self):
-        app, check, finder = self._explain({}, imports_torch=True)
-        check.assert_not_called()
-        app.after.assert_called_once_with(0, app._offer_python_relaunch, mock.ANY,
-                                          "/usr/bin/python3.12", True)
-
-    def test_a_fresh_pc_with_a_supported_python_but_no_torch_is_offered_it(self):
-        # A new user on a distribution whose python3 is 3.14: python3.13 is
-        # installed but has no torch yet. The app restarts with it and then
-        # installs its packages there.
-        app, _check, _finder = self._explain({}, imports_torch=False,
-                                             found=("/usr/bin/python3.13", False))
-        app.after.assert_called_once_with(0, app._offer_python_relaunch, mock.ANY,
-                                          "/usr/bin/python3.13", False)
-        texts = {"ask_python_relaunch": "has torch {python}",
-                 "ask_python_relaunch_install": "supported, will install {python}"}
-        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
-                              _ask_yes_no_now=Mock(return_value=True), _relaunch_with=Mock(),
-                              _PYTHON_RELAUNCH_KEY=gui.App._PYTHON_RELAUNCH_KEY)
-        with mock.patch.object(gui, "save_config"):
-            gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13", False)
-        app._ask_yes_no_now.assert_called_once_with(
-            "Python", "unsupported\n\nsupported, will install /usr/bin/python3.13")
-        app._relaunch_with.assert_called_once_with("/usr/bin/python3.13")
-        with mock.patch.object(gui, "save_config"):
-            gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
-        self.assertIn("has torch", app._ask_yes_no_now.call_args.args[1])
-
-    def test_forgetting_clears_the_config_key(self):
-        with mock.patch.object(gui, "save_config") as save:
-            gui.App._forget_python_relaunch(SimpleNamespace(
-                _PYTHON_RELAUNCH_KEY=gui.App._PYTHON_RELAUNCH_KEY))
-        save.assert_called_once_with({"python_relaunch": None})
-
-    def test_the_relaunch_runs_this_script_with_the_same_arguments(self):
-        app = SimpleNamespace(_log_line=Mock(), destroy=Mock())
-        with mock.patch.object(gui.sys, "argv", ["video_translator_gui.py", "--x"]), \
-                mock.patch.object(gui.os, "execv") as execv:
-            gui.App._relaunch_with(app, "/usr/bin/python3.13")
-        script = str(Path(gui.__file__).resolve())
-        execv.assert_called_once_with("/usr/bin/python3.13",
-                                      ["/usr/bin/python3.13", script, "--x"])
-        app.destroy.assert_called_once_with()
+    def test_a_relaunched_start_is_logged_in_every_language(self):
+        for lang in gui.UI_STRINGS:
+            app = SimpleNamespace(_s=lambda key, lang=lang: gui.UI_STRINGS[lang][key])
+            note = gui.App._relaunch_note(app, {"VTAI_RELAUNCHED_FROM": "3.14"})
+            self.assertIn("3.14", note)
+            self.assertIn(gui.sys.executable, note)
+            self.assertIn("2.6-2.7", note)
+        self.assertIsNone(gui.App._relaunch_note(app, {}))
 
 
 class SwitchToMarianTests(unittest.TestCase):

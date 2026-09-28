@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Ved første oppstart oppdager GUI eventuelle manglende pakker (faster-whisper, Demucs, Edge-TTS, etc.) og installerer dem automatisk, og strømmer utdataene til loggvinduet. ffmpeg installeres også automatisk via `apt-get` / `dnf` / `pacman` (Linux) eller lastet ned fra GitHub (Windows). Startes den med en Python som PyTorch ikke støtter, sier appen fra og tilbyr omstart med en støttet Python funnet på PC-en.
+> Ved første oppstart oppdager GUI eventuelle manglende pakker (faster-whisper, Demucs, Edge-TTS, etc.) og installerer dem automatisk, og strømmer utdataene til loggvinduet. ffmpeg installeres også automatisk via `apt-get` / `dnf` / `pacman` (Linux) eller lastet ned fra GitHub (Windows). Startes den med en Python som PyTorch ikke støtter, starter appen seg selv på nytt med en støttet Python funnet på PC-en.
 
 > Overskriften viser et **Spiller**-merke. Når libmpv eller python-mpv mangler, sier den venstre ruten hva som mangler og tilbyr **Installer spiller**: på Linux bruker den pakkebehandlingen gjennom pkexec (deretter `sudo -n`) og viser den manuelle kommandoen når ingen av dem fungerer; på Windows spør den før nedlasting av libmpv for gjeldende bruker (ca. 32 MB).
 

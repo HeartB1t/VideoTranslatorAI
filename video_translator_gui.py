@@ -6439,67 +6439,27 @@ class App(tk.Tk):
         elif missing_pkgs:
             self._install_deps(missing_pkgs)
 
-    _PYTHON_RELAUNCH_KEY = "python_relaunch"    # config: the interpreter a Yes chose
-
     def _explain_unsupported_python(self, missing: list[str]) -> None:
-        """Tk thread: this Python is outside the pinned torch's range.
-
-        A Yes given once is remembered: the next launch from the wrong Python
-        restarts by itself, as long as that interpreter still imports torch.
-        """
+        """Tk thread: this Python is outside the pinned torch's range and no
+        supported interpreter was found before the window opened
+        (system_packages.relaunch_on_unsupported_python): say what to install."""
         version = f"{sys.version_info[0]}.{sys.version_info[1]}"
         text = self._s("msg_python_unsupported").format(
             version=version, torch=_system_packages.TORCH_RANGE_LABEL,
             supported=_system_packages.PYTHON_RANGE_LABEL)
         self._log_line("app", text)
         self._log_line("app", f"missing: {', '.join(missing)}; no pip install attempted")
-        remembered = str(load_config().get(self._PYTHON_RELAUNCH_KEY) or "")
-
-        def work():
-            # Subprocesses (one per candidate interpreter): off the Tk thread.
-            if remembered and _system_packages.python_imports_torch(remembered):
-                if not self._destroying:
-                    self.after(0, self._relaunch_with, remembered)
-                return
-            if remembered and not self._destroying:
-                self.after(0, self._forget_python_relaunch)
-            found = _system_packages.find_supported_python()
-            if not self._destroying:
-                if found is None:
-                    self.after(0, self._offer_python_relaunch, text, None)
-                else:
-                    self.after(0, self._offer_python_relaunch, text, found[0], found[1])
-
-        threading.Thread(target=work, name="python-probe", daemon=True).start()
-
-    def _forget_python_relaunch(self) -> None:
-        save_config({self._PYTHON_RELAUNCH_KEY: None})
-
-    def _offer_python_relaunch(self, text: str, python: str | None,
-                               has_torch: bool = True) -> None:
-        """Tk thread: restart with ``python`` on a Yes (remembered); else say
-        what to install. Without torch, the app installs its packages there."""
-        if self._destroying:
-            return
-        if python:
-            key = "ask_python_relaunch" if has_torch else "ask_python_relaunch_install"
-            question = text + "\n\n" + self._s(key).format(python=python)
-            if self._ask_yes_no_now("Python", question):
-                save_config({self._PYTHON_RELAUNCH_KEY: python})
-                self._relaunch_with(python)
-            return
         messagebox.showwarning(
             "Python", text + "\n\n" + self._s("msg_python_none").format(
                 supported=_system_packages.PYTHON_RANGE_LABEL), parent=self)
 
-    def _relaunch_with(self, python: str) -> None:
-        """Replace this process with ``python`` running this script, same arguments."""
-        script = str(Path(__file__).resolve())
-        args = [python, script, *sys.argv[1:]]
-        self._log_line("app", f"restart: {' '.join(args)}")
-        with contextlib.suppress(Exception):
-            self.destroy()
-        os.execv(python, args)
+    def _relaunch_note(self, environ=None) -> str | None:
+        """The log line for a start that was relaunched from an unsupported Python."""
+        came_from = (os.environ if environ is None else environ).get(_system_packages.RELAUNCH_ENV)
+        if not came_from:
+            return None
+        return self._s("msg_python_relaunched").format(
+            version=came_from, torch=_system_packages.TORCH_RANGE_LABEL, python=sys.executable)
 
     def _install_ffmpeg(self):
         self._running = True
@@ -11290,6 +11250,9 @@ class App(tk.Tk):
         self._log_event("log_started", version=version + (f" ({commit})" if commit else ""),
                         py=platform.python_version(),
                         os=f"{platform.system()} {platform.release()} {platform.machine()}")
+        note = self._relaunch_note()
+        if note:
+            self._log_line("app", note)
         if self._log_file.ok:
             self._log_event("log_file", days=_app_log.KEEP_DAYS, path=self._log_file.path)
         with contextlib.suppress(Exception):
@@ -11759,6 +11722,10 @@ def _cli():
 
 
 if __name__ == "__main__":
+    # Before any window: a Python the pinned torch cannot run on hands over to
+    # the supported interpreter found on this PC (one start, not two).
+    _system_packages.relaunch_on_unsupported_python(
+        [str(Path(__file__).resolve()), *sys.argv[1:]])
     if len(sys.argv) > 1:
         _cli()
     else:

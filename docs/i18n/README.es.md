@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> En el primer inicio, la GUI detecta cualquier paquete faltante (faster-whisper, Demucs, Edge-TTS, etc.) y los instala automáticamente, transmitiendo la salida a la ventana de registro. ffmpeg también se instala automáticamente a través de `apt-get` / `dnf` / `pacman` (Linux) o se descarga desde GitHub (Windows). Si se inicia con un Python que PyTorch no admite, la aplicación lo indica y propone reiniciarse con uno compatible encontrado en el PC.
+> En el primer inicio, la GUI detecta cualquier paquete faltante (faster-whisper, Demucs, Edge-TTS, etc.) y los instala automáticamente, transmitiendo la salida a la ventana de registro. ffmpeg también se instala automáticamente a través de `apt-get` / `dnf` / `pacman` (Linux) o se descarga desde GitHub (Windows). Si se inicia con un Python que PyTorch no admite, la aplicación se reinicia sola con uno compatible encontrado en el PC.
 
 > El encabezado muestra una insignia de **Jugador**. Cuando falta libmpv o python-mpv, el panel izquierdo dice lo que falta y ofrece **Instalar reproductor**: en Linux usa el administrador de paquetes a través de pkexec (luego `sudo -n`) y muestra el comando manual cuando ninguno de los dos funciona; en Windows pregunta antes de descargar libmpv para el usuario actual (aproximadamente 32 MB).
 

@@ -202,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Při prvním spuštění GUI detekuje všechny chybějící balíčky (faster-whisper, Demucs, Edge-TTS atd.) a automaticky je nainstaluje, přičemž výstup streamuje do okna protokolu. ffmpeg se také instaluje automaticky přes `apt-get` / `dnf` / `pacman` (Linux) nebo stahuje z GitHubu (Windows). Spuštěna s Pythonem, který PyTorch nepodporuje, aplikace to oznámí a nabídne restart s podporovaným Pythonem nalezeným v počítači.
+> Při prvním spuštění GUI detekuje všechny chybějící balíčky (faster-whisper, Demucs, Edge-TTS atd.) a automaticky je nainstaluje, přičemž výstup streamuje do okna protokolu. ffmpeg se také instaluje automaticky přes `apt-get` / `dnf` / `pacman` (Linux) nebo stahuje z GitHubu (Windows). Spuštěna s Pythonem, který PyTorch nepodporuje, aplikace se sama restartuje s podporovaným Pythonem nalezeným v počítači.
 
 > V záhlaví je odznak **Hráč**. Když chybí libmpv nebo python-mpv, v levém podokně je napsáno, co chybí, a nabízí se **Instalovat přehrávač**: v Linuxu používá správce balíčků přes pkexec (pak `sudo -n`) a zobrazuje ruční příkaz, když nefunguje ani jeden; ve Windows se zeptá před stažením libmpv pro aktuálního uživatele (asi 32 MB).
 

@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from collections.abc import Callable, Sequence
 from typing import Any
+
+from . import system_packages as _system_packages
 
 
 def _build_parser(legacy) -> argparse.ArgumentParser:
@@ -309,6 +312,13 @@ def _cli(argv: Sequence[str] | None = None) -> None:
 def main(argv: Sequence[str] | None = None) -> int | None:
     """Run the legacy-compatible CLI, or launch the GUI when no args are given."""
     args = list(sys.argv[1:] if argv is None else argv)
+    # Before any window: a Python the pinned torch cannot run on hands over to
+    # the supported interpreter found on this PC. The script next to the
+    # package carries its own import path, unlike "-m videotranslator.cli",
+    # which needs the package installed for that other interpreter.
+    script = Path(__file__).resolve().parent.parent / "video_translator_gui.py"
+    if script.is_file():
+        _system_packages.relaunch_on_unsupported_python([str(script), *args])
     if not args:
         import video_translator_gui as legacy
         legacy.App().mainloop()

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.util
 import os
 import shutil
 import site
@@ -239,6 +240,45 @@ def find_python_with_torch(**kw) -> str | None:
     """The newest other interpreter that imports torch, or None."""
     found = find_supported_python(**kw)
     return found[0] if found and found[1] else None
+
+
+RELAUNCH_ENV = "VTAI_RELAUNCHED_FROM"     # set on the exec: the Python we came from
+
+
+def relaunch_on_unsupported_python(command: Sequence[str], *,
+                                   version_info: Sequence[int] = sys.version_info,
+                                   find_spec: Callable[[str], Any] = importlib.util.find_spec,
+                                   environ: Any = os.environ,
+                                   execv: Callable[..., Any] = os.execv,
+                                   find: Callable[[], tuple[str, bool] | None] | None = None,
+                                   echo: Callable[[str], Any] = print) -> str | None:
+    """Before any window: replace this process with the best supported
+    interpreter when this Python cannot run the AI stack.
+
+    ``command`` is what follows the interpreter (the script and its arguments,
+    or ``-m videotranslator.cli ...``). Nothing happens when this Python is in
+    the pinned torch's range, when torch is importable anyway, when we already
+    relaunched once (no loop), or when no supported interpreter with pip is
+    found: the app then opens and explains. Returns the interpreter chosen, or
+    None when the app goes on in this Python.
+    """
+    if python_supported(version_info) or find_spec("torch") is not None:
+        return None
+    if environ.get(RELAUNCH_ENV):
+        return None
+    found = (find or find_supported_python)()
+    if found is None:
+        return None
+    python = found[0]
+    version = f"{version_info[0]}.{version_info[1]}"
+    environ[RELAUNCH_ENV] = version
+    echo(f"Video Translator AI: Python {version} cannot run PyTorch {TORCH_RANGE_LABEL}; "
+         f"restarting with {python}")
+    for stream in (sys.stdout, sys.stderr):     # exec drops what is still buffered
+        with contextlib.suppress(Exception):
+            stream.flush()
+    execv(python, [python, *command])
+    return python
 
 
 CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",
