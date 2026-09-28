@@ -328,6 +328,66 @@ class ComponentInstallerTests(unittest.TestCase):
         self.assertNotIn("_running", inspect.getsource(sp))
 
 
+class PythonSupportTests(unittest.TestCase):
+    """The pinned PyTorch (2.6-2.7) ships wheels for CPython 3.9 to 3.13 only.
+
+    Started with python3 = 3.14 on a Kali, the app tried to pip-install the
+    AI stack into it and failed twice (demucs build, then "no matching
+    distribution: torch"), while python3.13 next to it had everything."""
+
+    def test_the_python_range_of_the_pinned_torch(self):
+        for version, ok in (((3, 8), False), ((3, 9), True), ((3, 11), True),
+                            ((3, 13), True), ((3, 14), False), ((3, 14, 7, "final", 0), False)):
+            with self.subTest(version=version):
+                self.assertEqual(sp.python_supported(version), ok)
+        self.assertEqual(sp.PYTHON_RANGE_LABEL, "3.9-3.13")
+        self.assertEqual(sp.TORCH_RANGE_LABEL, "2.6-2.7")
+
+    def _run(self, torch_in):
+        def run(cmd, **kw):
+            exe = cmd[0]
+            has = any(marker in exe for marker in torch_in)
+            return subprocess.CompletedProcess(cmd, 0 if has else 1,
+                                               stdout=f"{exe}\n" if has else "", stderr="")
+        return run
+
+    def test_finds_the_newest_other_interpreter_that_imports_torch(self):
+        which = _which("python3.14", "python3.13", "python3.12")
+        found = sp.find_python_with_torch(which=which, run=self._run(["python3.12"]),
+                                          sys_platform="linux")
+        self.assertEqual(found, "/usr/bin/python3.12")
+        found = sp.find_python_with_torch(which=which, run=self._run(["python3.13", "python3.12"]),
+                                          sys_platform="linux")
+        self.assertEqual(found, "/usr/bin/python3.13")
+
+    def test_none_when_no_interpreter_has_torch(self):
+        self.assertIsNone(sp.find_python_with_torch(which=_which("python3.13"),
+                                                    run=self._run([]), sys_platform="linux"))
+        self.assertIsNone(sp.find_python_with_torch(which=_which(), run=self._run(["x"]),
+                                                    sys_platform="linux"))
+
+    def test_windows_asks_the_py_launcher_too(self):
+        seen = []
+
+        def run(cmd, **kw):
+            seen.append(cmd[:2])
+            ok = cmd[:2] == ["/usr/bin/py", "-3.11"]
+            return subprocess.CompletedProcess(cmd, 0 if ok else 1,
+                                               stdout="C:\\Python311\\python.exe\n" if ok else "")
+        found = sp.find_python_with_torch(which=_which("py"), run=run, sys_platform="win32")
+        self.assertEqual(found, "C:\\Python311\\python.exe")
+        self.assertIn(["/usr/bin/py", "-3.13"], seen)
+
+    def test_a_hanging_or_broken_interpreter_is_skipped(self):
+        def run(cmd, **kw):
+            if "python3.13" in cmd[0]:
+                raise subprocess.TimeoutExpired(cmd, kw.get("timeout", 0))
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"{cmd[0]}\n")
+        found = sp.find_python_with_torch(which=_which("python3.13", "python3.12"), run=run,
+                                          sys_platform="linux")
+        self.assertEqual(found, "/usr/bin/python3.12")
+
+
 class PlayerInstallRequestTests(unittest.TestCase):
     def _request(self, reason, platform, *, importable=False, which=None, env=None):
         return sp.player_install_request(

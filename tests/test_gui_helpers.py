@@ -1,5 +1,6 @@
 import threading
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
@@ -68,6 +69,67 @@ class LiveTransportRoutingTests(unittest.TestCase):
         gui.App._on_player_command(self.app, "stop", {})
         self.app._stop_live_session.assert_called_once_with()
         self.controller.stop.assert_called_once_with()
+
+
+class UnsupportedPythonTests(unittest.TestCase):
+    """Started with a Python the pinned torch has no wheels for, the app
+    explains and offers the interpreter that has torch instead of a doomed pip."""
+
+    def _app(self, **extra):
+        return SimpleNamespace(_install_deps=Mock(), _install_ffmpeg=Mock(),
+                               _explain_unsupported_python=Mock(), after=Mock(),
+                               _pending_pkgs_after_ffmpeg=[], **extra)
+
+    def test_no_pip_attempt_on_an_unsupported_python(self):
+        app = self._app()
+        with mock.patch.object(gui, "check_dependencies", return_value=(["faster-whisper"], [])), \
+                mock.patch.object(gui._system_packages, "python_supported", return_value=False):
+            gui.App._check_deps_on_start(app)
+        app._explain_unsupported_python.assert_called_once_with(["faster-whisper"])
+        app._install_deps.assert_not_called()
+        app._install_ffmpeg.assert_not_called()
+
+    def test_a_supported_python_installs_as_before(self):
+        app = self._app()
+        with mock.patch.object(gui, "check_dependencies", return_value=(["faster-whisper"], [])), \
+                mock.patch.object(gui._system_packages, "python_supported", return_value=True):
+            gui.App._check_deps_on_start(app)
+        app._install_deps.assert_called_once_with(["faster-whisper"])
+        app._explain_unsupported_python.assert_not_called()
+
+    def test_the_offer_restarts_with_the_interpreter_that_has_torch(self):
+        texts = {"ask_python_relaunch": "Restart with {python}?",
+                 "msg_python_none": "none: install {supported}"}
+        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
+                              _ask_yes_no_now=Mock(return_value=True), _relaunch_with=Mock())
+        gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
+        app._ask_yes_no_now.assert_called_once_with(
+            "Python", "unsupported\n\nRestart with /usr/bin/python3.13?")
+        app._relaunch_with.assert_called_once_with("/usr/bin/python3.13")
+        app._ask_yes_no_now.return_value = False
+        app._relaunch_with.reset_mock()
+        gui.App._offer_python_relaunch(app, "unsupported", "/usr/bin/python3.13")
+        app._relaunch_with.assert_not_called()
+
+    def test_without_another_interpreter_the_message_says_what_to_install(self):
+        texts = {"ask_python_relaunch": "Restart with {python}?",
+                 "msg_python_none": "none: install {supported}"}
+        app = SimpleNamespace(_destroying=False, _s=texts.__getitem__,
+                              _ask_yes_no_now=Mock(), _relaunch_with=Mock())
+        with mock.patch.object(gui.messagebox, "showwarning") as warn:
+            gui.App._offer_python_relaunch(app, "unsupported", None)
+        warn.assert_called_once_with("Python", "unsupported\n\nnone: install 3.9-3.13", parent=app)
+        app._relaunch_with.assert_not_called()
+
+    def test_the_relaunch_runs_this_script_with_the_same_arguments(self):
+        app = SimpleNamespace(_log_line=Mock(), destroy=Mock())
+        with mock.patch.object(gui.sys, "argv", ["video_translator_gui.py", "--x"]), \
+                mock.patch.object(gui.os, "execv") as execv:
+            gui.App._relaunch_with(app, "/usr/bin/python3.13")
+        script = str(Path(gui.__file__).resolve())
+        execv.assert_called_once_with("/usr/bin/python3.13",
+                                      ["/usr/bin/python3.13", script, "--x"])
+        app.destroy.assert_called_once_with()
 
 
 class SwitchToMarianTests(unittest.TestCase):

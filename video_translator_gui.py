@@ -3913,6 +3913,8 @@ from videotranslator.video_effects import shader_for_theme as _shader_for_theme 
 _PLAYER_STRING_PROBLEMS += _merge_models_strings(UI_STRINGS)
 from videotranslator.ui_strings_log import merge_into as _merge_log_strings  # noqa: E402
 _PLAYER_STRING_PROBLEMS += _merge_log_strings(UI_STRINGS)
+from videotranslator.ui_strings_python import merge_into as _merge_python_strings  # noqa: E402
+_PLAYER_STRING_PROBLEMS += _merge_python_strings(UI_STRINGS)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -6423,12 +6425,58 @@ class App(tk.Tk):
             # Nothing required to install - safe to check optional now
             self.after(300, self._check_optional_deps)
             return
+        if missing_pkgs and not _system_packages.python_supported():
+            # The pinned torch has no wheels for this interpreter: pip would
+            # fail twice (demucs build, "no matching distribution: torch") and
+            # the log would hide the cause. Say it, and offer the interpreter
+            # on this PC that has torch.
+            self._explain_unsupported_python(missing_pkgs)
+            return
         # Serialize: install ffmpeg first, then pip packages in _ffmpeg_done callback
         self._pending_pkgs_after_ffmpeg = missing_pkgs
         if missing_bins:
             self._install_ffmpeg()
         elif missing_pkgs:
             self._install_deps(missing_pkgs)
+
+    def _explain_unsupported_python(self, missing: list[str]) -> None:
+        """Tk thread: this Python is outside the pinned torch's range."""
+        version = f"{sys.version_info[0]}.{sys.version_info[1]}"
+        text = self._s("msg_python_unsupported").format(
+            version=version, torch=_system_packages.TORCH_RANGE_LABEL,
+            supported=_system_packages.PYTHON_RANGE_LABEL)
+        self._log_line("app", text)
+        self._log_line("app", f"missing: {', '.join(missing)}; no pip install attempted")
+
+        def work():
+            # Subprocesses (one per candidate interpreter): off the Tk thread.
+            found = _system_packages.find_python_with_torch()
+            if not self._destroying:
+                self.after(0, self._offer_python_relaunch, text, found)
+
+        threading.Thread(target=work, name="python-probe", daemon=True).start()
+
+    def _offer_python_relaunch(self, text: str, python: str | None) -> None:
+        """Tk thread: restart with ``python`` on a Yes; else say what to install."""
+        if self._destroying:
+            return
+        if python:
+            question = text + "\n\n" + self._s("ask_python_relaunch").format(python=python)
+            if self._ask_yes_no_now("Python", question):
+                self._relaunch_with(python)
+            return
+        messagebox.showwarning(
+            "Python", text + "\n\n" + self._s("msg_python_none").format(
+                supported=_system_packages.PYTHON_RANGE_LABEL), parent=self)
+
+    def _relaunch_with(self, python: str) -> None:
+        """Replace this process with ``python`` running this script, same arguments."""
+        script = str(Path(__file__).resolve())
+        args = [python, script, *sys.argv[1:]]
+        self._log_line("app", f"restart: {' '.join(args)}")
+        with contextlib.suppress(Exception):
+            self.destroy()
+        os.execv(python, args)
 
     def _install_ffmpeg(self):
         self._running = True

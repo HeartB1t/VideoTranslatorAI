@@ -172,6 +172,51 @@ def run_plan(plan: Sequence[Sequence[str]], *, runner: Callable[[Sequence[str]],
 # installation (not in a wheel), and every install the app makes passes them
 # as constraints: a missing package, the MarianMT tokenizers or the Wav2Lip
 # stack cannot then upgrade the tested torch, numpy or transformers.
+# The pinned PyTorch (torch>=2.6,<2.8 in requirements-gpu-cu124.txt) ships
+# wheels for CPython 3.9 to 3.13 only. Started with a newer Python, a pip
+# install of the AI stack can only fail (seen on a Kali whose python3 is 3.14,
+# while python3.13 next to it had everything): the app says so instead, and
+# offers the interpreter on this PC that already imports torch.
+TORCH_PYTHON_MIN = (3, 9)
+TORCH_PYTHON_END = (3, 14)          # exclusive
+TORCH_RANGE_LABEL = "2.6-2.7"
+PYTHON_RANGE_LABEL = "3.9-3.13"
+TORCH_PYTHON_VERSIONS = ("3.13", "3.12", "3.11", "3.10", "3.9")
+
+
+def python_supported(version_info: Sequence[int] = sys.version_info) -> bool:
+    """True when the pinned torch has wheels for this interpreter."""
+    return TORCH_PYTHON_MIN <= tuple(version_info[:2]) < TORCH_PYTHON_END
+
+
+def find_python_with_torch(*, which: Callable[[str], str | None] = shutil.which,
+                           run: Callable[..., Any] = subprocess.run,
+                           sys_platform: str = sys.platform) -> str | None:
+    """The newest other interpreter on this PC that imports torch, or None.
+
+    Looks for python3.13 .. python3.9 on PATH and, on Windows, asks the py
+    launcher for each version; the answer is that interpreter's own path.
+    """
+    probe = "import sys, torch; print(sys.executable)"
+    launcher = which("py") if sys_platform == "win32" else None
+    for version in TORCH_PYTHON_VERSIONS:
+        candidates: list[list[str]] = []
+        exe = which(f"python{version}")
+        if exe:
+            candidates.append([exe])
+        if launcher:
+            candidates.append([launcher, f"-{version}"])
+        for base in candidates:
+            try:
+                result = run([*base, "-c", probe], capture_output=True, text=True, timeout=30)
+            except Exception:               # noqa: BLE001 - a hung or broken interpreter
+                continue
+            lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+            if result.returncode == 0 and lines:
+                return lines[-1]
+    return None
+
+
 CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",
                        "requirements-gpu-cu124.txt")
 APP_DIR = Path(__file__).resolve().parents[1]
