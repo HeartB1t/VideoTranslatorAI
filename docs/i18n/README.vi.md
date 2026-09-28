@@ -165,7 +165,7 @@ Từng bước một, không cần dòng lệnh. Đã được thử nghiệm tr
 2. **Cài đặt**: nhấp chuột phải vào `setup_windows.bat` → **Chạy với tư cách quản trị viên** → nhấn `1` (Cài đặt). Nếu SmartScreen báo "Windows đã bảo vệ PC của bạn", nhấp vào **Thông tin khác** → **Vẫn chạy**: tập lệnh này là văn bản thuần túy, bạn có thể mở nó bằng Notepad.
 3. **Chờ đợi**: trên một PC sạch với kết nối nhanh, quá trình này mất khoảng 15 phút và 8 GB dung lượng đĩa. Trình cài đặt tải xuống và thiết lập, theo thứ tự này:
    - Python 3.11 (toàn hệ thống) và thời gian chạy Microsoft Visual C++, nếu còn thiếu
-   - các gói Python: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote và ngăn xếp Wav2Lip
+   - các gói Python: PyTorch (bản CUDA 12.4 khi có GPU NVIDIA, nếu không thì bản CPU), faster-whisper, Demucs, coqui-tts, pyannote và ngăn xếp Wav2Lip
    - Git for Windows (cho Wav2Lip), ffmpeg và trình phát video tích hợp (libmpv trong `mpv-runtime`; tùy chọn, mọi thứ khác vẫn hoạt động nếu không có nó)
    - một **lối tắt trên màn hình nền** cho mọi tài khoản Windows trên PC và một thư mục trong **menu Bắt đầu** chứa ứng dụng cùng mục **Cập nhật Video Translator AI**
 4. **Khởi động** ứng dụng từ lối tắt trên màn hình nền hoặc từ menu Bắt đầu. Không có GPU NVIDIA, ứng dụng vẫn chạy trên CPU, chỉ chậm hơn: hãy chọn một mô hình Whisper nhỏ.

@@ -165,7 +165,7 @@ Le pipeline utilise cinq composants accélérés par GPU (faster-whisper, Demucs
 2. **Installez** : clic droit sur `setup_windows.bat` → **Exécuter en tant qu'administrateur** → appuyez sur `1` (Install). Si SmartScreen affiche "Windows a protégé votre ordinateur", cliquez sur **Informations complémentaires** → **Exécuter quand même** : le script est du texte brut, vous pouvez l'ouvrir avec le Bloc-notes.
 3. **Patientez** : sur un PC neuf avec une connexion rapide, cela prend environ 15 minutes et 8 Go de disque. Le programme d'installation télécharge et met en place, dans cet ordre :
    - Python 3.11 (à l'échelle du système) et le runtime Microsoft Visual C++, s'ils manquent
-   - les packages Python : PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote et la pile Wav2Lip
+   - les packages Python : PyTorch (CUDA 12.4 avec un GPU NVIDIA, sinon la version CPU), faster-whisper, Demucs, coqui-tts, pyannote et la pile Wav2Lip
    - Git for Windows (pour Wav2Lip), ffmpeg et le lecteur vidéo intégré (libmpv dans `mpv-runtime` ; facultatif, tout le reste fonctionne sans lui)
    - un **raccourci sur le Bureau** pour chaque compte Windows du PC et un dossier **Menu Démarrer** avec l'application et **Mettre à jour Video Translator AI**
 4. **Démarrez**-le depuis le raccourci du Bureau ou le Menu Démarrer. Sans GPU NVIDIA, l'application fonctionne sur le CPU, seulement plus lentement : choisissez un petit modèle Whisper.

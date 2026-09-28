@@ -165,7 +165,7 @@ Passo dopo passo, senza riga di comando. Testato su un PC Windows 11 pulito.
 2. **Installa**: fai clic con il tasto destro su `setup_windows.bat` → **Esegui come amministratore** → premi `1` (Install). Se SmartScreen mostra "Windows ha protetto il tuo PC", clicca su **Ulteriori informazioni** → **Esegui comunque**: lo script è testo semplice, puoi aprirlo con il Blocco note.
 3. **Attendi**: su un PC pulito con una connessione veloce servono circa 15 minuti e 8 GB di spazio su disco. Il programma di installazione scarica e configura, in quest'ordine:
    - Python 3.11 (a livello di sistema) e il runtime Microsoft Visual C++, se mancanti
-   - i pacchetti Python: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote e lo stack di Wav2Lip
+   - i pacchetti Python: PyTorch (CUDA 12.4 con una GPU NVIDIA, altrimenti la versione per CPU), faster-whisper, Demucs, coqui-tts, pyannote e lo stack di Wav2Lip
    - Git for Windows (per Wav2Lip), ffmpeg e il lettore video integrato (libmpv in `mpv-runtime`; facoltativo, tutto il resto funziona anche senza)
    - un **collegamento sul desktop** per ogni account Windows sul PC e una cartella nel **menu Start** con l'applicazione e **Aggiorna Video Translator AI**
 4. **Avvia** il programma dal collegamento sul desktop o dal menu Start. Senza una GPU NVIDIA l'app funziona sulla CPU, solo più lentamente: scegli un modello Whisper piccolo.

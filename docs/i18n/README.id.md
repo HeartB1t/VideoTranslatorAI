@@ -165,7 +165,7 @@ Langkah demi langkah, tanpa perlu baris perintah. Diuji pada PC Windows 11 yang 
 2. **Instal**: klik kanan `setup_windows.bat` → **Run as administrator** → tekan `1` (Install). Jika SmartScreen menampilkan "Windows protected your PC", klik **More info** → **Run anyway**: skripnya berupa teks biasa, bisa dibuka dengan Notepad.
 3. **Tunggu**: pada PC baru dengan koneksi cepat, prosesnya memakan waktu sekitar 15 menit dan 8 GB ruang disk. Penginstal mengunduh dan menyiapkan, dalam urutan ini:
    - Python 3.11 (seluruh sistem) dan runtime Microsoft Visual C++, jika belum ada
-   - paket Python: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote dan tumpukan Wav2Lip
+   - paket Python: PyTorch (CUDA 12.4 dengan GPU NVIDIA, selain itu versi CPU), faster-whisper, Demucs, coqui-tts, pyannote dan tumpukan Wav2Lip
    - Git for Windows (untuk Wav2Lip), ffmpeg dan pemutar video terintegrasi (libmpv di `mpv-runtime`; opsional, semuanya tetap berfungsi tanpanya)
    - **pintasan Desktop** untuk setiap akun Windows di PC dan folder **Start Menu** berisi aplikasi serta **Perbarui Video Translator AI**
 4. **Jalankan** dari pintasan Desktop atau Start Menu. Tanpa GPU NVIDIA aplikasi tetap berjalan di CPU, hanya lebih lambat: pilih model Whisper yang kecil.

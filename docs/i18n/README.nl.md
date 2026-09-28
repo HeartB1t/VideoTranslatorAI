@@ -165,7 +165,7 @@ Stap voor stap, geen opdrachtregel nodig. Getest op een schone Windows 11-pc.
 2. **Installeer**: klik met de rechtermuisknop op `setup_windows.bat` → **Uitvoeren als beheerder** → druk op `1` (Install). Als SmartScreen meldt "Windows heeft uw pc beveiligd", klik dan op **Meer info** → **Toch uitvoeren**: het script is platte tekst, je kunt het openen met Kladblok.
 3. **Wacht**: op een schone pc met een snelle verbinding duurt het ongeveer 15 minuten en 8 GB schijfruimte. Het installatieprogramma downloadt en installeert in deze volgorde:
    - Python 3.11 (systeembreed) en de Microsoft Visual C++-runtime, indien deze ontbreken
-   - de Python-pakketten: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote en de Wav2Lip-stack
+   - de Python-pakketten: PyTorch (CUDA 12.4 met een NVIDIA-GPU, anders de CPU-versie), faster-whisper, Demucs, coqui-tts, pyannote en de Wav2Lip-stack
    - Git for Windows (voor Wav2Lip), ffmpeg en de geïntegreerde videospeler (libmpv in `mpv-runtime`; optioneel, al het andere werkt ook zonder)
    - een **bureaubladsnelkoppeling** voor elk Windows-account op de pc en een map in het **Startmenu** met de toepassing en **Video Translator AI bijwerken**
 4. **Start** het via de bureaubladsnelkoppeling of het Startmenu. Zonder NVIDIA-GPU werkt de app op de CPU, alleen trager: kies een klein Whisper-model.

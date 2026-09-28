@@ -165,7 +165,7 @@ Krok za krokem, bez nutnosti příkazové řádky. Otestováno na čistém poč�
 2. **Instalace**: klikněte pravým tlačítkem na `setup_windows.bat` → **Spustit jako správce** → stiskněte `1` (Install). Pokud SmartScreen zobrazí "Windows chránil váš počítač", klikněte na **Další informace** → **Přesto spustit**: skript je čistý text, můžete jej otevřít v Poznámkovém bloku.
 3. **Počkejte**: na čistém počítači s rychlým připojením to trvá zhruba 15 minut a zabere 8 GB místa na disku. Instalátor v tomto pořadí stáhne a nastaví:
    - Python 3.11 (v rámci celého systému) a běhové prostředí Microsoft Visual C++, pokud chybí
-   - balíčky Pythonu: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote a sadu nástrojů Wav2Lip
+   - balíčky Pythonu: PyTorch (CUDA 12.4 s grafickou kartou NVIDIA, jinak verze pro CPU), faster-whisper, Demucs, coqui-tts, pyannote a sadu nástrojů Wav2Lip
    - Git for Windows (pro Wav2Lip), ffmpeg a integrovaný přehrávač videa (libmpv v `mpv-runtime`; volitelné, vše ostatní funguje i bez něj)
    - **zástupce na ploše** pro každý účet Windows na počítači a složku v **nabídce Start** s aplikací a položkou **Aktualizovat Video Translator AI**
 4. **Spusťte** ji ze zástupce na ploše nebo z nabídky Start. Bez GPU NVIDIA aplikace funguje na CPU, jen pomaleji: zvolte menší model Whisper.

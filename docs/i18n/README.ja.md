@@ -165,7 +165,7 @@ Edge-TTS 音声カタログは、`video_translator_gui.py` の先頭近くの `L
 2. **インストール**: `setup_windows.bat` を右クリック → **管理者として実行** → `1` を押します (Install)。SmartScreen が「Windows によって PC が保護されました」と表示した場合は、**詳細情報** → **実行** をクリックしてください。スクリプトはただのテキストなので、メモ帳で開いて中身を確認できます。
 3. **待機**: 高速な回線を持つクリーンな PC では、約 15 分とディスク 8 GB を消費します。インストーラーは次の順序でダウンロードしてセットアップします。
    - Python 3.11 (システム全体) と Microsoft Visual C++ ランタイム (不足している場合)
-   - Python パッケージ: PyTorch CUDA 12.4、faster-whisper、Demucs、coqui-tts、pyannote、Wav2Lip 一式
+   - Python パッケージ: PyTorch（NVIDIA GPU があれば CUDA 12.4 版、なければ CPU 版）、faster-whisper、Demucs、coqui-tts、pyannote、Wav2Lip 一式
    - Git for Windows (Wav2Lip 用)、ffmpeg、統合ビデオプレーヤー (`mpv-runtime` 内の libmpv。任意項目で、これがなくても他はすべて動作します)
    - PC上のすべての Windows アカウント向けの **デスクトップ ショートカット** と、アプリと **Video Translator AI をアップデート** を含む **スタート メニュー** フォルダー
 4. **起動**: デスクトップ ショートカットまたはスタート メニューから起動します。NVIDIA GPU がない場合、アプリは CPU で動作しますが遅くなります。その場合は小さめの Whisper モデルを選んでください。

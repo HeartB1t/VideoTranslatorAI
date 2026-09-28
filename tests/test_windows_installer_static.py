@@ -227,7 +227,38 @@ class WindowsInstallerStaticTests(unittest.TestCase):
 
     def test_the_vc_runtime_comes_before_pytorch_in_install_and_repair(self):
         body = self.flat[self.flat.index("\n:step_install_deps\n"):]
-        self.assertLess(body.index("call :step_vc_runtime"), body.index("Installing PyTorch cu124"))
+        self.assertLess(body.index("call :step_vc_runtime"), body.index('-r "%GPU_REQUIREMENTS%"'))
+
+    # -- PyTorch: the 2.5 GB CUDA build only where an NVIDIA GPU is found --
+
+    def test_the_cuda_build_is_chosen_only_for_an_nvidia_gpu(self):
+        body = self._label_body("detect_torch_build", "exit /b 0")
+        self.assertIn("where nvidia-smi", body)
+        # the PCI vendor id finds the card even before its driver is installed
+        self.assertIn("Get-CimInstance Win32_VideoController", body)
+        self.assertIn(r"$_.PNPDeviceID -like 'PCI\VEN_10DE*'", body)
+        # the CPU build only once both probes missed
+        self.assertLess(body.index("where nvidia-smi"), body.index('set "TORCH_BUILD=cpu"'))
+        self.assertLess(body.index("VEN_10DE"), body.index('set "TORCH_BUILD=cpu"'))
+        self.assertIn('call :logfile "Step 3/6 PyTorch: no NVIDIA GPU found, CPU build"', body)
+
+    def test_the_cpu_build_skips_every_cuda_install(self):
+        body = self.flat[self.flat.index("\n:step_install_deps\n"):self.flat.index("\n:step_tts_failed\n")]
+        cuda = [match.start() for match in re.finditer("download.pytorch.org/whl/cu124", body)]
+        self.assertEqual(len(cuda), 2)
+        # the first install
+        skip = body.index('if "%TORCH_BUILD%"=="cpu" goto step_torch_cpu')
+        self.assertLess(body.index("call :detect_torch_build"), skip)
+        self.assertLess(skip, cuda[0])
+        self.assertLess(cuda[0], body.index("goto step_torch_done\n\n:step_torch_cpu\n"))
+        cpu = body[body.index("\n:step_torch_cpu\n"):body.index("\n:step_torch_done\n")]
+        self.assertIn('-r "%GPU_REQUIREMENTS%"', cpu)  # PyPI's Windows wheels are the CPU build
+        self.assertNotIn("--index-url", cpu)
+        # the "+cu" check that brings a replaced CUDA build back
+        skip = body.index('if "%TORCH_BUILD%"=="cpu" goto step_torch_checked')
+        self.assertLess(body.index("\n:step_torch_done\n"), skip)
+        self.assertLess(skip, cuda[1])
+        self.assertLess(cuda[1], body.index("\n:step_torch_checked\n"))
 
     def test_the_vc_runtime_is_verified_and_run_from_an_admin_only_folder(self):
         body = self._label_body("step_vc_runtime", ":step_vc_runtime_manual")

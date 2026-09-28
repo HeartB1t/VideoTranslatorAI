@@ -165,7 +165,7 @@ Lépésről lépésre, parancssor nélkül. Tiszta Windows 11 gépen tesztelve.
 2. **Telepítse**: kattintson jobb gombbal a `setup_windows.bat` fájlra → **Futtatás rendszergazdaként** → nyomja meg az `1`-et (Install). Ha a SmartScreen azt írja, hogy "A Windows megvédte a számítógépét", kattintson a **További információ** → **Futtatás mindenképp** lehetőségre: a szkript egyszerű szöveg, megnyithatja Jegyzettömbben is.
 3. **Várjon**: egy tiszta gépen gyors internetkapcsolat mellett kb. 15 percet és 8 GB lemezterületet igényel. A telepítő ebben a sorrendben tölti le és állítja be:
    - a Python 3.11-et (rendszerszinten) és a Microsoft Visual C++ futtatókörnyezetet, ha hiányzik
-   - a Python-csomagokat: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote és a Wav2Lip verem
+   - a Python-csomagokat: PyTorch (NVIDIA GPU esetén CUDA 12.4, egyébként a CPU-s változat), faster-whisper, Demucs, coqui-tts, pyannote és a Wav2Lip verem
    - a Git for Windows-t (a Wav2Lip-hez), az ffmpeg-et és az integrált videolejátszót (libmpv a `mpv-runtime`-ban; nem kötelező, minden más nélküle is működik)
    - egy **asztali parancsikont** a gép minden Windows-fiókjához, valamint egy **Start menü** mappát az alkalmazással és a **Video Translator AI frissítése** elemmel
 4. **Indítsa el** az asztali parancsikonról vagy a Start menüből. NVIDIA GPU nélkül az alkalmazás a CPU-n fut, csak lassabban: válasszon kisebb Whisper modellt.

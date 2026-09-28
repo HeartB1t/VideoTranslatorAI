@@ -165,7 +165,7 @@ Claude/프로젝트 유지 관리 노트는 **Voice Catalog Source Of Truth** �
 2. **설치**: `setup_windows.bat`를 마우스 오른쪽 버튼으로 클릭 → **관리자 권한으로 실행** → `1`을 눌러 설치합니다 (Install). SmartScreen이 "Windows에서 PC를 보호했습니다"라고 표시하면 **추가 정보** → **실행**을 클릭하세요. 스크립트는 일반 텍스트이므로 메모장으로 열어볼 수 있습니다.
 3. **대기**: 빠른 인터넷을 사용하는 새 PC 기준으로 약 15분과 디스크 8GB가 필요합니다. 설치 프로그램은 다음 순서로 다운로드하고 설정합니다.
    - Python 3.11(시스템 전체)과 Microsoft Visual C++ 런타임(없는 경우)
-   - Python 패키지: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote, Wav2Lip 스택
+   - Python 패키지: PyTorch (NVIDIA GPU가 있으면 CUDA 12.4, 없으면 CPU 버전), faster-whisper, Demucs, coqui-tts, pyannote, Wav2Lip 스택
    - Git for Windows(Wav2Lip용), ffmpeg, 통합 비디오 플레이어(`mpv-runtime`의 libmpv, 선택 사항이며 없어도 나머지는 모두 작동)
    - PC의 모든 Windows 계정을 위한 **바탕화면 바로가기**와 앱 및 **Video Translator AI 업데이트**가 포함된 **시작 메뉴** 폴더
 4. **시작**: 바탕화면 바로가기나 시작 메뉴에서 실행합니다. NVIDIA GPU가 없으면 앱이 CPU에서 동작하며 속도만 느려집니다. 이 경우 작은 Whisper 모델을 선택하세요.

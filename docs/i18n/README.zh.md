@@ -165,7 +165,7 @@ Claude/项目维护注释在 **Voice Catalog Source Of Truth** 下的 `CLAUDE.md
 2. **安装**：右键单击 `setup_windows.bat` → **以管理员身份运行** → 按 `1`（安装）。如果 SmartScreen 显示“Windows 已保护你的电脑”，点击**更多信息** → **仍要运行**：该脚本是纯文本，你可以用记事本打开它。
 3. **等待**：在网速较快的全新电脑上，大约需要 15 分钟和 8 GB 磁盘空间。安装程序按以下顺序下载并设置：
    - Python 3.11（系统范围）以及缺失时的 Microsoft Visual C++ 运行时
-   - Python 包：PyTorch CUDA 12.4、faster-whisper、Demucs、coqui-tts、pyannote 以及 Wav2Lip 相关组件
+   - Python 包：PyTorch（有 NVIDIA GPU 时为 CUDA 12.4 版，否则为 CPU 版）、faster-whisper、Demucs、coqui-tts、pyannote 以及 Wav2Lip 相关组件
    - Git for Windows（用于 Wav2Lip）、ffmpeg 以及集成视频播放器（`mpv-runtime` 中的 libmpv；可选，没有它其他一切照常运作）
    - 为电脑上每个 Windows 帐户创建的**桌面快捷方式**，以及包含应用程序和**更新 Video Translator AI**的**开始菜单**文件夹
 4. 从桌面快捷方式或开始菜单**启动**它。没有 NVIDIA GPU 时应用会用 CPU 运行，只是速度较慢：请选择较小的 Whisper 模型。

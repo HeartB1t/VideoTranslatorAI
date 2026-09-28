@@ -1041,6 +1041,8 @@ echo  [*] Upgrading pip...
 :: also apply to every later optional install, so it cannot upgrade the core
 :: ML stack outside the tested range. They do not install optional packages.
 
+call :detect_torch_build
+if "%TORCH_BUILD%"=="cpu" goto step_torch_cpu
 echo  [*] Installing PyTorch cu124 + torchaudio + torchvision...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet ^
   --index-url https://download.pytorch.org/whl/cu124
@@ -1052,7 +1054,21 @@ if errorlevel 1 (
 ) else (
     call :logfile "Step 3/6 PyTorch 2.6.0 cu124: ok"
 )
+goto step_torch_done
 
+:step_torch_cpu
+:: The Windows wheels of torch on PyPI are the CPU build. A CUDA build that
+:: an earlier run installed already satisfies the profile and stays.
+echo  [*] Installing PyTorch for the CPU + torchaudio + torchvision...
+"%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" -r "%GPU_REQUIREMENTS%" --quiet
+if errorlevel 1 (
+    echo  [^^!] PyTorch install failed.
+    call :logfile "Step 3/6 PyTorch: CPU build FAILED"
+) else (
+    call :logfile "Step 3/6 PyTorch 2.6.0 CPU: ok"
+)
+
+:step_torch_done
 echo  [*] Installing ctranslate2...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" ctranslate2 --quiet
 
@@ -1065,6 +1081,7 @@ if errorlevel 1 (
 )
 call :logfile "Step 3/6 pipeline packages: ok"
 
+if "%TORCH_BUILD%"=="cpu" goto step_torch_checked
 "%PYTHON_EXE%" -c "import torch,sys; sys.exit(0 if '+cu' in torch.__version__ else 1)" >nul 2>&1
 if errorlevel 1 (
     echo  [^^!] PyTorch CUDA was downgraded by a dependency. Reinstalling cu124...
@@ -1073,6 +1090,7 @@ if errorlevel 1 (
     if errorlevel 1 echo  [^^!] PyTorch cu124 reinstall failed - GPU acceleration may be unavailable.
     if errorlevel 1 call :logfile "Step 3/6 PyTorch: cu124 reinstall FAILED - GPU acceleration may be unavailable"
 )
+:step_torch_checked
 
 echo  [*] Installing transformers ^(^>=4.40.0,^<5.1^)...
 "%PYTHON_EXE%" -m pip install -c "%CORE_REQUIREMENTS%" -c "%OPTIONAL_REQUIREMENTS%" -c "%GPU_REQUIREMENTS%" transformers --quiet
@@ -1151,6 +1169,29 @@ call :logfile "Step 3/6 voice cloning coqui-tts: ok"
 call :step_wav2lip "%~2"
 echo  [+] Python packages installed.
 call :logfile "Step 3/6 Python packages: done"
+exit /b 0
+
+
+:: The CUDA build of PyTorch is a 2.5 GB download against 0.2 GB for the
+:: CPU build, and it helps only on an NVIDIA GPU. The PCI vendor id 10DE
+:: finds the card even before its driver is installed; nvidia-smi covers
+:: the rest. Repair detects again: on a GPU added later the "+cu" check
+:: after the pipeline packages replaces the CPU build.
+:detect_torch_build
+set "TORCH_BUILD=cu124"
+where nvidia-smi >nul 2>&1
+if not errorlevel 1 goto detect_torch_build_done
+powershell -NoProfile -Command "if (Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI\VEN_10DE*' }) { exit 0 }; exit 1" >nul 2>&1
+if not errorlevel 1 goto detect_torch_build_done
+set "TORCH_BUILD=cpu"
+:detect_torch_build_done
+if "%TORCH_BUILD%"=="cu124" (
+    echo  [+] NVIDIA GPU found: PyTorch with CUDA 12.4.
+    call :logfile "Step 3/6 PyTorch: NVIDIA GPU found, CUDA 12.4 build"
+) else (
+    echo  [+] No NVIDIA GPU found: PyTorch for the CPU, 0.2 GB instead of 2.5 GB.
+    call :logfile "Step 3/6 PyTorch: no NVIDIA GPU found, CPU build"
+)
 exit /b 0
 
 

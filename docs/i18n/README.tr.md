@@ -165,7 +165,7 @@ Adım adım, komut satırına gerek yok. Temiz bir Windows 11 bilgisayarda test 
 2. **Yükleyin**: `setup_windows.bat`'ye sağ tıklayın → **Yönetici olarak çalıştır** → `1` tuşuna basın (Yükle). SmartScreen "Windows bilgisayarınızı korudu" derse, **Diğer bilgiler** → **Yine de çalıştır**'a tıklayın: betik düz metindir, Not Defteri ile açabilirsiniz.
 3. **Bekleyin**: hızlı bağlantılı temiz bir bilgisayarda yaklaşık 15 dakika ve 8 GB disk alanı gerekir. Yükleyici şu sırayla indirir ve kurar:
    - Eksikse Python 3.11 (sistem çapında) ve Microsoft Visual C++ çalışma zamanı
-   - Python paketleri: PyTorch CUDA 12.4, faster-whisper, Demucs, coqui-tts, pyannote ve Wav2Lip yığını
+   - Python paketleri: PyTorch (NVIDIA GPU varsa CUDA 12.4, yoksa CPU sürümü), faster-whisper, Demucs, coqui-tts, pyannote ve Wav2Lip yığını
    - Git for Windows (Wav2Lip için), ffmpeg ve entegre video oynatıcı (`mpv-runtime` içinde libmpv; isteğe bağlıdır, onsuz da her şey çalışır)
    - bilgisayardaki her Windows hesabı için bir **Masaüstü kısayolu** ve uygulama ile **Video Translator AI'yi Güncelle**'yi içeren bir **Başlat Menüsü** klasörü
 4. **Başlatın**: Masaüstü kısayolundan veya Başlat Menüsünden başlatın. NVIDIA GPU olmadan uygulama işlemciyle çalışır, sadece daha yavaş: küçük bir Whisper modeli seçin.
