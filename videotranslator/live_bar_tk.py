@@ -402,6 +402,20 @@ class LiveBar(tk.Frame):
         if not self._banner.winfo_manager():
             self._banner.pack(fill="x", before=self._idle if not self._active else self._running)
 
+    # Warnings about how a running session is doing: they end with it.
+    _SESSION_WARNINGS = frozenset({
+        "live_warn_rate_limited", "live_warn_engine_slow", "live_warn_falling_behind",
+        "live_warn_skipped", "live_warn_cpu_fallback"})
+
+    def drop_session_warning(self) -> None:
+        """At the end of a session, clear a banner that described it running.
+
+        Errors, and refusals that outlive the session (an ElevenLabs quota, a
+        voice service that is down), stay up until the user closes them.
+        """
+        if not self._banner_is_error and self._banner_key in self._SESSION_WARNINGS:
+            self.clear_banner()
+
     def clear_banner(self) -> None:
         self._banner_key = None
         self._banner_params = {}

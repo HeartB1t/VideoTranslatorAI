@@ -9542,6 +9542,7 @@ class App(tk.Tk):
             def work():
                 session.join(5.0)
             self._redirecting_thread_factory(work, name="live-stop").start()
+        self._live_bar.drop_session_warning()
         self._live_bar.set_active(False)
         self._refresh_live_bar_enabled()
 

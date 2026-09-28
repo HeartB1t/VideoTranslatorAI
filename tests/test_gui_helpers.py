@@ -70,6 +70,19 @@ class LiveTransportRoutingTests(unittest.TestCase):
         self.controller.stop.assert_called_once_with()
 
 
+class FinishLiveSessionTests(unittest.TestCase):
+    def test_the_end_drops_the_warnings_about_the_running_session(self):
+        bar = Mock()
+        app = SimpleNamespace(
+            _live_session=None, _live_last_status=None, _live_stopping=True,
+            _live_poll_after=None, _live_bar=bar, _refresh_live_bar_enabled=Mock(),
+            _log_event=Mock())
+        gui.App._finish_live_session(app)
+        self.assertEqual([c[0] for c in bar.method_calls],
+                         ["drop_session_warning", "set_active"])
+        bar.set_active.assert_called_once_with(False)
+
+
 class LiveChoicesPersistenceTests(unittest.TestCase):
     """The live bar remembers mode/engine/dub/subs/delay across launches."""
 

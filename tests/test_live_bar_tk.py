@@ -216,6 +216,24 @@ class LiveBarTests(unittest.TestCase):
         self.assertTrue(self.bar._banner.winfo_manager())
         self.assertTrue(self.bar._banner_is_error)
 
+    def test_session_warnings_end_with_the_session_errors_and_refusals_stay(self):
+        # Seen on the Windows VM: "ollama is limiting requests ... for s." still
+        # up after "Real-time translation ended".
+        for key, is_error, stays in (
+                ("live_warn_rate_limited", False, False),
+                ("live_warn_engine_slow", False, False),
+                ("live_warn_falling_behind", False, False),
+                ("live_warn_skipped", False, False),
+                ("live_warn_cpu_fallback", False, False),
+                ("live_warn_el_quota", False, True),
+                ("live_warn_tts_unavailable", False, True),
+                ("live_err_ingest", True, True)):
+            with self.subTest(key=key):
+                self.bar.show_banner(key, {"engine": "ollama", "s": 30}, is_error=is_error)
+                self.bar.drop_session_warning()
+                self.assertEqual(bool(self.bar._banner.winfo_manager()), stays)
+                self.bar.clear_banner()
+
     def test_banner_close_clears_and_emits(self):
         self.bar.show_banner("live_warn_cpu_fallback", {})
         self.assertTrue(self.bar._banner.winfo_manager())
