@@ -121,6 +121,15 @@ class LiveBarTests(unittest.TestCase):
         self.assertIn(("engine", {"engine": "google"}), self.commands)
         self.assertTrue(self.bar._banner.winfo_manager())  # online-engine warning
 
+    def test_set_engine_code_updates_the_row_without_emitting(self):
+        from videotranslator.live_bar_tk import _ENGINE_KEYS
+        self.bar.set_engine_code("google")
+        self.assertEqual(self.bar.current_settings()["engine"], "google")
+        self.assertEqual(self.bar._engine_combo.get(), self.bar._s(_ENGINE_KEYS["google"]))
+        self.assertEqual([c for c in self.commands if c[0] == "engine"], [])
+        self.bar.set_engine_code("nonsense")           # ignored
+        self.assertEqual(self.bar.current_settings()["engine"], "google")
+
     def test_dub_and_subs_emit(self):
         self.bar._chk_dub.invoke()
         self.bar._chk_subs.invoke()

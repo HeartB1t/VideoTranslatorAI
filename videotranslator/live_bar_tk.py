@@ -293,13 +293,16 @@ class LiveBar(tk.Frame):
             "subs_enabled": bool(self._subs_var.get()),
         }
 
+    def set_engine_code(self, code: str) -> None:
+        """Show ``code`` in the engine box without emitting (the session switched)."""
+        if code in LIVE_ENGINES:
+            self._engine_var.set(code)
+            self._engine_combo.current(LIVE_ENGINES.index(code))
+
     def set_config_values(self, settings: Any) -> None:
         """Preselect the idle row from a LiveSettings-like object."""
         self._mode_var.set(getattr(settings, "sync_mode", "delayed"))
-        engine = getattr(settings, "engine", "marian")
-        if engine in LIVE_ENGINES:
-            self._engine_var.set(engine)
-            self._engine_combo.current(LIVE_ENGINES.index(engine))
+        self.set_engine_code(getattr(settings, "engine", "marian"))
         self._dub_var.set(bool(getattr(settings, "dub_enabled", True)))
         self._subs_var.set(bool(getattr(settings, "subs_enabled", True)))
         ahead = getattr(settings, "file_ahead_s", None) if self._source_kind == "file" \

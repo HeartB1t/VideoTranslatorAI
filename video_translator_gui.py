@@ -8996,8 +8996,12 @@ class App(tk.Tk):
             return
         session = self._live_session
         if intent == "switch_marian":
+            # The banner's button: this session goes on with MarianMT (offline,
+            # fast on a CPU); the saved engine choice is not touched.
             if session is not None:
                 session.set_engine("marian")
+                self._live_bar.set_engine_code("marian")
+                self._live_bar.clear_banner()
             return
         if intent in ("mode", "delay", "engine", "dub", "subs"):
             # Remember the choice for the next launch (the original mute is

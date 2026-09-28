@@ -15,6 +15,7 @@ ever appears in this module.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import time
@@ -338,6 +339,7 @@ class LiveSession:
         self._factories = factories
         self._thread_factory = thread_factory
         self._log = log
+        self._engine_requested: str | None = None   # set_engine, read by the MT loop
         self._clock = factories.clock
         self._tick_interval = tick_interval
 
@@ -871,6 +873,7 @@ class LiveSession:
             elif kind == "engine":
                 with self._status_lock:
                     self._status.engine = value
+                self._engine_requested = value      # the MT loop switches
             elif kind == "dub":
                 self._dub_wanted = value
                 if value:
@@ -1121,11 +1124,12 @@ class LiveSession:
         self._decode_cancel.set()
         self._stop.set()
 
-    def _set_warning(self, code: str, engine: str, **params) -> None:
+    def _set_warning(self, code: str, engine: str, *, action: str | None = None,
+                     **params) -> None:
         with self._status_lock:
             self._status.warning_key = WARN_KEYS.get(code, code)
             self._status.warning_params = {"engine": engine, **params}
-            self._status.warning_action = None
+            self._status.warning_action = action
 
     def _clear_warning(self) -> None:
         with self._status_lock:
@@ -1282,16 +1286,51 @@ class LiveSession:
             except Exception:               # noqa: BLE001
                 pass
 
+    def _timeout_key(self, engine: str) -> str:
+        if engine == "ollama":
+            return "ollama_live" if self._cfg.settings.sync_mode == "live" else "ollama_delayed"
+        return engine
+
     def _mt_loop(self) -> None:
         translator = None
         prepared = False
-        key = self._cfg.engine
-        if key == "ollama":
-            key = "ollama_live" if self._cfg.settings.sync_mode == "live" else "ollama_delayed"
-        timeout = TIMEOUTS_S.get(key, 5.0)
+        engine = self._cfg.engine
+        timeout = TIMEOUTS_S.get(self._timeout_key(engine), 5.0)
         breaker = CircuitBreaker()
+
+        def switch(wanted: str) -> None:
+            """Replace the translator with ``wanted`` (the banner's "Switch to
+            MarianMT", or the row's engine box during a session). A translator
+            that cannot prepare leaves the running one in place."""
+            nonlocal translator, engine, online, prepared, timeout, breaker
+            src = self._langlock.locked or self._cfg.lang_source
+            candidate = self._factories.translator(wanted)
+            try:
+                if prepared or self._langlock.locked is not None:
+                    candidate.prepare(src, self._cfg.lang_target)
+            except Exception as exc:            # noqa: BLE001 - a missing model, a missing dependency
+                key = getattr(exc, "key", type(exc).__name__)
+                self._log(f"live: switch to {wanted} failed: {key} {getattr(exc, 'params', '') or exc}")
+                with contextlib.suppress(Exception):
+                    candidate.close()
+                with self._status_lock:
+                    self._status.engine = engine
+                    self._status.warning_action = None       # the button did not help
+                return
+            with contextlib.suppress(Exception):
+                translator.close()
+            translator, engine = candidate, wanted
+            online = bool(getattr(translator, "online", False))
+            timeout = TIMEOUTS_S.get(self._timeout_key(engine), 5.0)
+            breaker = CircuitBreaker()
+            prepared = prepared or self._langlock.locked is not None
+            self._clear_warning()
+            self._log(f"live: translation engine switched to {engine}")
+            if prepared:
+                self._log_translator_ready(translator)
+
         try:
-            translator = self._factories.translator(self._cfg.engine)
+            translator = self._factories.translator(engine)
             online = bool(getattr(translator, "online", False))
             # Models that expose prepare() can be warmed as soon as language is
             # explicit; auto mode waits until the detector locks a source.
@@ -1304,6 +1343,11 @@ class LiveSession:
                 try:
                     sentence = self._mt_q.get(timeout=0.2)
                 except queue.Empty:
+                    sentence = None
+                wanted, self._engine_requested = self._engine_requested, None
+                if wanted and wanted != engine:
+                    switch(wanted)
+                if sentence is None:
                     continue
                 if getattr(sentence, "gen", 0) < self._gen:
                     continue
@@ -1321,8 +1365,9 @@ class LiveSession:
                 # An online engine whose breaker is open keeps the original text
                 # (shown in the source language) without spending a call.
                 if online and not breaker.allow():
-                    self._log(f"live: {sentence.start:.1f}s kept original ({key} paused "
-                              f"after errors): {sentence.text[:120]}")
+                    self._log(f"live: {sentence.start:.1f}s kept original "
+                              f"({self._timeout_key(engine)} paused after errors): "
+                              f"{sentence.text[:120]}")
                     self._emit_segment(sentence.start, sentence.end, sentence.text,
                                        None, italic=True, gen=sentence.gen,
                                        seg_id=None)
@@ -1346,10 +1391,12 @@ class LiveSession:
                     else:
                         warn = breaker.record_failure(kind=outcome.error or "error")
                         if warn:
-                            # "rate_limited" says for how long: the pause
-                            # the breaker just opened.
-                            self._set_warning(warn, self._cfg.engine,
-                                              s=int(round(breaker.retry_in_s())))
+                            # "rate_limited" says for how long: the pause the
+                            # breaker just opened. The banner offers MarianMT,
+                            # offline and fast on a CPU, unless it is running.
+                            self._set_warning(
+                                warn, engine, s=int(round(breaker.retry_in_s())),
+                                action=None if engine == "marian" else "live_btn_switch_marian")
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,
                     outcome.text if outcome.ok else None, italic=not outcome.ok,

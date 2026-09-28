@@ -70,6 +70,25 @@ class LiveTransportRoutingTests(unittest.TestCase):
         self.controller.stop.assert_called_once_with()
 
 
+class SwitchToMarianTests(unittest.TestCase):
+    def test_the_banner_button_switches_the_session_and_the_row(self):
+        session, bar = Mock(), Mock()
+        app = SimpleNamespace(_live_session=session, _live_bar=bar, _log_event=Mock(),
+                              _schedule_live_save=Mock(), _refresh_live_voice_info=Mock())
+        gui.App._on_live_command(app, "switch_marian", {})
+        session.set_engine.assert_called_once_with("marian")
+        bar.set_engine_code.assert_called_once_with("marian")
+        bar.clear_banner.assert_called_once_with()
+        app._schedule_live_save.assert_not_called()    # a choice for this session only
+
+    def test_without_a_session_the_button_does_nothing(self):
+        bar = Mock()
+        app = SimpleNamespace(_live_session=None, _live_bar=bar, _log_event=Mock(),
+                              _schedule_live_save=Mock())
+        gui.App._on_live_command(app, "switch_marian", {})
+        bar.set_engine_code.assert_not_called()
+
+
 class FinishLiveSessionTests(unittest.TestCase):
     def test_the_end_drops_the_warnings_about_the_running_session(self):
         bar = Mock()

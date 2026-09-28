@@ -595,39 +595,150 @@ class LiveSessionPipelineTests(unittest.TestCase):
             self.assertEqual([t.name for t in live if t.is_alive()], [])
 
 
+class _LimitedTranslator(_FakeTranslator):
+    """An online engine that never answers in time."""
+    name, online = "google", True
+
+    def __init__(self, engine="google"):
+        self.closed = False
+
+    def translate(self, text, *, context=(), timeout_s=5.0):
+        from videotranslator.live_translate import Outcome
+        return Outcome(text, False, 0.01, error="rate_limited")
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeMarian(_FakeTranslator):
+    name, online = "marian", False
+
+    def __init__(self, fail_key=None):
+        self.prepared = None
+        self.closed = False
+        self._fail_key = fail_key
+
+    def prepare(self, src, tgt):
+        if self._fail_key:
+            from videotranslator.live_translate import LiveTranslateError
+            raise LiveTranslateError(self._fail_key, {"src": src, "tgt": tgt})
+        self.prepared = (src, tgt)
+
+    def describe(self):
+        return "MarianMT fake"
+
+    def close(self):
+        self.closed = True
+
+
+def _sentence(n):
+    return SimpleNamespace(gen=0, start=float(n), end=n + 1.0, text=f"sentence {n}")
+
+
+def _wait(predicate, timeout=3.0):
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return predicate()
+
+
 class LiveTranslationWarningTests(unittest.TestCase):
-    def test_a_rate_limited_engine_says_for_how_many_seconds(self):
+    """The banner about a struggling online engine, and its "Switch to MarianMT".
+
+    On the Windows VM (no GPU) Ollama never answered in time: the banner said
+    so but never offered the switch (the session set no action), and the
+    engine change it would have sent only relabelled the status."""
+
+    def _mt_session(self, tmp, marian):
+        from dataclasses import replace
+        from unittest.mock import Mock
+        from videotranslator.live_asr import LanguageLock
+        sess, _, _ = _session(tmp, overrides={"live_engine": "google"})
+        sess._langlock = LanguageLock("en")
+        sess._logs = []
+        sess._log = sess._logs.append
+        limited = _LimitedTranslator()
+        sess._factories = replace(
+            _pipeline_factories(),
+            translator=lambda engine: marian if engine == "marian" else limited)
+        sess._emitted = Mock()
+        sess._emit_segment = sess._emitted
+        return sess, limited
+
+    def test_a_rate_limited_engine_says_for_how_many_seconds_and_offers_marian(self):
         # live_warn_rate_limited reads "... for {s} s": the seconds were never
         # passed, and the banner said "for  s." (seen on the Windows VM).
-        from dataclasses import replace
-        from videotranslator.live_asr import LanguageLock
-        from videotranslator.live_translate import Outcome
-
-        class Limited(_FakeTranslator):
-            name, online = "google", True
-
-            def translate(self, text, *, context=(), timeout_s=5.0):
-                return Outcome(text, False, 0.01, error="rate_limited")
-
         with tempfile.TemporaryDirectory() as tmp:
-            sess, _, _ = _session(tmp)
-            sess._langlock = LanguageLock("en")
-            sess._factories = replace(_pipeline_factories(), translator=lambda engine: Limited())
+            sess, _ = self._mt_session(tmp, _FakeMarian())
             for n in range(3):
-                sess._mt_q.put(SimpleNamespace(gen=0, start=float(n), end=n + 1.0,
-                                               text=f"sentence {n}"))
+                sess._mt_q.put(_sentence(n))
             worker = threading.Thread(target=sess._mt_loop)
             worker.start()
             try:
-                deadline = time.monotonic() + 3
-                while sess.status().warning_key is None and time.monotonic() < deadline:
-                    time.sleep(0.01)
+                self.assertTrue(_wait(lambda: sess.status().warning_key is not None))
                 st = sess.status()
             finally:
                 sess.request_stop()
                 worker.join(3)
         self.assertEqual(st.warning_key, "live_warn_rate_limited")
-        self.assertEqual(st.warning_params, {"engine": sess._cfg.engine, "s": 30})
+        self.assertEqual(st.warning_params, {"engine": "google", "s": 30})
+        self.assertEqual(st.warning_action, "live_btn_switch_marian")
+
+    def test_the_switch_to_marian_replaces_the_translator_mid_session(self):
+        marian = _FakeMarian()
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, limited = self._mt_session(tmp, marian)
+            for n in range(3):
+                sess._mt_q.put(_sentence(n))
+            worker = threading.Thread(target=sess._mt_loop)
+            worker.start()
+            try:
+                self.assertTrue(_wait(lambda: sess.status().warning_action is not None))
+                sess.set_engine("marian")
+                sess._drain_control(0)
+                self.assertTrue(_wait(lambda: sess.status().warning_key is None))
+                sess._mt_q.put(_sentence(3))
+                self.assertTrue(_wait(lambda: sess._emitted.call_count >= 4))
+                st = sess.status()
+                last = sess._emitted.call_args
+            finally:
+                sess.request_stop()
+                worker.join(3)
+        self.assertEqual(st.engine, "marian")
+        self.assertEqual(marian.prepared, ("en", "it"))
+        self.assertTrue(limited.closed)
+        self.assertEqual((last.args[2], last.args[3], last.kwargs["italic"]),
+                         ("sentence 3", "ciao.", False))
+        self.assertTrue(any("translator ready: MarianMT fake" in line for line in sess._logs))
+        self.assertTrue(marian.closed)             # closed with the session
+
+    def test_a_failed_switch_keeps_the_running_engine(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, limited = self._mt_session(tmp, _FakeMarian(fail_key="marian_pair"))
+            for n in range(3):
+                sess._mt_q.put(_sentence(n))
+            worker = threading.Thread(target=sess._mt_loop)
+            worker.start()
+            try:
+                self.assertTrue(_wait(lambda: sess.status().warning_action is not None))
+                sess.set_engine("marian")
+                sess._drain_control(0)
+                self.assertTrue(_wait(lambda: any("switch to marian failed" in line
+                                                  for line in sess._logs)))
+                closed_by_the_switch = limited.closed
+                sess._mt_q.put(_sentence(3))
+                self.assertTrue(_wait(lambda: sess._emitted.call_count >= 4))
+                st = sess.status()
+                alive = worker.is_alive()
+            finally:
+                sess.request_stop()
+                worker.join(3)
+        self.assertTrue(alive)
+        self.assertEqual((st.engine, st.warning_key, st.warning_action),
+                         ("google", "live_warn_rate_limited", None))
+        self.assertFalse(closed_by_the_switch)
+        self.assertTrue(limited.closed)            # by the session's end
+        self.assertIn("marian_pair", " ".join(sess._logs))
 
 
 class LiveSessionLifecycleTests(unittest.TestCase):
