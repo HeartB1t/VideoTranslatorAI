@@ -219,6 +219,22 @@ def recommend(hw: HardwareInfo, preference: str = "balanced", *,
     }
 
 
+def _vram_for(opt: ModelOption, hw: HardwareInfo) -> float | None:
+    """GPU memory ``opt`` can run in, or None when it runs on the CPU.
+
+    Whisper, MarianMT and XTTS run on torch: only a GPU torch can drive counts.
+    Ollama brings its own CUDA runtime and uses an NVIDIA card whatever torch
+    this Python has (on a Kali with an RTX 3090 and a Python without torch,
+    qwen3:32b was judged on the RAM and called too big).
+    """
+    if opt.stage == "mt" and ":" in opt.key:            # an Ollama model
+        gpu = hw.best_gpu
+        if gpu is not None and gpu.backend in ("cuda", "nvidia"):
+            return gpu.vram_gb
+        return None
+    return hw.vram_gb
+
+
 def assess(opt: ModelOption, hw: HardwareInfo, *,
            cached: set[str] | frozenset[str] = frozenset()) -> str:
     """How an option fits this PC, for the manual choice list.
@@ -232,9 +248,10 @@ def assess(opt: ModelOption, hw: HardwareInfo, *,
         return "online"
     if not _disk_ok(opt, hw, set(cached)):
         return "no_disk"
-    gpu = hw.vram_gb is not None and opt.vram_gb > 0
+    vram = _vram_for(opt, hw)
+    gpu = vram is not None and opt.vram_gb > 0
     if gpu:
-        have, need, headroom = hw.vram_gb, opt.vram_gb, _VRAM_HEADROOM_GB
+        have, need, headroom = vram, opt.vram_gb, _VRAM_HEADROOM_GB
     else:
         have = hw.ram_gb if hw.ram_gb is not None else 8.0
         need, headroom = opt.ram_gb, _RAM_HEADROOM_GB
@@ -269,8 +286,9 @@ def ollama_pull_fit(model: str, hw: HardwareInfo, *, size_gb: float | None = Non
         if not size_gb:
             return None
         opt = ModelOption("mt", model, model, True, round(size_gb * 1024))
-    gpu = hw.vram_gb is not None and opt.vram_gb > 0
+    vram = _vram_for(opt, hw)
+    gpu = vram is not None and opt.vram_gb > 0
     cached = {model} if installed else frozenset()
     return PullFit(assess(opt, hw, cached=cached), opt.download_mb / 1024, hw.disk_free_gb,
                    opt.vram_gb if gpu else opt.ram_gb,
-                   hw.vram_gb if gpu else hw.ram_gb, gpu)
+                   vram if gpu else hw.ram_gb, gpu)

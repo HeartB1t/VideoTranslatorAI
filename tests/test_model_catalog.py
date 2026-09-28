@@ -141,6 +141,20 @@ class OllamaPullFitTests(unittest.TestCase):
         self.assertEqual((fit.verdict, fit.need_gb, fit.have_gb, fit.gpu),
                          ("ok", 22.0, 24.0, True))
 
+    def test_ollama_uses_an_nvidia_card_whatever_torch_this_python_has(self):
+        # Ollama brings its own CUDA runtime: on the Kali (RTX 3090, 24 GB)
+        # started with a Python without torch, qwen3:32b was judged on the
+        # 31.2 GB of RAM and called too big, while it runs on the card.
+        from videotranslator.model_catalog import ollama_pull_fit
+        hw = _hw(vram=24.0, ram=31.2, driver_only=True)
+        fit = ollama_pull_fit("qwen3:32b", hw, installed=True)
+        self.assertEqual((fit.verdict, fit.need_gb, fit.have_gb, fit.gpu),
+                         ("ok", 22.0, 24.0, True))
+        self.assertEqual(assess(MT["qwen3:32b"], hw), "ok")
+        # models that run on torch still need a GPU torch can drive
+        self.assertEqual(assess(WHISPER["large-v3"], _hw(vram=24.0, ram=4.0, driver_only=True)),
+                         assess(WHISPER["large-v3"], _hw(ram=4.0)))
+
     def test_models_outside_the_catalogue_are_judged_on_disk_only(self):
         from videotranslator.model_catalog import ollama_pull_fit
         self.assertEqual(ollama_pull_fit("qwen3:4b", _hw(ram=4.0), size_gb=2.5).verdict, "ok")
