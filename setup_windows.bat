@@ -20,7 +20,7 @@ for %%t in (%VTAI_CP%) do set "VTAI_CP=%%t"
 if defined VTAI_CP set "VTAI_CP=%VTAI_CP:.=%"
 echo(%VTAI_CP%| findstr /r /x "[0-9][0-9]*" >nul || set "VTAI_CP="
 
-set "SCRIPT_VERSION=2.1.2"
+set "SCRIPT_VERSION=2.1.3"
 title Video Translator AI - Setup v%SCRIPT_VERSION%
 
 :: -- Centralised paths (single source of truth) ------------------------------
