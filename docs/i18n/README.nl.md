@@ -175,6 +175,7 @@ Stap voor stap, geen opdrachtregel nodig. Getest op een schone Windows 11-pc.
 ### Linux/macOS
 
 ```bash
+# Python 3.11 tot 3.13 vereist (PyTorch heeft nog geen pakketten voor 3.14): op een distributie waar python3 3.14 is, gebruik python3.13 in de opdrachten hieronder
 # Kloon de opslagplaats
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Bij de eerste keer opstarten detecteert de GUI ontbrekende pakketten (faster-whisper, Demucs, Edge-TTS, enz.) en installeert deze automatisch, waarbij de uitvoer naar het logvenster wordt gestreamd. ffmpeg wordt ook automatisch geïnstalleerd via `apt-get` / `dnf` / `pacman` (Linux) of gedownload van GitHub (Windows).
+> Bij de eerste keer opstarten detecteert de GUI ontbrekende pakketten (faster-whisper, Demucs, Edge-TTS, enz.) en installeert deze automatisch, waarbij de uitvoer naar het logvenster wordt gestreamd. ffmpeg wordt ook automatisch geïnstalleerd via `apt-get` / `dnf` / `pacman` (Linux) of gedownload van GitHub (Windows). Gestart met een Python die PyTorch niet ondersteunt, meldt de app dit en biedt aan te herstarten met een ondersteunde Python die op de pc is gevonden.
 
 > In de koptekst staat een **Speler**-badge. Als libmpv of python-mpv ontbreekt, geeft het linkerdeelvenster aan wat er ontbreekt en wordt **Installeer speler** aangeboden: op Linux gebruikt het de pakketbeheerder via pkexec (vervolgens `sudo -n`) en wordt het handmatige commando weergegeven als geen van beide werkt; op Windows wordt gevraagd voordat libmpv voor de huidige gebruiker wordt gedownload (ongeveer 32 MB).
 

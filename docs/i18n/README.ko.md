@@ -175,6 +175,7 @@ Claude/프로젝트 유지 관리 노트는 **Voice Catalog Source Of Truth** �
 ### 리눅스/맥OS
 
 ```bash
+# Python 3.11에서 3.13까지 필요합니다(PyTorch에는 아직 3.14용 패키지가 없습니다): python3가 3.14인 배포판에서는 아래 명령에서 python3.13을 사용하세요
 # 저장소 복제
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> 처음 실행 시 GUI는 누락된 패키지(faster-whisper, Demucs, Edge-TTS 등)를 감지하고 자동으로 설치하여 출력을 로그 창으로 스트리밍합니다. ffmpeg는 `apt-get` / `dnf` / `pacman`(Linux)를 통해 자동으로 설치되거나 GitHub(Windows)에서 다운로드됩니다.
+> 처음 실행 시 GUI는 누락된 패키지(faster-whisper, Demucs, Edge-TTS 등)를 감지하고 자동으로 설치하여 출력을 로그 창으로 스트리밍합니다. ffmpeg는 `apt-get` / `dnf` / `pacman`(Linux)를 통해 자동으로 설치되거나 GitHub(Windows)에서 다운로드됩니다. PyTorch가 지원하지 않는 Python으로 시작되면 앱이 이를 알리고 PC에서 찾은 지원되는 Python으로 다시 시작할지 제안합니다.
 
 > 헤더에는 **플레이어** 배지가 표시됩니다. libmpv 또는 python-mpv가 누락된 경우 왼쪽 창에 누락된 항목이 표시되고 **플레이어 설치**가 제공됩니다. Linux에서는 pkexec(이후 `sudo -n`)를 통해 패키지 관리자를 사용하고 둘 다 작동하지 않으면 수동 명령을 표시합니다. Windows에서는 현재 사용자(약 32MB)에 대한 libmpv를 다운로드하기 전에 묻습니다.
 

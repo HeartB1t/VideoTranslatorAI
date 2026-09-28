@@ -175,6 +175,7 @@ Adım adım, komut satırına gerek yok. Temiz bir Windows 11 bilgisayarda test 
 ### Linux / macOS
 
 ```bash
+# Python 3.11 ile 3.13 arası gerekir (PyTorch'un 3.14 için henüz paketi yok): python3'ü 3.14 olan bir dağıtımda aşağıdaki komutlarda python3.13 kullanın
 # Depoyu klonla
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> İlk başlatmada GUI, eksik paketleri (faster-whisper, Demucs, Edge-TTS, vb.) algılar ve çıktıyı günlük penceresine aktararak bunları otomatik olarak yükler. ffmpeg ayrıca `apt-get` / `dnf` / `pacman` (Linux) aracılığıyla otomatik olarak yüklenir veya GitHub'dan (Windows) indirilir.
+> İlk başlatmada GUI, eksik paketleri (faster-whisper, Demucs, Edge-TTS, vb.) algılar ve çıktıyı günlük penceresine aktararak bunları otomatik olarak yükler. ffmpeg ayrıca `apt-get` / `dnf` / `pacman` (Linux) aracılığıyla otomatik olarak yüklenir veya GitHub'dan (Windows) indirilir. PyTorch'un desteklemediği bir Python ile başlatılırsa uygulama bunu bildirir ve bilgisayarda bulunan desteklenen bir Python ile yeniden başlatmayı önerir.
 
 > Başlıkta **Oyuncu** rozeti gösteriliyor. Libmpv veya python-mpv eksik olduğunda, sol bölmede neyin eksik olduğu belirtilir ve **Oynatıcıyı yükle** seçeneği sunulur: Linux'ta pkexec (sonra `sudo -n`) aracılığıyla paket yöneticisini kullanır ve ikisi de çalışmadığında manuel komutu gösterir; Windows'ta geçerli kullanıcı için libmpv'yi indirmeden önce sorar (yaklaşık 32 MB).
 

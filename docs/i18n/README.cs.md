@@ -175,6 +175,7 @@ Krok za krokem, bez nutnosti příkazové řádky. Otestováno na čistém poč�
 ### Linux / macOS
 
 ```bash
+# Je potřeba Python 3.11 až 3.13 (PyTorch zatím nemá balíčky pro 3.14): v distribuci, kde je python3 verze 3.14, použijte v příkazech níže python3.13
 # Klonujte repo
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Při prvním spuštění GUI detekuje všechny chybějící balíčky (faster-whisper, Demucs, Edge-TTS atd.) a automaticky je nainstaluje, přičemž výstup streamuje do okna protokolu. ffmpeg se také instaluje automaticky přes `apt-get` / `dnf` / `pacman` (Linux) nebo stahuje z GitHubu (Windows).
+> Při prvním spuštění GUI detekuje všechny chybějící balíčky (faster-whisper, Demucs, Edge-TTS atd.) a automaticky je nainstaluje, přičemž výstup streamuje do okna protokolu. ffmpeg se také instaluje automaticky přes `apt-get` / `dnf` / `pacman` (Linux) nebo stahuje z GitHubu (Windows). Spuštěna s Pythonem, který PyTorch nepodporuje, aplikace to oznámí a nabídne restart s podporovaným Pythonem nalezeným v počítači.
 
 > V záhlaví je odznak **Hráč**. Když chybí libmpv nebo python-mpv, v levém podokně je napsáno, co chybí, a nabízí se **Instalovat přehrávač**: v Linuxu používá správce balíčků přes pkexec (pak `sudo -n`) a zobrazuje ruční příkaz, když nefunguje ani jeden; ve Windows se zeptá před stažením libmpv pro aktuálního uživatele (asi 32 MB).
 

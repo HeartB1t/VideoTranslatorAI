@@ -175,6 +175,7 @@ Từng bước một, không cần dòng lệnh. Đã được thử nghiệm tr
 ### Linux/macOS
 
 ```bash
+# Cần Python 3.11 đến 3.13 (PyTorch chưa có gói cho 3.14): trên bản phân phối có python3 là 3.14, hãy dùng python3.13 trong các lệnh bên dưới
 # Sao chép kho lưu trữ
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Trong lần khởi chạy đầu tiên, GUI sẽ phát hiện mọi gói bị thiếu (faster-whisper, Demucs, Edge-TTS, v.v.) và tự động cài đặt chúng, truyền dữ liệu đầu ra tới cửa sổ nhật ký. ffmpeg cũng được cài đặt tự động thông qua `apt-get`/`dnf`/`pacman` (Linux) hoặc tải xuống từ GitHub (Windows).
+> Trong lần khởi chạy đầu tiên, GUI sẽ phát hiện mọi gói bị thiếu (faster-whisper, Demucs, Edge-TTS, v.v.) và tự động cài đặt chúng, truyền dữ liệu đầu ra tới cửa sổ nhật ký. ffmpeg cũng được cài đặt tự động thông qua `apt-get`/`dnf`/`pacman` (Linux) hoặc tải xuống từ GitHub (Windows). Nếu được khởi động bằng một Python mà PyTorch không hỗ trợ, ứng dụng sẽ báo và đề nghị khởi động lại bằng một Python được hỗ trợ tìm thấy trên máy.
 
 > Tiêu đề hiển thị huy hiệu **Người chơi**. Khi thiếu libmpv hoặc python-mpv, khung bên trái sẽ cho biết nội dung còn thiếu và cung cấp **Cài đặt trình phát**: trên Linux, nó sử dụng trình quản lý gói thông qua pkexec (sau đó là `sudo -n`) và hiển thị lệnh thủ công khi cả hai đều không hoạt động; trên Windows nó hỏi trước khi tải xuống libmpv cho người dùng hiện tại (khoảng 32 MB).
 

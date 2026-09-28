@@ -175,6 +175,7 @@ Langkah demi langkah, tanpa perlu baris perintah. Diuji pada PC Windows 11 yang 
 ### Linux/macOS
 
 ```bash
+# Diperlukan Python 3.11 sampai 3.13 (PyTorch belum punya paket untuk 3.14): pada distribusi yang python3-nya 3.14, gunakan python3.13 pada perintah di bawah
 # Kloning reponya
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Pada peluncuran pertama GUI mendeteksi paket yang hilang (faster-whisper, Demucs, Edge-TTS, dll.) dan menginstalnya secara otomatis, mengalirkan output ke jendela log. ffmpeg juga diinstal secara otomatis melalui `apt-get` / `dnf` / `pacman` (Linux) atau diunduh dari GitHub (Windows).
+> Pada peluncuran pertama GUI mendeteksi paket yang hilang (faster-whisper, Demucs, Edge-TTS, dll.) dan menginstalnya secara otomatis, mengalirkan output ke jendela log. ffmpeg juga diinstal secara otomatis melalui `apt-get` / `dnf` / `pacman` (Linux) atau diunduh dari GitHub (Windows). Jika dijalankan dengan Python yang tidak didukung PyTorch, aplikasi memberi tahu dan menawarkan mulai ulang dengan Python yang didukung yang ditemukan di PC.
 
 > Header menunjukkan lencana **Pemain**. Ketika libmpv atau python-mpv tidak ada, panel kiri menunjukkan apa yang hilang dan menawarkan **Instal pemutar**: di Linux ia menggunakan manajer paket melalui pkexec (kemudian `sudo -n`) dan menampilkan perintah manual ketika tidak ada yang berfungsi; di Windows ia menanyakan sebelum mengunduh libmpv untuk pengguna saat ini (sekitar 32 MB).
 

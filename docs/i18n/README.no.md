@@ -175,6 +175,7 @@ Trinn for trinn, ingen kommandolinje nødvendig. Testet på en ren Windows 11-PC
 ### Linux / macOS
 
 ```bash
+# Python 3.11 til 3.13 kreves (PyTorch har ennå ingen pakker for 3.14): på en distribusjon der python3 er 3.14, bruk python3.13 i kommandoene nedenfor
 # Klone repoen
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Ved første oppstart oppdager GUI eventuelle manglende pakker (faster-whisper, Demucs, Edge-TTS, etc.) og installerer dem automatisk, og strømmer utdataene til loggvinduet. ffmpeg installeres også automatisk via `apt-get` / `dnf` / `pacman` (Linux) eller lastet ned fra GitHub (Windows).
+> Ved første oppstart oppdager GUI eventuelle manglende pakker (faster-whisper, Demucs, Edge-TTS, etc.) og installerer dem automatisk, og strømmer utdataene til loggvinduet. ffmpeg installeres også automatisk via `apt-get` / `dnf` / `pacman` (Linux) eller lastet ned fra GitHub (Windows). Startes den med en Python som PyTorch ikke støtter, sier appen fra og tilbyr omstart med en støttet Python funnet på PC-en.
 
 > Overskriften viser et **Spiller**-merke. Når libmpv eller python-mpv mangler, sier den venstre ruten hva som mangler og tilbyr **Installer spiller**: på Linux bruker den pakkebehandlingen gjennom pkexec (deretter `sudo -n`) og viser den manuelle kommandoen når ingen av dem fungerer; på Windows spør den før nedlasting av libmpv for gjeldende bruker (ca. 32 MB).
 

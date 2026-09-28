@@ -175,6 +175,7 @@ Schritt für Schritt, ohne Kommandozeile. Getestet auf einem sauberen Windows 11
 ### Linux / macOS
 
 ```bash
+# Python 3.11 bis 3.13 nötig (PyTorch hat noch keine Pakete für 3.14): auf einer Distribution mit python3 = 3.14 in den Befehlen unten python3.13 verwenden
 # Klonen Sie das Repo
 git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
@@ -201,7 +202,7 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
-> Beim ersten Start erkennt die GUI fehlende Pakete (faster-whisper, Demucs, Edge-TTS usw.), installiert sie automatisch und streamt die Ausgabe an das Protokollfenster. ffmpeg wird auch automatisch über `apt-get` / `dnf` / `pacman` (Linux) installiert oder von GitHub (Windows) heruntergeladen.
+> Beim ersten Start erkennt die GUI fehlende Pakete (faster-whisper, Demucs, Edge-TTS usw.), installiert sie automatisch und streamt die Ausgabe an das Protokollfenster. ffmpeg wird auch automatisch über `apt-get` / `dnf` / `pacman` (Linux) installiert oder von GitHub (Windows) heruntergeladen. Wird sie mit einem Python gestartet, das PyTorch nicht unterstützt, sagt die App das und bietet den Neustart mit einem unterstützten Python vom PC an.
 
 > Die Kopfzeile zeigt ein **Spieler**-Abzeichen. Wenn libmpv oder python-mpv fehlt, wird im linken Bereich angezeigt, was fehlt, und es wird **Install Player** angeboten: Unter Linux wird der Paketmanager über pkexec (dann `sudo -n`) verwendet und der manuelle Befehl angezeigt, wenn keiner von beiden funktioniert. Unter Windows wird vor dem Herunterladen von libmpv nach dem aktuellen Benutzer gefragt (ca. 32 MB).
 
