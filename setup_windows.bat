@@ -456,42 +456,42 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
 
 set "Q_TTS="
 set /p "Q_TTS=Remove TTS group (coqui-tts, transformers) ? [Y/N]: "
-if /i "!Q_TTS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y coqui-tts transformers
+if /i "!Q_TTS!"=="Y" call :pip_remove coqui-tts transformers
 if /i "!Q_TTS!"=="Y" call :logfile "Custom uninstall: pip uninstall coqui-tts transformers - code !ERRORLEVEL!"
 
 set "Q_TORCH="
 set /p "Q_TORCH=Remove PyTorch stack (torch, torchaudio, torchvision, torchcodec) ? [Y/N]: "
-if /i "!Q_TORCH!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y torch torchaudio torchvision torchcodec
+if /i "!Q_TORCH!"=="Y" call :pip_remove torch torchaudio torchvision torchcodec
 if /i "!Q_TORCH!"=="Y" call :logfile "Custom uninstall: pip uninstall torch torchaudio torchvision torchcodec - code !ERRORLEVEL!"
 
 set "Q_WHI="
 set /p "Q_WHI=Remove Whisper + ctranslate2 ? [Y/N]: "
-if /i "!Q_WHI!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y faster-whisper ctranslate2
+if /i "!Q_WHI!"=="Y" call :pip_remove faster-whisper ctranslate2
 if /i "!Q_WHI!"=="Y" call :logfile "Custom uninstall: pip uninstall faster-whisper ctranslate2 - code !ERRORLEVEL!"
 
 set "Q_DEM="
 set /p "Q_DEM=Remove Demucs ? [Y/N]: "
-if /i "!Q_DEM!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y demucs
+if /i "!Q_DEM!"=="Y" call :pip_remove demucs
 if /i "!Q_DEM!"=="Y" call :logfile "Custom uninstall: pip uninstall demucs - code !ERRORLEVEL!"
 
 set "Q_W2L="
 set /p "Q_W2L=Remove Wav2Lip deps (new-basicsr/basicsr, facexlib, dlib) ? [Y/N]: "
-if /i "!Q_W2L!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y new-basicsr basicsr facexlib dlib
-if /i "!Q_W2L!"=="Y" call :logfile "Custom uninstall: pip uninstall new-basicsr basicsr facexlib dlib - code !ERRORLEVEL!"
+if /i "!Q_W2L!"=="Y" call :pip_remove new-basicsr basicsr facexlib dlib dlib-bin
+if /i "!Q_W2L!"=="Y" call :logfile "Custom uninstall: pip uninstall new-basicsr basicsr facexlib dlib dlib-bin - code !ERRORLEVEL!"
 
 set "Q_PYA="
 set /p "Q_PYA=Remove pyannote.audio (speaker diarization) ? [Y/N]: "
-if /i "!Q_PYA!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y pyannote.audio
+if /i "!Q_PYA!"=="Y" call :pip_remove pyannote.audio
 if /i "!Q_PYA!"=="Y" call :logfile "Custom uninstall: pip uninstall pyannote.audio - code !ERRORLEVEL!"
 
 set "Q_MIS="
 set /p "Q_MIS=Remove pipeline utilities (yt-dlp, edge-tts, deep-translator, pydub, pyloudnorm, soundfile, sacremoses, sentencepiece) ? [Y/N]: "
-if /i "!Q_MIS!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
+if /i "!Q_MIS!"=="Y" call :pip_remove yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
 if /i "!Q_MIS!"=="Y" call :logfile "Custom uninstall: pip uninstall yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece - code !ERRORLEVEL!"
 
 set "Q_MPV="
 set /p "Q_MPV=Remove the integrated video player package (mpv / python-mpv) ? [Y/N]: "
-if /i "!Q_MPV!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y mpv python-mpv
+if /i "!Q_MPV!"=="Y" call :pip_remove mpv python-mpv
 if /i "!Q_MPV!"=="Y" call :logfile "Custom uninstall: pip uninstall mpv python-mpv - code !ERRORLEVEL!"
 
 :uninst_custom_tools
@@ -1928,7 +1928,7 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
 :: Bug C fix: silero-vad, keyring and dlib-bin are installed by
 :: :step_install_deps / :step_wav2lip but were missing here, leaving stale
 :: packages after a "Remove all Python AI packages" uninstall.
-"%PYTHON_EXE%" -m pip uninstall -y ^
+call :pip_remove ^
     coqui-tts transformers ^
     torch torchaudio torchvision torchcodec ^
     faster-whisper ctranslate2 ^
@@ -1937,10 +1937,19 @@ if not defined PYTHON_EXE set "PYTHON_EXE=python"
     pyannote.audio ^
     silero-vad keyring ^
     mpv python-mpv ^
-    yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece 2>nul
+    yt-dlp edge-tts deep-translator pydub pyloudnorm soundfile sacremoses sentencepiece
 call :logfile "Remove Python AI packages: pip uninstall finished, code %ERRORLEVEL%"
 echo  [+] Done.
 exit /b 0
+
+:: %* = distributions to remove. Only the installed ones reach pip: the
+:: lists keep legacy names (basicsr, python-mpv, dlib-bin) and pip printed
+:: "WARNING: Skipping basicsr as it is not installed" for each missing one.
+:: Names compare as pip normalizes them. ERRORLEVEL is pip's exit code, 0
+:: when none of them is installed.
+:pip_remove
+"%PYTHON_EXE%" -c "import re, subprocess, sys; from importlib import metadata; norm = lambda name: re.sub(r'[-_.]+', '-', name).lower(); have = {norm(dist.metadata.get('Name') or '') for dist in metadata.distributions()}; present = [name for name in sys.argv[1:] if norm(name) in have]; sys.exit(subprocess.call([sys.executable, '-m', 'pip', 'uninstall', '-y', *present]) if present else 0)" %*
+exit /b
 
 :remove_python
 echo  [*] Uninstalling Python 3.11 ...

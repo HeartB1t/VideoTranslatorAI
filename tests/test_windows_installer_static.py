@@ -183,8 +183,24 @@ class WindowsInstallerStaticTests(unittest.TestCase):
     def test_both_uninstall_lists_remove_python_mpv(self):
         # Full list: right before its last line; custom menu: its own prompt.
         self.assertIn("    mpv python-mpv ^\n    yt-dlp edge-tts deep-translator pydub pyloudnorm "
-                      "soundfile sacremoses sentencepiece 2>nul", self.flat)
-        self.assertIn('if /i "!Q_MPV!"=="Y" "%PYTHON_EXE%" -m pip uninstall -y mpv python-mpv', self.text)
+                      "soundfile sacremoses sentencepiece\n", self.flat)
+        self.assertIn('if /i "!Q_MPV!"=="Y" call :pip_remove mpv python-mpv', self.text)
+
+    def test_pip_is_asked_to_remove_only_installed_packages(self):
+        # The lists keep legacy names (basicsr, python-mpv, dlib-bin): pip printed
+        # "WARNING: Skipping basicsr as it is not installed" for each missing one.
+        self.assertNotIn("-m pip uninstall", self.text)
+        body = self._label_body("pip_remove", "exit /b")
+        self.assertIn("metadata.distributions()", body)
+        self.assertIn("re.sub(r'[-_.]+', '-', name).lower()", body)  # pip's name normalization
+        self.assertIn("'-m', 'pip', 'uninstall', '-y', *present", body)
+        self.assertTrue(body.rstrip().endswith("%*"))
+        full = self._label_body("remove_python_packages_all", "exit /b 0")
+        self.assertIn("call :pip_remove ^", full)
+        self.assertNotIn("2>nul\n", full[full.index("call :pip_remove"):])  # real pip errors stay visible
+        # the custom Wav2Lip entry removes the same packages as the full list
+        self.assertIn('if /i "!Q_W2L!"=="Y" call :pip_remove new-basicsr basicsr facexlib dlib dlib-bin\n', self.flat)
+        self.assertIn("new-basicsr basicsr facexlib dlib dlib-bin ^", full)
 
     def test_per_user_cleanup_removes_every_app_folder_and_nothing_else(self):
         # The app's own per-user folders: config + logs (Roaming), data with the
