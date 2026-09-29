@@ -1218,5 +1218,28 @@ def _card_of(widget, pane):
     return w
 
 
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class DefaultRedirectGlobalTests(unittest.TestCase):
+    """The process-wide _DEFAULT_REDIRECT survives an older app's teardown."""
+
+    def test_closing_an_older_app_keeps_the_newer_apps_redirect(self):
+        # Regression: _DEFAULT_REDIRECT is a module global shared by every App.
+        # _remove_log_hooks used to clear it unconditionally, so an older app
+        # closing (late, from a worker) silenced a newer, live app: its print()
+        # output stopped reaching the log panel. This is what made a Windows CI
+        # test flaky/failing when it ran after other apps had been created.
+        with built_app({"ui_lang": "en"}) as (gui, older, _older_cfg):
+            self.assertIs(gui._DEFAULT_REDIRECT, older._own_default_redirect)
+            with built_app({"ui_lang": "en"}) as (_gui2, newer, _newer_cfg):
+                # the newer app now owns the shared global
+                self.assertIs(gui._DEFAULT_REDIRECT, newer._own_default_redirect)
+                # the older app tears down its hooks: it must NOT clear the
+                # newer app's live redirect
+                older._remove_log_hooks()
+                self.assertIs(gui._DEFAULT_REDIRECT, newer._own_default_redirect)
+            # once the owner (newer) is gone, the global is cleared
+            self.assertIsNone(gui._DEFAULT_REDIRECT)
+
+
 if __name__ == "__main__":
     unittest.main()

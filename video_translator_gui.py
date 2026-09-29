@@ -11292,7 +11292,8 @@ class App(tk.Tk):
         if self._log_hooks_installed:
             return
         self._log_hooks_installed = True
-        _DEFAULT_REDIRECT = _TkStreamRedirect(self, self._log_write)
+        self._own_default_redirect = _TkStreamRedirect(self, self._log_write)
+        _DEFAULT_REDIRECT = self._own_default_redirect
         self._saved_thread_excepthook = threading.excepthook
         threading.excepthook = self._log_thread_exception
         self._lib_log_handler = _LogPanelHandler(self)
@@ -11432,7 +11433,13 @@ class App(tk.Tk):
         if not self._log_hooks_installed:
             return
         self._log_hooks_installed = False
-        _DEFAULT_REDIRECT = None
+        # Clear the process-wide global only if it still points at THIS app's
+        # redirect. The global is shared across every App in the process, so a
+        # newer app may have installed its own since: tearing down an older app
+        # (or one closing late from a worker) must not silence a live one, which
+        # would drop its print() output. Same identity guard as the excepthook.
+        if _DEFAULT_REDIRECT is getattr(self, "_own_default_redirect", None):
+            _DEFAULT_REDIRECT = None
         if threading.excepthook == self._log_thread_exception:
             threading.excepthook = self._saved_thread_excepthook
         with contextlib.suppress(Exception):
