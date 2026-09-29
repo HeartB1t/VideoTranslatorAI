@@ -263,6 +263,10 @@ _MAX_CLIP_CACHE = 2000
 _ACTIVE_DUB = frozenset(("translated", "synth", "ready", "preloaded", "playing"))
 _SUB_MIN_DISPLAY_S = 1.5
 _CAPTION_CLEAR_TAIL_S = 0.3
+# Wall-clock bound for a pacer recovery that never reaches "playing": past it the
+# recovery (and the pacer waiting for it) is force-released, a backstop for any
+# path where the recovery clip can neither preload nor expire.
+_RECOVERY_ARM_TIMEOUT_S = 8.0
 
 
 class DubScheduler:
@@ -333,6 +337,7 @@ class DubScheduler:
         # Wall-clock (mono) bound of a recovery clip: with the picture held the
         # media clock is frozen, so its end cannot be detected from media time.
         self._recovery_mono_end: float = 0.0
+        self._recovery_armed_mono: float = 0.0
         self._duck_target: float = 1.0
         self._margins: list[float] = []        # recent start margins for p90
         self._voiced = 0
@@ -432,20 +437,28 @@ class DubScheduler:
         if not on:
             if self._playing is not None or self._preloaded is not None:
                 actions.append(StopClip(0.18))
-            self._playing = self._preloaded = None
-            self._pacer_recovery_seg = None
-            self._held = None
-            self._clip_paused = False
+            self._abandon_clips()
+            # Dub off: _dub_actions no longer runs, so it can neither voice nor
+            # expire the queued lines, while drained() still reads their state.
+            # Drop every remaining active voice (never spoken) so it cannot orphan
+            # the auto-stop; done/dropped are kept and no counter changes. A late
+            # TTS result for a dropped seg_id is discarded by clip_ready's state
+            # guard. set_dub(True) re-arms the ones still in time.
+            for seg_id in [sid for sid, st in self._dub_state.items()
+                           if st in _ACTIVE_DUB]:
+                self._dub_state.pop(seg_id, None)
             if self._duck_target != 1.0:
                 self._duck_target = 1.0
                 actions.append(Duck(1.0))
             return actions
         # Only sentences that can still be voiced: past ones would expire at once
-        # and be counted as lost voice lines that were never really missed.
+        # and be counted as lost voice lines that were never really missed. A
+        # cached clip re-arms as "ready" (no second TTS request), like on_seek.
         for seg in self._segments.values():
             if (self._dub_eligible(seg) and seg.seg_id not in self._dub_state
                     and self._still_voiceable(seg, self._last_now)):
-                self._dub_state[seg.seg_id] = "translated"
+                self._dub_state[seg.seg_id] = (
+                    "ready" if seg.seg_id in self._clips else "translated")
         return actions
 
     def _finish_playing(self) -> None:
@@ -477,15 +490,38 @@ class DubScheduler:
             self._dub_state.get(s.seg_id) in ("ready", "preloaded")
             and 0.0 <= s.start - now <= 0.6 for s in self._segments.values())
 
+    def _abandon_clips(self) -> None:
+        """Clear the clip pointers and finalize their segments' dub state.
+
+        A seek, an epoch change or dub-off abandons the clip in flight and clears
+        the pointers; without finalizing the per-segment state a "playing" segment
+        would orphan in an active dub state. No _dub_actions loop reaches a
+        "playing" state once _playing is None (the only "playing" -> "done"
+        transition needs _playing to point at it), so drained() would stay false
+        forever (the intermittent auto-stop hang after a seek past a speaking
+        clip). The interrupted "playing" clip has already been spoken -> "done"
+        (the voiced count stays). A "preloaded" or held clip was never spoken:
+        drop it from the dub state (not "done", so it is not counted spoken, and
+        not left active, which would orphan drained() at dub-off where
+        _dub_actions no longer runs). on_seek and set_dub(True) re-arm it if it
+        is still in time.
+        """
+        if self._playing is not None and self._dub_state.get(self._playing) == "playing":
+            self._dub_state[self._playing] = "done"
+        for seg_id in (self._preloaded, self._held):
+            if seg_id is not None and self._dub_state.get(seg_id) in _ACTIVE_DUB:
+                self._dub_state.pop(seg_id, None)
+        self._playing = self._preloaded = None
+        self._pacer_recovery_seg = None
+        self._held = None
+        self._clip_paused = False
+
     def _dub_reset(self) -> list[object]:
         """Stop any clip and unduck (epoch change / seek)."""
         actions: list[object] = []
         if self._playing is not None or self._preloaded is not None:
             actions.append(StopClip(0.0))
-        self._playing = self._preloaded = None
-        self._pacer_recovery_seg = None
-        self._held = None
-        self._clip_paused = False
+        self._abandon_clips()
         if self._duck_target != 1.0:
             self._duck_target = 1.0
             actions.append(Duck(1.0))
@@ -543,6 +579,21 @@ class DubScheduler:
                      pacer_paused: bool = False) -> list[object]:
         actions: list[object] = []
         live = self._mode == "live"
+        # Safety net: a recovery armed but never reaching "playing" (a lost
+        # preload/expire path) must not pin the pacer forever. Past a wall-clock
+        # bound, release it so _run_pacer can resume and the session can drain.
+        if (self._pacer_recovery_seg is not None
+                and self._pacer_recovery_seg != self._playing
+                and mono - self._recovery_armed_mono > _RECOVERY_ARM_TIMEOUT_S):
+            rec = self._pacer_recovery_seg
+            self._pacer_recovery_seg = None
+            if self._preloaded == rec:
+                self._preloaded = None
+                actions.append(StopClip(0.0))
+            if self._dub_state.get(rec) in _ACTIVE_DUB:
+                self._dub_state[rec] = "dropped"
+                self._dub_dropped += 1
+                actions.append(Drop(rec, "late"))
         # Pause/resume the playing clip with the main transport, then detect end.
         if self._playing is not None:
             recovery_playing = (self._playing == self._pacer_recovery_seg
@@ -626,6 +677,17 @@ class DubScheduler:
                 if recover_late:
                     if self._pacer_recovery_seg is None:
                         self._pacer_recovery_seg = seg.seg_id
+                        self._recovery_armed_mono = mono
+                    if (self._preloaded is not None
+                            and self._preloaded != self._pacer_recovery_seg):
+                        # The device holds a later clip that can neither start
+                        # (picture held, not the recovery) nor expire (clock
+                        # frozen), so the recovery could never preload and the
+                        # pacer would wait for it forever: unload it (it stays
+                        # "ready" and preloads again after the recovery).
+                        self._dub_state[self._preloaded] = "ready"
+                        self._preloaded = None
+                        actions.append(StopClip(0.0))
                     continue
                 if self._preloaded == seg.seg_id:
                     # The clip was loaded into the voice device: stop it so the
@@ -638,6 +700,13 @@ class DubScheduler:
                 self._dub_dropped += 1
                 if self._held == seg.seg_id:
                     self._held = None
+                if self._pacer_recovery_seg == seg.seg_id:
+                    # A clip armed for pacer recovery then dropped (the hold
+                    # ended: user pause, another clip started, pacer resumed)
+                    # must release the recovery pointer, or drained() stays false
+                    # and _run_pacer stays blocked (pacer_recovery_pending) for
+                    # the rest of the session.
+                    self._pacer_recovery_seg = None
         # Preload the next ready clip when the voice device is free.
         if voice_state == "idle" and self._preloaded is None and self._playing is None:
             cand = self._next_ready(now, pacer_paused)
@@ -878,10 +947,11 @@ class DubScheduler:
 
         Used by the soft auto-stop at end of source: True only when no clip is
         playing, preloaded, held or in pacer recovery, no dubbed line is still
-        translating/synthesizing/ready, and every caption's spoken span has
-        already elapsed (``seg.end <= now``). ``now`` is None (invalid clock)
-        is never drained. The dub, which finishes last, is the gate that keeps
-        a stop from cutting queued voice lines short.
+        translating/synthesizing/ready, and every caption's display window has
+        already elapsed (``now`` past ``_clear_time``, so the last subtitle kept
+        its ``_SUB_MIN_DISPLAY_S`` minimum before the stop clears the overlay).
+        ``now`` is None (invalid clock) is never drained. The dub, which finishes
+        last, is the gate that keeps a stop from cutting queued voice lines short.
         """
         if now is None:
             return False
@@ -889,9 +959,9 @@ class DubScheduler:
                 or self._held is not None or self._pacer_recovery_seg is not None):
             return False
         for seg in self._segments.values():
-            if self._dub_state.get(seg.seg_id) in _ACTIVE_DUB:
+            if self._dub and self._dub_state.get(seg.seg_id) in _ACTIVE_DUB:
                 return False
-            if self._subs and self._caption_ready(seg) and seg.end > now:
+            if self._subs and self._caption_ready(seg) and self._clear_time(seg) > now:
                 return False
         return True
 
@@ -951,6 +1021,8 @@ class DubScheduler:
             if seg.end < now and seg.seg_id not in self._dropped:
                 self._dropped.add(seg.seg_id)
                 actions.append(Drop(seg.seg_id, "late"))
+                if self._pacer_recovery_seg == seg.seg_id:
+                    self._pacer_recovery_seg = None
         if self._shown is not None and self._shown[0] in self._dropped:
             self._shown = None
             actions.append(ClearSubtitle())

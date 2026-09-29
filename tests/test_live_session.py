@@ -140,6 +140,20 @@ class _FakeClockView:
         return self.media
 
 
+class _EofClockView:
+    """Media clock that advances while playing, then freezes on the last frame
+    (or reports an invalid position, None) at EOF, like _MediaClock past end of
+    file. Set ``media`` to advance/freeze it and ``invalid`` to make it None.
+    """
+    def __init__(self, media=0.0):
+        self.media = media
+        self.invalid = False
+        self.epoch = 0
+
+    def now(self, _mono):
+        return None if self.invalid else self.media
+
+
 def _factories():
     noop = lambda *a, **k: None
     return LiveFactories(decoder=noop, vad=noop, whisper=noop, translator=noop,
@@ -1561,6 +1575,156 @@ class SchedulerDrainedTests(unittest.TestCase):
             sched.tick(now, main_running=True, voice_state="idle")
         self.assertTrue(sched.drained(9.0))
 
+    _ACTIVE = ("translated", "synth", "ready", "preloaded", "playing")
+
+    def _play_a_clip(self, sched):
+        """Drive one segment to a playing clip (returns its seg_id)."""
+        seg = LiveSegment(1, 0, 1.0, 3.0, "hi", text_tgt="ciao", dub_ok=True)
+        clip = SimpleNamespace(path="/tmp/x.wav", audible_s=0.5, voice_start_s=0.0)
+        sched.upsert(seg)                            # -> translated
+        sched.tick(0.5, voice_state="idle")          # -> requests TTS (synth)
+        sched.clip_ready(1, 0, clip)                 # -> ready
+        sched.tick(1.0, voice_state="idle")          # -> preloaded
+        sched.tick(1.2, voice_state="preloaded")     # -> playing
+        self.assertEqual(sched._dub_state[1], "playing")
+        return 1
+
+    def test_seek_past_a_playing_line_does_not_orphan_it(self):
+        # A forward seek past a clip that is playing must not leave the segment in
+        # a "playing" dub state after _dub_reset clears the _playing pointer: no
+        # drop loop handles that state, so drained() would hang forever (the
+        # intermittent field bug after a seek toward the end). Both a within
+        # coverage seek (restart False) and a decoder restart (restart True).
+        for restart in (False, True):
+            with self.subTest(restart=restart):
+                sched = self._sched(dub=True, subs=False)
+                self._play_a_clip(sched)
+                sched.on_seek(10.0, 1, restart=restart)   # forward seek past the line
+                sched.tick(10.0, voice_state="idle")
+                self.assertNotIn(sched._dub_state.get(1), self._ACTIVE)
+                self.assertTrue(sched.drained(10.0))
+
+    def test_seek_past_a_preloaded_line_resolves_it(self):
+        # A preloaded clip whose pointer is cleared must not orphan either: it
+        # becomes "ready" and the normal late-drop path resolves it.
+        sched = self._sched(dub=True, subs=False)
+        seg = LiveSegment(1, 0, 1.0, 3.0, "hi", text_tgt="ciao", dub_ok=True)
+        clip = SimpleNamespace(path="/tmp/x.wav", audible_s=0.5, voice_start_s=0.0)
+        sched.upsert(seg)
+        sched.tick(0.5, voice_state="idle")
+        sched.clip_ready(1, 0, clip)
+        sched.tick(1.0, voice_state="idle")          # -> preloaded
+        self.assertEqual(sched._dub_state[1], "preloaded")
+        sched.on_seek(10.0, 0)                        # forward seek past it
+        sched.tick(10.0, voice_state="idle")          # late-drop resolves the "ready"
+        self.assertNotIn(sched._dub_state.get(1), self._ACTIVE)
+        self.assertTrue(sched.drained(10.0))
+
+    def test_dub_off_while_playing_does_not_orphan_the_line(self):
+        # The same orphan via set_dub(False): drained() checks dub states even
+        # when dub is off, so turning it off mid-clip must resolve the line.
+        sched = self._sched(dub=True, subs=False)
+        self._play_a_clip(sched)
+        sched.set_dub(False)                          # user disables dub mid-clip
+        self.assertTrue(sched.drained(5.0))
+
+    def test_dub_off_with_queued_voices_drains_at_end(self):
+        # Dub off must leave no active voice: a playing clip, a ready line and a
+        # synth line in flight. _dub_actions no longer runs at dub off, so any
+        # active state would orphan drained() at end of source.
+        sched = self._sched(dub=True, subs=False)
+        self._play_a_clip(sched)                      # seg 1 -> playing
+        sched.upsert(LiveSegment(2, 0, 5.0, 7.0, "b", text_tgt="bb", dub_ok=True))
+        sched.upsert(LiveSegment(3, 0, 9.0, 11.0, "c", text_tgt="cc", dub_ok=True))
+        sched._dub_state[2] = "ready"
+        sched._clips[2] = SimpleNamespace(path="/y.wav", audible_s=0.5, voice_start_s=0.0)
+        sched._dub_state[3] = "synth"
+        sched.set_dub(False)
+        self.assertEqual(sched._dub_state.get(1), "done")   # spoken clip kept
+        self.assertNotIn(sched._dub_state.get(2), self._ACTIVE)
+        self.assertNotIn(sched._dub_state.get(3), self._ACTIVE)
+        self.assertTrue(sched.drained(20.0))
+
+    def test_dub_off_then_on_re_arms_future_lines_only(self):
+        # Re-enabling dub re-arms only the lines still in time: a cached one as
+        # "ready" (no second TTS request), a past one not at all. Counters intact.
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(2, 0, 20.0, 22.0, "b", text_tgt="bb", dub_ok=True))
+        sched.upsert(LiveSegment(3, 0, 1.0, 3.0, "c", text_tgt="cc", dub_ok=True))
+        sched._dub_state[2] = "ready"
+        sched._clips[2] = SimpleNamespace(path="/y.wav", audible_s=0.5, voice_start_s=0.0)
+        sched._dub_state[3] = "ready"
+        sched._last_now = 10.0
+        voiced0, dropped0 = sched.metrics()["voiced"], sched.metrics()["dropped"]
+        sched.set_dub(False)
+        sched.set_dub(True)
+        self.assertEqual(sched._dub_state.get(2), "ready")  # cached -> ready, no re-request
+        self.assertNotIn(3, sched._dub_state)               # past -> not re-armed
+        self.assertEqual(sched.metrics()["voiced"], voiced0)
+        self.assertEqual(sched.metrics()["dropped"], dropped0)
+
+    def test_late_tts_result_after_dub_off_is_discarded(self):
+        # A TTS result that lands after the line was dropped at dub off must be
+        # discarded by clip_ready's state guard, with no error and no state.
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="aa", dub_ok=True))
+        sched._dub_state[1] = "synth"
+        sched.set_dub(False)
+        self.assertNotIn(1, sched._dub_state)
+        accepted = sched.clip_ready(1, 0, SimpleNamespace(path="/z.wav",
+                                                          audible_s=0.5, voice_start_s=0.0))
+        self.assertFalse(accepted)
+        self.assertNotIn(sched._dub_state.get(1), self._ACTIVE)
+
+    def test_recovery_armed_unloads_a_blocking_preloaded_clip(self):
+        # Delayed-mode recovery deadlock: R is late (recovery) but the device
+        # holds a later clip X (preloaded) that can neither start (picture held)
+        # nor expire (clock frozen). Arming the recovery must unload X so R can
+        # preload, or the pacer waits for R forever.
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "r", text_tgt="rr", dub_ok=True))
+        sched.upsert(LiveSegment(2, 0, 3.0, 4.0, "x", text_tgt="xx", dub_ok=True))
+        sched._clips[1] = SimpleNamespace(path="/r.wav", audible_s=1.5, voice_start_s=0.0)
+        sched._clips[2] = SimpleNamespace(path="/x.wav", audible_s=0.5, voice_start_s=0.0)
+        sched._dub_state[1] = "ready"          # R late, waiting
+        sched._dub_state[2] = "preloaded"      # X loaded in the device
+        sched._preloaded = 2
+        sched.tick(3.5, voice_state="preloaded", pacer_paused=True)
+        self.assertEqual(sched._pacer_recovery_seg, 1)   # R armed for recovery
+        self.assertNotEqual(sched._preloaded, 2)         # X unloaded
+        self.assertEqual(sched._dub_state[2], "ready")   # X back to ready (re-preloads)
+
+    def test_recovery_never_playing_is_released_by_the_wall_clock(self):
+        # Backstop: a recovery that never reaches "playing" (a lost preload/expire
+        # path) is released past a wall-clock bound, so the pacer does not hang.
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "r", text_tgt="rr", dub_ok=True))
+        sched._clips[1] = SimpleNamespace(path="/r.wav", audible_s=1.5, voice_start_s=0.0)
+        sched._dub_state[1] = "ready"
+        sched.tick(3.5, mono=100.0, voice_state="idle", pacer_paused=True)   # arm R
+        self.assertEqual(sched._pacer_recovery_seg, 1)
+        sched.tick(3.5, mono=109.0, voice_state="idle", pacer_paused=True)   # bound passed
+        self.assertIsNone(sched._pacer_recovery_seg)
+        self.assertFalse(sched.pacer_recovery_pending)
+        self.assertTrue(sched.drained(20.0))
+
+    def test_pacer_recovery_then_drop_clears_the_pointer(self):
+        # A clip armed for pacer recovery then dropped must release the recovery
+        # pointer, or drained() stays false and the pacer stays blocked (
+        # pacer_recovery_pending) for the whole session.
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="aa", dub_ok=True))
+        sched._dub_state[1] = "ready"
+        sched._clips[1] = SimpleNamespace(path="/x.wav", audible_s=0.5, voice_start_s=0.0)
+        sched.tick(2.0, voice_state="idle", pacer_paused=True)    # armed for recovery
+        self.assertEqual(sched._pacer_recovery_seg, 1)
+        self.assertTrue(sched.pacer_recovery_pending)
+        sched.tick(2.5, voice_state="idle", pacer_paused=False)   # hold ended -> dropped
+        self.assertEqual(sched._dub_state[1], "dropped")
+        self.assertIsNone(sched._pacer_recovery_seg)
+        self.assertFalse(sched.pacer_recovery_pending)
+        self.assertTrue(sched.drained(5.0))
+
 
 class LiveSessionAutoStopTests(unittest.TestCase):
     """Soft auto-stop: a finished source with an empty queue ends by itself."""
@@ -1575,6 +1739,7 @@ class LiveSessionAutoStopTests(unittest.TestCase):
             self.assertNotEqual(sess.status().state, "ended")
             self.assertFalse(sess._stop.is_set())
             sess._clock_view.media = 4.0               # picture reached the end
+            sess._media_eof = True                     # mpv reports eof-reached
             sess._tick_once(1.0)
             self.assertEqual(sess.status().state, "ended")
             self.assertTrue(sess._stop.is_set())
@@ -1600,9 +1765,283 @@ class LiveSessionAutoStopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             sess, _, _ = _session(tmp, media=4.0)
             sess._source_done = True
+            sess._media_eof = True                     # at EOF, but a clip is playing
             sess._voice_state = "playing"              # dubbing not finished yet
             sess._tick_once(0.0)
             self.assertNotEqual(sess.status().state, "ended")
+
+    # -- end-of-source clock: the real bug and its guards -------------------
+    #
+    # The field bug: at EOF the picture freezes on the last frame, so the media
+    # clock stops advancing (frozen last PTS) or reports None. The drain must
+    # not depend on it, or the session never auto-stops. These tests drive a
+    # clock that freezes/goes None at EOF (they do NOT push the clock past the
+    # caption to fake the gate) and check that the stop still fires, after the
+    # caption's display window, without truncating anything.
+
+    def _eof_session(self, tmp, **overrides):
+        sess, _, _ = _session(tmp, media=1.5, overrides=overrides or None)
+        clock = _EofClockView(1.5)
+        sess._clock_view = clock
+        sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+        sess._tick_once(0.0)                    # caption shown, arrival 1.5
+        clock.media = 2.98                      # picture advances to just before end
+        sess._tick_once(1.48)
+        sess._media_eof = True                  # mpv reports eof-reached (last frame)
+        return sess, clock
+
+    def test_frozen_clock_at_eof_still_ends_after_the_window(self):
+        # Last PTS freezes just before the caption end (seg.end > frozen now),
+        # so without the fix drained() stays False forever and the session hangs.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._eof_session(tmp)
+            sess._source_done = True
+            sess._tick_once(1.6)                # frozen; still inside the window
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+            sess._tick_once(2.4)                # wall clock past the window
+            self.assertEqual(sess.status().state, "ended")
+            self.assertTrue(sess._stop.is_set())
+
+    def test_invalid_none_clock_at_eof_still_ends(self):
+        # mpv can report an invalid position (None) at EOF; drained(None) is
+        # never True, so without the fix the session hangs. The wall clock seeded
+        # from the last real media position must still drain it.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._eof_session(tmp)
+            sess._source_done = True
+            clock.invalid = True                # now() -> None from here on
+            sess._tick_once(1.6)
+            self.assertNotEqual(sess.status().state, "ended")
+            sess._tick_once(2.4)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_frozen_clock_waits_for_the_caption_display_window(self):
+        # The last PTS freezes exactly at seg.end: the old seg.end gate would
+        # stop at once and the teardown would clear the subtitle before its
+        # _SUB_MIN_DISPLAY_S. The drain must wait for the full display window.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)                # arrival 1.5 -> clear_time 3.3
+            clock.media = 3.0                   # picture reaches exactly the end
+            sess._tick_once(1.5)
+            sess._source_done = True
+            sess._media_eof = True              # mpv reports eof-reached
+            sess._tick_once(1.6)                # frozen at 3.0, window not over
+            self.assertNotEqual(sess.status().state, "ended")
+            sess._tick_once(2.0)                # wall clock past clear_time 3.3
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_no_stop_while_source_not_done_even_with_a_frozen_clock(self):
+        # An unfinished (or endless) source never sets _source_done: the frozen
+        # clock and any amount of wall clock must not trigger the stop.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._eof_session(tmp)
+            for mono in (1.6, 2.4, 4.0, 8.0):
+                sess._tick_once(mono)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+
+    def test_voice_clip_blocks_the_stop_despite_the_wall_clock(self):
+        # A dubbed line still speaking must not be cut short by the wall-clock
+        # drain: the stop waits until the voice device is idle again.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._eof_session(tmp)
+            sess._source_done = True
+            sess._voice_state = "playing"       # a dub line is still speaking
+            for mono in (1.6, 2.4, 4.0, 8.0):   # wall clock well past the window
+                sess._tick_once(mono)
+            self.assertNotEqual(sess.status().state, "ended")
+            sess._voice_state = "idle"          # the dub finished speaking
+            for mono in (9.0, 9.5, 10.0):
+                sess._tick_once(mono)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_no_autostop_while_user_paused_mid_video(self):
+        # A VOD decoder runs far ahead of the picture, so _source_done is set
+        # early, with the video still playing. The user then pauses mid-video:
+        # the media clock freezes, but this is a PAUSE, not EOF. The wall-clock
+        # drain must not advance past the pending captions and stop during the
+        # pause (subs only: no dub line holds it). Guards the pause regression.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(_seg("uno", start=1.0, end=3.0))
+            sess.submit_segment(LiveSegment(2, 0, 7.0, 9.0, "two", text_tgt="due"))
+            sess._tick_once(0.0)
+            clock.media = 8.0                  # picture advanced to 8 s
+            sess._tick_once(1.0)
+            sess._source_done = True           # decoder finished early, picture at 8 s
+            sess._user_paused = True           # user pauses at 8 s (NOT eof)
+            for mono in (2.0, 5.0, 12.0, 30.0):   # long pause, lots of wall clock
+                sess._tick_once(mono)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+
+    def test_no_autostop_mid_video_past_last_caption_without_eof(self):
+        # The last caption ends well before the video does (a captionless tail:
+        # credits or silence). _source_done fires early and the picture plays on
+        # PAST the last caption with the clock still advancing. Without the EOF
+        # gate drained() would be True and the session would stop mid-video. It
+        # must wait until the picture actually reaches the end.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)
+            sess._source_done = True            # decoder finished; silent tail remains
+            clock.media = 8.0                   # picture plays on, past the last caption
+            sess._tick_once(1.0)
+            self.assertNotEqual(sess.status().state, "ended")
+            clock.media = 12.0
+            sess._tick_once(1.5)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+            sess._media_eof = True              # picture reaches the last frame
+            sess._tick_once(2.0)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_no_autostop_during_a_seek_none_clock_without_eof(self):
+        # A within-coverage seek briefly makes now() None while _source_done stays
+        # True (restart=False keeps it). This is not EOF (no eof-reached), so the
+        # None must not arm the wall clock and stop the session.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)
+            clock.media = 2.5
+            sess._tick_once(1.0)
+            sess._source_done = True
+            clock.invalid = True                # seek in progress: now() -> None
+            for mono in (1.5, 2.0, 5.0, 12.0):
+                sess._tick_once(mono)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+
+    def test_frozen_clock_expires_the_tail_dub_and_ends(self):
+        # The tail dub gate: with the clock frozen below seg.end the tail line
+        # stays _still_voiceable (slot_end = end + overhang > frozen now), so it
+        # never expires and drained() hangs on _ACTIVE_DUB. The end-of-source
+        # wall clock must advance the scheduler tick so the slot ends, the line
+        # is dropped, and the session stops. Guards the primary fix, not only the
+        # _clear_time swap (which does not touch the dub gate).
+        import queue as _queue
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5,
+                                  overrides={"live_dub_enabled": True})
+            # A TTS worker that accepts the request but never returns a clip, so
+            # the line stays "synth" (active) until its slot ends.
+            sess._synth = SimpleNamespace(submit=lambda *a, **k: True,
+                                          results=_queue.Queue(), name="fake",
+                                          stop=lambda *a, **k: True)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(LiveSegment(1, 0, 1.0, 3.0, "hi",
+                                            text_tgt="ciao", dub_ok=True))
+            sess._tick_once(0.0)                # translated -> RequestTts -> synth
+            clock.media = 2.98
+            sess._tick_once(1.48)
+            sess._source_done = True
+            sess._media_eof = True             # mpv reports eof-reached
+            sess._tick_once(1.6)               # frozen: tail dub still voiceable
+            self.assertNotEqual(sess.status().state, "ended")
+            for mono in (2.4, 3.0, 4.0, 5.0):  # wall clock past slot_end + window
+                sess._tick_once(mono)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_tail_dub_starting_past_the_frozen_pts_still_ends(self):
+        # Point 2: the last line starts just past the last video frame (its audio
+        # ends a hair after the picture). With the clock frozen at the last frame
+        # its slot (start .. end + overhang) is never reached by the frozen now,
+        # so _still_voiceable stays True and it hangs in _ACTIVE_DUB. The EOF wall
+        # clock must carry the scheduler past its slot so it is voiced or expires.
+        import queue as _queue
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5,
+                                  overrides={"live_dub_enabled": True})
+            sess._synth = SimpleNamespace(submit=lambda *a, **k: True,
+                                          results=_queue.Queue(), name="fake",
+                                          stop=lambda *a, **k: True)
+            clock = _EofClockView(1.5)
+            sess._clock_view = clock
+            sess.submit_segment(LiveSegment(1, 0, 3.05, 3.5, "hi",
+                                            text_tgt="ciao", dub_ok=True))
+            sess._tick_once(0.0)
+            clock.media = 3.0                  # picture stops on the last frame
+            sess._tick_once(1.0)
+            sess._source_done = True
+            sess._media_eof = True
+            sess._tick_once(1.6)               # frozen: line not yet at its slot end
+            self.assertNotEqual(sess.status().state, "ended")
+            for mono in (2.4, 3.0, 4.0, 6.0):  # wall clock past slot_end (4.1)
+                sess._tick_once(mono)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_disable_dub_after_voice_errors_leaves_no_orphan(self):
+        # The dub is also disabled automatically after 3 voice-output errors,
+        # through _disable_dub -> set_dub(False). Queued voices must not orphan
+        # the auto-stop, and a late TTS result must be discarded.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.0,
+                                  overrides={"live_dub_enabled": True})
+            sched = sess._scheduler
+            sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="aa", dub_ok=True))
+            sched.upsert(LiveSegment(2, 0, 5.0, 7.0, "b", text_tgt="bb", dub_ok=True))
+            sched._dub_state[1] = "ready"
+            sched._clips[1] = SimpleNamespace(path="/x.wav", audible_s=0.5, voice_start_s=0.0)
+            sched._dub_state[2] = "synth"
+            sess._voice_fail = 3
+            sess._disable_dub("tts_unavailable")     # automatic path after 3 errors
+            active = ("translated", "synth", "ready", "preloaded", "playing")
+            self.assertNotIn(sched._dub_state.get(1), active)
+            self.assertNotIn(sched._dub_state.get(2), active)
+            self.assertTrue(sched.drained(20.0))
+            self.assertFalse(sched.clip_ready(2, 0, SimpleNamespace(
+                path="/y.wav", audible_s=0.5, voice_start_s=0.0)))
+
+    def test_session_seek_past_a_speaking_clip_still_autostops_at_eof(self):
+        # The field bug end to end: a within-coverage forward seek past a clip
+        # that is speaking abandons it. Without finalizing its state the segment
+        # orphans in "playing" and drained() hangs forever (auto-stop never
+        # fires). After the fix the session still auto-stops at end of media.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=0.5,
+                                  overrides={"live_dub_enabled": True})
+            clock = _EofClockView(0.5)
+            sess._clock_view = clock
+            sched = sess._scheduler
+            # A playing clip for seg1, and a later caption covering the seek
+            # target so the seek stays within coverage (restart False).
+            seg1 = LiveSegment(1, 0, 1.0, 3.0, "one", text_tgt="uno", dub_ok=True)
+            seg2 = LiveSegment(2, 0, 14.0, 16.0, "two", text_tgt="due", dub_ok=True)
+            clip = SimpleNamespace(path="/tmp/x.wav", audible_s=1.5, voice_start_s=0.0)
+            sched.upsert(seg1)
+            sched.upsert(seg2)
+            sched.tick(0.5, voice_state="idle")
+            sched.clip_ready(1, 0, clip)
+            sched.tick(1.0, voice_state="idle")
+            sched.tick(1.2, voice_state="preloaded")
+            self.assertEqual(sched._dub_state[1], "playing")
+            sess._voice_state = "playing"          # as in the field dump before the seek
+            sess._control.put(("seek", 15.0))      # real session seek path, within coverage
+            clock.media = 15.0
+            sess._tick_once(1.0)                    # on_seek abandons the speaking clip
+            self.assertNotIn(sched._dub_state.get(1), ("translated", "synth", "ready",
+                                                       "preloaded", "playing"))
+            sess._voice_state = "idle"             # the clip stopped (dump: voice_state idle)
+            sess._source_done = True
+            sess._media_eof = True
+            clock.media = 16.0
+            for mono in (1.5, 2.0, 3.0, 5.0):
+                sess._tick_once(mono)
+            self.assertEqual(sess.status().state, "ended")
 
 
 if __name__ == "__main__":

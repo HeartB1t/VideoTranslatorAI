@@ -401,6 +401,15 @@ class LiveSession:
         self._user_paused = False
         self._source_done = False
         self._auto_stopped = False
+        # End-of-source drain: only at the TRUE end of the media (mpv reports
+        # eof-reached) the wall-clock drain kicks in. A user pause or the pacer
+        # pause also freezes the clock, but those are not EOF and must not stop
+        # the session (see _drain_now). _media_eof is refreshed from the player
+        # each tick; without a bridge (tests) it stays as set.
+        self._media_eof = False
+        self._last_media_now: float | None = None
+        self._drain_anchor_mono: float | None = None
+        self._drain_anchor_media = 0.0
         self._last_pacer_mono = -1e9
         self._last_status_mono = -1e9
         self._overlay: str | None = None
@@ -689,7 +698,11 @@ class LiveSession:
         self._drain_control(mono)
         self._drain_sched_in()
         self._drain_synth()
-        now = self._clock_view.now(mono)
+        real_now = self._clock_view.now(mono)
+        if self._bridge is not None:
+            marker = self._bridge.latest("eof-reached")
+            self._media_eof = bool(marker and marker[0])
+        now = self._drain_now(real_now, mono)
         epoch = getattr(self._clock_view, "epoch", 0)
         if mono - self._last_pacer_mono >= 1.0:
             self._last_pacer_mono = mono
@@ -713,20 +726,29 @@ class LiveSession:
             self._publish_status(now)
             self._reassert_mixer()
         self._maybe_autostop(now)
+        if real_now is not None:
+            self._last_media_now = real_now
         return actions
 
     def _maybe_autostop(self, now: float | None) -> None:
-        """Soft stop when a finite source is done and the dub queue is empty.
+        """Soft stop when a finite source is done and the picture is at its end.
 
-        Only for a source that truly finished (``_source_done`` is set when the
-        decoder reaches EOF and the pipeline end reaches the MT loop): a live
-        broadcast that never ends never sets it, so it is never stopped here.
-        The producer queues must be empty, the voice device idle and the
-        scheduler drained, so no queued caption or dubbed line is cut short.
-        The session ends the same clean way as the Stop button; the player is
-        left on the final frame (nothing loads or closes it).
+        Requires BOTH signals: ``_source_done`` (the decoder reached EOF and the
+        pipeline end reached the MT loop) AND ``_media_eof`` (the picture reached
+        the last frame, mpv eof-reached). The source finishes early on a file (the
+        decoder runs ahead of the picture), so ``_source_done`` alone must not stop
+        while the video is still playing, whether it is mid-play past the last
+        caption (a captionless tail) or paused. A live broadcast never sets
+        ``_source_done``, so it is never stopped here. The producer queues must be
+        empty, the voice device idle and the scheduler drained, so no queued
+        caption or dubbed line is cut short. ``now`` here is the effective time
+        from ``_drain_now``: at the true end the frozen (or None) media clock is
+        replaced by a wall clock so the last caption window and the tail dub slot
+        still elapse and never block the stop forever. The session ends the same
+        clean way as the Stop button; the player is left on the final frame.
         """
-        if self._auto_stopped or not self._source_done or self._startup_hold:
+        if (self._auto_stopped or not self._source_done or not self._media_eof
+                or self._startup_hold):
             return
         if self._stop.is_set() or self._voice_state != "idle":
             return
@@ -741,6 +763,35 @@ class LiveSession:
         self._decode_cancel.set()
         self._stop.set()
         self._decode_wake.set()
+
+    def _drain_now(self, real_now: float | None, mono: float) -> float | None:
+        """Effective media time for the tick once the source is finished.
+
+        Before the source finishes, while the media clock still advances, or when
+        the picture is only paused/seeking (not at EOF), use the real position and
+        keep the wall clock disarmed: a pause or a seek must never let the drain
+        run past the pending captions and stop the session. Only at the TRUE end
+        of the media (``_media_eof``, from mpv eof-reached) with the clock frozen
+        on the last frame or gone None does an effective media time advance on the
+        monotonic wall clock, anchored to the last real position: the scheduler
+        then expires the last caption's display window (_clear_time) and the tail
+        dub's slot (_slot_end / _still_voiceable), so both drain gates can conclude
+        and None never blocks the stop forever. Re-armed on a seek that restarts
+        decoding (``_source_done`` cleared, see _drain_control).
+        """
+        if not self._source_done:
+            self._drain_anchor_mono = None
+            return real_now
+        advancing = (real_now is not None and self._last_media_now is not None
+                     and real_now > self._last_media_now + 1e-6)
+        if advancing or not self._media_eof:
+            self._drain_anchor_mono = None
+            return real_now
+        if self._drain_anchor_mono is None:
+            base = real_now if real_now is not None else self._last_media_now
+            self._drain_anchor_mono = mono
+            self._drain_anchor_media = base if base is not None else 0.0
+        return self._drain_anchor_media + max(0.0, mono - self._drain_anchor_mono)
 
     def _reassert_mixer(self) -> None:
         """While the scheduler owns the mixer, apply user volume/mute changes.
@@ -889,6 +940,8 @@ class LiveSession:
                     with self._decode_lock:
                         self._gen += 1
                         self._source_done = False
+                        self._media_eof = False
+                        self._drain_anchor_mono = None
                         self._decode_cancel.set()
                         self._decode_cancel = threading.Event()
                         self._decode_request = (self._gen, max(0.0, value - 0.5),
