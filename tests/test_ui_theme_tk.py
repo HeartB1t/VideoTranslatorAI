@@ -959,8 +959,22 @@ class TalkingLogTests(unittest.TestCase):
     """Every click, choice and error reaches the Log panel and the log file."""
 
     def _panel(self, app):
+        import video_translator_gui as gui
         app.update()
         app.after(150)
+        app.update()
+        # print() output reaches the widget through a redirect that buffers and
+        # flushes on a 100ms Tk timer. Under load (the full suite on Windows CI)
+        # that timer can lag, so a just-written line may not be in the widget
+        # yet. Flush the active redirect synchronously so the read is
+        # deterministic instead of timing dependent.
+        for redir in (getattr(app, "_own_default_redirect", None), gui._DEFAULT_REDIRECT):
+            flush = getattr(redir, "_flush_buf", None)
+            if flush is not None:
+                try:
+                    flush()
+                except Exception:                    # noqa: BLE001
+                    pass
         app.update()
         return app._log.get("1.0", "end")
 
