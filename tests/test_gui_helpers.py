@@ -146,7 +146,7 @@ class FinishLiveSessionTests(unittest.TestCase):
         app = SimpleNamespace(
             _live_session=None, _live_last_status=None, _live_stopping=True,
             _live_poll_after=None, _live_bar=bar, _refresh_live_bar_enabled=Mock(),
-            _log_event=Mock())
+            _refresh_live_heavy_model_hint=Mock(), _log_event=Mock())
         gui.App._finish_live_session(app)
         self.assertEqual([c[0] for c in bar.method_calls],
                          ["drop_session_warning", "set_active"])
@@ -164,7 +164,8 @@ class LiveChoicesPersistenceTests(unittest.TestCase):
     def test_choice_changes_schedule_a_save_even_without_a_session(self):
         for intent in ("mode", "delay", "engine", "dub", "subs"):
             app = SimpleNamespace(_live_session=None, _schedule_live_save=Mock(),
-                                  _log_event=Mock(), _refresh_live_voice_info=Mock())
+                                  _log_event=Mock(), _refresh_live_voice_info=Mock(),
+                                  _refresh_live_heavy_model_hint=Mock())
             gui.App._on_live_command(app, intent, {})
             app._schedule_live_save.assert_called_once_with()
 
@@ -231,7 +232,8 @@ class ModelChoicesTests(unittest.TestCase):
             _use_voicebox=_Var(False),
             _active_profile=_Var("balanced"), _live_bar=Mock(), _destroying=False,
             _on_engine_change=Mock(), _update_profile_buttons=Mock(),
-            _update_start_summary=Mock(), _models_choice_restored=False)
+            _update_start_summary=Mock(), _models_choice_restored=False,
+            _refresh_live_heavy_model_hint=Mock())
         for name in ("_current_model_choices", "_set_model_choices"):
             setattr(self.app, name, getattr(gui.App, name).__get__(self.app))
 
@@ -331,7 +333,8 @@ class LaunchLiveSessionConfigTests(unittest.TestCase):
             _log_event=Mock(), _live_voice_info_text=lambda: "voice",
             _redirecting_thread_factory=None,
             _schedule_live_poll=Mock(), _request_voice_backend=Mock(),
-            _refresh_live_bar_enabled=Mock(), _live_resolving=True)
+            _refresh_live_bar_enabled=Mock(), _refresh_live_heavy_model_hint=Mock(),
+            _live_resolving=True)
         app._elevenlabs_settings = lambda: dict(config.get("elevenlabs") or {})
         app._live_tts_opts = gui.App._live_tts_opts.__get__(app)
         captured = {}

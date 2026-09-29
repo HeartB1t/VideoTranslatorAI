@@ -873,6 +873,28 @@ class DubScheduler:
             return True
         return False
 
+    def drained(self, now: float | None) -> bool:
+        """Whether nothing is left to show, synthesize or voice at media time ``now``.
+
+        Used by the soft auto-stop at end of source: True only when no clip is
+        playing, preloaded, held or in pacer recovery, no dubbed line is still
+        translating/synthesizing/ready, and every caption's spoken span has
+        already elapsed (``seg.end <= now``). ``now`` is None (invalid clock)
+        is never drained. The dub, which finishes last, is the gate that keeps
+        a stop from cutting queued voice lines short.
+        """
+        if now is None:
+            return False
+        if (self._playing is not None or self._preloaded is not None
+                or self._held is not None or self._pacer_recovery_seg is not None):
+            return False
+        for seg in self._segments.values():
+            if self._dub_state.get(seg.seg_id) in _ACTIVE_DUB:
+                return False
+            if self._subs and self._caption_ready(seg) and seg.end > now:
+                return False
+        return True
+
     def on_seek(self, now: float, gen: int, *, restart: bool = False) -> list[object]:
         """Reset presentation state for a seek to ``now``.
 

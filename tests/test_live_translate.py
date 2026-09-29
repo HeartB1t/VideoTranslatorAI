@@ -4,6 +4,7 @@ import unittest
 
 from videotranslator.live_translate import (
     EN_LEGS,
+    LIVE_HEAVY_PARAMS_B,
     TIMEOUTS_S,
     DeeplLiveTranslator,
     GoogleLiveTranslator,
@@ -13,6 +14,8 @@ from videotranslator.live_translate import (
     MarianLiveTranslator,
     MarianRoute,
     Outcome,
+    estimate_model_params_b,
+    is_model_heavy_for_live,
     make_translator,
     marian_is_cached,
     marian_route,
@@ -486,6 +489,59 @@ class TimeoutsTests(unittest.TestCase):
     def test_expected_keys(self):
         self.assertEqual(set(TIMEOUTS_S),
                          {"marian", "ollama_delayed", "ollama_live", "google", "deepl"})
+
+
+class ModelWeightHeuristicTests(unittest.TestCase):
+    def test_estimate_extracts_the_billions_size(self):
+        self.assertEqual(estimate_model_params_b("qwen3:8b"), 8.0)
+        self.assertEqual(estimate_model_params_b("qwen3:32b"), 32.0)
+        self.assertEqual(estimate_model_params_b("qwen2.5:14b"), 14.0)
+        self.assertEqual(estimate_model_params_b("llama3.1:8b"), 8.0)
+        self.assertEqual(estimate_model_params_b("deepseek-r1:70b"), 70.0)
+        self.assertEqual(estimate_model_params_b("phi3:3.8b"), 3.8)
+
+    def test_estimate_is_none_without_a_size(self):
+        for name in ("qwen3", "llama3.1", "", None, "mistral:latest"):
+            with self.subTest(name=name):
+                self.assertIsNone(estimate_model_params_b(name))
+
+    def test_estimate_ignores_a_version_or_quant_token(self):
+        # A version number ("2.5") or a "bit" word is not a parameter size.
+        self.assertIsNone(estimate_model_params_b("model:8bit"))
+        self.assertEqual(estimate_model_params_b("mistral:7b-instruct-q4_0"), 7.0)
+
+    def test_estimate_counts_mixture_of_experts_total(self):
+        self.assertEqual(estimate_model_params_b("mixtral:8x7b"), 56.0)
+        self.assertEqual(estimate_model_params_b("mixtral:8x22b"), 176.0)
+        # A plain size still resolves to its own number, not a product.
+        self.assertEqual(estimate_model_params_b("qwen3:8b"), 8.0)
+
+    def test_mixture_of_experts_is_heavy_while_a_small_dense_model_is_not(self):
+        self.assertTrue(is_model_heavy_for_live("mixtral:8x7b"))
+        self.assertTrue(is_model_heavy_for_live("mixtral:8x22b"))
+        self.assertFalse(is_model_heavy_for_live("qwen3:8b"))
+
+    def test_estimate_handles_case_and_surrounding_space(self):
+        self.assertEqual(estimate_model_params_b("  Qwen3:32B  "), 32.0)
+        self.assertEqual(estimate_model_params_b("LLAMA3:8B"), 8.0)
+
+    def test_heavy_uses_the_threshold(self):
+        self.assertFalse(is_model_heavy_for_live("qwen3:8b"))    # 8 <= 9
+        self.assertTrue(is_model_heavy_for_live("qwen2.5:14b"))
+        self.assertTrue(is_model_heavy_for_live("gemma2:27b"))
+        self.assertTrue(is_model_heavy_for_live("qwen3:30b"))
+        self.assertTrue(is_model_heavy_for_live("qwen3:32b"))
+        self.assertTrue(is_model_heavy_for_live("llama3:70b"))
+
+    def test_unknown_size_is_never_heavy(self):
+        self.assertFalse(is_model_heavy_for_live("qwen3"))
+        self.assertFalse(is_model_heavy_for_live(""))
+        self.assertFalse(is_model_heavy_for_live(None))
+
+    def test_default_threshold_is_nine_billion(self):
+        self.assertEqual(LIVE_HEAVY_PARAMS_B, 9.0)
+        self.assertFalse(is_model_heavy_for_live("x:9b"))         # exactly 9, not heavy
+        self.assertTrue(is_model_heavy_for_live("x:10b"))
 
 
 if __name__ == "__main__":

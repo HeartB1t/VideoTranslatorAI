@@ -26,6 +26,60 @@ TIMEOUTS_S: dict[str, float] = {
 }
 
 
+# A model above this many billion parameters is treated as too heavy for the
+# live path (measured on an RTX 3090: qwen3:8b loads in ~22 s and translates a
+# sentence in 0.1-0.6 s, qwen3:32b takes ~96 s to load and misses the 5 s
+# per-sentence timeout, so every subtitle stays in the source language).
+LIVE_HEAVY_PARAMS_B = 9.0
+
+# The parameter size in an Ollama tag: a number directly before a "b"/"B" that
+# is not part of a longer token (so "qwen3:32b" -> 32, "llama3.1:8b" -> 8, while
+# a version like "qwen2.5" or "8bit" is not mistaken for a size).
+_MODEL_PARAMS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])", re.IGNORECASE)
+# Mixture-of-experts tag "NxMb" (e.g. "mixtral:8x7b", "8x22b"): the load cost is
+# the total N*M billion parameters (8x7b -> 56, 8x22b -> 176), not the M of one
+# expert, so this form is resolved before the plain size above.
+_MODEL_MOE_RE = re.compile(r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])",
+                           re.IGNORECASE)
+
+
+def estimate_model_params_b(model_name: str | None) -> float | None:
+    """Estimate an Ollama model's size in billions of parameters from its name.
+
+    Pure and side-effect free. A mixture-of-experts tag ("mixtral:8x7b" -> 56.0)
+    counts the total experts; otherwise the number attached to the size "b"
+    ("qwen3:32b" -> 32.0, "qwen2.5:14b" -> 14.0, "llama3.1:8b" -> 8.0). Returns
+    ``None`` when the name does not expose a size, so the caller never warns on
+    a guess.
+    """
+    name = model_name or ""
+    moe = _MODEL_MOE_RE.findall(name)
+    if moe:
+        experts, per_expert = moe[-1]
+        try:
+            return float(experts) * float(per_expert)
+        except ValueError:
+            return None
+    matches = _MODEL_PARAMS_RE.findall(name)
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def is_model_heavy_for_live(model_name: str | None, *,
+                            threshold_b: float = LIVE_HEAVY_PARAMS_B) -> bool:
+    """Whether ``model_name`` is likely too heavy for real-time translation.
+
+    True only when the estimated size is strictly above ``threshold_b`` (so 8b
+    passes, 14b/27b/30b/32b/70b do not); an unknown size never counts as heavy.
+    """
+    params = estimate_model_params_b(model_name)
+    return params is not None and params > threshold_b
+
+
 @dataclass(frozen=True)
 class MarianLeg:
     model: str

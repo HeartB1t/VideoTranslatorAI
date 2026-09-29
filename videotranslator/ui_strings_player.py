@@ -3415,6 +3415,72 @@ _VOICE_COUNTER = {
 for _counter_lang, _counter_text in _VOICE_COUNTER.items():
     PLAYER_UI_STRINGS[_counter_lang]["live_voice_counter"] = _counter_text
 
+# Slow-engine banner, Ollama variant ({engine}): names a lighter local model as
+# well as MarianMT, since a user on Ollama usually wants to stay local.
+_WARN_ENGINE_SLOW_OLLAMA = {
+    "en": "{engine} is not responding in time: subtitles stay in the original language. Try a lighter Ollama model (e.g. qwen3:8b) or Google/DeepL.",
+    "it": "{engine} non risponde in tempo: i sottotitoli restano nella lingua originale. Prova un modello Ollama più leggero (es. qwen3:8b) oppure Google/DeepL.",
+    "ar": "{engine} لا يستجيب في الوقت المناسب: تبقى الترجمة بلغتها الأصلية. جرّب نموذج Ollama أخف (مثل qwen3:8b) أو Google/DeepL.",
+    "zh": "{engine} 未能及时响应：字幕将保留原始语言。请尝试更轻量的 Ollama 模型（如 qwen3:8b）或 Google/DeepL。",
+    "cs": "{engine} neodpovídá včas: titulky zůstávají v původním jazyce. Zkuste lehčí model Ollama (např. qwen3:8b) nebo Google/DeepL.",
+    "da": "{engine} svarer ikke i tide: underteksterne forbliver på originalsproget. Prøv en lettere Ollama-model (f.eks. qwen3:8b) eller Google/DeepL.",
+    "nl": "{engine} reageert niet op tijd: de ondertitels blijven in de oorspronkelijke taal. Probeer een lichter Ollama-model (bijv. qwen3:8b) of Google/DeepL.",
+    "fi": "{engine} ei vastaa ajoissa: tekstitykset pysyvät alkukielellä. Kokeile kevyempää Ollama-mallia (esim. qwen3:8b) tai Google/DeepL.",
+    "fr": "{engine} ne répond pas à temps : les sous-titres restent dans la langue d'origine. Essayez un modèle Ollama plus léger (par ex. qwen3:8b) ou Google/DeepL.",
+    "de": "{engine} antwortet nicht rechtzeitig: die Untertitel bleiben in der Originalsprache. Versuchen Sie ein leichteres Ollama-Modell (z. B. qwen3:8b) oder Google/DeepL.",
+    "el": "Το {engine} δεν απαντά έγκαιρα: οι υπότιτλοι παραμένουν στην αρχική γλώσσα. Δοκιμάστε ένα ελαφρύτερο μοντέλο Ollama (π.χ. qwen3:8b) ή Google/DeepL.",
+    "hi": "{engine} समय पर प्रतिक्रिया नहीं दे रहा: उपशीर्षक मूल भाषा में ही रहेंगे। कोई हल्का Ollama मॉडल (जैसे qwen3:8b) या Google/DeepL आज़माएँ।",
+    "hu": "A(z) {engine} nem válaszol időben: a feliratok az eredeti nyelven maradnak. Próbáljon könnyebb Ollama-modellt (pl. qwen3:8b) vagy Google/DeepL szolgáltatást.",
+    "id": "{engine} tidak merespons tepat waktu: subtitel tetap dalam bahasa asli. Coba model Ollama yang lebih ringan (mis. qwen3:8b) atau Google/DeepL.",
+    "ja": "{engine} が時間内に応答しません: 字幕は元の言語のままになります。より軽量な Ollama モデル（例: qwen3:8b）または Google/DeepL を試してください。",
+    "ko": "{engine}이(가) 제때 응답하지 않습니다: 자막이 원래 언어로 유지됩니다. 더 가벼운 Ollama 모델(예: qwen3:8b)이나 Google/DeepL을 사용해 보세요.",
+    "no": "{engine} svarer ikke i tide: undertekstene forblir på originalspråket. Prøv en lettere Ollama-modell (f.eks. qwen3:8b) eller Google/DeepL.",
+    "pl": "{engine} nie odpowiada na czas: napisy pozostają w języku oryginału. Wypróbuj lżejszy model Ollama (np. qwen3:8b) lub Google/DeepL.",
+    "pt": "{engine} não responde a tempo: as legendas permanecem no idioma original. Experimente um modelo Ollama mais leve (por ex. qwen3:8b) ou Google/DeepL.",
+    "ro": "{engine} nu răspunde la timp: subtitrările rămân în limba originală. Încearcă un model Ollama mai ușor (de ex. qwen3:8b) sau Google/DeepL.",
+    "ru": "{engine} не отвечает вовремя: субтитры остаются на языке оригинала. Попробуйте более лёгкую модель Ollama (например, qwen3:8b) или Google/DeepL.",
+    "es": "{engine} no responde a tiempo: los subtítulos permanecen en el idioma original. Prueba un modelo de Ollama más ligero (p. ej. qwen3:8b) o Google/DeepL.",
+    "sv": "{engine} svarar inte i tid: undertexterna blir kvar på originalspråket. Prova en lättare Ollama-modell (t.ex. qwen3:8b) eller Google/DeepL.",
+    "tr": "{engine} zamanında yanıt vermiyor: altyazılar özgün dilde kalır. Daha hafif bir Ollama modeli (örn. qwen3:8b) veya Google/DeepL deneyin.",
+    "uk": "{engine} не відповідає вчасно: субтитри залишаються мовою оригіналу. Спробуйте легшу модель Ollama (наприклад, qwen3:8b) або Google/DeepL.",
+    "vi": "{engine} không phản hồi kịp: phụ đề vẫn ở ngôn ngữ gốc. Hãy thử một mô hình Ollama nhẹ hơn (ví dụ qwen3:8b) hoặc Google/DeepL.",
+}
+for _slow_lang, _slow_text in _WARN_ENGINE_SLOW_OLLAMA.items():
+    PLAYER_UI_STRINGS[_slow_lang]["live_warn_engine_slow_ollama"] = _slow_text
+
+# Proactive hint ({model}) shown when a heavy Ollama model is chosen for live:
+# it likely misses the per-sentence timeout, leaving subtitles untranslated.
+_HINT_HEAVY_MODEL = {
+    "en": "{model} is a large model: in real time it may not keep up and the subtitles would stay in the original language. For live, prefer a lighter model (e.g. qwen3:8b) or Google/DeepL. For translating a file it is fine.",
+    "it": "{model} è un modello grande: in tempo reale potrebbe non stare nei tempi e i sottotitoli resterebbero nella lingua originale. Per il live meglio un modello più leggero (es. qwen3:8b) oppure Google/DeepL. Per tradurre un file va benissimo.",
+    "ar": "{model} نموذج كبير: قد لا يواكب الوقت الفعلي وتبقى الترجمة بلغتها الأصلية. للبث المباشر يُفضّل نموذج أخف (مثل qwen3:8b) أو Google/DeepL. أما لترجمة ملف فهو مناسب تمامًا.",
+    "zh": "{model} 是一个大模型：实时翻译时可能跟不上，字幕会保留原始语言。实时模式建议使用更轻量的模型（如 qwen3:8b）或 Google/DeepL。用于翻译文件则完全没问题。",
+    "cs": "{model} je velký model: v reálném čase nemusí stíhat a titulky by zůstaly v původním jazyce. Pro živý přenos je lepší lehčí model (např. qwen3:8b) nebo Google/DeepL. Pro překlad souboru je zcela v pořádku.",
+    "da": "{model} er en stor model: i realtid kan den måske ikke følge med, og underteksterne ville forblive på originalsproget. Til live er en lettere model bedre (f.eks. qwen3:8b) eller Google/DeepL. Til at oversætte en fil er den helt fin.",
+    "nl": "{model} is een groot model: in realtime kan het misschien niet bijblijven en zouden de ondertitels in de oorspronkelijke taal blijven. Voor live is een lichter model beter (bijv. qwen3:8b) of Google/DeepL. Voor het vertalen van een bestand is het prima.",
+    "fi": "{model} on suuri malli: reaaliajassa se ei ehkä pysy mukana ja tekstitykset jäisivät alkukielelle. Suoraan lähetykseen kannattaa valita kevyempi malli (esim. qwen3:8b) tai Google/DeepL. Tiedoston kääntämiseen se sopii hyvin.",
+    "fr": "{model} est un grand modèle : en temps réel, il risque de ne pas suivre et les sous-titres resteraient dans la langue d'origine. Pour le direct, préférez un modèle plus léger (par ex. qwen3:8b) ou Google/DeepL. Pour traduire un fichier, il convient parfaitement.",
+    "de": "{model} ist ein großes Modell: in Echtzeit kommt es möglicherweise nicht mit und die Untertitel blieben in der Originalsprache. Für Live ist ein leichteres Modell besser (z. B. qwen3:8b) oder Google/DeepL. Zum Übersetzen einer Datei ist es bestens geeignet.",
+    "el": "Το {model} είναι μεγάλο μοντέλο: σε πραγματικό χρόνο μπορεί να μην προλαβαίνει και οι υπότιτλοι θα έμεναν στην αρχική γλώσσα. Για ζωντανή μετάδοση προτιμήστε ένα ελαφρύτερο μοντέλο (π.χ. qwen3:8b) ή Google/DeepL. Για τη μετάφραση αρχείου είναι μια χαρά.",
+    "hi": "{model} एक बड़ा मॉडल है: रीयल टाइम में यह शायद साथ न दे पाए और उपशीर्षक मूल भाषा में ही रह जाएँ। लाइव के लिए कोई हल्का मॉडल बेहतर है (जैसे qwen3:8b) या Google/DeepL। फ़ाइल अनुवाद के लिए यह ठीक है।",
+    "hu": "A(z) {model} nagy modell: valós időben előfordulhat, hogy nem bírja a tempót, és a feliratok az eredeti nyelven maradnának. Élő közvetítéshez ajánlott könnyebb modell (pl. qwen3:8b) vagy Google/DeepL. Fájl fordításához teljesen megfelel.",
+    "id": "{model} adalah model besar: secara real-time mungkin tidak sanggup mengikuti dan subtitel akan tetap dalam bahasa asli. Untuk siaran langsung sebaiknya pakai model yang lebih ringan (mis. qwen3:8b) atau Google/DeepL. Untuk menerjemahkan berkas, model ini tidak masalah.",
+    "ja": "{model} は大きなモデルです: リアルタイムでは処理が間に合わず、字幕が元の言語のままになることがあります。ライブにはより軽量なモデル（例: qwen3:8b）または Google/DeepL がおすすめです。ファイルの翻訳には問題なく使えます。",
+    "ko": "{model}은(는) 큰 모델입니다: 실시간에서는 속도를 따라가지 못해 자막이 원래 언어로 남을 수 있습니다. 라이브에는 더 가벼운 모델(예: qwen3:8b)이나 Google/DeepL을 권장합니다. 파일 번역에는 문제없습니다.",
+    "no": "{model} er en stor modell: i sanntid klarer den kanskje ikke å henge med, og undertekstene ville forblitt på originalspråket. Til direktesending er en lettere modell bedre (f.eks. qwen3:8b) eller Google/DeepL. Til å oversette en fil passer den fint.",
+    "pl": "{model} to duży model: w czasie rzeczywistym może nie nadążać, a napisy pozostałyby w języku oryginału. Do transmisji na żywo lepszy jest lżejszy model (np. qwen3:8b) lub Google/DeepL. Do tłumaczenia pliku nadaje się bez problemu.",
+    "pt": "{model} é um modelo grande: em tempo real pode não acompanhar e as legendas ficariam no idioma original. Para o ao vivo, prefira um modelo mais leve (por ex. qwen3:8b) ou Google/DeepL. Para traduzir um arquivo, funciona muito bem.",
+    "ro": "{model} este un model mare: în timp real s-ar putea să nu facă față, iar subtitrările ar rămâne în limba originală. Pentru transmisiuni live e mai bun un model mai ușor (de ex. qwen3:8b) sau Google/DeepL. Pentru traducerea unui fișier este perfect.",
+    "ru": "{model} большая модель: в реальном времени она может не успевать, и субтитры останутся на языке оригинала. Для прямой трансляции лучше выбрать модель полегче (например, qwen3:8b) или Google/DeepL. Для перевода файла она вполне подходит.",
+    "es": "{model} es un modelo grande: en tiempo real puede que no dé abasto y los subtítulos se quedarían en el idioma original. Para el directo, mejor un modelo más ligero (p. ej. qwen3:8b) o Google/DeepL. Para traducir un archivo va perfecto.",
+    "sv": "{model} är en stor modell: i realtid hinner den kanske inte med och undertexterna skulle bli kvar på originalspråket. För live är en lättare modell bättre (t.ex. qwen3:8b) eller Google/DeepL. För att översätta en fil fungerar den utmärkt.",
+    "tr": "{model} büyük bir model: gerçek zamanlıda yetişemeyebilir ve altyazılar özgün dilde kalır. Canlı için daha hafif bir model (örn. qwen3:8b) veya Google/DeepL tercih edin. Bir dosyayı çevirmek için gayet uygun.",
+    "uk": "{model} велика модель: у реальному часі вона може не встигати, і субтитри залишаться мовою оригіналу. Для прямої трансляції краще легша модель (наприклад, qwen3:8b) або Google/DeepL. Для перекладу файлу вона цілком підходить.",
+    "vi": "{model} là một mô hình lớn: khi dịch thời gian thực có thể không theo kịp và phụ đề sẽ giữ nguyên ngôn ngữ gốc. Với phát trực tiếp nên dùng mô hình nhẹ hơn (ví dụ qwen3:8b) hoặc Google/DeepL. Để dịch một tập tin thì hoàn toàn ổn.",
+}
+for _hint_lang, _hint_text in _HINT_HEAVY_MODEL.items():
+    PLAYER_UI_STRINGS[_hint_lang]["live_hint_heavy_model"] = _hint_text
+
 PLAYER_KEYS: tuple[str, ...] = tuple(sorted(PLAYER_UI_STRINGS["en"]))
 
 

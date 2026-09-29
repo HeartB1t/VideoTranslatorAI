@@ -179,6 +179,9 @@ WARN_KEYS: dict[str, str] = {
     "rate_limited": "live_warn_rate_limited",
     "quota": "live_warn_quota",
     "engine_slow": "live_warn_engine_slow",
+    # A slow Ollama engine: the banner also names a lighter local model, since
+    # the user likely wants to stay on Ollama rather than switch to MarianMT.
+    "engine_slow_ollama": "live_warn_engine_slow_ollama",
     "tts_unavailable": "live_warn_tts_unavailable",
     # ElevenLabs refusals that will not go away by themselves: say which.
     "el_paid_voice": "live_warn_el_paid_voice",

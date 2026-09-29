@@ -1526,5 +1526,84 @@ class LiveDubHeavyTests(unittest.TestCase):
                 self.assertTrue(real.terminate(5.0))
 
 
+class SchedulerDrainedTests(unittest.TestCase):
+    """DubScheduler.drained gates the soft auto-stop at end of source."""
+
+    def _sched(self, **kw):
+        from videotranslator.live_scheduler import DubScheduler
+        return DubScheduler(mode="delayed", **kw)
+
+    def test_none_clock_is_never_drained(self):
+        self.assertFalse(self._sched().drained(None))
+
+    def test_empty_scheduler_is_drained(self):
+        self.assertTrue(self._sched().drained(0.0))
+
+    def test_pending_caption_is_not_drained_until_its_span_elapses(self):
+        sched = self._sched()
+        sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "hi", text_tgt="ciao"))
+        sched.tick(1.5)                       # caption shown, span not over
+        self.assertFalse(sched.drained(1.5))
+        self.assertTrue(sched.drained(4.0))   # now past its end
+
+    def test_dub_line_still_synthesizing_is_not_drained(self):
+        sched = self._sched(dub=True)
+        seg = LiveSegment(1, 0, 1.0, 3.0, "hi", text_tgt="ciao", dub_ok=True)
+        sched.upsert(seg)                     # dub state -> "translated"
+        self.assertFalse(sched.drained(5.0))  # a dubbed line is still pending
+
+    def test_drained_after_the_dub_line_is_dropped(self):
+        sched = self._sched(dub=True)
+        seg = LiveSegment(1, 0, 1.0, 3.0, "hi", text_tgt="ciao", dub_ok=True)
+        sched.upsert(seg)
+        # No TTS worker feeds a clip: ticking past the slot drops the line.
+        for now in (1.0, 3.0, 6.0, 9.0):
+            sched.tick(now, main_running=True, voice_state="idle")
+        self.assertTrue(sched.drained(9.0))
+
+
+class LiveSessionAutoStopTests(unittest.TestCase):
+    """Soft auto-stop: a finished source with an empty queue ends by itself."""
+
+    def test_ends_after_source_done_and_everything_drained(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=1.5)
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)                       # caption shown
+            sess._source_done = True
+            sess._tick_once(0.5)                       # still inside the caption
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+            sess._clock_view.media = 4.0               # picture reached the end
+            sess._tick_once(1.0)
+            self.assertEqual(sess.status().state, "ended")
+            self.assertTrue(sess._stop.is_set())
+
+    def test_no_stop_while_source_not_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=4.0)      # past any caption
+            sess.submit_segment(_seg("ciao", start=1.0, end=3.0))
+            sess._tick_once(0.0)
+            sess._tick_once(0.5)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+
+    def test_no_stop_during_startup_hold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=4.0)
+            sess._startup_hold = True
+            sess._source_done = True
+            sess._tick_once(0.0)
+            self.assertNotEqual(sess.status().state, "ended")
+
+    def test_no_stop_while_a_voice_clip_is_playing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, media=4.0)
+            sess._source_done = True
+            sess._voice_state = "playing"              # dubbing not finished yet
+            sess._tick_once(0.0)
+            self.assertNotEqual(sess.status().state, "ended")
+
+
 if __name__ == "__main__":
     unittest.main()

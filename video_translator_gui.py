@@ -346,6 +346,7 @@ from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: E402
 from videotranslator import platforms as _platforms  # noqa: E402
 from videotranslator.resource_paths import assets_dir as _assets_dir  # noqa: E402
 from videotranslator import live_session as _live_session_module  # noqa: E402
+from videotranslator.live_translate import is_model_heavy_for_live as _is_model_heavy_for_live  # noqa: E402
 from videotranslator import player_core as _player_core  # noqa: E402
 from videotranslator import player_engine as _player_engine  # noqa: E402
 from videotranslator import player_settings as _player_settings_module  # noqa: E402
@@ -7907,6 +7908,8 @@ class App(tk.Tk):
         self._player_panel.pack(side="top", fill="both", expand=True)
         self._refresh_live_bar_enabled()
         self._refresh_live_voice_info()
+        # A persisted heavy Ollama model gets its proactive hint at startup too.
+        self._refresh_live_heavy_model_hint()
 
         # Right column: input, translation, profile, start, then the settings
         # accordion, in a canvas that scrolls only this column. The canvas
@@ -8792,6 +8795,28 @@ class App(tk.Tk):
         when missing), when Ollama is the translation engine."""
         if self._translation_engine.get() == "llm_ollama":
             self._ensure_ollama_ready_async()
+        self._refresh_live_heavy_model_hint()
+
+    def _refresh_live_heavy_model_hint(self) -> None:
+        """Proactive hint on the live bar when a heavy Ollama model is chosen.
+
+        A large model (e.g. qwen3:32b) loads slowly and misses the per-sentence
+        timeout, so every subtitle would stay in the source language. Shown in
+        the bar's banner area (never a modal), only while no session is running
+        (a running session drives the banner from its own warnings), and dropped
+        as soon as a lighter model or another engine is picked.
+        """
+        bar = getattr(self, "_live_bar", None)
+        if bar is None:
+            return
+        hint_key = "live_hint_heavy_model"
+        engine = bar.current_settings().get("engine")
+        model = self._ollama_model_var.get().strip()
+        heavy = engine == "ollama" and _is_model_heavy_for_live(model)
+        if heavy and self._live_session is None:
+            bar.show_banner(hint_key, {"model": model})
+        elif bar.current_banner_key() == hint_key:
+            bar.clear_banner()
 
     def _log_async(self, text: str) -> None:
         """Thread-safe helper: schedula log_write sul main thread."""
@@ -9097,6 +9122,10 @@ class App(tk.Tk):
             # Remember the choice for the next launch (the original mute is
             # deliberately not persisted: it resets with every session).
             self._schedule_live_save()
+        if intent == "engine":
+            # A heavy Ollama model warrants the proactive hint; any other engine
+            # drops it.
+            self._refresh_live_heavy_model_hint()
         if session is None:
             return  # settings changed while idle are read at start()
         if intent == "mode":
@@ -9166,6 +9195,7 @@ class App(tk.Tk):
         self._on_engine_change()
         self._update_profile_buttons()
         self._update_start_summary()
+        self._refresh_live_heavy_model_hint()
 
     def _apply_model_choices(self, choices: dict) -> None:
         """Apply from the window, keeping what it replaces for Restore previous."""
@@ -9629,6 +9659,9 @@ class App(tk.Tk):
         self._live_startup_pending = True
         self._live_bar.set_active(True)
         self._live_bar.set_start_enabled(False)
+        # A session is running now: drop the proactive heavy-model hint at once
+        # (the banner belongs to the session's own warnings from here on).
+        self._refresh_live_heavy_model_hint()
         self._schedule_live_poll()
         if voice_pending:
             self._request_voice_backend()        # attached to the session when ready
@@ -9686,6 +9719,9 @@ class App(tk.Tk):
         self._live_bar.drop_session_warning()
         self._live_bar.set_active(False)
         self._refresh_live_bar_enabled()
+        # Back to the choosing state: if a heavy Ollama model is still selected,
+        # the proactive hint reappears (guarded by _live_session being None now).
+        self._refresh_live_heavy_model_hint()
 
     def _source_media_items(self) -> list[_player_core.MediaItem]:
         return [

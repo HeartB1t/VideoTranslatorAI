@@ -400,6 +400,7 @@ class LiveSession:
         self._startup_silence_ready = threading.Event()
         self._user_paused = False
         self._source_done = False
+        self._auto_stopped = False
         self._last_pacer_mono = -1e9
         self._last_status_mono = -1e9
         self._overlay: str | None = None
@@ -711,7 +712,35 @@ class LiveSession:
             self._last_status_mono = mono
             self._publish_status(now)
             self._reassert_mixer()
+        self._maybe_autostop(now)
         return actions
+
+    def _maybe_autostop(self, now: float | None) -> None:
+        """Soft stop when a finite source is done and the dub queue is empty.
+
+        Only for a source that truly finished (``_source_done`` is set when the
+        decoder reaches EOF and the pipeline end reaches the MT loop): a live
+        broadcast that never ends never sets it, so it is never stopped here.
+        The producer queues must be empty, the voice device idle and the
+        scheduler drained, so no queued caption or dubbed line is cut short.
+        The session ends the same clean way as the Stop button; the player is
+        left on the final frame (nothing loads or closes it).
+        """
+        if self._auto_stopped or not self._source_done or self._startup_hold:
+            return
+        if self._stop.is_set() or self._voice_state != "idle":
+            return
+        if not (self._utt_q.empty() and self._mt_q.empty()
+                and self._sched_in.empty()):
+            return
+        if not self._scheduler.drained(now):
+            return
+        self._auto_stopped = True
+        self._log("live: source finished and dubbing complete; ending session")
+        self._set_state("ended")
+        self._decode_cancel.set()
+        self._stop.set()
+        self._decode_wake.set()
 
     def _reassert_mixer(self) -> None:
         """While the scheduler owns the mixer, apply user volume/mute changes.
@@ -1393,9 +1422,14 @@ class LiveSession:
                         if warn:
                             # "rate_limited" says for how long: the pause the
                             # breaker just opened. The banner offers MarianMT,
-                            # offline and fast on a CPU, unless it is running.
+                            # offline and fast on a CPU, unless it is running. A
+                            # slow Ollama also gets the "try a lighter model"
+                            # variant, since the user likely wants to stay local.
+                            code = ("engine_slow_ollama"
+                                    if warn == "engine_slow" and engine == "ollama"
+                                    else warn)
                             self._set_warning(
-                                warn, engine, s=int(round(breaker.retry_in_s())),
+                                code, engine, s=int(round(breaker.retry_in_s())),
                                 action=None if engine == "marian" else "live_btn_switch_marian")
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,

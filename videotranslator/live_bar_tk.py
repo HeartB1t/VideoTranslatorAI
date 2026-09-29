@@ -407,7 +407,8 @@ class LiveBar(tk.Frame):
 
     # Warnings about how a running session is doing: they end with it.
     _SESSION_WARNINGS = frozenset({
-        "live_warn_rate_limited", "live_warn_engine_slow", "live_warn_falling_behind",
+        "live_warn_rate_limited", "live_warn_engine_slow",
+        "live_warn_engine_slow_ollama", "live_warn_falling_behind",
         "live_warn_skipped", "live_warn_cpu_fallback"})
 
     def drop_session_warning(self) -> None:
@@ -418,6 +419,11 @@ class LiveBar(tk.Frame):
         """
         if not self._banner_is_error and self._banner_key in self._SESSION_WARNINGS:
             self.clear_banner()
+
+    def current_banner_key(self) -> str | None:
+        """The key of the banner on screen (None when hidden), for the caller
+        to tell its own hint apart from a session warning before clearing it."""
+        return self._banner_key
 
     def clear_banner(self) -> None:
         self._banner_key = None
