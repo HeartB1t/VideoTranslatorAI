@@ -6325,6 +6325,12 @@ class App(tk.Tk):
         sys.stderr = _GlobalRedirect(sys.stderr)
         self._install_log_hooks()
 
+        # Windows: a failed load of an optional native DLL (libmpv and its
+        # dependencies) must raise an exception, never a modal hard-error box.
+        # Mask it once for the whole GUI process; no-op off Windows.
+        from videotranslator import libmpv_runtime as _libmpv_runtime
+        _libmpv_runtime.mask_hard_error_dialogs()
+
     def _set_window_icon(self) -> None:
         """Set the window icon from the bundled assets folder.
 

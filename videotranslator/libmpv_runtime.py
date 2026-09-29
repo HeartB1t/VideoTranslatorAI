@@ -38,7 +38,7 @@ import threading
 import traceback
 import urllib.request
 import zipfile
-from collections.abc import Callable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +59,12 @@ VULKAN_DIR_NAME = "vulkan-fallback"
 VULKAN_DLL = "vulkan-1.dll"
 PYTHON_MPV_REQUIREMENT = "mpv>=1.0.6,<2"
 PROBE_TIMEOUT_S = 20.0
+# Win32 loader error-mode flags (winbase.h). Suppress the modal "bad image"
+# hard-error box (status 0xc000012f) so a broken mpv-2.dll surfaces as a normal
+# OSError instead of a popup that blocks the thread, or, in headless CI, wedges
+# the probe subprocess.
+SEM_FAILCRITICALERRORS = 0x0001
+SEM_NOGPFAULTERRORBOX = 0x0002
 # The folder that contains the videotranslator package: the working directory
 # of `python -m videotranslator...` children (the desktop shortcut may start
 # the GUI from anywhere).
@@ -499,6 +505,70 @@ def _read_mpv_version(lib: Any) -> str | None:
         lib.mpv_terminate_destroy(handle)
 
 
+@contextlib.contextmanager
+def suppress_hard_error_dialogs(*, sys_platform: str = sys.platform) -> Iterator[None]:
+    """Stop the Windows loader popping a modal hard-error box while a DLL loads.
+
+    An invalid or incomplete ``mpv-2.dll`` makes the OS raise a hard error
+    (``0xc000012f``, "not designed to run on Windows or contains an error").
+    Unless the process has masked it, Windows shows a modal dialog that blocks
+    the calling thread until the user clicks OK, and in a headless CI runner the
+    same hard error wedges the isolated probe subprocess and taints the run.
+    Masking ``SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX`` turns the failed
+    load back into a normal Python ``OSError``.
+
+    We use per-thread ``SetThreadErrorMode`` (Windows 7+) so the change is
+    scoped and the previous mode is restored exactly, falling back to the
+    process-wide ``SetErrorMode`` on the rare build without it. Either way the
+    existing flags are preserved (read the current mode, OR in ours, restore the
+    original on exit). No-op off Windows: Linux is never touched.
+    """
+    windll = getattr(ctypes, "windll", None)   # present only on real Windows
+    if sys_platform != "win32" or windll is None:
+        yield
+        return
+    flags = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
+    kernel32 = windll.kernel32
+    if hasattr(kernel32, "SetThreadErrorMode"):
+        old = ctypes.c_uint()
+        # dwNewMode, LPDWORD lpOldMode -> the old mode comes back in `old`.
+        kernel32.SetThreadErrorMode(flags, ctypes.byref(old))
+        try:
+            # SetThreadErrorMode already OR-preserves the process mode; here we
+            # also fold in whatever thread flags were set, to add and not reset.
+            kernel32.SetThreadErrorMode(old.value | flags, None)
+            yield
+        finally:
+            kernel32.SetThreadErrorMode(old.value, None)
+    else:
+        # Legacy SetErrorMode replaces the mode and returns the previous one.
+        old_mode = kernel32.SetErrorMode(flags)
+        try:
+            kernel32.SetErrorMode(old_mode | flags)
+            yield
+        finally:
+            kernel32.SetErrorMode(old_mode)
+
+
+def mask_hard_error_dialogs(*, sys_platform: str = sys.platform) -> None:
+    """Add the loader hard-error mask to this process, once, and keep it.
+
+    For the GUI process at start-up: a desktop app that loads optional native
+    DLLs (libmpv and its dependencies) should never show a modal system
+    hard-error box. Additive (reads the current mode and ORs ours in) and
+    process-wide (no restore), unlike ``suppress_hard_error_dialogs`` which is a
+    scoped context manager. No-op off Windows.
+    """
+    windll = getattr(ctypes, "windll", None)   # present only on real Windows
+    if sys_platform != "win32" or windll is None:
+        return
+    flags = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX
+    kernel32 = windll.kernel32
+    # SetErrorMode returns the previous mode; OR ours in so existing flags stay.
+    old_mode = kernel32.SetErrorMode(flags)
+    kernel32.SetErrorMode(old_mode | flags)
+
+
 def probe_libmpv(*, sys_platform: str = sys.platform, env: Mapping[str, str] | None = None,
                  app_dir: Path | None = None, runtime_dir: Path | None = None,
                  find_library: Callable[[str], str | None] = ctypes.util.find_library,
@@ -530,7 +600,8 @@ def probe_libmpv(*, sys_platform: str = sys.platform, env: Mapping[str, str] | N
                 _DLL_DIR_HANDLES.append(adder(str(fallback)))
                 vulkan_present = True
     try:
-        lib = cdll(path)
+        with suppress_hard_error_dialogs(sys_platform=sys_platform):
+            lib = cdll(path)
     except OSError as exc:
         reason = classify_import_error(exc, sys_platform=sys_platform, vulkan_present=vulkan_present)
         return _status(reason, path=path, build=build, detail=f"{type(exc).__name__}: {exc}")
@@ -732,7 +803,11 @@ def load_mpv(*, importer: Callable[[str], ModuleType] = importlib.import_module,
                                  add_dll_directory=add_dll_directory or getattr(os, "add_dll_directory", None),
                                  system32_has_vulkan=vulkan_ok)
         try:
-            module = importer("mpv")
+            # python-mpv does the ctypes.CDLL of mpv-2.dll at import time; on
+            # Windows suppress the loader hard-error box so a bad DLL raises
+            # here instead of freezing the (non-Tk) worker thread on a popup.
+            with suppress_hard_error_dialogs(sys_platform=sys_platform):
+                module = importer("mpv")
         except Exception as exc:  # python-mpv raises OSError/RuntimeError at import time
             reason = classify_import_error(exc, sys_platform=sys_platform, vulkan_present=vulkan_ok)
             raise PlayerUnavailable(_status(reason, detail=f"{type(exc).__name__}: {exc}")) from exc
@@ -1241,8 +1316,12 @@ def _cmd_check(args: argparse.Namespace, *, sys_platform: str) -> int:
     if sys_platform != "win32":
         # libmpv refuses to create a handle under a non-C LC_NUMERIC.
         locale.setlocale(locale.LC_NUMERIC, "C")
-    status = probe_libmpv(sys_platform=sys_platform,
-                          runtime_dir=Path(args.dir) if args.dir else None)
+    # This is the isolated load subprocess: mask the loader hard-error box for
+    # the whole probe (the DLL load and every mpv_create/mpv_initialize that may
+    # pull in vulkan/ANGLE), so a bad build fails as an OSError, never a popup.
+    with suppress_hard_error_dialogs(sys_platform=sys_platform):
+        status = probe_libmpv(sys_platform=sys_platform,
+                              runtime_dir=Path(args.dir) if args.dir else None)
     if status.ok and not _module_present("mpv", importlib.util.find_spec):
         status = dataclasses.replace(status, ok=False, reason="python-mpv-missing",
                                      detail=status.detail + "; python-mpv (module mpv) is not importable")

@@ -15,6 +15,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from videotranslator import libmpv_runtime as rt
@@ -722,6 +723,104 @@ class MessageHelperTests(unittest.TestCase):
     def test_download_size_includes_vulkan_only_when_needed(self):
         self.assertEqual(rt.windows_download_mb(vulkan=False), 32)
         self.assertEqual(rt.windows_download_mb(vulkan=True), 50)
+
+
+FLAGS = rt.SEM_FAILCRITICALERRORS | rt.SEM_NOGPFAULTERRORBOX
+
+
+class FakeKernel32:
+    """Records error-mode calls; SetThreadErrorMode returns the previous mode."""
+
+    def __init__(self, *, thread_api=True, initial=0):
+        self.mode = initial
+        self.calls = []
+        # Only expose SetThreadErrorMode when simulating a modern Windows, so
+        # the code's hasattr() check selects the legacy fallback otherwise.
+        if thread_api:
+            self.SetThreadErrorMode = self._set_thread_error_mode
+
+    def _set_thread_error_mode(self, new_mode, lp_old):
+        prev = self.mode
+        self.mode = new_mode
+        if lp_old is not None:
+            lp_old._obj.value = prev
+        self.calls.append(("thread", new_mode))
+        return 1
+
+    def SetErrorMode(self, new_mode):
+        prev = self.mode
+        self.mode = new_mode
+        self.calls.append(("proc", new_mode))
+        return prev
+
+
+class HardErrorSuppressionTests(unittest.TestCase):
+    """Win32-only masking of the loader hard-error box (0xc000012f)."""
+
+    @contextlib.contextmanager
+    def _fake_windll(self, kernel32):
+        windll = types.SimpleNamespace(kernel32=kernel32)
+        with mock.patch.object(rt.ctypes, "windll", windll, create=True):
+            yield
+
+    def test_linux_is_a_noop(self):
+        # No windll is touched off Windows, even if it somehow existed.
+        sentinel = mock.NonCallableMock()
+        with mock.patch.object(rt.ctypes, "windll", sentinel, create=True):
+            with rt.suppress_hard_error_dialogs(sys_platform="linux"):
+                pass
+            rt.mask_hard_error_dialogs(sys_platform="linux")
+        self.assertEqual(sentinel.mock_calls, [])
+
+    def test_win32_context_masks_the_flags_then_restores(self):
+        k = FakeKernel32(initial=0x0004)      # a pre-existing, unrelated flag
+        with self._fake_windll(k):
+            with rt.suppress_hard_error_dialogs(sys_platform="win32"):
+                # Inside the block both our flags are set, and the previous
+                # flag is preserved (added, not reset).
+                self.assertEqual(k.mode & FLAGS, FLAGS)
+                self.assertEqual(k.mode & 0x0004, 0x0004)
+            # Restored to exactly what was there before.
+            self.assertEqual(k.mode, 0x0004)
+
+    def test_win32_legacy_seterrormode_fallback(self):
+        k = FakeKernel32(thread_api=False, initial=0x0004)
+        with self._fake_windll(k):
+            with rt.suppress_hard_error_dialogs(sys_platform="win32"):
+                self.assertEqual(k.mode & FLAGS, FLAGS)
+                self.assertEqual(k.mode & 0x0004, 0x0004)
+            self.assertEqual(k.mode, 0x0004)
+        self.assertTrue(all(kind == "proc" for kind, _ in k.calls))
+
+    def test_win32_mask_is_additive_and_process_wide(self):
+        k = FakeKernel32(initial=0x0004)
+        with self._fake_windll(k):
+            rt.mask_hard_error_dialogs(sys_platform="win32")
+        # Our flags added, the existing flag kept, and nothing restored.
+        self.assertEqual(k.mode & FLAGS, FLAGS)
+        self.assertEqual(k.mode & 0x0004, 0x0004)
+
+    def test_win32_probe_masks_before_the_cdll_load(self):
+        k = FakeKernel32()
+        masked_at_load = []
+
+        def cdll(path):
+            masked_at_load.append(k.mode & FLAGS == FLAGS)
+            raise OSError("bad image")   # a broken DLL now raises, no popup
+
+        with self._fake_windll(k):
+            with tempfile.TemporaryDirectory() as tmp:
+                runtime = Path(tmp) / "rt"
+                runtime.mkdir()
+                (runtime / "mpv-2.dll").write_bytes(b"MZ")
+                status = rt.probe_libmpv(
+                    sys_platform="win32", env={"LOCALAPPDATA": tmp}, app_dir=Path(tmp),
+                    runtime_dir=runtime, cdll=cdll, add_dll_directory=lambda d: None,
+                    system32=runtime)      # vulkan-1.dll absent, but the load raises first
+        # The mask was active exactly when the DLL was loaded, and cleared after.
+        self.assertEqual(masked_at_load, [True])
+        self.assertEqual(k.mode, 0)
+        self.assertEqual(status.reason, "libmpv-load-failed")
 
 
 if __name__ == "__main__":
