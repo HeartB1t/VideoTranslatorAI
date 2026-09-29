@@ -47,6 +47,19 @@ class LiveTransportRoutingTests(unittest.TestCase):
         self.session.notify_user_seek.assert_called_once_with(14)
         self.controller.seek.assert_called_once_with(14, dragging=False)
 
+    def test_live_drag_without_a_seek_does_not_arm_the_restart_wait(self):
+        # A live drag sends no seek (only the release does): arming the clock's
+        # restart wait here would strand it invalid if the release is lost.
+        for target in (3, 9, 14):
+            gui.App._on_player_command(self.app, "seek", {"seconds": target, "dragging": True})
+        self.app._player_clock.expect_restart.assert_not_called()
+        gui.App._on_player_command(self.app, "seek", {"seconds": 14})
+        self.app._player_clock.expect_restart.assert_called_once_with()
+
+    def test_relative_seeks_still_arm_the_restart_wait(self):
+        gui.App._on_player_command(self.app, "back_10", {})
+        self.app._player_clock.expect_restart.assert_called_once_with()
+
     def test_transport_without_media_explains_instead_of_doing_nothing(self):
         self.app._live_session = None
         self.controller.state.item = None
@@ -151,6 +164,43 @@ class FinishLiveSessionTests(unittest.TestCase):
         self.assertEqual([c[0] for c in bar.method_calls],
                          ["drop_session_warning", "set_active"])
         bar.set_active.assert_called_once_with(False)
+
+
+class PollLiveStatusTests(unittest.TestCase):
+    def _app(self, bar, **extra):
+        return SimpleNamespace(
+            _live_session=Mock(), _destroying=False, _live_poll_after="x",
+            _live_bar=bar, _live_last_status=None, _live_startup_pending=False,
+            _player_log=Mock(), _schedule_live_poll=Mock(),
+            _finish_live_session=Mock(), **extra)
+
+    def test_a_render_failure_does_not_break_the_poll_chain(self):
+        bar = Mock()
+        bar.render.side_effect = RuntimeError("boom")
+        app = self._app(bar)
+        gui.App._poll_live_status(app)
+        # The chain keeps going and the session is not torn down on a transient error.
+        app._schedule_live_poll.assert_called_once_with()
+        app._finish_live_session.assert_not_called()
+        app._player_log.assert_called_once()
+
+    def test_the_poll_error_is_logged_once_not_at_4hz(self):
+        bar = Mock()
+        bar.render.side_effect = RuntimeError("boom")
+        app = self._app(bar)
+        for _ in range(3):
+            gui.App._poll_live_status(app)
+        app._player_log.assert_called_once()             # warned once, not per tick
+        self.assertEqual(app._schedule_live_poll.call_count, 3)
+
+    def test_a_terminal_state_still_finishes_the_session(self):
+        bar = Mock()
+        app = self._app(bar)
+        app._live_session.status.return_value = SimpleNamespace(
+            state="ended", startup_ready=True)
+        gui.App._poll_live_status(app)
+        app._finish_live_session.assert_called_once_with()
+        app._schedule_live_poll.assert_not_called()
 
 
 class LiveChoicesPersistenceTests(unittest.TestCase):

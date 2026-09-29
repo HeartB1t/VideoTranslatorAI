@@ -113,14 +113,27 @@ class EventBridge:
 class PlaybackClock:
     """Extrapolate valid mpv time observations between callback updates."""
 
-    def __init__(self, *, first_pts: float | None = None) -> None:
+    # If mpv's "playback-restart" event is lost (a seek it could not perform on
+    # a non-seekable stream, or a drag whose release never arrived), the clock
+    # would stay invalid until Stop: captions freeze, the dub pauses, the pacer
+    # never resumes and the auto-stop never fires. After this long without the
+    # event, the first fresh non-seeking observation is accepted as the restart.
+    # 3 s comfortably exceeds a normal seek's restart latency (a few hundred ms),
+    # so a genuinely slow seek is not cut short, while a stuck state is bounded.
+    _RESTART_TIMEOUT_S = 3.0
+
+    def __init__(self, *, first_pts: float | None = None,
+                 log: Callable[[str], None] | None = None) -> None:
         self.first_pts = first_pts
+        self._log = log
         self._position: float | None = None
         self._stamp = 0.0
         self._speed = 1.0
         self._running = False
         self._valid = False
         self._expecting_restart = False
+        self._expect_since: float | None = None
+        self._restart_warned = False
         self._epoch = 0
         self._lock = threading.Lock()
 
@@ -138,18 +151,40 @@ class PlaybackClock:
         with self._lock:
             self._expecting_restart = True
             self._valid = False
+            self._expect_since = None
 
     def on_playback_restart(self, mono: float) -> None:
         with self._lock:
             self._epoch += 1
             self._expecting_restart = False
+            self._expect_since = None
             self._valid = False
             self._stamp = float(mono)
 
     def observe(self, pos: float | None, mono: float, *, speed: float,
                 running: bool, seeking: bool) -> None:
         with self._lock:
-            invalid = (pos is None or seeking or self._expecting_restart
+            if self._expecting_restart:
+                # Anchor the safety-net timer to the observe clock (the same
+                # timeline the rest of the extrapolation uses).
+                if self._expect_since is None:
+                    self._expect_since = float(mono)
+                usable = (pos is not None and not seeking
+                          and (self.first_pts is None or pos >= self.first_pts))
+                timed_out = float(mono) - self._expect_since >= self._RESTART_TIMEOUT_S
+                if not (usable and timed_out):
+                    # Still inside the window: keep ignoring stale positions.
+                    self._valid = False
+                    return
+                # The restart event never came: adopt this fresh observation.
+                self._epoch += 1
+                self._expecting_restart = False
+                self._expect_since = None
+                if self._log is not None and not self._restart_warned:
+                    self._restart_warned = True
+                    self._log("live: playback-restart not received after a seek; "
+                              "resuming the clock from the current position")
+            invalid = (pos is None or seeking
                        or (self.first_pts is not None and pos < self.first_pts))
             if invalid:
                 self._valid = False

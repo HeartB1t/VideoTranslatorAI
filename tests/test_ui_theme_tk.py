@@ -702,6 +702,28 @@ class AutoThemeStartupTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class HeavyModelHintStartupTests(unittest.TestCase):
+    """A saved heavy Ollama live model shows its hint at startup without crashing.
+
+    The hint's banner writes to the log panel: shown from the middle of
+    _build_ui it ran before the log existed and App() raised AttributeError
+    ('_log'), so the GUI did not open at all for such a config.
+    """
+
+    def test_saved_heavy_ollama_model_starts_and_shows_the_hint(self):
+        cfg = {"ui_lang": "en", "live_engine": "ollama", "ollama_model": "qwen3:32b"}
+        with built_app(cfg) as (gui, app, cfg_path):
+            app.update()
+            self.assertEqual(app._live_bar.current_banner_key(), "live_hint_heavy_model")
+
+    def test_saved_light_ollama_model_starts_without_the_hint(self):
+        cfg = {"ui_lang": "en", "live_engine": "ollama", "ollama_model": "qwen3:8b"}
+        with built_app(cfg) as (gui, app, cfg_path):
+            app.update()
+            self.assertIsNone(app._live_bar.current_banner_key())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class KeyboardAccessTests(unittest.TestCase):
     """M6: the header gear and the accent dots work without a mouse."""
 

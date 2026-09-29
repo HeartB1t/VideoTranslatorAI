@@ -200,6 +200,14 @@ class AudioDecoder:
 
     _RATE = 16000
     _BLOCK = 4000  # 0.25 s at 16 kHz
+    # Network read timeout in microseconds (FFmpeg ``rw_timeout``): a stalled
+    # HTTP(S) stream (dead NAT/VPN, changed network) then raises instead of
+    # blocking the decode thread forever, so the session fails cleanly and the
+    # per-frame cancel can be honoured. 15 s absorbs a transient stall or a slow
+    # live segment without a false failure, while still bounding a dead link.
+    _NET_RW_TIMEOUT_US = 15_000_000
+    # Cap the backoff between FFmpeg's own reconnect attempts (seconds).
+    _NET_RECONNECT_DELAY_MAX_S = 5
 
     def __init__(self, source, *, container_format: str | None = None,
                  start_at: float = 0.0, time_domain: str = "rebased",
@@ -212,7 +220,17 @@ class AudioDecoder:
         self._start_at = start_at
         self._time_domain = time_domain
         self._seek_index = seek_index
-        self._container = av_module.open(source, format=container_format)
+        open_kwargs: dict = {"format": container_format}
+        # Network options only for HTTP(S) URLs; local files keep the plain open
+        # (unchanged behaviour, and any av_module fake still works).
+        if isinstance(source, str) and source.lower().startswith(("http://", "https://")):
+            open_kwargs["options"] = {
+                "rw_timeout": str(self._NET_RW_TIMEOUT_US),
+                "reconnect": "1",
+                "reconnect_streamed": "1",
+                "reconnect_delay_max": str(self._NET_RECONNECT_DELAY_MAX_S),
+            }
+        self._container = av_module.open(source, **open_kwargs)
         if not self._container.streams.audio:
             self._container.close()
             raise RuntimeError("the source has no audio track to transcribe")

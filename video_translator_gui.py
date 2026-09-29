@@ -6243,7 +6243,7 @@ class App(tk.Tk):
         self._player_mixer = _player_engine.VolumeMixer(
             user_volume=self._player_settings.volume,
             muted=self._player_settings.muted)
-        self._player_clock = _player_engine.PlaybackClock()
+        self._player_clock = _player_engine.PlaybackClock(log=self._player_log)
         self._player_backend = None
         self._voice_backend = None            # second mpv for live dubbed voice (P5)
         # The voice mpv is built on a worker; the result is handed to Tk through
@@ -6301,6 +6301,10 @@ class App(tk.Tk):
             self._btn_log_toggle.configure(text=self._s("btn_log_hide"))
         for problem in _PLAYER_STRING_PROBLEMS:
             self._log_write(f"[!] Player strings: {problem}\n")
+        # A persisted heavy Ollama model gets its proactive hint at startup too.
+        # Only after _build_ui: the hint's banner writes to the log panel, which
+        # does not exist yet in the middle of _build_ui.
+        self._refresh_live_heavy_model_hint()
         # Models applied in the 'Models for this PC' window survive a restart.
         self._models_dialog = None
         self._models_choice_restored = False
@@ -7908,8 +7912,6 @@ class App(tk.Tk):
         self._player_panel.pack(side="top", fill="both", expand=True)
         self._refresh_live_bar_enabled()
         self._refresh_live_voice_info()
-        # A persisted heavy Ollama model gets its proactive hint at startup too.
-        self._refresh_live_heavy_model_hint()
 
         # Right column: input, translation, profile, start, then the settings
         # accordion, in a canvas that scrolls only this column. The canvas
@@ -8996,14 +8998,16 @@ class App(tk.Tk):
             else:
                 controller.seek_relative(10.0)
         elif name == "seek":
-            self._player_clock.expect_restart()
             target = max(0.0, float(args.get("seconds", 0.0)))
             dragging = bool(args.get("dragging", False))
             if session is not None and not dragging:
                 session.notify_user_seek(target)
             # Live dragging previews only the bar; one exact seek on release
             # prevents ASR restarts and intermediate playback-restart events.
+            # Arm the restart wait only when a seek is actually sent, or a drag
+            # with no seek would leave the clock invalid until the next real one.
             if session is None or not dragging:
+                self._player_clock.expect_restart()
                 controller.seek(target, dragging=dragging)
         elif name == "volume":
             controller.set_volume(int(args.get("value", controller.state.volume)))
@@ -9657,6 +9661,7 @@ class App(tk.Tk):
             voice=self._live_voice_info_text())
         self._live_last_status = None
         self._live_startup_pending = True
+        self._live_poll_warned = False
         self._live_bar.set_active(True)
         self._live_bar.set_start_enabled(False)
         # A session is running now: drop the proactive heavy-model hint at once
@@ -9676,13 +9681,24 @@ class App(tk.Tk):
         session = self._live_session
         if session is None or self._destroying:
             return
-        status = session.status()
-        self._live_last_status = status
-        self._live_bar.render(status)
-        if getattr(self, "_live_startup_pending", False) and status.startup_ready:
-            session.release_startup_hold()
-            self._live_startup_pending = False
-        if status.state in ("stopped", "failed", "ended"):
+        # A failure in status() or render() must never break the after() chain:
+        # otherwise a terminal state is never read, _finish_live_session never
+        # runs, the bar stays active and the worker threads are never joined.
+        # Log once (the poll repeats at 4 Hz) and keep polling regardless.
+        terminal = False
+        try:
+            status = session.status()
+            self._live_last_status = status
+            self._live_bar.render(status)
+            if getattr(self, "_live_startup_pending", False) and status.startup_ready:
+                session.release_startup_hold()
+                self._live_startup_pending = False
+            terminal = status.state in ("stopped", "failed", "ended")
+        except Exception as exc:                     # noqa: BLE001
+            if not getattr(self, "_live_poll_warned", False):
+                self._live_poll_warned = True
+                self._player_log(f"[live] status poll error: {exc}")
+        if terminal:
             self._finish_live_session()
             return
         self._schedule_live_poll()
@@ -10244,7 +10260,7 @@ class App(tk.Tk):
 
     def _on_player_fallback_ready(self, backend, bridge, profile: str) -> None:
         self._player_bridge = bridge
-        self._player_clock = _player_engine.PlaybackClock()
+        self._player_clock = _player_engine.PlaybackClock(log=self._player_log)
         self._player_fallback_notice_pending = True
         self._player_loaded_at = None
         self._player_log_lines.clear()

@@ -99,6 +99,45 @@ class PlaybackClockTests(unittest.TestCase):
         self.assertFalse(clock.valid)
         self.assertIsNone(clock.now(3.0))
 
+    def test_safety_net_recovers_when_the_restart_event_is_lost(self):
+        logs = []
+        clock = pe.PlaybackClock(log=logs.append)
+        clock.observe(100.0, 0.0, speed=1.0, running=True, seeking=False)
+        clock.expect_restart()
+        # Inside the 3 s window the clock stays invalid (stale positions ignored).
+        clock.observe(100.1, 1.0, speed=1.0, running=True, seeking=False)
+        self.assertIsNone(clock.now(1.0))
+        self.assertEqual(clock.epoch, 0)
+        # Timed from the first post-seek observation (mono 1.0): 4.05 > 1.0 + 3.
+        clock.observe(100.4, 4.05, speed=1.0, running=True, seeking=False)
+        self.assertEqual(clock.epoch, 1)
+        self.assertAlmostEqual(clock.now(4.05), 100.4)
+        self.assertEqual(len(logs), 1)          # warned exactly once
+
+    def test_safety_net_waits_for_a_non_seeking_observation(self):
+        clock = pe.PlaybackClock()
+        clock.observe(50.0, 0.0, speed=1.0, running=True, seeking=False)
+        clock.expect_restart()
+        clock.observe(50.0, 0.5, speed=1.0, running=True, seeking=False)   # anchor
+        # Past the timeout but still seeking: not adopted yet.
+        clock.observe(50.0, 4.6, speed=1.0, running=True, seeking=True)
+        self.assertIsNone(clock.now(4.6))
+        self.assertEqual(clock.epoch, 0)
+        # First non-seeking observation past the timeout is adopted as restart.
+        clock.observe(51.0, 4.7, speed=1.0, running=True, seeking=False)
+        self.assertEqual(clock.epoch, 1)
+        self.assertAlmostEqual(clock.now(4.7), 51.0)
+
+    def test_real_restart_event_preempts_the_safety_net(self):
+        clock = pe.PlaybackClock()
+        clock.expect_restart()
+        clock.observe(7.0, 0.1, speed=1.0, running=True, seeking=False)
+        clock.on_playback_restart(0.2)          # the event arrived in time
+        self.assertEqual(clock.epoch, 1)
+        clock.observe(1000.0, 5.0, speed=1.0, running=True, seeking=False)
+        self.assertEqual(clock.epoch, 1)        # no extra safety-net bump
+        self.assertAlmostEqual(clock.now(5.0), 1000.0)
+
 
 class CommandQueueTests(unittest.TestCase):
     def test_same_key_replaces_the_queued_command_in_place(self):

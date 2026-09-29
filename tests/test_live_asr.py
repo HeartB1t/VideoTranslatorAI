@@ -139,6 +139,46 @@ class PersistentWhisperUnitTests(unittest.TestCase):
         self.assertEqual(pw.model_name, "large-v3-turbo")
 
 
+class AudioDecoderOpenOptionsTests(unittest.TestCase):
+    """AudioDecoder.__init__ open options, exercised with a fake av module
+    (no real PyAV / network needed, so these always run)."""
+
+    def _capturing_av(self, captured):
+        class _Container:
+            streams = type("S", (), {"audio": [object()]})()
+            start_time = None
+
+            def close(self):
+                pass
+
+        class _Av:
+            @staticmethod
+            def open(source, **kwargs):
+                captured.update(kwargs)
+                return _Container()
+
+            AudioResampler = staticmethod(lambda **k: object())
+
+        return _Av()
+
+    def test_network_source_gets_reconnect_and_read_timeout_options(self):
+        for url in ("https://host/live.m3u8", "http://host/stream"):
+            captured = {}
+            AudioDecoder(url, av_module=self._capturing_av(captured))
+            opts = captured.get("options")
+            self.assertIsNotNone(opts, url)
+            self.assertEqual(opts["rw_timeout"], str(15_000_000))
+            self.assertEqual(opts["reconnect"], "1")
+            self.assertEqual(opts["reconnect_streamed"], "1")
+            self.assertIn("reconnect_delay_max", opts)
+
+    def test_local_source_passes_no_network_options(self):
+        captured = {}
+        AudioDecoder("/tmp/clip.wav", av_module=self._capturing_av(captured))
+        self.assertNotIn("options", captured)
+        self.assertIn("format", captured)
+
+
 @unittest.skipUnless(_HEAVY, "heavy smoke: set VTAI_RUN_HEAVY_SMOKE=1")
 class LiveAsrHeavySmokeTests(unittest.TestCase):
     def _wav(self, path):
