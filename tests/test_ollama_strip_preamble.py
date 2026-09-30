@@ -97,5 +97,65 @@ class OllamaStripPreambleAcknowledgmentTests(unittest.TestCase):
         self.assertEqual(strip("Certo. Buongiorno."), "Buongiorno.")
 
 
+class OllamaStripPreambleContentWordTests(unittest.TestCase):
+    """A preamble word followed by a content word is the sentence itself.
+
+    Review of 30/09: the "ecco", acknowledgment and "translation" prefixes had
+    OPTIONAL closing punctuation, so they also matched a sentence that merely
+    starts with that word and ate its first word ("Ecco perche' lo faccio"
+    became "perche' lo faccio", "Ecco il problema" even lost the article).
+    A prefix is a preamble only when a structural continuation follows it
+    (punctuation, or "la/il traduzione" for "ecco"); a plain space plus a
+    content word means the model is speaking, not announcing.
+    """
+
+    def test_ecco_followed_by_a_content_word_is_kept(self):
+        for text in ("Ecco perche' lo faccio.", "Ecco il problema.",
+                     "Ecco la casa di mio padre."):
+            with self.subTest(text=text):
+                self.assertEqual(strip(text), text)
+
+    def test_acknowledgment_followed_by_a_content_word_is_kept(self):
+        for text in ("Certo che si'.", "Sure thing, mate.", "Ok va bene cosi'."):
+            with self.subTest(text=text):
+                self.assertEqual(strip(text), text)
+
+    def test_translation_word_followed_by_a_content_word_is_kept(self):
+        for text in ("Translated text: Hi.", "Traduzione simultanea in corso."):
+            with self.subTest(text=text):
+                self.assertEqual(strip(text), text)
+
+    def test_real_preambles_are_still_stripped(self):
+        # The structural continuations keep working after the tightening.
+        self.assertEqual(strip("Ecco la traduzione: Ciao."), "Ciao.")
+        self.assertEqual(strip("Ecco la traduzione concisa: Ciao."), "Ciao.")
+        self.assertEqual(strip("Ecco: Ciao."), "Ciao.")
+        self.assertEqual(strip("Ecco, Ciao."), "Ciao.")
+        self.assertEqual(strip("Traduzione: Ciao."), "Ciao.")
+        self.assertEqual(strip("Translation - Ciao."), "Ciao.")
+        self.assertEqual(strip("Certo, ecco la traduzione: Ciao."), "Ciao.")
+
+    def test_chinese_chain_is_untouched_by_the_tightening(self):
+        # CJK characters are \w: the Chinese prefixes keep their own rules.
+        self.assertEqual(strip("好的这是翻译：Ni hao"), "Ni hao")
+
+    def test_label_alone_on_its_line_is_stripped(self):
+        # A small model can put the label on its own line without a colon; the
+        # newline is a structural continuation (it would be read aloud once the
+        # newline is collapsed to a space).
+        self.assertEqual(strip("Ecco\nCiao."), "Ciao.")
+        self.assertEqual(strip("Traduzione\nCiao."), "Ciao.")
+        self.assertEqual(strip("Ok\nCiao."), "Ciao.")
+        self.assertEqual(strip("Sure\nHi."), "Hi.")
+
+    def test_word_then_space_then_content_is_still_kept(self):
+        # The line break is the signal: a plain space before a content word is
+        # not, so these stay whole.
+        for text in ("Ecco perche' lo faccio.", "Certo che si'.",
+                     "Traduzione simultanea in corso."):
+            with self.subTest(text=text):
+                self.assertEqual(strip(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()

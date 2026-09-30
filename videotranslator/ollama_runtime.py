@@ -217,15 +217,27 @@ def _ollama_strip_preamble(text: str) -> str:
     #    whitespace before the next prefix. The word prefixes end with
     #    `(?![\w'-])` so they match whole words only: without it "Okay" lost
     #    its "Ok" ("ay, here we are") and "Eccoci" its "Ecco" ("ci qui").
+    #    A word prefix is a preamble only with a structural continuation
+    #    (closing punctuation, or "la/il traduzione" after "ecco"): with the
+    #    punctuation optional, "Ecco il problema" lost "Ecco il", "Certo che
+    #    si'" lost "Certo" and "Translated text:" lost "Translated". A space
+    #    plus a content word means the sentence itself starts that way. A line
+    #    break right after the word IS a structural continuation ("Ecco\nCiao",
+    #    "Ok\nCiao"): a small model puts the label on its own line without a
+    #    colon, and the newline is collapsed to a space later, so without this
+    #    the label would be read aloud.
     PREAMBLE_PATTERNS = [
         # EN/IT "Here's the translation:" - including variants "concisa", "tradotta"
         r"^(?:here'?s?|this is|the|la|le|il)\s+(?:the\s+)?(?:concise\s+)?translation(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
-        # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:"
-        r"^ecco(?![\w'-])(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
+        # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:" or a bare
+        # "Ecco:" / "Ecco," / "Ecco." / "Ecco\n" - never "Ecco" + a content word.
+        r"^ecco(?![\w'-])(?:(?:\s+(?:la|il))?\s+traduzione(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-,!]?|\s*[:.\-,!]|[ \t]*\r?\n)\s*",
         # Singolo token "Traduzione:" / "Translation:" / "Übersetzung:" / "Traducción:"
-        r"^(?:traduzione|translated|translation|übersetzung|traducción|traduction)(?![\w'-])\s*[:.\-]?\s*",
+        # (punctuation or a line break required: "Traduzione simultanea" is content)
+        r"^(?:traduzione|translated|translation|übersetzung|traducción|traduction)(?![\w'-])(?:\s*[:.\-]|[ \t]*\r?\n)\s*",
         # Acknowledgment: "Ok,", "Sure!", "Certainly.", "Certo!", "Bien sûr,"
-        r"^(?:ok|sure|certainly|of course|certo|bien sûr)(?![\w'-])\s*[,.!]?\s*",
+        # (punctuation or a line break required: "Certo che si'", "Sure thing" are content)
+        r"^(?:ok|sure|certainly|of course|certo|bien sûr)(?![\w'-])(?:\s*[,.!]|[ \t]*\r?\n)\s*",
         # Cinese: "好的" (OK), "这是" (this is), "翻译：" (translation:)
         r"^好的\s*[，,:：]?\s*",
         r"^这是\s*[，,:：]?\s*",
