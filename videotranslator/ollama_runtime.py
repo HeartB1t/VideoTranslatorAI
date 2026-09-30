@@ -214,16 +214,18 @@ def _ollama_strip_preamble(text: str) -> str:
     #    fixed-point loop (max 6 passes) so concatenated prefixes like
     #    "Sure! Here's the translation:" or "好的这是翻译：" are consumed one
     #    by one. Each pattern ends with `\s*` / `:?\s*` to absorb trailing
-    #    whitespace before the next prefix.
+    #    whitespace before the next prefix. The word prefixes end with
+    #    `(?![\w'-])` so they match whole words only: without it "Okay" lost
+    #    its "Ok" ("ay, here we are") and "Eccoci" its "Ecco" ("ci qui").
     PREAMBLE_PATTERNS = [
         # EN/IT "Here's the translation:" - including variants "concisa", "tradotta"
         r"^(?:here'?s?|this is|the|la|le|il)\s+(?:the\s+)?(?:concise\s+)?translation(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
         # IT "Ecco la/il traduzione [concisa/per doppiaggio/tradotta]:"
-        r"^ecco(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
+        r"^ecco(?![\w'-])(?:\s+(?:la|il))?(?:\s+traduzione)?(?:\s+(?:concisa|per\s+\S+|tradotta))?\s*[:.\-]?\s*",
         # Singolo token "Traduzione:" / "Translation:" / "Übersetzung:" / "Traducción:"
-        r"^(?:traduzione|translated|translation|übersetzung|traducción|traduction)\s*[:.\-]?\s*",
+        r"^(?:traduzione|translated|translation|übersetzung|traducción|traduction)(?![\w'-])\s*[:.\-]?\s*",
         # Acknowledgment: "Ok,", "Sure!", "Certainly.", "Certo!", "Bien sûr,"
-        r"^(?:ok|sure|certainly|of course|certo|bien sûr)\s*[,.!]?\s*",
+        r"^(?:ok|sure|certainly|of course|certo|bien sûr)(?![\w'-])\s*[,.!]?\s*",
         # Cinese: "好的" (OK), "这是" (this is), "翻译：" (translation:)
         r"^好的\s*[，,:：]?\s*",
         r"^这是\s*[，,:：]?\s*",

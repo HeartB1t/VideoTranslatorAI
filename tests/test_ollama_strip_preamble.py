@@ -75,5 +75,27 @@ class OllamaStripPreambleThinkTests(unittest.TestCase):
         self.assertNotIn("user said", out.lower())
 
 
+class OllamaStripPreambleAcknowledgmentTests(unittest.TestCase):
+    """The acknowledgment preamble ("Ok,", "Sure!") must match whole words.
+
+    Found in the 30/09 acceptance test: the IT->EN translation of "Ok, eccoci
+    qui" came out as "ay, here we are" because "Ok" was cut out of "Okay".
+    """
+
+    def test_okay_is_not_cut_to_ay(self):
+        self.assertEqual(strip("Okay, here we are."), "Okay, here we are.")
+
+    def test_words_starting_with_an_acknowledgment_are_kept(self):
+        for text in ("Surely not.", "Oklahoma is far.", "Certosa di Pavia.",
+                     "Certainly-ish, maybe."):
+            with self.subTest(text=text):
+                self.assertEqual(strip(text), text)
+
+    def test_standalone_acknowledgments_are_still_stripped(self):
+        self.assertEqual(strip("Ok, eccoci qui."), "eccoci qui.")
+        self.assertEqual(strip("Sure! Here's the translation: Ciao."), "Ciao.")
+        self.assertEqual(strip("Certo. Buongiorno."), "Buongiorno.")
+
+
 if __name__ == "__main__":
     unittest.main()
