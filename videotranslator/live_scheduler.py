@@ -326,7 +326,8 @@ class DubScheduler:
         self._playing_fit = 1.0                # speed factor of the playing clip
         self._overlap_sped = False
         self._dub_state: dict[int, str] = {}   # seg_id -> translated/synth/ready/
-                                               # preloaded/playing/done/dropped
+                                               # preloaded/playing/done/dropped/
+                                               # skipped (jumped over by a seek)
         self._clips: dict[int, object] = {}    # seg_id -> Clip
         self._clip_cache: dict[tuple, object] = {}  # (rstart, rend, tgt) -> Clip
         self._preloaded: int | None = None
@@ -932,7 +933,7 @@ class DubScheduler:
     @property
     def startup_ready(self) -> bool:
         """Whether at least one initial unit can be presented without a hole."""
-        resolved = {"ready", "preloaded", "playing", "done", "dropped"}
+        resolved = {"ready", "preloaded", "playing", "done", "dropped", "skipped"}
         for seg in sorted(self._segments.values(), key=lambda item: item.start):
             if not self._caption_ready(seg):
                 continue
@@ -998,6 +999,15 @@ class DubScheduler:
                             "ready" if seg.seg_id in self._clips else "translated")
                     # An in-flight request retains its original gen and filename.
                     # Reissuing it races os.replace and wastes a network request.
+            # Lines a forward seek jumped over were skipped by the user, not
+            # lost: take them out of the queue without counting them. Left
+            # active, the late/expired passes reported each one as a lost voice
+            # line and inflated the said/lost summary. A late TTS result is
+            # ignored by clip_ready; a seek back re-arms them (loop above).
+            for seg in self._segments.values():
+                if (self._dub_state.get(seg.seg_id) in ("translated", "synth", "ready")
+                        and not self._still_voiceable(seg, now)):
+                    self._dub_state[seg.seg_id] = "skipped"
         return actions
 
     def _forget_after(self, now: float) -> None:

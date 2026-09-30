@@ -256,6 +256,49 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         s.clip_ready(0, 0, _clip())
         self.assertIn("PreloadClip", _types(s.tick(4.0)))
 
+    def _jumped_over(self, mode):
+        """Three lines before a forward seek: a ready clip, a translated line and
+        a request still in flight."""
+        s = _dub_sched(mode=mode, max_live_lag_s=4.0)
+        for sid, start in ((1, 10.0), (2, 20.0), (3, 30.0)):
+            s.upsert(LiveSegment(sid, 0, start, start + 2.0, "a", text_tgt="uno",
+                                 dub_ok=True))
+        s.tick(9.0, mono=100.0, voice_state="idle")          # requests 1..3
+        s.clip_ready(1, 0, _clip())                           # 1 ready, 2-3 in flight
+        return s
+
+    def test_forward_seek_skips_the_jumped_lines_without_counting_them_lost(self):
+        # 30/09 acceptance test: a seek 60 s -> 150 s reported the 21 lines in
+        # between as "lost (late)" and the summary said "lost 22".
+        for mode in ("delayed", "live"):
+            with self.subTest(mode=mode):
+                s = self._jumped_over(mode)
+                s.on_seek(50.0, 1)
+                acts = s.tick(50.0, mono=101.0, voice_state="idle")
+                acts += s.tick(51.0, mono=102.0, voice_state="idle")
+                self.assertNotIn("Drop", _types(acts))
+                self.assertEqual(s.metrics()["voice_dropped"], 0)
+                self.assertFalse(s.clip_ready(2, 0, _clip()))   # late result ignored
+                self.assertEqual(s.metrics()["voice_dropped"], 0)
+                self.assertTrue(s.drained(51.0))
+
+    def test_backward_seek_re_arms_the_skipped_lines(self):
+        s = self._jumped_over("delayed")
+        s.on_seek(50.0, 1)
+        s.tick(50.0, mono=101.0, voice_state="idle")
+        s.on_seek(8.0, 2)
+        self.assertEqual(s._dub_state.get(1), "ready")         # cached clip again
+        self.assertEqual(s._dub_state.get(2), "translated")
+
+    def test_small_live_seek_keeps_a_line_still_in_the_lag(self):
+        s = _dub_sched(mode="live", max_live_lag_s=4.0)
+        s.upsert(self._seg(start=10.0, end=12.0))
+        s.tick(9.0, mono=100.0, voice_state="idle")
+        s.clip_ready(0, 0, _clip())
+        s.on_seek(11.0, 1)                                     # 1 s after its start
+        self.assertEqual(s._dub_state.get(0), "ready")
+        self.assertIn("PreloadClip", _types(s.tick(11.0, mono=101.0, voice_state="idle")))
+
     def test_restart_event_without_jump_does_not_abandon_preload(self):
         s = _dub_sched()
         s.upsert(self._seg())
