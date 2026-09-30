@@ -26,8 +26,20 @@ def build_transcribe_kwargs(
     No ``repetition_penalty``: 1.3 penalised every token already spoken in the
     window, so natural repetitions ("really, really, really") ended decoding
     early and whole sentences were lost (up to 62% of a short clip with
-    ``small``). Loops stay covered by ``condition_on_previous_text=False``,
-    ``no_repeat_ngram_size``, the compression threshold and the dedup.
+    ``small``).
+
+    ``compression_ratio_threshold`` and ``log_prob_threshold`` are passed for
+    completeness but discard nothing here: they only drive the temperature
+    fallback, and with a scalar ``temperature=0`` there is no fallback, so a
+    looping segment is returned as is. The guards that actually work are
+    ``condition_on_previous_text=False`` (a loop cannot seed the next window),
+    ``no_repeat_ngram_size=3`` (no trigram repeats inside a window, which stops
+    a loop at decode time) and the adjacent dedup in
+    ``normalize_whisper_segments``. A post-hoc drop on ``compression_ratio`` is
+    deliberately NOT done here: that value is computed per decoded window (up to
+    30 s of concatenated speech) and copied to every segment, so it would drop a
+    whole window at once, silently, and real repetitive speech ("No, no, no!")
+    can exceed the bound.
     """
     kwargs: dict[str, Any] = {
         "language": None if lang_source == "auto" else lang_source,
