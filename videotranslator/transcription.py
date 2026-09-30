@@ -21,14 +21,20 @@ def build_transcribe_kwargs(
     lang_source: str,
     hotwords: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Return the standard faster-Whisper decoding parameters."""
+    """Return the standard faster-Whisper decoding parameters.
+
+    No ``repetition_penalty``: 1.3 penalised every token already spoken in the
+    window, so natural repetitions ("really, really, really") ended decoding
+    early and whole sentences were lost (up to 62% of a short clip with
+    ``small``). Loops stay covered by ``condition_on_previous_text=False``,
+    ``no_repeat_ngram_size``, the compression threshold and the dedup.
+    """
     kwargs: dict[str, Any] = {
         "language": None if lang_source == "auto" else lang_source,
         "beam_size": 5,
         "vad_filter": True,
         "vad_parameters": {"threshold": 0.3, "min_silence_duration_ms": 300},
         "condition_on_previous_text": False,
-        "repetition_penalty": 1.3,
         "no_repeat_ngram_size": 3,
         "compression_ratio_threshold": 2.4,
         "log_prob_threshold": -1.0,

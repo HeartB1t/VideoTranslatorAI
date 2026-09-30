@@ -45,6 +45,17 @@ class TranscriptionHelperTests(unittest.TestCase):
     def test_build_transcribe_kwargs_explicit_language(self):
         self.assertEqual(build_transcribe_kwargs("it")["language"], "it")
 
+    def test_no_repetition_penalty_that_drops_real_speech(self):
+        # 30/09 acceptance test: repetition_penalty=1.3 made Whisper stop early
+        # on natural repetitions ("really, really, really"): small kept 7.3 s
+        # of a 19 s clip, large-v3-turbo lost 34 s of 300 s of Italian speech.
+        # The anti-loop guards stay in place.
+        kwargs = build_transcribe_kwargs("auto")
+        self.assertLessEqual(kwargs.get("repetition_penalty", 1.0), 1.0)
+        self.assertFalse(kwargs["condition_on_previous_text"])
+        self.assertEqual(kwargs["no_repeat_ngram_size"], 3)
+        self.assertEqual(kwargs["compression_ratio_threshold"], 2.4)
+
     def test_normalize_whisper_segments_drops_empty_and_adjacent_dupes(self):
         raw = [
             types.SimpleNamespace(start=0.0, end=1.0, text=" Hello "),
