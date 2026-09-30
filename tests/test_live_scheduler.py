@@ -290,6 +290,80 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         self.assertEqual(s._dub_state.get(1), "ready")         # cached clip again
         self.assertEqual(s._dub_state.get(2), "translated")
 
+    def test_late_clip_for_a_skipped_line_is_kept_for_a_seek_back(self):
+        # Review of 30/09: a TTS result landing for a line a forward seek had
+        # jumped over was refused AND not cached, so a seek back over it asked
+        # the TTS again: with ElevenLabs a second paid call for the same text.
+        # The clip must be kept (line still "skipped", not counted) and reused.
+        for mode in ("delayed", "live"):
+            with self.subTest(mode=mode):
+                s = self._jumped_over(mode)
+                s.on_seek(50.0, 1)
+                s.tick(50.0, mono=101.0, voice_state="idle")
+                self.assertEqual(s._dub_state.get(2), "skipped")
+                self.assertFalse(s.clip_ready(2, 0, _clip("late.mp3")))
+                self.assertEqual(s._dub_state.get(2), "skipped")   # not "ready"
+                self.assertIn(2, s._clips)                         # but kept
+                self.assertTrue(s.drained(51.0))
+                self.assertEqual(s.metrics()["voice_dropped"], 0)
+                s.on_seek(18.0, 2)                                 # back over it
+                self.assertEqual(s._dub_state.get(2), "ready")
+                acts = s.tick(18.6, mono=102.0, voice_state="idle")
+                self.assertNotIn(2, [a.seg_id for a in acts if isinstance(a, RequestTts)])
+                self.assertEqual([a.seg_id for a in acts if isinstance(a, PreloadClip)], [2])
+
+    def test_skipped_lines_are_re_armed_when_the_voice_comes_back(self):
+        # Review of 30/09: seek forward (lines skipped) -> voice off -> seek
+        # back (dub off: on_seek does not re-arm) -> voice on. set_dub(True)
+        # only re-armed lines absent from the dub state, and "skipped" is in
+        # it, so those lines stayed skipped for the rest of the session.
+        for mode in ("delayed", "live"):
+            with self.subTest(mode=mode):
+                s = self._jumped_over(mode)
+                s.on_seek(50.0, 1)
+                s.tick(50.0, mono=101.0, voice_state="idle")
+                s.set_dub(False)
+                s.on_seek(8.0, 2)
+                self.assertEqual(s._dub_state.get(1), "skipped")   # dub off: untouched
+                s.set_dub(True)
+                self.assertEqual(s._dub_state.get(1), "ready")     # cached clip
+                self.assertEqual(s._dub_state.get(2), "translated")
+                self.assertEqual(s._dub_state.get(3), "translated")
+                acts = s.tick(8.6, mono=102.0, voice_state="idle")
+                armed = sorted({a.seg_id for a in acts
+                                if isinstance(a, (RequestTts, PreloadClip))})
+                self.assertEqual(armed, [1, 2, 3])
+
+    def test_live_seek_back_within_the_lag_recovers_a_skipped_line(self):
+        # Review of 30/09: on_seek re-armed with `end > now` while it skips
+        # with `_still_voiceable`. In live mode a line is voiceable up to
+        # max_live_lag after its start (catch-up), so a skipped line reached
+        # again by a seek back past its end but inside the lag stayed skipped.
+        s = self._jumped_over("live")              # 1: 10-12 s, clip ready
+        s.on_seek(50.0, 1)
+        s.tick(50.0, mono=101.0, voice_state="idle")
+        self.assertEqual(s._dub_state.get(1), "skipped")
+        s.on_seek(13.0, 2)                         # 3 s after its start, past its end
+        self.assertEqual(s._dub_state.get(1), "ready")
+        self.assertEqual(s._dub_state.get(2), "translated")
+        acts = s.tick(13.0, mono=102.0, voice_state="idle")
+        self.assertEqual([a.seg_id for a in acts if isinstance(a, PreloadClip)], [1])
+
+    def test_seek_back_to_a_line_no_longer_voiceable_keeps_it_skipped(self):
+        # Guard for the change above: a line whose moment is really gone (past
+        # the delayed slot, or beyond the live lag) is not re-armed by a seek
+        # back, so it cannot expire at once and be counted as a lost voice line.
+        for mode, now in (("delayed", 13.0), ("live", 14.5)):
+            with self.subTest(mode=mode, now=now):
+                s = self._jumped_over(mode)
+                s.on_seek(50.0, 1)
+                s.tick(50.0, mono=101.0, voice_state="idle")
+                s.on_seek(now, 2)
+                self.assertEqual(s._dub_state.get(1), "skipped")
+                acts = s.tick(now, mono=102.0, voice_state="idle")
+                self.assertNotIn("Drop", _types(acts))
+                self.assertEqual(s.metrics()["voice_dropped"], 0)
+
     def test_small_live_seek_keeps_a_line_still_in_the_lag(self):
         s = _dub_sched(mode="live", max_live_lag_s=4.0)
         s.upsert(self._seg(start=10.0, end=12.0))
@@ -298,6 +372,27 @@ class DubSchedulerDubPathTests(unittest.TestCase):
         s.on_seek(11.0, 1)                                     # 1 s after its start
         self.assertEqual(s._dub_state.get(0), "ready")
         self.assertIn("PreloadClip", _types(s.tick(11.0, mono=101.0, voice_state="idle")))
+
+    def test_delayed_seek_back_into_the_overhang_window_keeps_skipped(self):
+        # Regression (2nd review, 30/09): a delayed seek back into the window
+        # [end, end + overhang) re-armed a skipped line that _dub_actions then
+        # dropped as "late", restoring the inflated lost count (and, with no
+        # cached clip, a wasted paid TTS request). _re_armable stops re-arming
+        # before the late-drop point, so the line stays skipped.
+        # seg 1 (10-12 s) has a cached clip; seg 2 (20-22 s) is still in flight.
+        for target, seg_id in ((12.3, 1), (22.3, 2)):
+            with self.subTest(target=target, seg_id=seg_id):
+                s = self._jumped_over("delayed")
+                s.on_seek(50.0, 1)
+                s.tick(50.0, mono=101.0, voice_state="idle")
+                self.assertEqual(s._dub_state.get(seg_id), "skipped")
+                s.on_seek(target, 2)                          # just past its own slot
+                self.assertEqual(s._dub_state.get(seg_id), "skipped")
+                acts = s.tick(target, mono=102.0, voice_state="idle")
+                self.assertNotIn("Drop", _types(acts))
+                self.assertFalse([a for a in acts if isinstance(a, RequestTts)
+                                  and a.seg_id == seg_id])
+                self.assertEqual(s.metrics()["voice_dropped"], 0)
 
     def test_restart_event_without_jump_does_not_abandon_preload(self):
         s = _dub_sched()

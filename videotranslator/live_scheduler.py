@@ -402,19 +402,31 @@ class DubScheduler:
         seg = self._segments.get(seg_id)
         if seg is None or seg.gen != gen:
             return False
-        if self._dub_state.get(seg_id) not in ("synth", "translated"):
+        state = self._dub_state.get(seg_id)
+        if state == "skipped" and clip is not None:
+            # A late result for a line a forward seek jumped over: the line
+            # stays skipped (not ready, not counted), but the clip is kept so a
+            # seek back re-arms it as "ready" from _clips or the cache instead
+            # of asking the TTS again (with ElevenLabs a second paid call).
+            self._store_clip(seg, clip)
+            return False
+        if state not in ("synth", "translated"):
             return False
         if clip is None:
             self._dub_state[seg_id] = "dropped"
             self._dub_dropped += 1
             return False
-        self._clips[seg_id] = clip
-        seg.clip = clip
+        self._store_clip(seg, clip)
         self._dub_state[seg_id] = "ready"
+        return True
+
+    def _store_clip(self, seg: LiveSegment, clip: object) -> None:
+        """Attach ``clip`` to ``seg`` and remember it in the bounded clip cache."""
+        self._clips[seg.seg_id] = clip
+        seg.clip = clip
         self._clip_cache[self._cache_key(seg)] = clip
         while len(self._clip_cache) > _MAX_CLIP_CACHE:
             self._clip_cache.pop(next(iter(self._clip_cache)))    # oldest first
-        return True
 
     def _still_voiceable(self, seg: LiveSegment, now: float | None) -> bool:
         """Whether a clip for ``seg`` could still be voiced at media time ``now``.
@@ -426,7 +438,25 @@ class DubScheduler:
             return True
         if self._mode == "live":
             return now - seg.start <= self._max_live_lag
+        if now >= seg.end + self._overhang:
+            return False        # the slot never extends past end + overhang: no scan
         return now < self._slot_end(seg)
+
+    def _re_armable(self, seg: LiveSegment, now: float | None) -> bool:
+        """Whether re-arming ``seg`` at ``now`` leads to a real voice line.
+
+        Stricter than ``_still_voiceable``: in delayed mode ``_dub_actions``
+        drops a "ready" clip as late once ``now > start - lead + late_tol``, so
+        re-arming past that point only wastes a TTS request and adds a spurious
+        lost voice line (the very count and paid call the seek fixes remove).
+        The skip pass keeps using ``_still_voiceable`` (there, being generous
+        is right); re-arming must use this tighter rule.
+        """
+        if now is None:
+            return True
+        if self._mode == "live":
+            return self._still_voiceable(seg, now)
+        return now < seg.start - self._lead + self._late_tolerance(seg)
 
     @property
     def dub_on(self) -> bool:
@@ -455,9 +485,13 @@ class DubScheduler:
         # Only sentences that can still be voiced: past ones would expire at once
         # and be counted as lost voice lines that were never really missed. A
         # cached clip re-arms as "ready" (no second TTS request), like on_seek.
+        # A line a forward seek skipped re-arms like an absent one: a seek back
+        # while the dub was off could not re-arm it (on_seek only does with the
+        # dub on), and left "skipped" it would never be voiced again.
         for seg in self._segments.values():
-            if (self._dub_eligible(seg) and seg.seg_id not in self._dub_state
-                    and self._still_voiceable(seg, self._last_now)):
+            if (self._dub_eligible(seg)
+                    and self._dub_state.get(seg.seg_id) in (None, "skipped")
+                    and self._re_armable(seg, self._last_now)):
                 self._dub_state[seg.seg_id] = (
                     "ready" if seg.seg_id in self._clips else "translated")
         return actions
@@ -990,10 +1024,17 @@ class DubScheduler:
                 self._arrival.pop(seg.seg_id, None)
                 self._dropped.discard(seg.seg_id)
         if self._dub:
-            # Segments after the new position play again: ready if the clip is
-            # cached, else re-request from scratch.
+            # Segments that a real voice line can still reach from the new
+            # position play again: ready if the clip is cached, else re-request.
+            # `_re_armable` is tighter than the skip pass below: in live it is
+            # the lag bound (a line is voiced up to max_live_lag after its
+            # start, so a seek back inside the lag recovers a skipped line); in
+            # delayed it stops before the "late" drop point, so a seek back into
+            # `[end, end + overhang)` does not re-arm a line that _dub_actions
+            # would immediately drop as late (a spurious lost line and, without
+            # a cached clip, a wasted paid TTS request).
             for seg in self._segments.values():
-                if seg.end > now and self._dub_eligible(seg):
+                if self._dub_eligible(seg) and self._re_armable(seg, now):
                     if self._dub_state.get(seg.seg_id) != "synth":
                         self._dub_state[seg.seg_id] = (
                             "ready" if seg.seg_id in self._clips else "translated")
@@ -1002,8 +1043,9 @@ class DubScheduler:
             # Lines a forward seek jumped over were skipped by the user, not
             # lost: take them out of the queue without counting them. Left
             # active, the late/expired passes reported each one as a lost voice
-            # line and inflated the said/lost summary. A late TTS result is
-            # ignored by clip_ready; a seek back re-arms them (loop above).
+            # line and inflated the said/lost summary. A late TTS result keeps
+            # its clip but leaves the line skipped (clip_ready); a seek back
+            # re-arms them (loop above).
             for seg in self._segments.values():
                 if (self._dub_state.get(seg.seg_id) in ("translated", "synth", "ready")
                         and not self._still_voiceable(seg, now)):
