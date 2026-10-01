@@ -200,12 +200,6 @@ def _probe_python(base: Sequence[str], code: str, run: Callable[..., Any]) -> st
     return lines[-1] if result.returncode == 0 and lines else None
 
 
-def python_imports_torch(python: str, *, run: Callable[..., Any] = subprocess.run) -> bool:
-    """True when ``python`` starts and imports torch."""
-    return _probe_python([python], "import torch", run) is not None or (
-        _probe_python([python], "import torch; print(1)", run) == "1")
-
-
 def find_supported_python(*, which: Callable[[str], str | None] = shutil.which,
                           run: Callable[..., Any] = subprocess.run,
                           sys_platform: str = sys.platform) -> tuple[str, bool] | None:

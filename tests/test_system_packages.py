@@ -378,14 +378,6 @@ class PythonSupportTests(unittest.TestCase):
         self.assertEqual(found, "C:\\Python311\\python.exe")
         self.assertIn(["/usr/bin/py", "-3.13"], seen)
 
-    def test_one_interpreter_can_be_asked_whether_it_imports_torch(self):
-        self.assertTrue(sp.python_imports_torch("/usr/bin/python3.13", run=self._run(["3.13"])))
-        self.assertFalse(sp.python_imports_torch("/usr/bin/python3.13", run=self._run([])))
-
-        def boom(cmd, **kw):
-            raise OSError("gone")
-        self.assertFalse(sp.python_imports_torch("/gone/python3.13", run=boom))
-
     def test_a_supported_interpreter_without_torch_is_offered_when_none_has_it(self):
         def run(cmd, **kw):
             code = cmd[-1]
