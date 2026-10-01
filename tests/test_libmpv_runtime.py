@@ -825,3 +825,16 @@ class HardErrorSuppressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Sha256FromChecksumsTests(unittest.TestCase):
+    def test_reads_the_digest_of_one_file(self):
+        from videotranslator.libmpv_runtime import sha256_from_checksums
+        text = ("AB" * 32 + "  other.zip\n"
+                + "cd" * 32 + " *ffmpeg-master-latest-win64-gpl.zip\n"
+                + "not-a-digest  bad.zip\n")
+        self.assertEqual(sha256_from_checksums(text, "ffmpeg-master-latest-win64-gpl.zip"), "cd" * 32)
+        self.assertEqual(sha256_from_checksums(text, "other.zip"), "ab" * 32)
+        self.assertIsNone(sha256_from_checksums(text, "bad.zip"))
+        self.assertIsNone(sha256_from_checksums(text, "missing.zip"))
+        self.assertIsNone(sha256_from_checksums("", "x"))

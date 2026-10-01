@@ -10,10 +10,26 @@ from __future__ import annotations
 import importlib.util
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
 FindSpec = Callable[[str], Any]
+
+WAV2LIP_MODEL_URL = "https://huggingface.co/numz/wav2lip_studio/resolve/main/Wav2lip/wav2lip_gan.pth"
+# Same digest as WAV2LIP_SHA256 in setup_windows.bat and the file's LFS etag.
+WAV2LIP_MODEL_SHA256 = "ca9ab7b7b812c0e80a6e70a5977c545a1e8a365a6c49d5e533023c034d7ac3d8"
+WAV2LIP_MODEL_MAX_BYTES = 512 << 20
+
+
+def download_wav2lip_model(dest: Path, *, http: Any = None) -> None:
+    """Fetch the GAN weights to ``dest``, only if their SHA256 matches.
+
+    torch.load unpickles the file, so a tampered download would run code.
+    """
+    from .libmpv_runtime import HttpClient, fetch_verified
+    fetch_verified(http or HttpClient(), WAV2LIP_MODEL_URL, Path(dest),
+                   WAV2LIP_MODEL_SHA256, WAV2LIP_MODEL_MAX_BYTES)
 
 
 @dataclass(frozen=True)

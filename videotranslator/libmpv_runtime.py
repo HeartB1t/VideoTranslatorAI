@@ -961,6 +961,15 @@ def _valid_sha256(value: Any) -> str | None:
     return text if _SHA256_RE.fullmatch(text) else None
 
 
+def sha256_from_checksums(text: str, filename: str) -> str | None:
+    """The digest of ``filename`` in a sha256sum-style list, or None."""
+    for line in (text or "").splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].lstrip("*") == filename:
+            return _valid_sha256(parts[0])
+    return None
+
+
 def github_candidates(source: AssetSource, http: Any,
                       log: Callable[[str], None]) -> list[DownloadCandidate]:
     """Newest-first candidates of a github-latest source, each with a SHA256 to verify.
@@ -1036,7 +1045,7 @@ def run_hidden(cmd: Sequence[str], *, timeout_s: float = 300.0,
     return int(proc.returncode)
 
 
-def _fetch_verified(http: Any, url: str, target: Path, sha256: str, max_bytes: int) -> None:
+def fetch_verified(http: Any, url: str, target: Path, sha256: str, max_bytes: int) -> None:
     """Download to ``target.part``, check the hash, then rename; never leaves a .part behind."""
     part = target.with_name(target.name + ".part")
     try:
@@ -1053,7 +1062,7 @@ def _fetch_pinned(source: AssetSource, target: Path, http: Any, log: Callable[[s
     errors = []
     for url in source.urls:
         try:
-            _fetch_verified(http, url, target, source.sha256 or "", source.max_bytes)
+            fetch_verified(http, url, target, source.sha256 or "", source.max_bytes)
             return target
         except (OSError, ValueError, DownloadError) as exc:
             log(f"[!] {source.name}: {url} failed: {exc}")
@@ -1119,7 +1128,7 @@ def _try_candidate(cand: DownloadCandidate, work: Path, tool: Path, http: Any,
                    runner: Callable[[Sequence[str]], int], check: Callable[[Path], LibmpvStatus],
                    vulkan: AssetSource, dest: Path, log: Callable[[str], None]) -> LibmpvStatus:
     archive = work / cand.asset
-    _fetch_verified(http, cand.url, archive, cand.sha256, cand.source.max_bytes)
+    fetch_verified(http, cand.url, archive, cand.sha256, cand.source.max_bytes)
     try:
         dll = _extract_member(tool, archive, cand.source.member, work, runner)
     finally:

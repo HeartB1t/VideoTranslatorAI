@@ -981,3 +981,49 @@ class LiveVoiceInfoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FfmpegWindowsDownloadTests(unittest.TestCase):
+    """The Windows ffmpeg fallback keeps only a zip that matches its release's checksums."""
+
+    def _run(self, checksums: str):
+        import tempfile
+
+        class _Resp:
+            def __init__(self, data):
+                self._data, self.headers = data, {"Content-Length": str(len(data))}
+
+            def read(self, n=-1):
+                chunk, self._data = (self._data, b"") if n < 0 else (self._data[:n], self._data[n:])
+                return chunk
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def urlopen(req, timeout=None):
+            url = req.full_url
+            return _Resp(checksums.encode() if url.endswith("checksums.sha256") else b"zip bytes")
+
+        logs = []
+        fake = SimpleNamespace(after=lambda delay, fn, *a: fn(*a), _log_write=logs.append)
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch("urllib.request.urlopen", urlopen), \
+                mock.patch.object(gui.Path, "home", return_value=Path(tmp)):
+            ok = gui.App._install_ffmpeg_windows(fake)
+            left = sorted(p.name for p in (Path(tmp) / ".local" / "bin" / "ffmpeg").iterdir())
+        return ok, left, "".join(logs)
+
+    def test_a_zip_that_does_not_match_is_deleted(self):
+        ok, left, log = self._run("0" * 64 + "  ffmpeg-master-latest-win64-gpl.zip\n")
+        self.assertFalse(ok)
+        self.assertEqual(left, [])
+        self.assertIn("does not match its published SHA256", log)
+
+    def test_no_published_checksum_means_no_download(self):
+        ok, left, log = self._run("1" * 64 + "  ffmpeg-other.zip\n")
+        self.assertFalse(ok)
+        self.assertEqual(left, [])
+        self.assertIn("no published SHA256", log)

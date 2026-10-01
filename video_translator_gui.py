@@ -5124,13 +5124,13 @@ WAV2LIP_WORK_DIR = _WAV2LIP_PATHS.work_dir
 WAV2LIP_REPO    = WAV2LIP_DIR / "Wav2Lip"
 WAV2LIP_MODEL   = WAV2LIP_DIR / "wav2lip_gan.pth"
 WAV2LIP_REPO_URL  = "https://github.com/Rudrabha/Wav2Lip.git"
-WAV2LIP_MODEL_URL = "https://huggingface.co/numz/wav2lip_studio/resolve/main/Wav2lip/wav2lip_gan.pth"
 WAV2LIP_TIMEOUT = 3600  # seconds before Wav2Lip subprocess is forcibly killed
 
 # Base deps needed by Wav2Lip on all platforms; dlib + face-detection extras
 # are handled separately below (different install strategy per OS).
 from videotranslator.wav2lip_runtime import (  # noqa: E402
     WAV2LIP_BASE_REQUIREMENTS,
+    download_wav2lip_model as _download_wav2lip_model,
     missing_wav2lip_base_packages as _missing_wav2lip_base_packages,
     missing_wav2lip_face_packages as _missing_wav2lip_face_packages,
 )
@@ -5320,15 +5320,9 @@ def _ensure_wav2lip_assets():
 
     if not WAV2LIP_MODEL.exists():
         print("     Downloading Wav2Lip GAN model (~416MB)...", flush=True)
-        part = Path(str(WAV2LIP_MODEL) + ".part")
         try:
-            from urllib.request import Request, urlopen
-            req = Request(WAV2LIP_MODEL_URL, headers={"User-Agent": "VideoTranslatorAI/1.0"})
-            with urlopen(req, timeout=120) as r, open(part, "wb") as f:
-                shutil.copyfileobj(r, f)
-            part.replace(WAV2LIP_MODEL)
+            _download_wav2lip_model(WAV2LIP_MODEL)
         except Exception as e:
-            part.unlink(missing_ok=True)
             raise RuntimeError(f"Failed downloading Wav2Lip model: {e}") from e
 
 
@@ -6546,23 +6540,34 @@ class App(tk.Tk):
         return False
 
     def _install_ffmpeg_windows(self) -> bool:
-        import urllib.request, zipfile, ctypes
+        import hashlib, urllib.request, zipfile, ctypes
+        from videotranslator.libmpv_runtime import sha256_from_checksums
         # Download ffmpeg essentials build from GitHub releases
-        ffmpeg_url  = "https://github.com/BtbN/ffmpeg-builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        release_url = "https://github.com/BtbN/ffmpeg-builds/releases/download/latest"
+        zip_name    = "ffmpeg-master-latest-win64-gpl.zip"
+        ffmpeg_url  = f"{release_url}/{zip_name}"
         install_dir = Path.home() / ".local" / "bin" / "ffmpeg"
         install_dir.mkdir(parents=True, exist_ok=True)
         zip_path    = install_dir / "ffmpeg.zip"
 
-        self.after(0, self._log_write, "    Downloading ffmpeg (~60 MB)...\n")
+        self.after(0, self._log_write, "    Downloading ffmpeg (~200 MB)...\n")
         try:
             # Stream download via urlopen + copyfileobj so we can enforce a
             # per-read timeout. urlretrieve has no timeout knob and will hang
-            # indefinitely on a slow/stalled mirror. Pattern mirrors
-            # _ensure_wav2lip_assets which downloads the Wav2Lip model.
+            # indefinitely on a slow/stalled mirror.
             from urllib.request import Request, urlopen
-            req = Request(ffmpeg_url, headers={"User-Agent": "VideoTranslatorAI/1.0"})
+            headers = {"User-Agent": "VideoTranslatorAI/1.0"}
+            # "latest" is rebuilt daily: its digest comes from the same release.
+            with urlopen(Request(f"{release_url}/checksums.sha256", headers=headers),
+                         timeout=60) as r:
+                expected = sha256_from_checksums(
+                    r.read(1 << 20).decode("utf-8", "replace"), zip_name)
+            if not expected:
+                raise RuntimeError(f"no published SHA256 for {zip_name}")
+            digest = hashlib.sha256()
             downloaded = 0
-            with urlopen(req, timeout=120) as r, open(zip_path, "wb") as out:
+            with urlopen(Request(ffmpeg_url, headers=headers), timeout=120) as r, \
+                    open(zip_path, "wb") as out:
                 total = int(r.headers.get("Content-Length") or 0)
                 chunk = 64 * 1024
                 while True:
@@ -6570,10 +6575,13 @@ class App(tk.Tk):
                     if not buf:
                         break
                     out.write(buf)
+                    digest.update(buf)
                     downloaded += len(buf)
                     if total > 0:
                         pct = min(100, downloaded * 100 // total)
                         self.after(0, self._log_write, f"\r    Downloading... {pct}%")
+            if digest.hexdigest() != expected:
+                raise RuntimeError(f"{zip_name} does not match its published SHA256")
             self.after(0, self._log_write, "\n    Extracting...\n")
             install_dir_resolved = install_dir.resolve()
             with zipfile.ZipFile(zip_path, "r") as z:
@@ -6605,6 +6613,7 @@ class App(tk.Tk):
             os.environ["PATH"] += os.pathsep + str(install_dir)
             return True
         except Exception as e:
+            zip_path.unlink(missing_ok=True)
             self.after(0, self._log_write, f"    ! ffmpeg download failed: {e}\n")
             return False
 

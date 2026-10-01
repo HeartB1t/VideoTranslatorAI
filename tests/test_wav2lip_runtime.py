@@ -61,3 +61,39 @@ class Wav2LipRuntimeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Wav2LipModelDownloadTests(unittest.TestCase):
+    """torch.load unpickles the weights: only a file with the pinned hash may land."""
+
+    class _Http:
+        def __init__(self, payload: bytes):
+            self.payload = payload
+            self.urls = []
+
+        def fetch(self, url, dest, *, max_bytes):
+            import hashlib
+            self.urls.append((url, max_bytes))
+            dest.write_bytes(self.payload)
+            return hashlib.sha256(self.payload).hexdigest()
+
+    def test_a_tampered_model_is_refused_and_leaves_nothing_behind(self):
+        import tempfile
+        from pathlib import Path
+        from videotranslator.libmpv_runtime import DownloadError
+        from videotranslator.wav2lip_runtime import WAV2LIP_MODEL_URL, download_wav2lip_model
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "wav2lip_gan.pth"
+            http = self._Http(b"not the real weights")
+            with self.assertRaises(DownloadError):
+                download_wav2lip_model(dest, http=http)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(http.urls[0][0], WAV2LIP_MODEL_URL)
+
+    def test_the_pinned_hash_matches_the_windows_installer(self):
+        import re
+        from pathlib import Path
+        from videotranslator.wav2lip_runtime import WAV2LIP_MODEL_SHA256
+        bat = (Path(__file__).resolve().parents[1] / "setup_windows.bat").read_text(encoding="utf-8")
+        self.assertEqual(re.search(r'WAV2LIP_SHA256=([0-9a-f]{64})', bat).group(1),
+                         WAV2LIP_MODEL_SHA256)
