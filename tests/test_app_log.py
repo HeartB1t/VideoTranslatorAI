@@ -153,6 +153,18 @@ class LineFormatTests(unittest.TestCase):
         self.assertEqual(c("live: 3.6s You -> Tu (1.1 s)"), ("info", "live", "3.6s You -> Tu (1.1 s)"))
         self.assertEqual(c("live: voice line 4 lost (rejected)")[0], "warn")
         self.assertEqual(c("live: 36.1s kept original (timeout, 5.0 s): long")[0], "warn")
+        self.assertEqual(c("live: start failed: boom")[0], "error")
+
+    def test_the_words_of_a_subtitle_never_set_the_level(self):
+        # Seen in a live stress test: a lyric with "crash" became an ERROR line.
+        c = app_log.classify
+        self.assertEqual(c("live: 177.5s kept original (google paused after errors): "
+                           "another face pops the crash.")[0], "warn")
+        self.assertEqual(c("live: 3.0s It failed again -> Ha fallito ancora (0.2 s)")[0], "info")
+        self.assertEqual(c("live: 4.0s I lost my keys -> Ho perso le chiavi (0.1 s)")[0], "info")
+
+    def test_classify_reads_other_line_starts(self):
+        c = app_log.classify
         self.assertEqual(c("[live] start failed: boom"), ("error", "live", "start failed: boom"))
         self.assertEqual(c("[mpv] X11 error: BadWindow"), ("info", "mpv", "X11 error: BadWindow"))
         self.assertEqual(c("Traceback (most recent call last):")[0], "error")

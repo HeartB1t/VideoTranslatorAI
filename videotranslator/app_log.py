@@ -244,6 +244,9 @@ _AREA_TAG = re.compile(r"^\[([a-z][a-z0-9_-]{1,15})\]\s+(.*)$", re.S)
 _ERROR_WORDS = re.compile(r"\b(failed|fatal|crash(ed)?)\b", re.I)
 _LIVE_WARN = re.compile(r"\b(lost|kept original|refused|unavailable|falling behind|"
                         r"still alive|not fully configured)\b", re.I)
+# "12.3s ..." is a sentence line: its level comes from its shape, never from
+# the words of the subtitle it carries.
+_LIVE_SENTENCE = re.compile(r"^\d+(?:\.\d+)?s ")
 _EXCEPTION_LINE = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|Warning)\b.*:")
 _STEP = re.compile(r"^\[\d+/\d+\]")
 
@@ -261,6 +264,10 @@ def classify(fragment: str) -> tuple[str | None, str, str]:
         return "error", "app", text
     if text.startswith("live: "):
         body = text[len("live: "):]
+        sentence = _LIVE_SENTENCE.match(body)
+        if sentence:
+            kept = body[sentence.end():].startswith("kept original")
+            return ("warn" if kept else "info"), "live", body
         if _ERROR_WORDS.search(body):
             return "error", "live", body
         return ("warn" if _LIVE_WARN.search(body) else "info"), "live", body
