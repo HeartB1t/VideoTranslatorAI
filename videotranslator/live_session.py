@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import shutil
 import time
 from collections.abc import Callable
@@ -1481,8 +1482,11 @@ class LiveSession:
                             code = ("engine_slow_ollama"
                                     if warn == "engine_slow" and engine == "ollama"
                                     else warn)
+                            # An exhausted quota pauses for good: retry_in_s() is inf.
+                            retry = breaker.retry_in_s()
                             self._set_warning(
-                                code, engine, s=int(round(breaker.retry_in_s())),
+                                code, engine,
+                                s=int(round(retry)) if math.isfinite(retry) else 0,
                                 action=None if engine == "marian" else "live_btn_switch_marian")
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,

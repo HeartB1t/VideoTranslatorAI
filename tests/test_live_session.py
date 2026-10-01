@@ -698,6 +698,36 @@ class LiveTranslationWarningTests(unittest.TestCase):
         self.assertEqual(st.warning_params, {"engine": "google", "s": 30})
         self.assertEqual(st.warning_action, "live_btn_switch_marian")
 
+    def test_an_exhausted_quota_warns_instead_of_failing_the_session(self):
+        # A quota failure keeps the breaker open for good: retry_in_s() is inf,
+        # and int(round(inf)) used to end the session as an internal error.
+        from dataclasses import replace
+
+        class _QuotaTranslator(_LimitedTranslator):
+            def translate(self, text, *, context=(), timeout_s=5.0):
+                from videotranslator.live_translate import Outcome
+                return Outcome(text, False, 0.01, error="quota")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _ = self._mt_session(tmp, _FakeMarian())
+            quota = _QuotaTranslator()
+            sess._factories = replace(
+                sess._factories,
+                translator=lambda engine: _FakeMarian() if engine == "marian" else quota)
+            sess._mt_q.put(_sentence(0))
+            worker = threading.Thread(target=sess._mt_loop)
+            worker.start()
+            try:
+                self.assertTrue(_wait(lambda: sess.status().warning_key is not None
+                                      or sess.status().state == "failed"))
+                st = sess.status()
+            finally:
+                sess.request_stop()
+                worker.join(3)
+        self.assertNotEqual(st.state, "failed", st.error_params)
+        self.assertEqual(st.warning_key, "live_warn_quota")
+        self.assertEqual(st.warning_action, "live_btn_switch_marian")
+
     def test_the_switch_to_marian_replaces_the_translator_mid_session(self):
         marian = _FakeMarian()
         with tempfile.TemporaryDirectory() as tmp:
