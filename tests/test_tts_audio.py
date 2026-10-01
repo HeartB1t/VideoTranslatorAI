@@ -108,6 +108,24 @@ class ConcatWavsTests(unittest.TestCase):
             self.assertEqual(sr, 44100)
             self.assertGreater(len(data), 4410)
 
+    def test_mismatched_files_raise_and_leave_the_output_untouched(self):
+        # Joining raw samples of different rates would play the second part at
+        # the wrong pitch; the caller keeps its previous best take instead.
+        import numpy as np
+        import soundfile as sf
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            sf.write(tmp / "a.wav", np.zeros(2400, dtype="float32"), 24000)
+            sf.write(tmp / "b.wav", np.zeros(2205, dtype="float32"), 22050)
+            sf.write(tmp / "stereo.wav", np.zeros((2400, 2), dtype="float32"), 24000)
+            out = tmp / "out.wav"
+            out.write_bytes(b"best take")
+            for other, word in (("b.wav", "sample rate"), ("stereo.wav", "channel")):
+                with self.assertRaisesRegex(ValueError, word):
+                    concat_wavs([str(tmp / "a.wav"), str(tmp / other)], str(out))
+            self.assertEqual(out.read_bytes(), b"best take")
+
 
 if __name__ == "__main__":
     unittest.main()

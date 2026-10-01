@@ -75,10 +75,22 @@ def concat_wavs(paths: list[str], output: str) -> None:
 
     chunks: list[Any] = []
     sr: int | None = None
+    nch: int | None = None
     for path in paths:
         data, this_sr = sf.read(path)
         if sr is None:
             sr = this_sr
+            nch = 1 if data.ndim == 1 else data.shape[1]
+        else:
+            if this_sr != sr:
+                raise ValueError(
+                    f"concat_wavs: sample rate mismatch ({this_sr} vs {sr})"
+                )
+            this_nch = 1 if data.ndim == 1 else data.shape[1]
+            if this_nch != nch:
+                raise ValueError(
+                    f"concat_wavs: channel count mismatch ({this_nch} vs {nch})"
+                )
         chunks.append(data)
     if sr is None or sr <= 0:
         raise ValueError("concat_wavs: unable to read sample rate")
