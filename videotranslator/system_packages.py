@@ -250,6 +250,8 @@ def relaunch_on_unsupported_python(command: Sequence[str], *,
                                    find_spec: Callable[[str], Any] = importlib.util.find_spec,
                                    environ: Any = os.environ,
                                    execv: Callable[..., Any] = os.execv,
+                                   spawn: Callable[[list[str]], int] = subprocess.call,
+                                   sys_platform: str = sys.platform,
                                    find: Callable[[], tuple[str, bool] | None] | None = None,
                                    echo: Callable[[str], Any] = print) -> str | None:
     """Before any window: replace this process with the best supported
@@ -277,8 +279,21 @@ def relaunch_on_unsupported_python(command: Sequence[str], *,
     for stream in (sys.stdout, sys.stderr):     # exec drops what is still buffered
         with contextlib.suppress(Exception):
             stream.flush()
-    execv(python, [python, *command])
-    return python
+    argv = [python, *command]
+    try:
+        if sys_platform != "win32":
+            execv(python, argv)
+            return python
+        # Windows has no exec: os.execv returns control to the caller at once,
+        # so a console gets its prompt back and the exit code is lost.
+        code = spawn(argv)
+    except OSError as exc:
+        # The interpreter found a moment ago does not start: open in this one,
+        # which explains what to install, instead of crashing before any window.
+        environ.pop(RELAUNCH_ENV, None)
+        echo(f"Video Translator AI: cannot start {python} ({exc}); going on with Python {version}")
+        return None
+    raise SystemExit(code)
 
 
 CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",

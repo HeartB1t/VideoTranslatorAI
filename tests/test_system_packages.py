@@ -431,15 +431,49 @@ class PythonSupportTests(unittest.TestCase):
 class RelaunchOnUnsupportedPythonTests(unittest.TestCase):
     """The hand-over runs before any window: one start, not two."""
 
-    def _call(self, version, *, torch_here=False, env=None, found=("/usr/bin/python3.13", True)):
+    def _call(self, version, *, torch_here=False, env=None, found=("/usr/bin/python3.13", True),
+              platform="linux", spawns=None):
         execs, echoes = [], []
         environ = dict(env or {})
+        spawns = [] if spawns is None else spawns
         result = sp.relaunch_on_unsupported_python(
             ["/app/video_translator_gui.py", "--x"], version_info=version,
             find_spec=lambda name: object() if torch_here else None, environ=environ,
             execv=lambda python, args: execs.append((python, args)),
+            spawn=lambda argv: spawns.append(argv) or 3, sys_platform=platform,
             find=lambda: found, echo=echoes.append)
         return result, execs, echoes, environ
+
+    def test_windows_waits_for_the_new_python_and_exits_with_its_code(self):
+        spawns = []
+        with self.assertRaises(SystemExit) as raised:
+            self._call((3, 14), found=("C:/Py313/python.exe", True), platform="win32",
+                       spawns=spawns)
+        self.assertEqual(raised.exception.code, 3)
+        self.assertEqual(spawns, [["C:/Py313/python.exe", "/app/video_translator_gui.py", "--x"]])
+
+    def test_an_interpreter_that_does_not_start_lets_the_app_open_here(self):
+        def broken(*args):
+            raise FileNotFoundError("gone")
+        for platform in ("linux", "win32"):
+            environ, echoes = {}, []
+            result = sp.relaunch_on_unsupported_python(
+                ["app.py"], version_info=(3, 14), find_spec=lambda name: None,
+                environ=environ, execv=broken, spawn=broken, sys_platform=platform,
+                find=lambda: ("/gone/python3.13", True), echo=echoes.append)
+            self.assertIsNone(result, platform)
+            self.assertEqual(environ, {}, platform)
+            self.assertIn("cannot start /gone/python3.13", echoes[-1])
+
+    def test_windows_never_uses_exec(self):
+        execs = []
+        with self.assertRaises(SystemExit):
+            sp.relaunch_on_unsupported_python(
+                ["app.py"], version_info=(3, 14), find_spec=lambda name: None, environ={},
+                execv=lambda python, args: execs.append(python), spawn=lambda argv: 0,
+                sys_platform="win32", find=lambda: ("C:/Py313/python.exe", True),
+                echo=lambda text: None)
+        self.assertEqual(execs, [])
 
     def test_a_supported_python_goes_on(self):
         result, execs, _, environ = self._call((3, 13))
