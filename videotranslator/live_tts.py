@@ -254,6 +254,7 @@ class EdgeClipSynth:
         self._aq: asyncio.Queue | None = None
         self._tasks: set = set()
         self._in_flight = 0
+        self._flight_lock = threading.Lock()
         self._last_start = 0.0
         self._accepts_timeout_kwargs = False
 
@@ -285,15 +286,19 @@ class EdgeClipSynth:
     def submit(self, seg_id: int, gen: int, text: str, rate_pct: int,
                deadline_mono: float) -> bool:
         if (not self._ready.is_set() or self._loop is None or self._stopping.is_set()
-                or not self._breaker.allow() or self._in_flight >= self._max_in_flight
+                or not self._breaker.allow()
                 or deadline_mono - self._clock() <= 0):
             return False
-        self._in_flight += 1
+        with self._flight_lock:
+            if self._in_flight >= self._max_in_flight:
+                return False
+            self._in_flight += 1
         try:
             self._loop.call_soon_threadsafe(
                 self._aq.put_nowait, (seg_id, gen, text, rate_pct, deadline_mono))
         except RuntimeError:
-            self._in_flight = max(0, self._in_flight - 1)
+            with self._flight_lock:
+                self._in_flight = max(0, self._in_flight - 1)
             return False
         return True
 
@@ -328,7 +333,8 @@ class EdgeClipSynth:
             self._loop.run_until_complete(self._loop.shutdown_asyncgens())
             self._loop.run_until_complete(self._loop.shutdown_default_executor())
             self._loop.close()
-            self._in_flight = 0
+            with self._flight_lock:
+                self._in_flight = 0
             # Cleanup belongs to the worker: stop(timeout=0) may return while
             # a file is still open on Windows.
             for part in self._out_dir.glob("clip_*.mp3.part"):
@@ -386,7 +392,8 @@ class EdgeClipSynth:
         except Exception:                       # noqa: BLE001 - never crash the loop
             self.results.put((seg_id, gen, None, "error"))
         finally:
-            self._in_flight = max(0, self._in_flight - 1)
+            with self._flight_lock:
+                self._in_flight = max(0, self._in_flight - 1)
 
     async def _synth(self, seg_id: int, gen: int, text: str, rate_pct: int,
                      timeout: float):

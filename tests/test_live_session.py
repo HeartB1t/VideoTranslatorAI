@@ -609,6 +609,23 @@ class LiveSessionPipelineTests(unittest.TestCase):
             self.assertEqual([t.name for t in live if t.is_alive()], [])
 
 
+class SchedulerCrashTests(unittest.TestCase):
+    def test_a_crash_in_the_tick_fails_the_session_and_stops_the_producers(self):
+        # Before: the producers kept decoding and transcribing, and the status
+        # stayed "running" on a session that no longer moved.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+
+            def boom(now):
+                raise RuntimeError("tick bug")
+            sess._tick_once = boom
+            sess._sched_loop()
+            st = sess.status()
+        self.assertTrue(sess._stop.is_set())
+        self.assertEqual(st.state, "failed")
+        self.assertEqual(st.error_params, {"detail": "tick bug"})
+
+
 class _LimitedTranslator(_FakeTranslator):
     """An online engine that never answers in time."""
     name, online = "google", True

@@ -529,7 +529,8 @@ class LiveSession:
 
     def request_stop(self) -> None:
         self._set_state("stopping")
-        self._decode_cancel.set()
+        with self._decode_lock:
+            self._decode_cancel.set()
         self._stop.set()
         self._decode_wake.set()
 
@@ -654,6 +655,8 @@ class LiveSession:
             while not self._stop.is_set():
                 self._tick_once(self._clock())
                 self._stop.wait(self._tick_interval)
+        except Exception as exc:            # noqa: BLE001 - surfaced as a live error
+            self._fail("internal", str(exc))
         finally:
             self._teardown_outputs()
 
@@ -761,7 +764,8 @@ class LiveSession:
         self._auto_stopped = True
         self._log("live: source finished and dubbing complete; ending session")
         self._set_state("ended")
-        self._decode_cancel.set()
+        with self._decode_lock:
+            self._decode_cancel.set()
         self._stop.set()
         self._decode_wake.set()
 
@@ -956,7 +960,7 @@ class LiveSession:
             elif kind == "engine":
                 with self._status_lock:
                     self._status.engine = value
-                self._engine_requested = value      # the MT loop switches
+                    self._engine_requested = value      # the MT loop switches
             elif kind == "dub":
                 self._dub_wanted = value
                 if value:
@@ -1204,7 +1208,8 @@ class LiveSession:
             self._status.error_key = error_key
             self._status.error_params = {"detail": detail} if detail else {}
             self._status.state = "failed"
-        self._decode_cancel.set()
+        with self._decode_lock:
+            self._decode_cancel.set()
         self._stop.set()
 
     def _set_warning(self, code: str, engine: str, *, action: str | None = None,
@@ -1427,7 +1432,8 @@ class LiveSession:
                     sentence = self._mt_q.get(timeout=0.2)
                 except queue.Empty:
                     sentence = None
-                wanted, self._engine_requested = self._engine_requested, None
+                with self._status_lock:
+                    wanted, self._engine_requested = self._engine_requested, None
                 if wanted and wanted != engine:
                     switch(wanted)
                 if sentence is None:

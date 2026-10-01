@@ -23,6 +23,13 @@ async def _noop_sleep(_seconds):
     return None
 
 
+def _wait_until(predicate, timeout=3.0):
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return predicate()
+
+
 class _FakeComm:
     def __init__(self, data):
         self._data = data
@@ -75,6 +82,31 @@ class EdgeClipSynthTests(unittest.TestCase):
             self.assertEqual(s._in_flight, 0)
             self.assertEqual(list(s._out_dir.glob("*.part")), [])
             self.assertFalse(s.submit(1, 0, "late", 0, time.monotonic() + 60))
+
+    def test_in_flight_stays_under_the_cap_and_returns_to_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = self._synth(tmp, lambda t, v, **k: _FakeComm(b"\x00" * 600), max_in_flight=4)
+            s.start()
+            accepted, peak = [0] * 3, [0]
+
+            def producer(i):
+                for n in range(200):
+                    if s.submit(i * 1000 + n, 0, "ciao", 0, time.monotonic() + 30):
+                        accepted[i] += 1
+                    peak[0] = max(peak[0], s._in_flight)
+            threads = [threading.Thread(target=producer, args=(i,)) for i in range(3)]
+            try:
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+                for _ in range(sum(accepted)):
+                    s.results.get(timeout=10)
+                self.assertTrue(_wait_until(lambda: s._in_flight == 0))
+                self.assertLessEqual(peak[0], 4)
+                self.assertTrue(s.submit(9999, 0, "again", 0, time.monotonic() + 30))
+            finally:
+                s.stop(3)
 
     def test_live_speech_uses_the_shared_sanitizer(self):
         from videotranslator.tts_text_sanitizer import sanitize_for_tts
