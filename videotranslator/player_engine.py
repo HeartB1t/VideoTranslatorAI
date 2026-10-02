@@ -164,13 +164,18 @@ class PlaybackClock:
     def observe(self, pos: float | None, mono: float, *, speed: float,
                 running: bool, seeking: bool, seen: float | None = None) -> None:
         """``mono`` is when mpv reported ``pos``; ``seen`` is when this observation
-        is made (default ``mono``). The extrapolation anchor never goes back while
-        the position is unchanged: mpv flips pause=False before its next time-pos,
-        whose stamp is still the moment of the pause."""
+        is made (default ``mono``).
+
+        Invariant: while not running the anchor is ``seen`` (a held position is
+        current at the observation), and the anchor never moves back while the
+        position is unchanged. mpv flips pause=False before its next time-pos,
+        whose stamp is still the moment of the pause: without this, the first
+        running ticks after a resume replayed the whole pause as playback.
+        """
         with self._lock:
             if self._expecting_restart:
-                # Anchor the safety-net timer to the observe clock (the same
-                # timeline the rest of the extrapolation uses).
+                # Timed on the time-pos stamps, not on ``seen``: the net must
+                # adopt a fresh position, so a frozen time-pos never times out.
                 if self._expect_since is None:
                     self._expect_since = float(mono)
                 usable = (pos is not None and not seeking

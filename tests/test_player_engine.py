@@ -89,6 +89,29 @@ class PlaybackClockTests(unittest.TestCase):
         clock.observe(8.1, 33.9, speed=1.0, running=True, seeking=False, seen=33.95)
         self.assertAlmostEqual(clock.now(34.0), 8.2)
 
+    def test_a_seek_to_the_same_position_anchors_at_the_restart(self):
+        # Seek while paused to the position already shown: mpv may not publish a
+        # new time-pos (same value), so its stamp stays from before the pause.
+        # The restart event is the floor of the anchor.
+        clock = pe.PlaybackClock()
+        clock.observe(7.6, 15.5, speed=1.0, running=True, seeking=False, seen=15.5)
+        clock.observe(7.6, 15.5, speed=1.0, running=False, seeking=False, seen=33.3)
+        clock.expect_restart()
+        clock.on_playback_restart(33.5)
+        clock.observe(7.6, 15.5, speed=1.0, running=True, seeking=False, seen=33.6)
+        self.assertAlmostEqual(clock.now(33.7), 7.8)
+
+    def test_safety_net_is_timed_on_time_pos_not_on_seen(self):
+        # A frozen time-pos (paused after a seek whose restart was lost) must not
+        # time out on wall time: the net would adopt a stale pre-seek position.
+        clock = pe.PlaybackClock()
+        clock.observe(100.0, 0.0, speed=1.0, running=True, seeking=False, seen=0.0)
+        clock.expect_restart()
+        clock.observe(100.0, 0.0, speed=1.0, running=True, seeking=False, seen=1.0)
+        clock.observe(100.0, 0.0, speed=1.0, running=True, seeking=False, seen=5.0)
+        self.assertIsNone(clock.now(5.0))
+        self.assertEqual(clock.epoch, 0)
+
     def test_seek_trace_ignores_clamped_values_until_restart(self):
         clock = pe.PlaybackClock()
         clock.observe(1007.52, 1.0, speed=1.0, running=True, seeking=False)
