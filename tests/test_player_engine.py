@@ -72,6 +72,23 @@ class PlaybackClockTests(unittest.TestCase):
         clock.observe(13.0, 102.0, speed=1.0, running=False, seeking=False)
         self.assertEqual(clock.now(110.0), 13.0)
 
+    def test_a_resume_never_extrapolates_from_before_the_pause(self):
+        # mpv flips pause=False before it publishes a new time-pos: the stamp of
+        # the last time-pos is the moment of the pause. Seen live: a 18 s buffering
+        # pause made now() jump 18 s ahead for a tick, and four ready voice lines
+        # were dropped as late.
+        clock = pe.PlaybackClock()
+        clock.observe(7.6, 15.5, speed=1.0, running=True, seeking=False, seen=15.5)
+        clock.observe(7.6, 15.5, speed=1.0, running=False, seeking=False, seen=20.0)
+        clock.observe(7.6, 15.5, speed=1.0, running=False, seeking=False, seen=33.3)
+        clock.observe(7.6, 15.5, speed=1.0, running=True, seeking=False, seen=33.4)
+        self.assertLess(clock.now(33.42), 8.0)
+        # Still no new time-pos on the next GUI tick: the anchor must not go back.
+        clock.observe(7.6, 15.5, speed=1.0, running=True, seeking=False, seen=33.45)
+        self.assertLess(clock.now(33.47), 8.0)
+        clock.observe(8.1, 33.9, speed=1.0, running=True, seeking=False, seen=33.95)
+        self.assertAlmostEqual(clock.now(34.0), 8.2)
+
     def test_seek_trace_ignores_clamped_values_until_restart(self):
         clock = pe.PlaybackClock()
         clock.observe(1007.52, 1.0, speed=1.0, running=True, seeking=False)

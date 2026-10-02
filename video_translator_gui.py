@@ -9824,7 +9824,7 @@ class App(tk.Tk):
             speed = 1.0
         self._player_clock.observe(
             position, stamp, speed=speed, running=not paused and not cached,
-            seeking=seeking)
+            seeking=seeking, seen=now)
         clock_now = self._player_clock.now(now)
         self._player_controller.apply_events(snapshot, clock_now)
         self._player_panel.render(self._player_controller.state, position=clock_now)
