@@ -42,6 +42,20 @@ class CircuitBreakerTests(unittest.TestCase):
         self.assertEqual(b.state, "open")
         self.assertFalse(b.allow())
 
+    def test_holding_covers_a_pause_that_ends_but_not_a_quota(self):
+        b = self._breaker(threshold=1, cooldown_s=30)
+        self.assertFalse(b.holding())
+        b.record_failure(kind="rate_limited")
+        self.assertTrue(b.holding())
+        self.clock.advance(31)
+        self.assertFalse(b.holding())
+        self.assertEqual(b.state, "open")          # holding() never takes the probe
+        self.assertTrue(b.allow())
+        q = self._breaker()
+        q.record_failure(kind="quota")
+        self.assertFalse(q.holding())
+        self.assertTrue(q.permanent)
+
     def test_rate_limited_warn_code(self):
         b = self._breaker(threshold=1)
         self.assertEqual(b.record_failure(kind="rate_limited"), "rate_limited")

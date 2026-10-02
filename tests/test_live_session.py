@@ -367,6 +367,7 @@ class FileBufferTests(unittest.TestCase):
             self.assertFalse(sess._self_paused)
             self.assertIsNone(sess.status().warning_key)
 
+
     def test_pauses_right_after_a_seek_do_not_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, _, _ = _session(tmp)
@@ -776,6 +777,9 @@ class LiveTranslationWarningTests(unittest.TestCase):
     def test_a_failed_switch_keeps_the_running_engine(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, limited = self._mt_session(tmp, _FakeMarian(fail_key="marian_pair"))
+            # The video is past these sentences: they are due, so they come out
+            # in the original instead of waiting for the paused engine.
+            sess._clock_view = _FakeClockView(10.0)
             for n in range(3):
                 sess._mt_q.put(_sentence(n))
             worker = threading.Thread(target=sess._mt_loop)
@@ -800,6 +804,136 @@ class LiveTranslationWarningTests(unittest.TestCase):
         self.assertFalse(closed_by_the_switch)
         self.assertTrue(limited.closed)            # by the session's end
         self.assertIn("marian_pair", " ".join(sess._logs))
+
+
+class _ScriptedOnline(_LimitedTranslator):
+    """Online engine: rate-limited for the first ``fail`` calls, then answers."""
+
+    def __init__(self, fail=10 ** 6, on_call=None, error="rate_limited"):
+        super().__init__()
+        self.calls, self._fail, self._on_call, self._error = [], fail, on_call, error
+
+    def translate(self, text, *, context=(), timeout_s=5.0):
+        from videotranslator.live_translate import Outcome
+        self.calls.append(text)
+        if self._on_call is not None:
+            self._on_call(len(self.calls))
+        if len(self.calls) <= self._fail:
+            return Outcome(text, False, 0.01, error=self._error)
+        return Outcome("tradotta", True, 0.01)
+
+
+from videotranslator.live_health import CircuitBreaker as _Breaker  # noqa: E402
+
+
+class _FastBreaker(_Breaker):
+    def __init__(self, **kw):
+        super().__init__(cooldown_s=0.6, max_cooldown_s=0.6)
+
+
+class OnlineEnginePauseTests(unittest.TestCase):
+    """A file runs far ahead of playback: a paused online engine must not turn
+    every sentence of the video into the original (seen 02/10 with Google in
+    HTTP 429: 75 sentences kept original in 3 s, the dub silent)."""
+
+    def _start(self, tmp, online, *, media=0.0, marian=None, mode="live", items=10,
+               clock_view=None):
+        from dataclasses import replace
+        from unittest import mock
+        from videotranslator.live_asr import LanguageLock
+        sess, _, _ = _session(tmp, overrides={"live_engine": "google", "live_sync_mode": mode})
+        sess._langlock = LanguageLock("en")
+        sess._logs = []
+        sess._log = sess._logs.append
+        sess._clock_view = clock_view or _FakeClockView(media)
+        sess._factories = replace(
+            _pipeline_factories(),
+            translator=lambda engine: (marian or _FakeMarian()) if engine == "marian" else online)
+        sess._emitted = mock.Mock()
+        sess._emit_segment = sess._emitted
+        for n in range(items):
+            sess._mt_q.put(_sentence(n))
+        patcher = mock.patch("videotranslator.live_session.CircuitBreaker", _FastBreaker)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        worker = threading.Thread(target=sess._mt_loop)
+        worker.start()
+
+        def stop():
+            sess.request_stop()
+            worker.join(3)
+        self.addCleanup(stop)
+        return sess
+
+    @staticmethod
+    def _emitted(sess):
+        return [(c.args[0], c.args[3]) for c in sess._emitted.call_args_list]
+
+    def test_a_paused_engine_holds_the_sentences_still_ahead(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sess = self._start(tmp, _ScriptedOnline(), media=1.0)
+            self.assertTrue(_wait(lambda: sess.status().warning_key is not None))
+            time.sleep(0.15)                    # well inside the breaker's pause
+            early = self._emitted(sess)
+            sess.set_engine("marian")
+            sess._drain_control(0)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 10))
+            final = self._emitted(sess)
+        # The failure that paused the engine keeps its sentence waiting too.
+        self.assertEqual([start for start, _ in early], [0.0, 1.0])
+        self.assertEqual(final[2:], [(float(n), "ciao.") for n in range(2, 10)])
+
+    def test_sentences_that_passed_during_the_pause_cost_no_call(self):
+        view = _FakeClockView(0.0)
+
+        def on_call(n):
+            if n == 3:
+                view.media = 5.6                # live mode: the video went on
+        online = _ScriptedOnline(fail=3, on_call=on_call)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess = self._start(tmp, online, items=8, clock_view=view)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 8, timeout=4))
+            final = self._emitted(sess)
+        self.assertEqual(len(online.calls), 4)   # 3 failures, then only sentence 7
+        self.assertEqual(final[3:7], [(float(n), None) for n in range(3, 7)])
+        self.assertEqual(final[7], (7.0, "tradotta"))
+
+    def test_a_seek_during_the_pause_drops_the_held_sentences(self):
+        online = _ScriptedOnline(fail=3)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess = self._start(tmp, online, media=0.0)
+            self.assertTrue(_wait(lambda: sess.status().warning_key is not None))
+            sess._gen = 1                       # a seek restarted the decoder
+            time.sleep(1.0)                     # past the pause: the engine answers again
+            final = self._emitted(sess)
+        self.assertEqual(len(online.calls), 3)
+        self.assertEqual([start for start, _ in final], [0.0, 1.0])
+
+    def test_delayed_mode_keeps_the_source_open_while_sentences_wait(self):
+        # The pacer stops buffering once the source is done: the end marker must
+        # wait behind the held sentences, or the video would play on untranslated.
+        from videotranslator.live_session import _PipelineEnd
+        with tempfile.TemporaryDirectory() as tmp:
+            sess = self._start(tmp, _ScriptedOnline(), media=0.0, mode="delayed", items=6)
+            sess._mt_q.put(_PipelineEnd(0))
+            self.assertTrue(_wait(lambda: sess.status().warning_key is not None))
+            time.sleep(0.15)
+            done = sess._source_done
+            emitted = self._emitted(sess)
+        self.assertFalse(done)
+        self.assertEqual(len(emitted), 2)
+
+    def test_an_exhausted_quota_on_a_file_goes_on_with_marian(self):
+        online = _ScriptedOnline(error="quota")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess = self._start(tmp, online, media=0.0, items=5)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 5))
+            final = self._emitted(sess)
+            st = sess.status()
+        self.assertEqual(len(online.calls), 1)
+        self.assertEqual(final, [(0.0, None)] + [(float(n), "ciao.") for n in range(1, 5)])
+        self.assertNotEqual(st.state, "failed")
+        self.assertIn("live: translation engine switched to marian", sess._logs)
 
 
 class LiveSessionLifecycleTests(unittest.TestCase):

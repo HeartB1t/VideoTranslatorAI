@@ -59,6 +59,15 @@ class CircuitBreaker:
     def state(self) -> str:
         return self._state
 
+    @property
+    def permanent(self) -> bool:
+        return self._permanent
+
+    def holding(self) -> bool:
+        """True during a pause that will end (not a quota), without taking the probe."""
+        return (self._state == "open" and not self._permanent
+                and self._clock() < self._open_until)
+
     def allow(self) -> bool:
         if self._permanent:
             return False

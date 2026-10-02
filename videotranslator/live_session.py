@@ -285,6 +285,12 @@ def _assert_state(state: str) -> str:
 import os
 import queue
 import threading
+from collections import deque
+
+# Sentences waiting for a paused online engine (as many as the scheduler keeps).
+_MAX_HELD = 2000
+# A held sentence is due (shown in the original) this close to its start.
+_HELD_DUE_S = 0.5
 
 
 @dataclass(frozen=True)
@@ -1417,6 +1423,57 @@ class LiveSession:
             if prepared:
                 self._log_translator_ready(translator)
 
+        # A finished source (file, downloaded URL) is transcribed far ahead of
+        # playback: while an online engine pauses after errors, its sentences
+        # wait here instead of all being kept in the original language at once.
+        # Only those whose time comes during the pause are shown untranslated.
+        held: deque = deque()
+        can_hold = self._cfg.source_kind in ("file", "url")
+        quota_fallback_tried = False
+
+        def media_now() -> float | None:
+            try:
+                return self._clock_view.now(self._clock())
+            except Exception:                   # noqa: BLE001 - no position: nothing is due
+                return None
+
+        def keep_original(sentence) -> None:
+            self._log(f"live: {sentence.start:.1f}s kept original "
+                      f"({self._timeout_key(engine)} paused after errors): "
+                      f"{sentence.text[:120]}")
+            self._emit_segment(sentence.start, sentence.end, sentence.text, None,
+                               italic=True, gen=sentence.gen, seg_id=None)
+
+        def end_of_source(marker) -> None:
+            with self._decode_lock:
+                if marker.gen == self._gen:
+                    self._source_done = True
+
+        def release_due() -> None:
+            """Show in the original the held sentences whose time has come. The
+            end marker leaves only after every sentence before it: a done source
+            stops the delayed-mode pacer from buffering."""
+            now = media_now()
+            while held:
+                head = held[0]
+                if getattr(head, "gen", 0) < self._gen:
+                    held.popleft()
+                elif isinstance(head, _PipelineEnd):
+                    end_of_source(held.popleft())
+                elif now is not None and head.start <= now + _HELD_DUE_S:
+                    keep_original(held.popleft())
+                else:
+                    return
+
+        def hold(item) -> None:
+            held.append(item)
+            if len(held) > _MAX_HELD:
+                oldest = held.popleft()
+                if isinstance(oldest, _PipelineEnd):
+                    end_of_source(oldest)
+                elif oldest.gen >= self._gen:
+                    keep_original(oldest)
+
         try:
             translator = self._factories.translator(engine)
             online = bool(getattr(translator, "online", False))
@@ -1428,22 +1485,30 @@ class LiveSession:
                 self._log_translator_ready(translator)
                 self._translator_ready.set()
             while not self._stop.is_set():
-                try:
-                    sentence = self._mt_q.get(timeout=0.2)
-                except queue.Empty:
-                    sentence = None
                 with self._status_lock:
                     wanted, self._engine_requested = self._engine_requested, None
                 if wanted and wanted != engine:
                     switch(wanted)
+                holding = can_hold and online and breaker.holding()
+                from_held = bool(held) and not holding
+                if from_held:
+                    sentence = held.popleft()
+                else:
+                    try:
+                        sentence = self._mt_q.get(timeout=0.2)
+                    except queue.Empty:
+                        sentence = None
+                    if holding:
+                        if sentence is not None and getattr(sentence, "gen", 0) >= self._gen:
+                            hold(sentence)
+                        release_due()
+                        continue
                 if sentence is None:
                     continue
                 if getattr(sentence, "gen", 0) < self._gen:
                     continue
                 if isinstance(sentence, _PipelineEnd):
-                    with self._decode_lock:
-                        if sentence.gen == self._gen:
-                            self._source_done = True
+                    end_of_source(sentence)
                     continue
                 if not prepared:
                     src = self._langlock.locked or self._cfg.lang_source
@@ -1451,28 +1516,30 @@ class LiveSession:
                     prepared = True
                     self._log_translator_ready(translator)
                     self._translator_ready.set()
+                if from_held:
+                    now = media_now()
+                    if now is not None and sentence.end <= now:
+                        keep_original(sentence)     # passed during the pause: no call
+                        continue
                 # An online engine whose breaker is open keeps the original text
                 # (shown in the source language) without spending a call.
                 if online and not breaker.allow():
-                    self._log(f"live: {sentence.start:.1f}s kept original "
-                              f"({self._timeout_key(engine)} paused after errors): "
-                              f"{sentence.text[:120]}")
-                    self._emit_segment(sentence.start, sentence.end, sentence.text,
-                                       None, italic=True, gen=sentence.gen,
-                                       seg_id=None)
-                    continue
+                    if breaker.permanent and can_hold and not quota_fallback_tried:
+                        # An exhausted quota never comes back: go on offline, as
+                        # the file pipeline does, when MarianMT covers the pair.
+                        quota_fallback_tried = True
+                        self._log(f"live: {engine} quota exhausted, going on with marian")
+                        switch("marian")
+                        if not online:
+                            with self._status_lock:
+                                self._status.engine = engine
+                    if online:
+                        keep_original(sentence)
+                        continue
                 outcome = translator.translate(sentence.text, context=(),
                                                timeout_s=timeout)
                 if sentence.gen != self._gen:
                     continue
-                # Every sentence to the log: what was heard, what came out, how long.
-                if outcome.ok:
-                    self._log(f"live: {sentence.start:.1f}s {sentence.text[:120]} -> "
-                              f"{outcome.text[:120]} ({outcome.latency_s:.1f} s)")
-                else:
-                    self._log(f"live: {sentence.start:.1f}s kept original "
-                              f"({outcome.error}, {outcome.latency_s:.1f} s): "
-                              f"{sentence.text[:120]}")
                 if online:
                     if outcome.ok:
                         breaker.record_success()
@@ -1494,6 +1561,21 @@ class LiveSession:
                                 code, engine,
                                 s=int(round(retry)) if math.isfinite(retry) else 0,
                                 action=None if engine == "marian" else "live_btn_switch_marian")
+                        if can_hold and breaker.holding():
+                            # This failure paused the engine: the sentence waits too.
+                            self._log(f"live: {sentence.start:.1f}s waits for "
+                                      f"{self._timeout_key(engine)} ({outcome.error}, "
+                                      f"{outcome.latency_s:.1f} s): {sentence.text[:120]}")
+                            held.appendleft(sentence)
+                            continue
+                # Every sentence to the log: what was heard, what came out, how long.
+                if outcome.ok:
+                    self._log(f"live: {sentence.start:.1f}s {sentence.text[:120]} -> "
+                              f"{outcome.text[:120]} ({outcome.latency_s:.1f} s)")
+                else:
+                    self._log(f"live: {sentence.start:.1f}s kept original "
+                              f"({outcome.error}, {outcome.latency_s:.1f} s): "
+                              f"{sentence.text[:120]}")
                 self._emit_segment(
                     sentence.start, sentence.end, sentence.text,
                     outcome.text if outcome.ok else None, italic=not outcome.ok,
