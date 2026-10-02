@@ -367,6 +367,19 @@ class FileBufferTests(unittest.TestCase):
             self.assertFalse(sess._self_paused)
             self.assertIsNone(sess.status().warning_key)
 
+    def test_a_paused_engine_keeps_its_banner_and_its_switch_button(self):
+        # Seen on the real GUI: in delayed mode the picture waits for sentences
+        # held for a rate-limited Google, and "falling behind" replaced the
+        # banner that offers "Switch to MarianMT", the only way out.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, overrides={"live_file_ahead_s": 8.0})
+            sess._set_warning("rate_limited", "google", s=30, action="live_btn_switch_marian")
+            self._paused_once(sess, 100.0)
+            self._paused_once(sess, 110.0)
+            self.assertEqual(sess._pacer.resume_ahead_s, 12.0)    # the buffer still grows
+            st = sess.status()
+        self.assertEqual((st.warning_key, st.warning_action),
+                         ("live_warn_rate_limited", "live_btn_switch_marian"))
 
     def test_pauses_right_after_a_seek_do_not_count(self):
         with tempfile.TemporaryDirectory() as tmp:

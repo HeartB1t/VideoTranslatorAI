@@ -1158,6 +1158,8 @@ class LiveSession:
         self._pacer.set_resume_ahead(raised)
         self._log(f"live: translation falling behind; buffer raised to {raised:.0f} s")
         with self._status_lock:
+            if self._status.warning_action is not None:
+                return      # e.g. a paused engine and its "Switch to MarianMT": keep the way out
             self._status.warning_key = WARN_KEYS.get("falling_behind", "falling_behind")
             self._status.warning_params = {"s": int(round(raised))}
             self._status.warning_action = None
