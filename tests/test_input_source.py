@@ -5,7 +5,9 @@ from pathlib import Path
 from unittest import mock
 
 from videotranslator.input_source import (
+    build_ytdlp_audio_options,
     build_ytdlp_options,
+    download_audio_url,
     download_url,
     emit_download_warnings,
     is_probable_url,
@@ -234,6 +236,103 @@ class InputSourceTests(unittest.TestCase):
         logs: list[str] = []
         emit_download_warnings(logs.append)
 
+        self.assertTrue(any("VPN" in line for line in logs))
+
+
+class AudioDownloadTests(unittest.TestCase):
+    def test_build_ytdlp_audio_options_requests_bestaudio_without_mp4_merge(self):
+        with mock.patch(
+            "videotranslator.js_runtime.resolve_js_runtimes", return_value=None
+        ):
+            opts = build_ytdlp_audio_options("/tmp/videos")
+
+        self.assertEqual(opts["format"], "bestaudio/best")
+        self.assertNotIn("merge_output_format", opts)
+        # The rest of the project's policy is preserved.
+        self.assertTrue(opts["noplaylist"])
+        self.assertTrue(opts["restrictfilenames"])
+        self.assertIn("%(title).80s.%(ext)s", opts["outtmpl"])
+
+    def test_build_ytdlp_audio_options_injects_js_runtimes(self):
+        opts = build_ytdlp_audio_options(
+            "/tmp/videos", js_runtimes={"node": {"path": "/usr/bin/node"}}
+        )
+        self.assertEqual(opts["js_runtimes"], {"node": {"path": "/usr/bin/node"}})
+
+    def test_resolve_downloaded_filename_finds_audio_extension(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            prepared = Path(tmp_str) / "track.webm"
+            audio = Path(tmp_str) / "track.m4a"
+            audio.write_bytes(b"x")
+
+            self.assertEqual(
+                resolve_downloaded_filename(
+                    prepared, extensions=(".m4a", ".opus", ".mp3")),
+                str(audio),
+            )
+
+    def test_download_audio_url_uses_injected_ytdlp_and_returns_path(self):
+        with tempfile.TemporaryDirectory() as tmp_str:
+            final = Path(tmp_str) / "track.m4a"
+            logs: list[str] = []
+            seen_opts: dict = {}
+
+            class FakeYoutubeDL:
+                def __init__(self, opts):
+                    seen_opts.update(opts)
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return None
+
+                def extract_info(self, url, download):
+                    final.write_bytes(b"x")
+                    return {"title": "track"}
+
+                def prepare_filename(self, info):
+                    return str(Path(tmp_str) / "track.webm")
+
+            with mock.patch(
+                "videotranslator.js_runtime.ensure_js_runtime", return_value=None
+            ), mock.patch(
+                "videotranslator.js_runtime.resolve_js_runtimes", return_value=None
+            ):
+                result = download_audio_url(
+                    "https://youtu.be/example",
+                    tmp_str,
+                    ytdlp_cls=FakeYoutubeDL,
+                    log_cb=logs.append,
+                )
+
+            self.assertEqual(result, str(final))
+            self.assertEqual(seen_opts["format"], "bestaudio/best")
+            self.assertNotIn("merge_output_format", seen_opts)
+            self.assertTrue(any(str(final) in line for line in logs))
+
+    def test_download_audio_url_emits_advice_then_reraises(self):
+        class FailingYoutubeDL:
+            def __init__(self, opts):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def extract_info(self, url, download):
+                raise RuntimeError("Sign in to confirm you're not a bot")
+
+        logs: list[str] = []
+        with mock.patch(
+            "videotranslator.js_runtime.ensure_js_runtime", return_value=None
+        ):
+            with self.assertRaises(RuntimeError):
+                download_audio_url(
+                    "https://youtu.be/x", "/tmp",
+                    ytdlp_cls=FailingYoutubeDL, log_cb=logs.append)
         self.assertTrue(any("VPN" in line for line in logs))
 
 

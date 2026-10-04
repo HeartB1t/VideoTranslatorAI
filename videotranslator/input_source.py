@@ -97,14 +97,46 @@ def build_ytdlp_options(
     return opts
 
 
-def resolve_downloaded_filename(prepared_filename: str | os.PathLike[str]) -> str:
-    """Return the final file path after yt-dlp merge/output extension changes."""
+def build_ytdlp_audio_options(
+    out_dir: str | os.PathLike[str],
+    *,
+    js_runtimes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return yt-dlp options for an audio-only download.
+
+    Same policy as ``build_ytdlp_options`` (cookies, outtmpl, restrictfilenames,
+    js_runtimes, extractor args) but it asks for ``bestaudio/best`` and drops the
+    ``merge_output_format`` remux so yt-dlp keeps bestaudio's native container
+    (.m4a/.webm/.opus) instead of wrapping it in mp4.
+    """
+    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes)
+    opts["format"] = "bestaudio/best"
+    opts.pop("merge_output_format", None)
+    return opts
+
+
+# Containers yt-dlp commonly writes for an audio-only download.
+_AUDIO_DOWNLOAD_EXTENSIONS = (
+    ".m4a", ".webm", ".opus", ".mp3", ".ogg", ".oga", ".wav", ".aac",
+)
+
+
+def resolve_downloaded_filename(
+    prepared_filename: str | os.PathLike[str],
+    *,
+    extensions: tuple[str, ...] = (".mp4", ".mkv", ".webm"),
+) -> str:
+    """Return the final file path after yt-dlp merge/output extension changes.
+
+    ``extensions`` lists the containers to probe when the prepared name does not
+    exist (the merge/remux changed it); audio-only downloads pass audio ones.
+    """
     filename = str(prepared_filename)
     if os.path.exists(filename):
         return filename
 
     stem = os.path.splitext(filename)[0]
-    for ext in (".mp4", ".mkv", ".webm"):
+    for ext in extensions:
         candidate = stem + ext
         if os.path.exists(candidate):
             return candidate
@@ -144,6 +176,45 @@ def download_url(
 
     if log_cb is not None:
         log_cb(f"[+] Downloaded: {filename}")
+    return filename
+
+
+def download_audio_url(
+    url: str,
+    out_dir: str | os.PathLike[str],
+    *,
+    ytdlp_cls: Callable[[dict[str, Any]], _YoutubeDLLike] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Download one URL audio-only with yt-dlp and return the final media path.
+
+    Mirrors ``download_url`` (same JS-runtime setup and error advice) but uses
+    the bestaudio options and probes audio containers to find the saved file.
+    ``ytdlp_cls`` is injectable so tests exercise the contract without yt-dlp or
+    the network.
+    """
+    if ytdlp_cls is None:
+        import yt_dlp
+
+        ytdlp_cls = yt_dlp.YoutubeDL
+
+    from videotranslator.js_runtime import ensure_js_runtime
+
+    js_runtimes = ensure_js_runtime(log_cb=log_cb)
+    opts = build_ytdlp_audio_options(out_dir, js_runtimes=js_runtimes)
+    try:
+        with ytdlp_cls(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = resolve_downloaded_filename(
+                ydl.prepare_filename(info),
+                extensions=_AUDIO_DOWNLOAD_EXTENSIONS,
+            )
+    except Exception as exc:
+        emit_download_advice(exc, log_cb)
+        raise
+
+    if log_cb is not None:
+        log_cb(f"[+] Downloaded audio: {filename}")
     return filename
 
 
