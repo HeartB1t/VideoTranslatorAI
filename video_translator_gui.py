@@ -405,6 +405,14 @@ UI_STRINGS = {
         "label_video":        "Video:",
         "label_output":       "Output:",
         "label_output_dir": "Cartella output:",
+        "section_extract_audio": "Estrai audio",
+        "label_audio_format": "Formato:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Solo strumentale (rimuovi voce)",
+        "btn_extract_audio": "Estrai",
+        "msg_no_input_extract": "Nessun file o URL da cui estrarre l'audio.",
+        "msg_extract_done": "Estrazione audio completata.",
+        "log_extracting": "Estrazione audio da: {}",
         "label_from":         "Da:",
         "label_to":           "A:",
         "label_voice":        "Voce:",
@@ -541,6 +549,14 @@ UI_STRINGS = {
         "label_video":        "Video:",
         "label_output":       "Output:",
         "label_output_dir": "Output folder:",
+        "section_extract_audio": "Extract audio",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Instrumental only (remove voice)",
+        "btn_extract_audio": "Extract",
+        "msg_no_input_extract": "No file or URL to extract audio from.",
+        "msg_extract_done": "Audio extraction complete.",
+        "log_extracting": "Extracting audio from: {}",
         "label_from":         "From:",
         "label_to":           "To:",
         "label_voice":        "Voice:",
@@ -677,6 +693,14 @@ UI_STRINGS = {
         "label_video": "فيديو:",
         "label_output": "الإخراج:",
         "label_output_dir": "مجلد الإخراج:",
+        "section_extract_audio": "استخراج الصوت",
+        "label_audio_format": "الصيغة:",
+        "label_audio_bitrate": "معدل البت:",
+        "opt_instrumental": "الموسيقى فقط (إزالة الصوت)",
+        "btn_extract_audio": "استخراج",
+        "msg_no_input_extract": "لا يوجد ملف أو رابط لاستخراج الصوت منه.",
+        "msg_extract_done": "اكتمل استخراج الصوت.",
+        "log_extracting": "استخراج الصوت من: {}",
         "label_from": "من:",
         "label_to": "ل:",
         "label_voice": "صوت:",
@@ -810,6 +834,14 @@ UI_STRINGS = {
         "label_video": "视频：",
         "label_output": "输出：",
         "label_output_dir": "输出文件夹：",
+        "section_extract_audio": "提取音频",
+        "label_audio_format": "格式：",
+        "label_audio_bitrate": "比特率：",
+        "opt_instrumental": "仅伴奏（移除人声）",
+        "btn_extract_audio": "提取",
+        "msg_no_input_extract": "没有可提取音频的文件或网址。",
+        "msg_extract_done": "音频提取完成。",
+        "log_extracting": "正在提取音频：{}",
         "label_from": "从：",
         "label_to": "到：",
         "label_voice": "嗓音：",
@@ -943,6 +975,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "výstup:",
         "label_output_dir": "Výstupní složka:",
+        "section_extract_audio": "Extrahovat zvuk",
+        "label_audio_format": "Formát:",
+        "label_audio_bitrate": "Datový tok:",
+        "opt_instrumental": "Pouze instrumentální (odebrat hlas)",
+        "btn_extract_audio": "Extrahovat",
+        "msg_no_input_extract": "Žádný soubor ani URL k extrakci zvuku.",
+        "msg_extract_done": "Extrakce zvuku dokončena.",
+        "log_extracting": "Extrahuji zvuk z: {}",
         "label_from": "Z:",
         "label_to": "Na:",
         "label_voice": "Hlas:",
@@ -1076,6 +1116,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Produktion:",
         "label_output_dir": "Outputmappe:",
+        "section_extract_audio": "Udtræk lyd",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Kun instrumental (fjern stemme)",
+        "btn_extract_audio": "Udtræk",
+        "msg_no_input_extract": "Ingen fil eller URL at udtrække lyd fra.",
+        "msg_extract_done": "Lydudtrækning fuldført.",
+        "log_extracting": "Udtrækker lyd fra: {}",
         "label_from": "Fra:",
         "label_to": "Til:",
         "label_voice": "Stemme:",
@@ -1209,6 +1257,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Uitgang:",
         "label_output_dir": "Uitvoermap:",
+        "section_extract_audio": "Audio extraheren",
+        "label_audio_format": "Formaat:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Alleen instrumentaal (stem verwijderen)",
+        "btn_extract_audio": "Extraheren",
+        "msg_no_input_extract": "Geen bestand of URL om audio uit te extraheren.",
+        "msg_extract_done": "Audio-extractie voltooid.",
+        "log_extracting": "Audio extraheren uit: {}",
         "label_from": "Van:",
         "label_to": "Naar:",
         "label_voice": "Stem:",
@@ -1342,6 +1398,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Lähtö:",
         "label_output_dir": "Tuloskansio:",
+        "section_extract_audio": "Pura ääni",
+        "label_audio_format": "Muoto:",
+        "label_audio_bitrate": "Bittinopeus:",
+        "opt_instrumental": "Vain instrumentaali (poista ääni)",
+        "btn_extract_audio": "Pura",
+        "msg_no_input_extract": "Ei tiedostoa tai URL-osoitetta, josta purkaa ääni.",
+        "msg_extract_done": "Äänen purku valmis.",
+        "log_extracting": "Puretaan ääntä kohteesta: {}",
         "label_from": "Lähettäjä:",
         "label_to": "Vastaanottaja:",
         "label_voice": "Ääni:",
@@ -1475,6 +1539,14 @@ UI_STRINGS = {
         "label_video": "Vidéo:",
         "label_output": "Sortir:",
         "label_output_dir": "Dossier de sortie:",
+        "section_extract_audio": "Extraire l'audio",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Débit:",
+        "opt_instrumental": "Instrumental seulement (supprimer la voix)",
+        "btn_extract_audio": "Extraire",
+        "msg_no_input_extract": "Aucun fichier ou URL pour extraire l'audio.",
+        "msg_extract_done": "Extraction audio terminée.",
+        "log_extracting": "Extraction de l'audio depuis: {}",
         "label_from": "Depuis:",
         "label_to": "À:",
         "label_voice": "Voix:",
@@ -1608,6 +1680,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Ausgabe:",
         "label_output_dir": "Ausgabeordner:",
+        "section_extract_audio": "Audio extrahieren",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Nur instrumental (Stimme entfernen)",
+        "btn_extract_audio": "Extrahieren",
+        "msg_no_input_extract": "Keine Datei oder URL zum Extrahieren von Audio.",
+        "msg_extract_done": "Audio-Extraktion abgeschlossen.",
+        "log_extracting": "Audio wird extrahiert aus: {}",
         "label_from": "Aus:",
         "label_to": "Zu:",
         "label_voice": "Stimme:",
@@ -1741,6 +1821,14 @@ UI_STRINGS = {
         "label_video": "Βίντεο:",
         "label_output": "Παραγωγή:",
         "label_output_dir": "Φάκελος εξόδου:",
+        "section_extract_audio": "Εξαγωγή ήχου",
+        "label_audio_format": "Μορφή:",
+        "label_audio_bitrate": "Ρυθμός bit:",
+        "opt_instrumental": "Μόνο ορχηστρικό (αφαίρεση φωνής)",
+        "btn_extract_audio": "Εξαγωγή",
+        "msg_no_input_extract": "Δεν υπάρχει αρχείο ή URL για εξαγωγή ήχου.",
+        "msg_extract_done": "Η εξαγωγή ήχου ολοκληρώθηκε.",
+        "log_extracting": "Εξαγωγή ήχου από: {}",
         "label_from": "Από:",
         "label_to": "Να:",
         "label_voice": "Φωνή:",
@@ -1874,6 +1962,14 @@ UI_STRINGS = {
         "label_video": "वीडियो:",
         "label_output": "आउटपुट:",
         "label_output_dir": "आउटपुट फ़ोल्डर:",
+        "section_extract_audio": "ऑडियो निकालें",
+        "label_audio_format": "प्रारूप:",
+        "label_audio_bitrate": "बिटरेट:",
+        "opt_instrumental": "केवल वाद्य (आवाज़ हटाएँ)",
+        "btn_extract_audio": "निकालें",
+        "msg_no_input_extract": "ऑडियो निकालने के लिए कोई फ़ाइल या URL नहीं।",
+        "msg_extract_done": "ऑडियो निष्कर्षण पूर्ण।",
+        "log_extracting": "ऑडियो निकाला जा रहा है: {}",
         "label_from": "से:",
         "label_to": "को:",
         "label_voice": "आवाज़:",
@@ -2007,6 +2103,14 @@ UI_STRINGS = {
         "label_video": "Videó:",
         "label_output": "Kimenet:",
         "label_output_dir": "Kimeneti mappa:",
+        "section_extract_audio": "Hang kinyerése",
+        "label_audio_format": "Formátum:",
+        "label_audio_bitrate": "Bitráta:",
+        "opt_instrumental": "Csak hangszeres (ének eltávolítása)",
+        "btn_extract_audio": "Kinyerés",
+        "msg_no_input_extract": "Nincs fájl vagy URL a hang kinyeréséhez.",
+        "msg_extract_done": "A hang kinyerése kész.",
+        "log_extracting": "Hang kinyerése innen: {}",
         "label_from": "Tól:",
         "label_to": "Címzett:",
         "label_voice": "Hang:",
@@ -2140,6 +2244,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Keluaran:",
         "label_output_dir": "Folder keluaran:",
+        "section_extract_audio": "Ekstrak audio",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Hanya instrumental (hapus vokal)",
+        "btn_extract_audio": "Ekstrak",
+        "msg_no_input_extract": "Tidak ada file atau URL untuk mengekstrak audio.",
+        "msg_extract_done": "Ekstraksi audio selesai.",
+        "log_extracting": "Mengekstrak audio dari: {}",
         "label_from": "Dari:",
         "label_to": "Ke:",
         "label_voice": "Suara:",
@@ -2273,6 +2385,14 @@ UI_STRINGS = {
         "label_video": "ビデオ：",
         "label_output": "出力：",
         "label_output_dir": "出力フォルダー：",
+        "section_extract_audio": "音声を抽出",
+        "label_audio_format": "形式：",
+        "label_audio_bitrate": "ビットレート：",
+        "opt_instrumental": "伴奏のみ（音声を除去）",
+        "btn_extract_audio": "抽出",
+        "msg_no_input_extract": "音声を抽出するファイルまたはURLがありません。",
+        "msg_extract_done": "音声の抽出が完了しました。",
+        "log_extracting": "音声を抽出中: {}",
         "label_from": "から：",
         "label_to": "に：",
         "label_voice": "声：",
@@ -2406,6 +2526,14 @@ UI_STRINGS = {
         "label_video": "동영상:",
         "label_output": "산출:",
         "label_output_dir": "출력 폴더:",
+        "section_extract_audio": "오디오 추출",
+        "label_audio_format": "형식:",
+        "label_audio_bitrate": "비트레이트:",
+        "opt_instrumental": "반주만 (음성 제거)",
+        "btn_extract_audio": "추출",
+        "msg_no_input_extract": "오디오를 추출할 파일 또는 URL이 없습니다.",
+        "msg_extract_done": "오디오 추출 완료.",
+        "log_extracting": "오디오 추출 중: {}",
         "label_from": "에서:",
         "label_to": "에게:",
         "label_voice": "목소리:",
@@ -2539,6 +2667,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Produksjon:",
         "label_output_dir": "Utdatamappe:",
+        "section_extract_audio": "Trekk ut lyd",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Kun instrumental (fjern stemme)",
+        "btn_extract_audio": "Trekk ut",
+        "msg_no_input_extract": "Ingen fil eller URL å trekke ut lyd fra.",
+        "msg_extract_done": "Lyduttrekk fullført.",
+        "log_extracting": "Trekker ut lyd fra: {}",
         "label_from": "Fra:",
         "label_to": "Til:",
         "label_voice": "Stemme:",
@@ -2672,6 +2808,14 @@ UI_STRINGS = {
         "label_video": "Wideo:",
         "label_output": "Wyjście:",
         "label_output_dir": "Folder wyjściowy:",
+        "section_extract_audio": "Wyodrębnij dźwięk",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Przepływność:",
+        "opt_instrumental": "Tylko instrumental (usuń głos)",
+        "btn_extract_audio": "Wyodrębnij",
+        "msg_no_input_extract": "Brak pliku lub adresu URL do wyodrębnienia dźwięku.",
+        "msg_extract_done": "Wyodrębnianie dźwięku zakończone.",
+        "log_extracting": "Wyodrębnianie dźwięku z: {}",
         "label_from": "Z:",
         "label_to": "Do:",
         "label_voice": "Głos:",
@@ -2805,6 +2949,14 @@ UI_STRINGS = {
         "label_video": "Vídeo:",
         "label_output": "Saída:",
         "label_output_dir": "Pasta de saída:",
+        "section_extract_audio": "Extrair áudio",
+        "label_audio_format": "Formato:",
+        "label_audio_bitrate": "Taxa de bits:",
+        "opt_instrumental": "Somente instrumental (remover voz)",
+        "btn_extract_audio": "Extrair",
+        "msg_no_input_extract": "Nenhum arquivo ou URL para extrair o áudio.",
+        "msg_extract_done": "Extração de áudio concluída.",
+        "log_extracting": "Extraindo áudio de: {}",
         "label_from": "De:",
         "label_to": "Para:",
         "label_voice": "Voz:",
@@ -2938,6 +3090,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Ieșire:",
         "label_output_dir": "Folder de ieșire:",
+        "section_extract_audio": "Extrage audio",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Rată de biți:",
+        "opt_instrumental": "Doar instrumental (elimină vocea)",
+        "btn_extract_audio": "Extrage",
+        "msg_no_input_extract": "Niciun fișier sau URL din care să extragi audio.",
+        "msg_extract_done": "Extragerea audio s-a finalizat.",
+        "log_extracting": "Se extrage audio din: {}",
         "label_from": "Din:",
         "label_to": "La:",
         "label_voice": "Voce:",
@@ -3071,6 +3231,14 @@ UI_STRINGS = {
         "label_video": "Видео:",
         "label_output": "Выход:",
         "label_output_dir": "Папка вывода:",
+        "section_extract_audio": "Извлечь звук",
+        "label_audio_format": "Формат:",
+        "label_audio_bitrate": "Битрейт:",
+        "opt_instrumental": "Только инструментал (убрать голос)",
+        "btn_extract_audio": "Извлечь",
+        "msg_no_input_extract": "Нет файла или URL для извлечения звука.",
+        "msg_extract_done": "Извлечение звука завершено.",
+        "log_extracting": "Извлечение звука из: {}",
         "label_from": "От:",
         "label_to": "К:",
         "label_voice": "Голос:",
@@ -3204,6 +3372,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Producción:",
         "label_output_dir": "Carpeta de salida:",
+        "section_extract_audio": "Extraer audio",
+        "label_audio_format": "Formato:",
+        "label_audio_bitrate": "Tasa de bits:",
+        "opt_instrumental": "Solo instrumental (quitar voz)",
+        "btn_extract_audio": "Extraer",
+        "msg_no_input_extract": "No hay archivo ni URL para extraer el audio.",
+        "msg_extract_done": "Extracción de audio completada.",
+        "log_extracting": "Extrayendo audio de: {}",
         "label_from": "De:",
         "label_to": "A:",
         "label_voice": "Voz:",
@@ -3337,6 +3513,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Produktion:",
         "label_output_dir": "Utdatamapp:",
+        "section_extract_audio": "Extrahera ljud",
+        "label_audio_format": "Format:",
+        "label_audio_bitrate": "Bithastighet:",
+        "opt_instrumental": "Endast instrumental (ta bort röst)",
+        "btn_extract_audio": "Extrahera",
+        "msg_no_input_extract": "Ingen fil eller URL att extrahera ljud från.",
+        "msg_extract_done": "Ljudextrahering klar.",
+        "log_extracting": "Extraherar ljud från: {}",
         "label_from": "Från:",
         "label_to": "Till:",
         "label_voice": "Röst:",
@@ -3470,6 +3654,14 @@ UI_STRINGS = {
         "label_video": "Video:",
         "label_output": "Çıkış:",
         "label_output_dir": "Çıktı klasörü:",
+        "section_extract_audio": "Sesi çıkar",
+        "label_audio_format": "Biçim:",
+        "label_audio_bitrate": "Bit hızı:",
+        "opt_instrumental": "Yalnızca enstrümantal (sesi kaldır)",
+        "btn_extract_audio": "Çıkar",
+        "msg_no_input_extract": "Ses çıkarılacak dosya veya URL yok.",
+        "msg_extract_done": "Ses çıkarma tamamlandı.",
+        "log_extracting": "Ses çıkarılıyor: {}",
         "label_from": "İtibaren:",
         "label_to": "İle:",
         "label_voice": "Ses:",
@@ -3603,6 +3795,14 @@ UI_STRINGS = {
         "label_video": "Відео:",
         "label_output": "Вихід:",
         "label_output_dir": "Тека виводу:",
+        "section_extract_audio": "Витягти звук",
+        "label_audio_format": "Формат:",
+        "label_audio_bitrate": "Бітрейт:",
+        "opt_instrumental": "Лише інструментал (прибрати голос)",
+        "btn_extract_audio": "Витягти",
+        "msg_no_input_extract": "Немає файлу або URL для витягання звуку.",
+        "msg_extract_done": "Витягання звуку завершено.",
+        "log_extracting": "Витягання звуку з: {}",
         "label_from": "Від:",
         "label_to": "до:",
         "label_voice": "Голос:",
@@ -3736,6 +3936,14 @@ UI_STRINGS = {
         "label_video": "Băng hình:",
         "label_output": "Đầu ra:",
         "label_output_dir": "Thư mục đầu ra:",
+        "section_extract_audio": "Trích xuất âm thanh",
+        "label_audio_format": "Định dạng:",
+        "label_audio_bitrate": "Bitrate:",
+        "opt_instrumental": "Chỉ nhạc nền (loại bỏ giọng)",
+        "btn_extract_audio": "Trích xuất",
+        "msg_no_input_extract": "Không có tệp hoặc URL để trích xuất âm thanh.",
+        "msg_extract_done": "Đã trích xuất âm thanh xong.",
+        "log_extracting": "Đang trích xuất âm thanh từ: {}",
         "label_from": "Từ:",
         "label_to": "ĐẾN:",
         "label_voice": "Tiếng nói:",
@@ -7130,6 +7338,62 @@ class App(tk.Tk):
         # Keyboard traversal follows stacking order: keep the field before the button
         self._url_text.lift(_wd)
 
+        # ── Audio/music extraction ──────────────────────────────────────────
+        from videotranslator import audio_extract
+        tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(6, 6))
+        self._lbl_section_extract = tk.Label(
+            inner, text=self._s("section_extract_audio"),
+            bg=CARD, fg=FG2, font="VT.Small")
+        self._lbl_section_extract.pack(anchor="w", pady=(0, 2))
+
+        # Format labels are brand/codec names, the same in every language.
+        self._audio_fmt_label_to_key = {
+            audio_extract.format_label(k): k for k in audio_extract.format_keys()
+        }
+        ext_row = tk.Frame(inner, bg=CARD)
+        ext_row.pack(fill="x", pady=(0, 4))
+        self._lbl_audio_format = tk.Label(
+            ext_row, text=self._s("label_audio_format"),
+            bg=CARD, fg=FG2, font="VT.Small")
+        self._lbl_audio_format.pack(side="left", padx=(0, 4))
+        self._audio_format_var = tk.StringVar(
+            value=audio_extract.format_label(audio_extract.format_keys()[0]))
+        self._audio_format_combo = ttk.Combobox(
+            ext_row, textvariable=self._audio_format_var,
+            values=list(self._audio_fmt_label_to_key.keys()),
+            state="readonly", width=14)
+        self._audio_format_combo.pack(side="left", padx=(0, 8))
+        self._audio_format_combo.bind(
+            "<<ComboboxSelected>>", self._on_audio_format_change)
+        self._lbl_audio_bitrate = tk.Label(
+            ext_row, text=self._s("label_audio_bitrate"),
+            bg=CARD, fg=FG2, font="VT.Small")
+        self._lbl_audio_bitrate.pack(side="left", padx=(0, 4))
+        self._audio_bitrate_var = tk.StringVar(value="")
+        self._audio_bitrate_combo = ttk.Combobox(
+            ext_row, textvariable=self._audio_bitrate_var,
+            values=[], state="disabled", width=6)
+        self._audio_bitrate_combo.pack(side="left")
+
+        ext_row2 = tk.Frame(inner, bg=CARD)
+        ext_row2.pack(fill="x", pady=(0, 2))
+        self._instrumental_var = tk.BooleanVar(value=False)
+        self._chk_instrumental = tk.Checkbutton(
+            ext_row2, text=self._s("opt_instrumental"),
+            variable=self._instrumental_var,
+            wraplength=_HINT_WRAP, justify="left",
+            bg=CARD, fg=FG, selectcolor=SEL,
+            activebackground=CARD, activeforeground=FG,
+            highlightbackground=CARD, highlightcolor=ACC, font="VT.Small")
+        self._chk_instrumental.pack(side="left")
+        _we, self._btn_extract_audio = self._flat_btn(
+            ext_row2, primary=True, text=self._s("btn_extract_audio"),
+            command=self._extract_audio, padx=8, pady=2)
+        _we.pack(side="right")
+
+        # Fill the bitrate combo for the default (lossy) format.
+        self._on_audio_format_change()
+
     def _build_advanced_panel(self, parent):
         """Right-pane card, below Start: collapsible accordion sections for
         all advanced options."""
@@ -8283,6 +8547,12 @@ class App(tk.Tk):
         self._btn_clear.configure(text=self._s("btn_clear"))
         self._btn_browse.configure(text=self._s("btn_browse"))
         self._btn_output_dir.configure(text=self._s("btn_browse"))
+        self._lbl_section_extract.configure(text=self._s("section_extract_audio"))
+        self._lbl_audio_format.configure(text=self._s("label_audio_format"))
+        self._lbl_audio_bitrate.configure(text=self._s("label_audio_bitrate"))
+        self._chk_instrumental.configure(text=self._s("opt_instrumental"))
+        if not self._running:
+            self._btn_extract_audio.configure(text=self._s("btn_extract_audio"))
         if not self._running:
             self._btn.configure(text=self._s("btn_start"))
         self._lbl_section_subtitles.configure(text=self._s("section_subtitles"))
@@ -10575,6 +10845,110 @@ class App(tk.Tk):
     def _persist_output_dir(self):
         """Save the configured output folder (empty string means the default)."""
         save_config({"output_dir": self._output_dir_var.get().strip()})
+
+    # ── Audio/music extraction ────────────────────────────────────────────────
+
+    def _current_audio_format_key(self) -> str:
+        """Map the selected format label back to its catalogue key."""
+        return self._audio_fmt_label_to_key.get(
+            self._audio_format_var.get(), "mp3")
+
+    def _on_audio_format_change(self, _event=None) -> None:
+        """Enable the bitrate combo only for lossy formats and refill its values."""
+        from videotranslator import audio_extract
+        fmt_key = self._current_audio_format_key()
+        if audio_extract.is_lossy(fmt_key):
+            rates = [str(b) for b in audio_extract.allowed_bitrates(fmt_key)]
+            self._audio_bitrate_combo.configure(values=rates, state="readonly")
+            current = self._audio_bitrate_var.get()
+            if current not in rates:
+                self._audio_bitrate_var.set(str(audio_extract.default_bitrate(fmt_key)))
+        else:
+            self._audio_bitrate_var.set("")
+            self._audio_bitrate_combo.configure(values=[], state="disabled")
+
+    def _extract_audio(self) -> None:
+        """Extract audio from every selected file and every entered URL into the
+        output folder, in a worker thread so the UI stays responsive."""
+        if self._running or self._ollama_setup_in_flight or self._player_release_pending:
+            return
+        if self._block_if_live_active():
+            return
+        from videotranslator import audio_extract
+
+        sources = list(self._batch_files) + self._get_urls()
+        if not sources:
+            messagebox.showerror(self._s("msg_error_t"),
+                                 self._s("msg_no_input_extract"))
+            return
+
+        fmt_key = self._current_audio_format_key()
+        bitrate = None
+        if audio_extract.is_lossy(fmt_key):
+            try:
+                bitrate = int(self._audio_bitrate_var.get())
+            except (ValueError, tk.TclError):
+                bitrate = None
+        instrumental = bool(self._instrumental_var.get())
+        try:
+            out_dir = str(_platforms.resolve_output_dir(
+                self._output_dir_var.get().strip() or None))
+        except Exception:
+            out_dir = str(_platforms.default_output_dir())
+
+        self._running = True
+        self._btn.configure(state="disabled")
+        self._btn_download.configure(state="disabled")
+        self._btn_extract_audio.configure(state="disabled")
+        self._progress.start(12)
+        self._log.configure(state="normal")
+        self._log.delete("1.0", "end")
+        self._log.configure(state="disabled")
+
+        def run():
+            _thread_local.redirect = _TkStreamRedirect(self, self._log_write)
+            ok = 0
+            fail = 0
+            try:
+                for src in sources:
+                    self.after(0, self._log_write,
+                               f"\n{'-'*50}\n"
+                               f"{self._s('log_extracting').format(src)}\n"
+                               f"{'-'*50}\n")
+                    try:
+                        out_path = audio_extract.extract_music(
+                            src, out_dir, fmt=fmt_key, bitrate=bitrate,
+                            instrumental=instrumental,
+                            log_cb=lambda line: self.after(
+                                0, self._log_write, line + "\n"),
+                        )
+                        self.after(0, self._log_write, f"[+] {out_path}\n")
+                        ok += 1
+                    except Exception as e:
+                        self.after(0, self._log_write,
+                                   f"[x] {type(e).__name__}: {e}\n")
+                        fail += 1
+            finally:
+                _thread_local.redirect = None
+            self.after(0, self._on_extract_done, ok, fail)
+
+        threading.Thread(target=run, name="extract-audio", daemon=True).start()
+
+    def _on_extract_done(self, ok: int, fail: int) -> None:
+        if self._destroying:
+            return
+        self._running = False
+        self._progress.stop()
+        self._btn.configure(state="normal", text=self._s("btn_start"))
+        self._btn_download.configure(state="normal", text=self._s("btn_download"))
+        self._btn_extract_audio.configure(state="normal",
+                                          text=self._s("btn_extract_audio"))
+        if fail == 0:
+            self._log_write("\n✓ Done!\n")
+            messagebox.showinfo(self._s("msg_completed_t"),
+                                self._s("msg_extract_done"))
+        else:
+            messagebox.showerror(self._s("msg_error_t"), self._s("msg_error"))
 
     # ── Translation start ─────────────────────────────────────────────────────
 
