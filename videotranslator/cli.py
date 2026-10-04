@@ -158,6 +158,22 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
              "(both can be passed; CLI string wins on duplicates).",
     )
     parser.add_argument("--batch", nargs="+", metavar="FILE")
+    # Audio/music extraction mode (runs instead of translation).
+    from videotranslator import audio_extract
+    parser.add_argument("--extract-audio", action="store_true",
+                        help="Extract the audio track instead of translating. "
+                             "Works on local files and URLs; outputs to "
+                             "--output-dir (or next to the input).")
+    parser.add_argument("--audio-format", default="mp3",
+                        choices=audio_extract.format_keys(),
+                        help="Output format for --extract-audio (default: mp3)")
+    parser.add_argument("--audio-bitrate", type=int, default=None,
+                        help="Bitrate in kbps for lossy --audio-format "
+                             "(e.g. 320 for mp3). Ignored for flac/wav. "
+                             "Must be an allowed value for the chosen format.")
+    parser.add_argument("--instrumental", action="store_true",
+                        help="With --extract-audio, remove the voice with "
+                             "Demucs and keep only the instrumental (uses GPU/CPU).")
     return parser
 
 
@@ -177,6 +193,40 @@ def preflight_options(*, lipsync: bool, player: bool,
         "required_optional_modules": tuple(modules),
         "native_checks": (lambda: check(required=player),),
     }
+
+
+def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -> None:
+    """Extract audio from every input (file or URL) and print the output path.
+
+    Runs instead of the translation pipeline. URLs are not checked for local
+    existence; missing local files are reported and skipped.
+    """
+    from videotranslator import audio_extract
+    from videotranslator.input_source import is_probable_url
+
+    cfg = legacy.load_config()
+    out_dir_opt = args.output_dir or cfg.get("output_dir")
+
+    for source in files:
+        is_url = is_probable_url(source)
+        if not is_url and not os.path.exists(source):
+            print(f"[!] File not found: {source}", flush=True)
+            continue
+        out_dir = out_dir_opt or (
+            os.getcwd() if is_url else os.path.dirname(os.path.abspath(source)))
+        try:
+            out_path = audio_extract.extract_music(
+                source,
+                out_dir,
+                fmt=args.audio_format,
+                bitrate=args.audio_bitrate,
+                instrumental=args.instrumental,
+                log_cb=lambda line: print(line, flush=True),
+            )
+        except (ValueError, RuntimeError) as exc:
+            print(f"[!] Audio extraction failed for {source}: {exc}", flush=True)
+            continue
+        print(f"[+] Audio saved: {out_path}", flush=True)
 
 
 def _cli(argv: Sequence[str] | None = None) -> None:
@@ -200,6 +250,10 @@ def _cli(argv: Sequence[str] | None = None) -> None:
     files = args.batch if args.batch else ([args.input] if args.input else [])
     if not files:
         parser.print_help()
+        sys.exit(0)
+
+    if args.extract_audio:
+        _run_extract_audio(args, files, legacy)
         sys.exit(0)
 
     missing_pkgs, missing_bins = legacy.check_dependencies()
