@@ -124,6 +124,19 @@ Claude/프로젝트 유지 관리 노트는 **Voice Catalog Source Of Truth** �
 - Voicebox API에는 인증이 없으므로 이 PC의 주소만 허용됩니다.
 - Voicebox가 응답하지 않거나 대상 언어를 지원하지 않으면 동영상은 Edge-TTS로 더빙됩니다.
 
+## 오디오 추출
+
+번역하는 대신 로컬 파일이나 URL에서 오디오를 추출합니다. 형식(MP3, M4A, Opus, OGG, FLAC 또는 WAV)을 선택하고 손실 형식의 경우 비트레이트를 선택합니다. 반주만 모드는 Demucs로 음성을 제거하고 음악만 남깁니다.
+
+명령줄에서:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+그래픽 인터페이스에서는 오디오 추출 컨트롤이 입력 카드에 있습니다. 형식과 비트레이트를 선택하고 음악만 남기려면 반주만 옵션을 켠 다음 추출을 누르세요.
+
 ## 요구사항
 
 - Python 3.10+(Windows 설치 프로그램이 3.11.9를 자동으로 프로비저닝)

@@ -124,6 +124,19 @@ Pengaturan lanjutan > Model > **Model untuk PC ini** membuka jendela yang membac
 - Hanya alamat di PC ini yang diterima, karena API Voicebox tidak memakai autentikasi.
 - Jika Voicebox tidak merespons atau tidak mendukung bahasa tujuan, video disulihsuarakan dengan Edge-TTS.
 
+## Ekstraksi audio
+
+Ekstrak audio dari file lokal atau URL alih-alih menerjemahkannya. Pilih format (MP3, M4A, Opus, OGG, FLAC atau WAV) dan, untuk format lossy, bitrate. Mode hanya instrumental menghapus suara dengan Demucs dan hanya menyisakan musik.
+
+Dari baris perintah:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+Di antarmuka grafis, kontrol ekstraksi audio ada di kartu Masukan: pilih format dan bitrate, aktifkan opsi hanya instrumental untuk menyimpan musik saja, lalu tekan Ekstrak.
+
 ## Persyaratan
 
 - Python 3.10+ (penginstal Windows menyediakan 3.11.9 secara otomatis)

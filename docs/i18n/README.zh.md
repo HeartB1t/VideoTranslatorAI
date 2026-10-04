@@ -124,6 +124,19 @@ Claude/项目维护注释在 **Voice Catalog Source Of Truth** 下的 `CLAUDE.md
 - 只接受本机地址，因为 Voicebox 的 API 没有身份验证。
 - 如果 Voicebox 没有响应或不支持目标语言，视频将使用 Edge-TTS 配音。
 
+## 提取音频
+
+从本地文件或网址提取音频，而不是翻译它。选择一种格式（MP3、M4A、Opus、OGG、FLAC 或 WAV），有损格式还可选择比特率。仅伴奏模式使用 Demucs 去除人声，只保留音乐。
+
+从命令行：
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+在图形界面中，提取音频控件位于输入卡片内：选择格式和比特率，启用仅伴奏选项以只保留音乐，然后按提取。
+
 ## 要求
 
 - Python 3.10+（Windows 安装程序自动提供 3.11.9）

@@ -124,6 +124,19 @@ Ustawienia zaawansowane > Model > **Modele dla tego komputera** otwiera okno, kt
 - Akceptowany jest tylko adres na tym komputerze, bo API Voicebox nie ma uwierzytelniania.
 - Jeśli Voicebox nie odpowiada lub nie obsługuje języka docelowego, wideo jest dubbingowane przez Edge-TTS.
 
+## Wyodrębnianie dźwięku
+
+Wyodrębnij dźwięk z pliku lokalnego lub z adresu URL zamiast go tłumaczyć. Wybierz format (MP3, M4A, Opus, OGG, FLAC lub WAV), a dla formatów stratnych przepływność. Tryb tylko instrumental usuwa głos za pomocą Demucs i zostawia samą muzykę.
+
+Z wiersza poleceń:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+W interfejsie graficznym elementy wyodrębniania dźwięku znajdują się na karcie Wejście: wybierz format i przepływność, włącz opcję tylko instrumental, aby zostawić samą muzykę, a następnie naciśnij Wyodrębnij.
+
 ## Wymagania
 
 - Python 3.10+ (instalator Windows automatycznie uruchamia wersję 3.11.9)

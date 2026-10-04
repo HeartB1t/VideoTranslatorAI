@@ -124,6 +124,19 @@ Avancerade inställningar > Modell > **Modeller för den här datorn** öppnar e
 - Bara en adress på den här datorn godtas, eftersom Voicebox API saknar autentisering.
 - Om Voicebox inte svarar eller inte stöder målspråket dubbas videon med Edge-TTS.
 
+## Ljudextrahering
+
+Extrahera ljudet från en lokal fil eller en URL i stället för att översätta det. Välj ett format (MP3, M4A, Opus, OGG, FLAC eller WAV) och för förlustformat en bithastighet. Läget endast instrumental tar bort rösten med Demucs och behåller bara musiken.
+
+Från kommandoraden:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+I det grafiska gränssnittet finns kontrollerna för ljudextrahering i Indata-kortet: välj format och bithastighet, aktivera endast instrumental för att behålla bara musiken och tryck på Extrahera.
+
 ## Krav
 
 - Python 3.10+ (Windows-installationsprogrammet tillhandahåller 3.11.9 automatiskt)

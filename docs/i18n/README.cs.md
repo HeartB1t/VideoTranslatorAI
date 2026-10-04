@@ -124,6 +124,19 @@ Pokročilá nastavení > Model > **Modely pro tento počítač** otevře okno, k
 - Přijata je jen adresa na tomto počítači, protože API Voiceboxu nemá ověřování.
 - Když Voicebox neodpovídá nebo nepodporuje cílový jazyk, video se nadabuje přes Edge-TTS.
 
+## Extrakce zvuku
+
+Získejte zvuk z místního souboru nebo z URL místo jeho překladu. Vyberte formát (MP3, M4A, Opus, OGG, FLAC nebo WAV) a u ztrátových formátů datový tok. Režim pouze instrumentální odstraní hlas pomocí Demucs a ponechá jen hudbu.
+
+Z příkazové řádky:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+V grafickém rozhraní jsou ovládací prvky extrakce zvuku na kartě Vstup: vyberte formát a datový tok, zapněte volbu pouze instrumentální pro zachování jen hudby a stiskněte Extrahovat.
+
 ## Požadavky
 
 - Python 3.10+ (instalační program Windows automaticky poskytuje verzi 3.11.9)

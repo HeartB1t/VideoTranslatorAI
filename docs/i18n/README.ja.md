@@ -124,6 +124,19 @@ Edge-TTS 音声カタログは、`video_translator_gui.py` の先頭近くの `L
 - Voicebox の API には認証がないため、この PC 上のアドレスだけを受け付けます。
 - Voicebox が応答しない場合や翻訳先の言語に対応していない場合、動画は Edge-TTS で吹き替えられます。
 
+## 音声の抽出
+
+翻訳する代わりに、ローカルファイルまたはURLから音声を抽出します。形式（MP3、M4A、Opus、OGG、FLAC、WAV）を選び、非可逆形式の場合はビットレートを選びます。伴奏のみモードは Demucs で音声を除去し、音楽だけを残します。
+
+コマンドラインから:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+グラフィカルインターフェースでは、音声抽出のコントロールは入力カードにあります。形式とビットレートを選び、音楽だけを残すには伴奏のみオプションを有効にして、抽出を押します。
+
 ## 要件
 
 - Python 3.10+ (Windows インストーラーは 3.11.9 を自動的にプロビジョニングします)

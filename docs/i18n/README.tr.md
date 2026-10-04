@@ -124,6 +124,19 @@ Gelişmiş ayarlar > Model > **Bu bilgisayar için modeller**, hiçbir şeyi de�
 - Voicebox API'sinde kimlik doğrulama olmadığı için yalnızca bu bilgisayardaki bir adres kabul edilir.
 - Voicebox yanıt vermezse veya hedef dili desteklemezse video Edge-TTS ile dublajlanır.
 
+## Ses çıkarma
+
+Sesi çevirmek yerine yerel bir dosyadan veya bir URL'den çıkarın. Bir biçim seçin (MP3, M4A, Opus, OGG, FLAC veya WAV) ve kayıplı biçimler için bir bit hızı. Yalnızca enstrümantal modu, Demucs ile sesi kaldırır ve yalnızca müziği bırakır.
+
+Komut satırından:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+Grafik arabirimde ses çıkarma denetimleri Girdi kartındadır: bir biçim ve bit hızı seçin, yalnızca müziği bırakmak için yalnızca enstrümantal seçeneğini etkinleştirin, ardından Çıkar düğmesine basın.
+
 ## Gereksinimler
 
 - Python 3.10+ (Windows yükleyicisi 3.11.9'u otomatik olarak hazırlar)

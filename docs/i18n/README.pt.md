@@ -124,6 +124,19 @@ Definições avançadas > Modelo > **Modelos para este PC** abre uma janela que 
 - Só é aceite um endereço neste PC, porque a API do Voicebox não tem autenticação.
 - Se o Voicebox não responder ou não suportar a língua de destino, o vídeo é dobrado com o Edge-TTS.
 
+## Extração de áudio
+
+Extraia o áudio de um arquivo local ou de uma URL em vez de traduzi-lo. Escolha um formato (MP3, M4A, Opus, OGG, FLAC ou WAV) e, para os formatos com perdas, uma taxa de bits. O modo somente instrumental remove a voz com o Demucs e mantém apenas a música.
+
+Pela linha de comando:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+Na interface gráfica, os controles de extração de áudio ficam no cartão Entrada: escolha o formato e a taxa de bits, ative a opção somente instrumental para manter apenas a música e pressione Extrair.
+
 ## Requisitos
 
 - Python 3.10+ (o instalador do Windows provisiona 3.11.9 automaticamente)

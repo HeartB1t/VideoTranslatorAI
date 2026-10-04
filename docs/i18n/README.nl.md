@@ -124,6 +124,19 @@ Geavanceerde instellingen > Model > **Modellen voor deze pc** opent een venster 
 - Alleen een adres op deze pc wordt geaccepteerd, omdat de Voicebox-API geen authenticatie heeft.
 - Antwoordt Voicebox niet of ondersteunt het de doeltaal niet, dan wordt de video nagesynchroniseerd met Edge-TTS.
 
+## Audio extraheren
+
+Haal de audio uit een lokaal bestand of een URL in plaats van het te vertalen. Kies een formaat (MP3, M4A, Opus, OGG, FLAC of WAV) en voor lossy formaten een bitrate. De modus alleen instrumentaal verwijdert de stem met Demucs en houdt alleen de muziek over.
+
+Vanaf de opdrachtregel:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+In de grafische interface staan de knoppen voor audio-extractie in de Invoer-kaart: kies een formaat en bitrate, schakel alleen instrumentaal in om alleen de muziek te houden en druk op Extraheren.
+
 ## Vereisten
 
 - Python 3.10+ (het Windows-installatieprogramma voorziet automatisch in 3.11.9)

@@ -124,6 +124,19 @@ Lisäasetukset > Malli > **Mallit tälle tietokoneelle** avaa ikkunan, joka luke
 - Vain tämän koneen osoite hyväksytään, koska Voiceboxin API:ssa ei ole todennusta.
 - Jos Voicebox ei vastaa tai ei tue kohdekieltä, video jälkiäänitetään Edge-TTS:llä.
 
+## Äänen purkaminen
+
+Pura ääni paikallisesta tiedostosta tai URL-osoitteesta sen kääntämisen sijaan. Valitse muoto (MP3, M4A, Opus, OGG, FLAC tai WAV) ja häviöllisille muodoille bittinopeus. Vain instrumentaali -tila poistaa äänen Demucsilla ja säilyttää vain musiikin.
+
+Komentoriviltä:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+Graafisessa käyttöliittymässä äänen purkamisen säätimet ovat Syöte-kortissa: valitse muoto ja bittinopeus, ota käyttöön vain instrumentaali säilyttääksesi vain musiikin ja paina Pura.
+
 ## Vaatimukset
 
 - Python 3.10+ (Windowsin asennusohjelma 3.11.9 automaattisesti)

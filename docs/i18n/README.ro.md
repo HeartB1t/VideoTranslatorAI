@@ -124,6 +124,19 @@ Setări avansate > Model > **Modele pentru acest PC** deschide o fereastră care
 - Este acceptată doar o adresă de pe acest PC, deoarece API-ul Voicebox nu are autentificare.
 - Dacă Voicebox nu răspunde sau nu acceptă limba țintă, videoclipul este dublat cu Edge-TTS.
 
+## Extragere audio
+
+Extrage sunetul dintr-un fișier local sau dintr-un URL în loc să îl traduci. Alege un format (MP3, M4A, Opus, OGG, FLAC sau WAV) și, pentru formatele cu pierderi, o rată de biți. Modul doar instrumental elimină vocea cu Demucs și păstrează numai muzica.
+
+Din linia de comandă:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+În interfața grafică, comenzile de extragere audio se află în cardul Intrare: alege formatul și rata de biți, activează opțiunea doar instrumental pentru a păstra numai muzica, apoi apasă Extrage.
+
 ## Cerințe
 
 - Python 3.10+ (instalatorul Windows prevede automat 3.11.9)

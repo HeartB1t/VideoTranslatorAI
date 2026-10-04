@@ -124,6 +124,19 @@ Avanserte innstillinger > Modell > **Modeller for denne PC-en** åpner et vindu 
 - Bare en adresse på denne PC-en godtas, fordi Voicebox-API-et ikke har autentisering.
 - Svarer ikke Voicebox eller støtter det ikke målspråket, dubbes videoen med Edge-TTS.
 
+## Uttrekk av lyd
+
+Trekk ut lyden fra en lokal fil eller en URL i stedet for å oversette den. Velg et format (MP3, M4A, Opus, OGG, FLAC eller WAV) og for tapsformater en bitrate. Modusen kun instrumental fjerner stemmen med Demucs og beholder bare musikken.
+
+Fra kommandolinjen:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+I det grafiske grensesnittet ligger kontrollene for lyduttrekk i Inndata-kortet: velg format og bitrate, slå på kun instrumental for å beholde bare musikken, og trykk på Trekk ut.
+
 ## Krav
 
 - Python 3.10+ (Windows-installasjonsprogrammet gir 3.11.9 automatisk)

@@ -124,6 +124,19 @@ A [Voicebox](https://github.com/jamiepine/voicebox) (MIT) különálló, hangoka
 - Csak ezen a gépen lévő cím fogadható el, mert a Voicebox API-ja nem használ hitelesítést.
 - Ha a Voicebox nem válaszol vagy nem támogatja a célnyelvet, a videó szinkronja Edge-TTS-sel készül.
 
+## Hang kinyerése
+
+Nyerje ki a hangot egy helyi fájlból vagy egy URL-ből ahelyett, hogy lefordítaná. Válasszon formátumot (MP3, M4A, Opus, OGG, FLAC vagy WAV), a veszteséges formátumokhoz pedig bitrátát. A csak hangszeres mód a Demucs segítségével eltávolítja a hangot, és csak a zenét tartja meg.
+
+Parancssorból:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+A grafikus felületen a hangkinyerés vezérlői a Bemenet kártyán találhatók: válasszon formátumot és bitrátát, kapcsolja be a csak hangszeres beállítást, hogy csak a zene maradjon meg, majd nyomja meg a Kinyerés gombot.
+
 ## Követelmények
 
 - Python 3.10+ (a Windows telepítőprogram 3.11.9 automatikusan)

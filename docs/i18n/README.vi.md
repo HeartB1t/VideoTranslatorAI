@@ -124,6 +124,19 @@ Cài đặt nâng cao > Mô hình > **Mô hình cho máy này** mở một cửa
 - Chỉ chấp nhận địa chỉ trên máy này, vì API của Voicebox không có xác thực.
 - Nếu Voicebox không phản hồi hoặc không hỗ trợ ngôn ngữ đích, video được lồng tiếng bằng Edge-TTS.
 
+## Trích xuất âm thanh
+
+Trích xuất âm thanh từ một tệp cục bộ hoặc một URL thay vì dịch nó. Chọn một định dạng (MP3, M4A, Opus, OGG, FLAC hoặc WAV) và, với các định dạng có mất dữ liệu, một bitrate. Chế độ chỉ nhạc nền loại bỏ giọng nói bằng Demucs và chỉ giữ lại phần nhạc.
+
+Từ dòng lệnh:
+
+```bash
+python video_translator_gui.py video.mp4 --extract-audio --audio-format mp3 --audio-bitrate 320
+python video_translator_gui.py video.mp4 --extract-audio --instrumental --audio-format flac
+```
+
+Trong giao diện đồ họa, các điều khiển trích xuất âm thanh nằm trong thẻ Đầu vào: chọn định dạng và bitrate, bật tùy chọn chỉ nhạc nền để chỉ giữ lại phần nhạc, rồi nhấn Trích xuất.
+
 ## Yêu cầu
 
 - Python 3.10+ (trình cài đặt Windows tự động cung cấp 3.11.9)
