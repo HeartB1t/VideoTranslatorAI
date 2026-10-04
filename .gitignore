@@ -36,6 +36,9 @@ Thumbs.db
 # Project memory file (loaded automatically by Claude Code, must stay in repo root)
 CLAUDE.md
 
+# Local task tracker (internal dev notes, not for the public repo)
+TRACKER.md
+
 # Tutto il resto del contesto dev locale: CHANGELOG, memoria feedback,
 # script dev, backup .bak. Sono tutti dentro `_dev/` che è gitignored.
 # Vedi `_dev/memory/MEMORY.md` per l'indice della memoria.
