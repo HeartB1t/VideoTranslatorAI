@@ -154,3 +154,58 @@ def separate_audio(
         log_cb(f"     -> Vocals (16kHz): {vocals_16k}")
         log_cb(f"     -> Background: {bg_path}")
     return vocals_16k, bg_path
+
+
+def separate_instrumental(
+    audio_path: str,
+    out_path: str,
+    *,
+    log_cb: LogCallback | None = None,
+) -> str:
+    """Remove the voice with Demucs and save the full-quality instrumental.
+
+    Unlike ``separate_audio`` (which feeds the translation pipeline and
+    downmixes to mono at 16 kHz for Whisper), this keeps the background at its
+    original sample rate and channel layout and writes it to ``out_path`` as a
+    WAV. The Demucs logic is duplicated on purpose so ``separate_audio`` stays
+    byte-for-byte unchanged. Returns ``out_path``.
+    """
+    if log_cb is not None:
+        log_cb("[music] Separating the instrumental with Demucs...")
+
+    import torch
+    import torchaudio
+    from demucs import pretrained
+    from demucs.apply import apply_model
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = pretrained.get_model("htdemucs")
+    model.to(device)
+
+    waveform, sr = torchaudio.load(audio_path)
+    if waveform.shape[0] == 1:
+        waveform = waveform.repeat(2, 1)
+    waveform = waveform.to(device)
+
+    sources = None
+    try:
+        with torch.no_grad():
+            sources = apply_model(
+                model,
+                waveform.unsqueeze(0),
+                **demucs_apply_kwargs(apply_model, device),
+            )[0]
+        # drums + bass + other, kept at full channel layout (no mono downmix).
+        background = sources[:3].sum(0).cpu()
+    finally:
+        del model, waveform
+        if sources is not None:
+            del sources
+        if device == "cuda":
+            torch.cuda.empty_cache()
+
+    torchaudio.save(out_path, background, sr)
+
+    if log_cb is not None:
+        log_cb(f"     -> Instrumental: {out_path}")
+    return out_path

@@ -1,5 +1,8 @@
 import subprocess
+import sys
+import types
 import unittest
+from unittest import mock
 
 from videotranslator.media import (
     build_extract_audio_cmd,
@@ -7,6 +10,7 @@ from videotranslator.media import (
     demucs_apply_kwargs,
     extract_audio,
     run_ffmpeg,
+    separate_instrumental,
 )
 
 
@@ -74,6 +78,83 @@ class MediaTests(unittest.TestCase):
             return device
 
         self.assertEqual(demucs_apply_kwargs(apply_model, "cpu"), {"device": "cpu"})
+
+
+class _NullCtx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_a):
+        return False
+
+
+class SeparateInstrumentalTests(unittest.TestCase):
+    """Task 3: full-quality instrumental via Demucs, with Demucs mocked so no
+    real model is loaded (CI has no torch/demucs)."""
+
+    def test_separate_instrumental_saves_full_quality_background(self):
+        class FakeTensor:
+            def __init__(self, shape=(2, 1000)):
+                self.shape = shape
+
+            def repeat(self, *_a):
+                return FakeTensor((2, self.shape[1]))
+
+            def to(self, _device):
+                return self
+
+            def unsqueeze(self, _dim):
+                return self
+
+            def __getitem__(self, _idx):
+                return self
+
+            def sum(self, _dim):
+                return self
+
+            def cpu(self):
+                return self
+
+        saved: list[tuple] = []
+
+        fake_torch = types.SimpleNamespace(
+            cuda=types.SimpleNamespace(
+                is_available=lambda: False,
+                empty_cache=lambda: saved.append(("empty_cache",)),
+            ),
+            no_grad=lambda: _NullCtx(),
+        )
+        fake_torchaudio = types.SimpleNamespace(
+            load=lambda _p: (FakeTensor((2, 1000)), 48000),
+            save=lambda path, tensor, sr: saved.append((path, tensor, sr)),
+        )
+        fake_pretrained = types.SimpleNamespace(
+            get_model=lambda _name: types.SimpleNamespace(to=lambda _d: None)
+        )
+        fake_apply = types.SimpleNamespace(apply_model=lambda *a, **k: FakeTensor())
+        fake_demucs = types.ModuleType("demucs")
+        fake_demucs.pretrained = fake_pretrained
+        fake_demucs.apply = fake_apply
+
+        modules = {
+            "torch": fake_torch,
+            "torchaudio": fake_torchaudio,
+            "demucs": fake_demucs,
+            "demucs.pretrained": fake_pretrained,
+            "demucs.apply": fake_apply,
+        }
+        logs: list[str] = []
+        with mock.patch.dict(sys.modules, modules):
+            result = separate_instrumental(
+                "song.wav", "/tmp/instr.wav", log_cb=logs.append)
+
+        self.assertEqual(result, "/tmp/instr.wav")
+        self.assertEqual(len(saved), 1)
+        saved_path, _tensor, saved_sr = saved[0]
+        self.assertEqual(saved_path, "/tmp/instr.wav")
+        self.assertEqual(saved_sr, 48000)  # original sample rate, not resampled
+        self.assertTrue(any("Demucs" in line or "nstrumental" in line
+                            for line in logs))
 
 
 if __name__ == "__main__":
