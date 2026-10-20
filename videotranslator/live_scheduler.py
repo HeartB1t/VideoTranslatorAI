@@ -327,7 +327,8 @@ class DubScheduler:
         self._overlap_sped = False
         self._dub_state: dict[int, str] = {}   # seg_id -> translated/synth/ready/
                                                # preloaded/playing/done/dropped/
-                                               # skipped (jumped over by a seek)
+                                               # skipped (jumped over by a seek,
+                                               # or passed while the dub was off)
         self._clips: dict[int, object] = {}    # seg_id -> Clip
         self._clip_cache: dict[tuple, object] = {}  # (rstart, rend, tgt) -> Clip
         self._preloaded: int | None = None
@@ -413,6 +414,13 @@ class DubScheduler:
         if state not in ("synth", "translated"):
             return False
         if clip is None:
+            if not self._dub:
+                # A request kept in flight through dub-off (set_dub) failed
+                # while the dub is off: the line was never going to be voiced
+                # then, so it is forgotten, not counted as a lost voice line,
+                # and set_dub(True) asks for it again if it is still in time.
+                self._dub_state.pop(seg_id, None)
+                return False
             self._dub_state[seg_id] = "dropped"
             self._dub_dropped += 1
             return False
@@ -463,6 +471,7 @@ class DubScheduler:
         return self._dub
 
     def set_dub(self, on: bool) -> list[object]:
+        was_on = self._dub
         self._dub = on
         actions: list[object] = []
         if not on:
@@ -470,17 +479,29 @@ class DubScheduler:
                 actions.append(StopClip(0.18))
             self._abandon_clips()
             # Dub off: _dub_actions no longer runs, so it can neither voice nor
-            # expire the queued lines, while drained() still reads their state.
-            # Drop every remaining active voice (never spoken) so it cannot orphan
-            # the auto-stop; done/dropped are kept and no counter changes. A late
-            # TTS result for a dropped seg_id is discarded by clip_ready's state
-            # guard. set_dub(True) re-arms the ones still in time.
+            # expire the queued lines; drained(), ready_until() and
+            # startup_ready ignore the dub states while the dub is off, so no
+            # line left here holds the auto-stop or the pacer. Drop the
+            # never-spoken lines with nothing pending (translated, ready; the
+            # preloaded/held clip went with _abandon_clips); done/dropped are
+            # kept and no counter changes. A "synth" line keeps its state: its
+            # TTS request is in flight and cannot be cancelled, and dropping it
+            # threw the result away (clip_ready found no state) so that
+            # set_dub(True) asked the TTS again, with ElevenLabs a second paid
+            # call per toggled line. clip_ready keeps that result as "ready" (or
+            # forgets a failure, uncounted); set_dub(True) re-arms the lines
+            # still in time and skips the others.
             for seg_id in [sid for sid, st in self._dub_state.items()
-                           if st in _ACTIVE_DUB]:
+                           if st in _ACTIVE_DUB and st != "synth"]:
                 self._dub_state.pop(seg_id, None)
             if self._duck_target != 1.0:
                 self._duck_target = 1.0
                 actions.append(Duck(1.0))
+            return actions
+        if was_on:
+            # Already on: no dub-off dropped or kept anything to re-arm, and the
+            # skip pass below would wrongly skip a line legitimately waiting
+            # past its re-arm point (a slow request still inside its slot).
             return actions
         # Only sentences that can still be voiced: past ones would expire at once
         # and be counted as lost voice lines that were never really missed. A
@@ -489,8 +510,19 @@ class DubScheduler:
         # while the dub was off could not re-arm it (on_seek only does with the
         # dub on), and left "skipped" it would never be voiced again.
         for seg in self._segments.values():
-            if (self._dub_eligible(seg)
-                    and self._dub_state.get(seg.seg_id) in (None, "skipped")
+            state = self._dub_state.get(seg.seg_id)
+            if state in ("synth", "ready"):
+                # Kept through the dub-off: a request still in flight, or the
+                # clip it delivered meanwhile. Still re-armable, it keeps its
+                # state (no second TTS request). Past that point it could only
+                # expire or be dropped as late, a lost voice line although the
+                # dub was off when its moment came: it is skipped instead, as a
+                # forward seek skips it (not active, not counted); a late clip
+                # is still kept by clip_ready, and a seek back re-arms it from
+                # _clips.
+                if not self._re_armable(seg, self._last_now):
+                    self._dub_state[seg.seg_id] = "skipped"
+            elif (state in (None, "skipped") and self._dub_eligible(seg)
                     and self._re_armable(seg, self._last_now)):
                 self._dub_state[seg.seg_id] = (
                     "ready" if seg.seg_id in self._clips else "translated")

@@ -880,11 +880,18 @@ class LiveSession:
                     from .tts_text_sanitizer import sanitize_for_tts
                     self._dur_model.observe(sanitize_for_tts(seg.text_tgt),
                                             int(clip.rate.rstrip("%")), clip.audible_s)
-                with self._status_lock:
-                    if self._status.warning_key == WARN_KEYS.get("tts_unavailable"):
-                        self._status.warning_key = None
-                        self._status.warning_params = {}
-                        self._status.warning_action = None
+                # A working TTS clears its failure warning, but only with the dub
+                # on: a request kept in flight through a dub-off also lands here,
+                # kept for a later dub-on (clip_ready), and the same warning
+                # tells why the dub turned itself off (3 voice-output errors, TTS
+                # or voice backend unavailable). Cleared while the dub stays
+                # off, the banner would no longer say why the voice is silent.
+                if self._scheduler.dub_on:
+                    with self._status_lock:
+                        if self._status.warning_key == WARN_KEYS.get("tts_unavailable"):
+                            self._status.warning_key = None
+                            self._status.warning_params = {}
+                            self._status.warning_action = None
 
     def _calibrate_lead(self) -> None:
         """Feed the voice position to the lead calibrator (first clips only)."""

@@ -109,7 +109,13 @@ import time
 from types import SimpleNamespace
 
 from videotranslator.live_session import LiveFactories, LiveSession
-from videotranslator.live_scheduler import LiveSegment
+from videotranslator.live_scheduler import (
+    Drop,
+    LiveSegment,
+    PreloadClip,
+    RequestTts,
+    StartClip,
+)
 
 
 class _FakeRt:
@@ -1254,6 +1260,61 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertFalse(sess._scheduler._dub)   # dub turned off
             self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
 
+    def test_late_clip_after_the_automatic_dub_off_keeps_the_warning(self):
+        # The dub turns itself off after 3 voice-output errors with the "dubbed
+        # voice unavailable" warning, usually with a TTS request still in
+        # flight. Kept through the dub-off (finding #3 of the 2026-10-20
+        # ultrareview), its successful result is accepted for a later dub-on,
+        # but it must not clear that warning: the dub stays off, and the banner
+        # would no longer say why the voice went off. The clip still feeds the
+        # duration model (a real measurement of the TTS).
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video, _voice, synth, _ = _dub_session(tmp, media=1.8)
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9                 # isolate from the file pacer
+            sess.submit_segment(_dub_seg("ciao", start=2.0, end=3.0))
+            sess._tick_once(0.0)                        # RequestTts: line in flight
+            self.assertEqual([s[0] for s in synth.submitted], [0])
+            for n in range(1, 4):                       # 3 voice-output errors
+                video.bridge.extra_latest("voice-eof", (n, "error"), float(n))
+                sess._sync_voice_state()
+            self.assertFalse(sess._scheduler.dub_on)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+            synth.push(0, 0, Clip(0, 0, "/clip.mp3", 2.0, "+0%",
+                                  voice_start_s=0.0, voice_end_s=2.0))
+            sess._drain_synth()
+            self.assertEqual(sess._scheduler._dub_state.get(0), "ready")   # kept
+            self.assertFalse(sess._scheduler.dub_on)
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable",
+                             "a clip landing after the automatic dub-off hid "
+                             "why the voice went off")
+            # 4 characters in 2.0 s at +0%: the model now says 2.0 s for "ciao"
+            # (the seed estimate is its 0.5 s floor).
+            self.assertAlmostEqual(sess._dur_model.estimate("ciao", 0), 2.0)
+
+    def test_clip_after_a_tts_failure_clears_the_warning_with_the_dub_on(self):
+        # The other side of the gate above: with the dub on, a successful clip
+        # after a failed synthesis shows that the TTS works again, so it clears
+        # the "dubbed voice unavailable" warning that the failure raised.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _video, _voice, synth, _ = _dub_session(tmp, media=1.8)
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9                 # isolate from the file pacer
+            sess.submit_segment(LiveSegment(1, 0, 2.0, 3.0, "a", text_tgt="uno",
+                                            dub_ok=True))
+            sess.submit_segment(LiveSegment(2, 0, 3.2, 4.0, "b", text_tgt="due",
+                                            dub_ok=True))
+            sess._tick_once(0.0)                        # both lines requested
+            self.assertEqual([s[0] for s in synth.submitted], [1, 2])
+            synth.push(1, 0, None, "network error")
+            sess._drain_synth()
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+            synth.push(2, 0, Clip(2, 0, "/clip.mp3", 1.0, "+0%",
+                                  voice_start_s=0.0, voice_end_s=1.0))
+            sess._drain_synth()
+            self.assertTrue(sess._scheduler.dub_on)
+            self.assertIsNone(sess.status().warning_key)
+
     def test_tts_unavailable_disables_dub_with_warning(self):
         with tempfile.TemporaryDirectory() as tmp:
             synth = _FakeSynth(start_exc=LiveTtsUnavailable("no edge-tts"))
@@ -1823,9 +1884,14 @@ class SchedulerDrainedTests(unittest.TestCase):
         self.assertTrue(sched.drained(5.0))
 
     def test_dub_off_with_queued_voices_drains_at_end(self):
-        # Dub off must leave no active voice: a playing clip, a ready line and a
-        # synth line in flight. _dub_actions no longer runs at dub off, so any
-        # active state would orphan drained() at end of source.
+        # Dub off must not orphan drained() at end of source: a playing clip, a
+        # ready line and a synth line in flight. _dub_actions no longer runs at
+        # dub off; the spoken clip is finalized "done" and the ready line leaves
+        # the queue. The synth line keeps its state: its TTS request is in flight
+        # and cannot be cancelled, and dropping it threw the result away so that
+        # dub-on asked the TTS again (finding #3 of the 2026-10-20 ultrareview).
+        # drained() ignores the dub states while the dub is off, so it still
+        # drains, and the toggle moves no counter.
         sched = self._sched(dub=True, subs=False)
         self._play_a_clip(sched)                      # seg 1 -> playing
         sched.upsert(LiveSegment(2, 0, 5.0, 7.0, "b", text_tgt="bb", dub_ok=True))
@@ -1833,11 +1899,14 @@ class SchedulerDrainedTests(unittest.TestCase):
         sched._dub_state[2] = "ready"
         sched._clips[2] = SimpleNamespace(path="/y.wav", audible_s=0.5, voice_start_s=0.0)
         sched._dub_state[3] = "synth"
+        voiced0, dropped0 = sched.metrics()["voiced"], sched.metrics()["dropped"]
         sched.set_dub(False)
         self.assertEqual(sched._dub_state.get(1), "done")   # spoken clip kept
         self.assertNotIn(sched._dub_state.get(2), self._ACTIVE)
-        self.assertNotIn(sched._dub_state.get(3), self._ACTIVE)
+        self.assertEqual(sched._dub_state.get(3), "synth")  # request in flight kept
         self.assertTrue(sched.drained(20.0))
+        self.assertEqual(sched.metrics()["voiced"], voiced0)
+        self.assertEqual(sched.metrics()["dropped"], dropped0)
 
     def test_dub_off_then_on_re_arms_future_lines_only(self):
         # Re-enabling dub re-arms only the lines still in time: a cached one as
@@ -1857,18 +1926,155 @@ class SchedulerDrainedTests(unittest.TestCase):
         self.assertEqual(sched.metrics()["voiced"], voiced0)
         self.assertEqual(sched.metrics()["dropped"], dropped0)
 
-    def test_late_tts_result_after_dub_off_is_discarded(self):
-        # A TTS result that lands after the line was dropped at dub off must be
-        # discarded by clip_ready's state guard, with no error and no state.
+    def test_late_tts_result_after_dub_off_is_kept_for_dub_on(self):
+        # A TTS result that lands after dub off is kept as a "ready" clip, not
+        # discarded: discarding it made dub-on ask the TTS again, with
+        # ElevenLabs a second paid call per toggled line (finding #3 of the
+        # 2026-10-20 ultrareview). The dub is still off, so the kept line does
+        # not hold the auto-stop and no counter moves.
         sched = self._sched(dub=True, subs=False)
         sched.upsert(LiveSegment(1, 0, 1.0, 3.0, "a", text_tgt="aa", dub_ok=True))
         sched._dub_state[1] = "synth"
         sched.set_dub(False)
-        self.assertNotIn(1, sched._dub_state)
+        self.assertEqual(sched._dub_state.get(1), "synth")
+        voiced0, dropped0 = sched.metrics()["voiced"], sched.metrics()["dropped"]
         accepted = sched.clip_ready(1, 0, SimpleNamespace(path="/z.wav",
                                                           audible_s=0.5, voice_start_s=0.0))
-        self.assertFalse(accepted)
-        self.assertNotIn(sched._dub_state.get(1), self._ACTIVE)
+        self.assertTrue(accepted)
+        self.assertEqual(sched._dub_state.get(1), "ready")
+        self.assertIn(1, sched._clips)
+        self.assertTrue(sched.drained(20.0))
+        self.assertEqual(sched.metrics()["voiced"], voiced0)
+        self.assertEqual(sched.metrics()["dropped"], dropped0)
+
+    # -- finding #3 of the 2026-10-20 ultrareview: a dub toggle with a TTS
+    # request in flight must not ask the TTS a second time for the same line.
+
+    @staticmethod
+    def _ids(actions, kind):
+        """The seg_ids of the actions of type ``kind``, in emission order."""
+        return [a.seg_id for a in actions if isinstance(a, kind)]
+
+    @staticmethod
+    def _clip():
+        return SimpleNamespace(path="/a.mp3", audible_s=1.0, voice_start_s=0.0)
+
+    def _line_in_flight(self):
+        """Dub on, one line (4.0-6.0 s) whose TTS request is in flight.
+
+        Returns the scheduler and the actions so far (the line's RequestTts).
+        Delayed defaults: the line preloads from 2.5 s, starts at 3.75 s, is
+        re-armable before 4.25 s (start - lead + late tolerance) and its slot
+        ends at 6.6 s (end + overhang).
+        """
+        sched = self._sched(dub=True, subs=False)
+        sched.upsert(LiveSegment(1, 0, 4.0, 6.0, "a", text_tgt="aa", dub_ok=True))
+        acts = sched.tick(1.0, mono=100.0, voice_state="idle")
+        self.assertEqual(self._ids(acts, RequestTts), [1])
+        self.assertEqual(sched._dub_state.get(1), "synth")
+        return sched, acts
+
+    def test_dub_off_on_with_a_line_in_flight_requests_it_once(self):
+        # set_dub(False) dropped the "synth" state of a line whose request was
+        # in flight (it cannot be cancelled), so set_dub(True) re-armed it as
+        # "translated" and _dub_actions asked the TTS again. The request
+        # survives the toggle and its clip, landing after dub-on, is voiced.
+        sched, acts = self._line_in_flight()
+        acts += sched.set_dub(False)
+        acts += sched.set_dub(True)
+        acts += sched.tick(1.5, mono=100.5, voice_state="idle")
+        self.assertTrue(sched.clip_ready(1, 0, self._clip()))
+        acts += sched.tick(3.0, mono=102.0, voice_state="idle")        # preload
+        acts += sched.tick(3.8, mono=102.8, voice_state="preloaded")   # start
+        self.assertEqual(self._ids(acts, RequestTts), [1],
+                         "the line was asked to the TTS a second time")
+        self.assertEqual(self._ids(acts, StartClip), [1])
+        self.assertEqual(sched.metrics()["voiced"], 1.0)
+        self.assertEqual(sched.metrics()["dropped"], 0.0)
+
+    def test_clip_landing_while_the_dub_is_off_is_voiced_after_dub_on(self):
+        # The clip lands while the dub is off: it was discarded (no state, not
+        # even cached) and dub-on asked the TTS again. It is kept as "ready" and
+        # dub-on, still in time, voices it without a new request.
+        sched, acts = self._line_in_flight()
+        acts += sched.set_dub(False)
+        self.assertTrue(sched.clip_ready(1, 0, self._clip()),
+                        "the clip landing while the dub is off was discarded")
+        acts += sched.tick(1.5, mono=100.5, voice_state="idle")        # dub off
+        acts += sched.set_dub(True)
+        self.assertEqual(sched._dub_state.get(1), "ready")
+        acts += sched.tick(3.0, mono=102.0, voice_state="idle")        # preload
+        acts += sched.tick(3.8, mono=102.8, voice_state="preloaded")   # start
+        self.assertEqual(self._ids(acts, RequestTts), [1])
+        self.assertEqual(self._ids(acts, StartClip), [1])
+        self.assertEqual(sched.metrics()["voiced"], 1.0)
+        self.assertEqual(sched.metrics()["dropped"], 0.0)
+
+    def test_dub_on_too_late_skips_the_line_and_keeps_its_clip(self):
+        # Dub-on after the moment of a line kept through dub-off must neither ask
+        # the TTS nor count a lost voice line (the dub was off when it passed):
+        # the line is skipped, as a forward seek skips it, and its clip, landed
+        # while the dub was off or after dub-on, is kept, so a seek back voices
+        # it from the clip without a new request. Too late means past the
+        # re-arm point (4.25 s), not only past the slot end (6.6 s, the looser
+        # _still_voiceable rule): at 5.0 s the line is still inside its slot,
+        # but a "ready" clip kept there would be dropped as late on the next
+        # tick, a lost voice line caused by the toggle itself; at 8.0 s the
+        # slot has ended as well.
+        for dub_on_at, mono in ((5.0, 104.0), (8.0, 107.0)):
+            for lands in ("while_off", "after_on"):
+                with self.subTest(dub_on_at=dub_on_at, lands=lands):
+                    sched, acts = self._line_in_flight()
+                    acts += sched.set_dub(False)
+                    if lands == "while_off":
+                        sched.clip_ready(1, 0, self._clip())
+                    acts += sched.tick(dub_on_at, mono=mono,
+                                       voice_state="idle")        # its moment passes
+                    acts += sched.set_dub(True)
+                    if lands == "after_on":
+                        self.assertFalse(sched.clip_ready(1, 0, self._clip()))
+                    acts += sched.tick(dub_on_at + 0.5, mono=mono + 0.5,
+                                       voice_state="idle")
+                    self.assertEqual(self._ids(acts, RequestTts), [1])
+                    self.assertEqual(self._ids(acts, Drop), [])
+                    self.assertEqual(sched.metrics()["dropped"], 0.0)
+                    self.assertIn(1, sched._clips, "the clip was thrown away")
+                    self.assertEqual(sched._dub_state.get(1), "skipped")
+                    self.assertTrue(sched.drained(20.0))
+                    acts = sched.on_seek(2.0, 1)                          # seek back
+                    self.assertEqual(sched._dub_state.get(1), "ready")
+                    acts += sched.tick(3.0, mono=mono + 1.0, voice_state="idle")
+                    self.assertEqual(self._ids(acts, RequestTts), [])
+                    self.assertEqual(self._ids(acts, PreloadClip), [1])
+
+    def test_failed_tts_result_while_the_dub_is_off_is_retried_once(self):
+        # A request kept through dub-off that fails while the dub is off is
+        # forgotten, not counted as a lost voice line (the dub was off, it was
+        # never going to be voiced then): dub-on, still in time, asks again once.
+        sched, acts = self._line_in_flight()
+        acts += sched.set_dub(False)
+        self.assertFalse(sched.clip_ready(1, 0, None, "error"))
+        self.assertEqual(sched.metrics()["dropped"], 0.0)
+        acts = sched.set_dub(True)
+        acts += sched.tick(1.5, mono=100.5, voice_state="idle")
+        acts += sched.tick(1.6, mono=100.6, voice_state="idle")
+        self.assertEqual(self._ids(acts, RequestTts), [1])
+        self.assertEqual(sched.metrics()["dropped"], 0.0)
+
+    def test_set_dub_on_while_already_on_changes_nothing(self):
+        # Only a real off -> on transition re-arms or skips lines. Here the
+        # line's request is still in flight past its re-arm point (a slow TTS,
+        # still inside its slot): a second set_dub(True) must not skip it, emit
+        # an action or move a counter.
+        sched, _acts = self._line_in_flight()
+        sched.set_dub(False)
+        sched.set_dub(True)
+        sched.tick(4.5, mono=103.5, voice_state="idle")    # past 4.25, slot ends 6.6
+        states, metrics = dict(sched._dub_state), sched.metrics()
+        self.assertEqual(states, {1: "synth"})
+        self.assertEqual(sched.set_dub(True), [])
+        self.assertEqual(sched._dub_state, states)
+        self.assertEqual(sched.metrics(), metrics)
 
     def test_recovery_armed_unloads_a_blocking_preloaded_clip(self):
         # Delayed-mode recovery deadlock: R is late (recovery) but the device
@@ -2361,7 +2567,11 @@ class LiveSessionAutoStopTests(unittest.TestCase):
     def test_disable_dub_after_voice_errors_leaves_no_orphan(self):
         # The dub is also disabled automatically after 3 voice-output errors,
         # through _disable_dub -> set_dub(False). Queued voices must not orphan
-        # the auto-stop, and a late TTS result must be discarded.
+        # the auto-stop. The ready line leaves the queue; the line whose TTS
+        # request is in flight keeps it, and its late result is kept for a later
+        # dub-on instead of being discarded (finding #3 of the 2026-10-20
+        # ultrareview: a discarded result was asked again, a second paid call
+        # with ElevenLabs), still without holding the auto-stop or a counter.
         with tempfile.TemporaryDirectory() as tmp:
             sess, _, _ = _session(tmp, media=1.0,
                                   overrides={"live_dub_enabled": True})
@@ -2375,10 +2585,13 @@ class LiveSessionAutoStopTests(unittest.TestCase):
             sess._disable_dub("tts_unavailable")     # automatic path after 3 errors
             active = ("translated", "synth", "ready", "preloaded", "playing")
             self.assertNotIn(sched._dub_state.get(1), active)
-            self.assertNotIn(sched._dub_state.get(2), active)
+            self.assertEqual(sched._dub_state.get(2), "synth")   # request in flight kept
             self.assertTrue(sched.drained(20.0))
-            self.assertFalse(sched.clip_ready(2, 0, SimpleNamespace(
-                path="/y.wav", audible_s=0.5, voice_start_s=0.0)))
+            self.assertTrue(sched.clip_ready(2, 0, SimpleNamespace(
+                path="/y.wav", audible_s=0.5, voice_start_s=0.0)))   # kept, not discarded
+            self.assertTrue(sched.drained(20.0))
+            self.assertEqual((sched.metrics()["voiced"], sched.metrics()["dropped"]),
+                             (0.0, 0.0))
 
     def test_session_seek_past_a_speaking_clip_still_autostops_at_eof(self):
         # The field bug end to end: a within-coverage forward seek past a clip
