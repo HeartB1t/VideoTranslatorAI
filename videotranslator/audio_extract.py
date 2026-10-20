@@ -142,6 +142,19 @@ def resolve_output_path(
     return os.path.join(str(out_dir), stem + fmt.ext)
 
 
+def _same_file(path_a: str, path_b: str) -> bool:
+    """Whether two paths name the same file, however they are spelled.
+
+    ``os.path.samefile`` when both exist (relative vs absolute, symlinks,
+    Windows case and separators); otherwise the normalised real paths.
+    """
+    try:
+        return os.path.samefile(path_a, path_b)
+    except OSError:
+        return (os.path.normcase(os.path.realpath(path_a))
+                == os.path.normcase(os.path.realpath(path_b)))
+
+
 def extract_music(
     source: str,
     out_dir: str,
@@ -161,6 +174,8 @@ def extract_music(
     - A URL source is downloaded audio-only into a temp dir first.
     - ``instrumental=True`` removes the voice with Demucs (a temp wav), then the
       ffmpeg conversion runs on that wav; otherwise it runs on the source.
+    - An output that would be the source itself (same name, format and folder)
+      gets a " (extracted)" suffix, so the source is never overwritten.
     - Temporary files live in a TemporaryDirectory and are cleaned up on exit.
 
     ``ffmpeg_runner``, ``downloader`` and ``separator`` are injectable so tests
@@ -177,6 +192,11 @@ def extract_music(
 
         out_path = resolve_output_path(media_path, out_dir, fmt,
                                        instrumental=instrumental)
+        if _same_file(out_path, media_path):
+            # e.g. song.mp3 to mp3 next to it: ffmpeg -y would truncate the file
+            # it is still reading (or refuse, when both paths are spelled alike).
+            base, ext = os.path.splitext(out_path)
+            out_path = f"{base} (extracted){ext}"
 
         if instrumental:
             instrumental_wav = os.path.join(tmp, "instrumental.wav")

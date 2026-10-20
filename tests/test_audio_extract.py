@@ -168,6 +168,46 @@ class ExtractMusicOrchestratorTests(unittest.TestCase):
             # ffmpeg converts the separator output, not the original source.
             self.assertEqual(cmds[0][3], sep_calls[0][1])
 
+    def test_source_named_like_the_output_is_never_overwritten(self):
+        # Field bug (ultrareview 2026-10-20): `--extract-audio song.mp3` writes
+        # next to the source, so the output was the source itself. ffmpeg -y
+        # truncated the file it was reading (5 s -> 1.3 s) when the two paths
+        # were spelled differently, and refused to write when they matched.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "song.mp3"
+            src.write_bytes(b"x")
+            expected = os.path.join(tmp, "song (extracted).mp3")
+            old_cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                for spelling in ("song.mp3", str(src),
+                                 os.path.join(tmp, ".", "song.mp3")):
+                    with self.subTest(source=spelling):
+                        cmds: list[list[str]] = []
+                        out = extract_music(
+                            spelling, tmp, fmt="mp3",
+                            ffmpeg_runner=lambda cmd, step: cmds.append(cmd),
+                        )
+                        self.assertEqual(out, expected)
+                        self.assertEqual(cmds[0][-1], expected)
+            finally:
+                os.chdir(old_cwd)      # Windows cannot delete the current dir
+
+    def test_same_format_in_another_folder_keeps_the_plain_name(self):
+        # Only the source itself is protected: a same-format output elsewhere
+        # keeps the plain name.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "song.mp3"
+            src.write_bytes(b"x")
+            out_dir = Path(tmp) / "out"
+
+            out = extract_music(
+                str(src), str(out_dir), fmt="mp3",
+                ffmpeg_runner=lambda cmd, step: None,
+            )
+
+            self.assertEqual(out, os.path.join(str(out_dir), "song.mp3"))
+
     def test_url_source_is_downloaded_first(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "out"
