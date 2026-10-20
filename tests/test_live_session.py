@@ -2108,6 +2108,43 @@ class SchedulerDrainedTests(unittest.TestCase):
         self.assertFalse(sched.pacer_recovery_pending)
         self.assertTrue(sched.drained(20.0))
 
+    def test_recovery_timeout_releases_the_held_clip(self):
+        # Finding #8 of the 2026-10-20 ultrareview: the wall-clock backstop
+        # dropped a recovery clip that never reached "playing" but left _held on
+        # it when that clip was also the one held behind the previous voice
+        # line; drained() is False while _held is set, so the backstop meant to
+        # let the session drain blocked the auto-stop forever. Delayed mode: A
+        # speaks and B, due meanwhile, is held behind it; A ends and B is
+        # preloaded, but the device never reports it "preloaded"; the pacer
+        # holds the picture with B already late, B is armed for recovery, and
+        # the backstop releases it past _RECOVERY_ARM_TIMEOUT_S (8 s).
+        sched = self._sched(dub=True)                 # captions on, as in a session
+        sched.upsert(LiveSegment(1, 0, 5.0, 7.0, "a", text_tgt="aa", dub_ok=True))
+        sched.upsert(LiveSegment(2, 0, 7.2, 9.0, "b", text_tgt="bb", dub_ok=True))
+        sched.clip_ready(1, 0, SimpleNamespace(path="/a.mp3", audible_s=3.6,
+                                               voice_start_s=0.0))
+        sched.clip_ready(2, 0, SimpleNamespace(path="/b.mp3", audible_s=1.0,
+                                               voice_start_s=0.0))
+        acts = sched.tick(4.0, mono=100.0, voice_state="idle")           # preload A
+        acts += sched.tick(4.8, mono=100.8, voice_state="preloaded")     # start A
+        acts += sched.tick(7.0, mono=103.0, voice_state="playing")       # B due: held
+        self.assertEqual(sched._held, 2)
+        acts += sched.tick(7.5, mono=103.5, voice_state="idle")          # A ends, preload B
+        self.assertEqual(self._ids(acts, PreloadClip), [1, 2])
+        # The device never reports B "preloaded"; the pacer holds the picture
+        # at 8.5 s, past B's late point (7.2 - 0.25 + 0.5 + 1.0 = 8.45 s).
+        acts += sched.tick(8.5, mono=104.5, main_running=False, voice_state="idle",
+                           pacer_paused=True)
+        self.assertEqual(sched._pacer_recovery_seg, 2)
+        self.assertEqual(sched._held, 2)
+        acts += sched.tick(8.5, mono=113.0, main_running=False, voice_state="idle",
+                           pacer_paused=True)                            # 8.5 s armed
+        self.assertEqual(self._ids(acts, StartClip), [1])                # B never spoke
+        self.assertEqual(self._ids(acts, Drop), [2])
+        self.assertFalse(sched.pacer_recovery_pending)
+        self.assertIsNone(sched._held, "the backstop left the dropped clip held")
+        self.assertTrue(sched.drained(20.0))                             # captions done
+
     def test_pacer_recovery_then_drop_clears_the_pointer(self):
         # A clip armed for pacer recovery then dropped must release the recovery
         # pointer, or drained() stays false and the pacer stays blocked (

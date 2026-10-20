@@ -657,6 +657,11 @@ class DubScheduler:
             if self._preloaded == rec:
                 self._preloaded = None
                 actions.append(StopClip(0.0))
+            if self._held == rec:
+                # The recovery clip may also be the one held behind the previous
+                # voice line: release it as the late-drop pass does, or drained()
+                # (False while _held is set) blocks the auto-stop forever.
+                self._held = None
             if self._dub_state.get(rec) in _ACTIVE_DUB:
                 self._dub_state[rec] = "dropped"
                 self._dub_dropped += 1
