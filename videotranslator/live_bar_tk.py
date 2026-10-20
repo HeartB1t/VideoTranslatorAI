@@ -425,6 +425,15 @@ class LiveBar(tk.Frame):
         to tell its own hint apart from a session warning before clearing it."""
         return self._banner_key
 
+    def current_banner_is_error(self) -> bool:
+        """Whether the banner on screen is an error (False when hidden), for the
+        caller to leave it up instead of showing its own hint in its place.
+
+        clear_banner() does not reset the error flag, so a closed error is told
+        apart by its key: only a banner still on screen counts.
+        """
+        return self._banner_key is not None and self._banner_is_error
+
     def clear_banner(self) -> None:
         self._banner_key = None
         self._banner_params = {}

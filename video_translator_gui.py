@@ -8835,8 +8835,9 @@ class App(tk.Tk):
         A large model (e.g. qwen3:32b) loads slowly and misses the per-sentence
         timeout, so every subtitle would stay in the source language. Shown in
         the bar's banner area (never a modal), only while no session is running
-        (a running session drives the banner from its own warnings), and dropped
-        as soon as a lighter model or another engine is picked.
+        (a running session drives the banner from its own warnings), never in
+        place of an error, and dropped as soon as a lighter model or another
+        engine is picked.
         """
         bar = getattr(self, "_live_bar", None)
         if bar is None:
@@ -8846,7 +8847,11 @@ class App(tk.Tk):
         model = self._ollama_model_var.get().strip()
         heavy = engine == "ollama" and _is_model_heavy_for_live(model)
         if heavy and self._live_session is None:
-            bar.show_banner(hint_key, {"model": model})
+            # An error (a failed session, a refused start) stays up until the
+            # user closes it or a new session starts: the hint in its place
+            # would hide why the session failed. One rule for every caller.
+            if not bar.current_banner_is_error():
+                bar.show_banner(hint_key, {"model": model})
         elif bar.current_banner_key() == hint_key:
             bar.clear_banner()
 
@@ -9766,7 +9771,8 @@ class App(tk.Tk):
         self._live_bar.set_active(False)
         self._refresh_live_bar_enabled()
         # Back to the choosing state: if a heavy Ollama model is still selected,
-        # the proactive hint reappears (guarded by _live_session being None now).
+        # the proactive hint reappears (guarded by _live_session being None now),
+        # unless the session failed: its error, kept above, stays in its place.
         self._refresh_live_heavy_model_hint()
 
     def _source_media_items(self) -> list[_player_core.MediaItem]:

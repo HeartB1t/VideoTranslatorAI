@@ -166,6 +166,44 @@ class FinishLiveSessionTests(unittest.TestCase):
         bar.set_active.assert_called_once_with(False)
 
 
+class HeavyModelHintRefreshTests(unittest.TestCase):
+    """The proactive heavy-model hint: one rule for every call site."""
+
+    def _app(self, *, banner_key=None, banner_is_error=False, model="qwen3:32b",
+             engine="ollama"):
+        bar = Mock()
+        bar.current_settings.return_value = {"engine": engine}
+        bar.current_banner_key.return_value = banner_key
+        bar.current_banner_is_error.return_value = banner_is_error
+        return SimpleNamespace(_live_bar=bar, _live_session=None,
+                               _ollama_model_var=_Var(model))
+
+    def test_the_hint_never_replaces_an_error(self):
+        # A failed session (or a refused start) left its error up: it stays until
+        # the user closes it or a new session starts, whatever refreshes the hint.
+        app = self._app(banner_key="live_err_ollama", banner_is_error=True)
+        gui.App._refresh_live_heavy_model_hint(app)
+        app._live_bar.show_banner.assert_not_called()
+        app._live_bar.clear_banner.assert_not_called()
+
+    def test_the_hint_shows_on_a_free_bar_or_over_a_session_warning(self):
+        for banner_key in (None, "live_warn_engine_slow_ollama"):
+            with self.subTest(banner_key=banner_key):
+                app = self._app(banner_key=banner_key)
+                gui.App._refresh_live_heavy_model_hint(app)
+                app._live_bar.show_banner.assert_called_once_with(
+                    "live_hint_heavy_model", {"model": "qwen3:32b"})
+
+    def test_a_lighter_model_or_another_engine_drops_the_hint(self):
+        for model, engine in (("qwen3:8b", "ollama"), ("qwen3:32b", "marian")):
+            with self.subTest(model=model, engine=engine):
+                app = self._app(banner_key="live_hint_heavy_model", model=model,
+                                engine=engine)
+                gui.App._refresh_live_heavy_model_hint(app)
+                app._live_bar.clear_banner.assert_called_once_with()
+                app._live_bar.show_banner.assert_not_called()
+
+
 class PollLiveStatusTests(unittest.TestCase):
     def _app(self, bar, **extra):
         return SimpleNamespace(

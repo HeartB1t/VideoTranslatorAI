@@ -250,6 +250,32 @@ class LiveBarTests(unittest.TestCase):
         self.assertFalse(self.bar._banner.winfo_manager())
         self.assertIn(("banner_close", {}), self.commands)
 
+    def test_current_banner_is_error_only_while_an_error_is_on_screen(self):
+        # The App leaves an error up instead of putting its heavy-model hint in
+        # its place: it must tell an error apart from a warning or no banner.
+        self.assertFalse(self.bar.current_banner_is_error())       # nothing shown
+        self.bar.show_banner("live_warn_cpu_fallback", {})
+        self.assertFalse(self.bar.current_banner_is_error())
+        self.bar.show_banner("live_err_ollama", {}, is_error=True)
+        self.assertTrue(self.bar.current_banner_is_error())
+        self.bar.show_banner("live_warn_cpu_fallback", {})          # a warning replaced it
+        self.assertFalse(self.bar.current_banner_is_error())
+
+    def test_a_failed_session_render_is_an_error_on_screen(self):
+        self.bar.show_running()
+        self.bar.render(SimpleNamespace(state="failed", lag_s=None, warning_key=None,
+                                        error_key="ollama", error_params={}))
+        self.assertTrue(self.bar.current_banner_is_error())
+
+    def test_a_closed_error_is_no_longer_an_error_on_screen(self):
+        # Once closed (its button, or clear_banner) the space is free again.
+        self.bar.show_banner("live_err_ollama", {}, is_error=True)
+        self.bar._banner_close.invoke()
+        self.assertFalse(self.bar.current_banner_is_error())
+        self.bar.show_banner("live_err_internal", {}, is_error=True)
+        self.bar.clear_banner()
+        self.assertFalse(self.bar.current_banner_is_error())
+
     def test_url_source_shows_live_badge_on_render(self):
         self.bar.set_source_kind("url")
         self.bar.show_running()

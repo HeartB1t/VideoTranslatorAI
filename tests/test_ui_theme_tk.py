@@ -724,6 +724,92 @@ class HeavyModelHintStartupTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+class HeavyModelHintAfterSessionTests(unittest.TestCase):
+    """The error of a failed live session stays up: the heavy-model hint waits.
+
+    With a heavy Ollama model chosen, a session that ended in "failed" left its
+    error banner up (drop_session_warning keeps errors on purpose), then
+    _finish_live_session refreshed the proactive hint, which took the error's
+    place: the user no longer saw why the session failed (for an unreachable
+    Ollama the hint even pointed at the wrong cause).
+    """
+
+    CONFIG = {"ui_lang": "en", "live_engine": "ollama", "ollama_model": "qwen3:32b"}
+
+    def _end_session(self, app, state, **status_fields):
+        """Run the real poll on a fake session that reached ``state``.
+
+        The bar renders the status, then _finish_live_session runs, as for a
+        real session. The fake has nothing to join, so no live-stop thread.
+        """
+        from types import SimpleNamespace
+
+        fields = {"lag_s": None, "status_params": {}, "dub_on": False,
+                  "warning_key": None, "error_key": None, "startup_ready": True}
+        fields.update(status_fields)
+        session = mock.Mock()
+        session.status.return_value = SimpleNamespace(state=state, **fields)
+        # What a successful start does to the bar (the hint goes while it runs).
+        app._live_session = session
+        app._live_bar.clear_banner()
+        app._live_bar.set_active(True)
+        app._refresh_live_heavy_model_hint()
+        with mock.patch.object(app, "_redirecting_thread_factory"):
+            app._poll_live_status()
+        self.assertIsNone(app._live_session)            # the poll ended it
+
+    def test_the_error_of_a_failed_session_stays_up(self):
+        for code, params, key, text in (
+                ("ollama", {}, "live_err_ollama",
+                 "Ollama is not reachable. Start it or choose another engine."),
+                ("internal", {}, "live_err_internal",
+                 "Real-time translation stopped because of an internal error: "
+                 "see the log."),
+                ("asr", {"detail": "CUDA out of memory"}, "live_err_asr",
+                 "Speech recognition could not start: CUDA out of memory")):
+            with self.subTest(code=code), built_app(self.CONFIG) as (gui, app, _cfg):
+                app.update()
+                self._end_session(app, "failed", error_key=code, error_params=params)
+                self.assertEqual(app._live_bar.current_banner_key(), key)
+                self.assertEqual(app._live_bar._banner_label.cget("text"), text)
+                self.assertTrue(app._live_bar.current_banner_is_error())
+
+    def test_choosing_a_model_keeps_the_error_until_the_user_closes_it(self):
+        with built_app(self.CONFIG) as (gui, app, _cfg):
+            app.update()
+            self._end_session(app, "failed", error_key="ollama", error_params={})
+            app._ollama_model_var.set("qwen3:30b")
+            app._on_ollama_model_chosen()
+            self.assertEqual(app._live_bar.current_banner_key(), "live_err_ollama")
+            # Closed by the user: the space is free, the next refresh shows the hint.
+            app._live_bar._banner_close.invoke()
+            app._on_ollama_model_chosen()
+            self.assertEqual(app._live_bar.current_banner_key(), "live_hint_heavy_model")
+
+    def test_a_session_warning_still_gives_way_to_the_hint(self):
+        # Not an error: the warning ends with the session and the hint comes back.
+        with built_app(self.CONFIG) as (gui, app, _cfg):
+            app.update()
+            self._end_session(app, "ended", warning_key="engine_slow_ollama",
+                              warning_params={"engine": "Ollama"}, warning_action=None)
+            self.assertEqual(app._live_bar.current_banner_key(), "live_hint_heavy_model")
+
+    def test_a_lighter_model_or_another_engine_still_drops_the_hint(self):
+        with built_app(self.CONFIG) as (gui, app, _cfg):
+            app.update()
+            self.assertEqual(app._live_bar.current_banner_key(), "live_hint_heavy_model")
+            app._ollama_model_var.set("qwen3:8b")
+            app._on_ollama_model_chosen()
+            self.assertIsNone(app._live_bar.current_banner_key())
+            app._ollama_model_var.set("qwen3:32b")
+            app._on_ollama_model_chosen()
+            self.assertEqual(app._live_bar.current_banner_key(), "live_hint_heavy_model")
+            app._live_bar._engine_combo.current(0)            # MarianMT
+            app._live_bar._on_engine()
+            self.assertIsNone(app._live_bar.current_banner_key())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
 class KeyboardAccessTests(unittest.TestCase):
     """M6: the header gear and the accent dots work without a mouse."""
 
