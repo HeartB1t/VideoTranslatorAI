@@ -195,11 +195,13 @@ def preflight_options(*, lipsync: bool, player: bool,
     }
 
 
-def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -> None:
+def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -> int:
     """Extract audio from every input (file or URL) and print the output path.
 
     Runs instead of the translation pipeline. URLs are not checked for local
-    existence; missing local files are reported and skipped.
+    existence; missing local files are reported and skipped. One failing input
+    never stops the batch. Returns how many inputs produced no file, so the
+    caller can exit non-zero.
     """
     from videotranslator import audio_extract
     from videotranslator.input_source import is_probable_url
@@ -207,10 +209,12 @@ def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -
     cfg = legacy.load_config()
     out_dir_opt = args.output_dir or cfg.get("output_dir")
 
+    failed = 0
     for source in files:
         is_url = is_probable_url(source)
         if not is_url and not os.path.exists(source):
             print(f"[!] File not found: {source}", flush=True)
+            failed += 1
             continue
         out_dir = out_dir_opt or (
             os.getcwd() if is_url else os.path.dirname(os.path.abspath(source)))
@@ -223,10 +227,16 @@ def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -
                 instrumental=args.instrumental,
                 log_cb=lambda line: print(line, flush=True),
             )
-        except (ValueError, RuntimeError) as exc:
-            print(f"[!] Audio extraction failed for {source}: {exc}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            # Any failure of one input (a URL yt-dlp cannot download, a file
+            # ffmpeg or Demucs cannot read, Demucs not installed) is reported
+            # and the batch goes on, as in the GUI.
+            print(f"[!] Audio extraction failed for {source}: "
+                  f"{type(exc).__name__}: {exc}", flush=True)
+            failed += 1
             continue
         print(f"[+] Audio saved: {out_path}", flush=True)
+    return failed
 
 
 def _cli(argv: Sequence[str] | None = None) -> None:
@@ -253,8 +263,8 @@ def _cli(argv: Sequence[str] | None = None) -> None:
         sys.exit(0)
 
     if args.extract_audio:
-        _run_extract_audio(args, files, legacy)
-        sys.exit(0)
+        failed = _run_extract_audio(args, files, legacy)
+        sys.exit(1 if failed else 0)
 
     missing_pkgs, missing_bins = legacy.check_dependencies()
     if missing_pkgs or missing_bins:

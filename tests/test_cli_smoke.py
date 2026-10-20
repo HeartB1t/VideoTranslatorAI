@@ -95,9 +95,10 @@ class CliSmokeTests(unittest.TestCase):
             self._keep_original_audio_for(
                 {"keep_original_audio": True}, ["--no-original-audio"]))
 
-    def _extract_calls_for(self, config, argv):
-        """Run the CLI extract branch with extract_music mocked and return the
-        list of (args, kwargs) it was called with."""
+    def _run_extract(self, config, argv, fail_for=None):
+        """Run the CLI extract branch with extract_music mocked and return
+        (calls, exit code, stdout). ``fail_for`` maps a source to the exception
+        its extraction raises."""
         import video_translator_gui as legacy
         from videotranslator import audio_extract
         from videotranslator.cli import _cli
@@ -106,15 +107,30 @@ class CliSmokeTests(unittest.TestCase):
 
         def fake_extract(source, out_dir, **kwargs):
             calls.append((source, out_dir, kwargs))
+            if fail_for and source in fail_for:
+                raise fail_for[source]
             return f"{out_dir}/out{kwargs.get('fmt', 'mp3')}"
 
+        out = io.StringIO()
         with mock.patch.object(legacy, "load_config", return_value=config), \
                 mock.patch.object(audio_extract, "extract_music",
                                   side_effect=fake_extract), \
-                contextlib.redirect_stdout(io.StringIO()):
-            with self.assertRaises(SystemExit) as ctx:
+                contextlib.redirect_stdout(out):
+            try:
                 _cli(argv)
-        self.assertEqual(ctx.exception.code, 0)
+            except SystemExit as exc:
+                code = exc.code
+            except Exception as exc:  # noqa: BLE001
+                self.fail(f"{type(exc).__name__} escaped the CLI: {exc}")
+            else:
+                self.fail("the CLI must end with an explicit exit status")
+        return calls, code, out.getvalue()
+
+    def _extract_calls_for(self, config, argv):
+        """Run the CLI extract branch with extract_music mocked, check it exits
+        0 and return the list of (args, kwargs) it was called with."""
+        calls, code, _out = self._run_extract(config, argv)
+        self.assertEqual(code, 0)
         return calls
 
     def test_extract_audio_local_file_calls_extract_music(self):
@@ -150,10 +166,35 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "https://youtu.be/abc")
 
-    def test_extract_audio_skips_a_missing_local_file(self):
-        calls = self._extract_calls_for(
+    def test_extract_audio_skips_a_missing_local_file_and_exits_non_zero(self):
+        # Nothing was produced: a script must not read the run as a success.
+        calls, code, out = self._run_extract(
             {}, ["/no/such/file.mp4", "--extract-audio"])
         self.assertEqual(calls, [])
+        self.assertEqual(code, 1)
+        self.assertIn("File not found: /no/such/file.mp4", out)
+
+    def test_extract_audio_goes_on_after_an_input_that_fails(self):
+        # Field bug (ultrareview 2026-10-20): a URL yt-dlp could not download
+        # raised DownloadError (an Exception, not a RuntimeError), which escaped
+        # with a traceback and skipped every input after it. A missing Demucs
+        # (ImportError) did the same with --instrumental.
+        class DownloadError(Exception):
+            """Stand-in for yt_dlp.utils.DownloadError (an Exception subclass)."""
+
+        url = "https://youtu.be/gone"
+        for error in (DownloadError("ERROR: Video unavailable"),
+                      ImportError("No module named 'demucs'")):
+            with self.subTest(error=type(error).__name__), \
+                    tempfile.NamedTemporaryFile(suffix=".mp4") as video:
+                calls, code, out = self._run_extract(
+                    {}, ["--batch", url, video.name, "--extract-audio"],
+                    fail_for={url: error})
+                self.assertEqual([c[0] for c in calls], [url, video.name])
+                self.assertEqual(code, 1)
+                self.assertIn(f"Audio extraction failed for {url}", out)
+                self.assertIn(str(error), out)
+                self.assertIn("[+] Audio saved:", out)
 
     def test_translation_unavailable_exits_with_clear_message(self):
         import video_translator_gui as legacy
