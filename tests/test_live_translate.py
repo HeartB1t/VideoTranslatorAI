@@ -521,6 +521,58 @@ class ModelWeightHeuristicTests(unittest.TestCase):
         self.assertTrue(is_model_heavy_for_live("mixtral:8x22b"))
         self.assertFalse(is_model_heavy_for_live("qwen3:8b"))
 
+    def test_estimate_ignores_the_active_parameter_suffix_of_a_moe_tag(self):
+        # Ollama's mixture-of-experts tags add the parameters active per token as
+        # "a<N>b" after the total ("qwen3:30b-a3b": 30B in all, 3B active). The
+        # whole model is loaded, so the size is the total, never the suffix. A
+        # decimal suffix ("a2.7b") pins the dot of the boundary: without it the
+        # "7b" right after the dot would read as a 7B size.
+        for name, size in (("qwen3:30b-a3b", 30.0),
+                           ("qwen3:30b-a3b-q4_K_M", 30.0),
+                           ("qwen3:235b-a22b", 235.0),
+                           ("qwen3:30b-a2.7b", 30.0),
+                           ("hf.co/unsloth/Qwen3-30B-A3B-GGUF:Q4_K_M", 30.0)):
+            with self.subTest(name=name):
+                self.assertEqual(estimate_model_params_b(name), size)
+
+    def test_estimate_is_none_when_a_moe_name_carries_only_the_active_suffix(self):
+        # Qwen1.5-MoE-A2.7B is 14.3B in all, but its name only carries the 2.7B
+        # active per token: no size is exposed, so there is no guess, neither
+        # the suffix nor the "7B" right after its dot.
+        self.assertIsNone(
+            estimate_model_params_b("hf.co/Qwen/Qwen1.5-MoE-A2.7B-Chat-GGUF"))
+
+    def test_a_moe_name_with_only_a_large_active_count_is_still_heavy(self):
+        # Some MoE tags expose only the active parameters ("a<N>b"), never the
+        # total: Hunyuan-A13B is 80B in all with 13B active. estimate stays None
+        # (the total is unknown, see the test above), but the active count alone
+        # is a true lower bound: 13B already clears the 9B threshold, so the whole
+        # model, larger still, is certainly too heavy. The heavy check reads that
+        # lower bound even though estimate cannot.
+        name = "hf.co/tencent/Hunyuan-A13B-Instruct-GGUF:Q4_K_M"
+        self.assertIsNone(estimate_model_params_b(name))
+        self.assertTrue(is_model_heavy_for_live(name))
+
+    def test_a_small_active_count_alone_is_never_heavy(self):
+        # Qwen1.5-MoE-A2.7B is 14.3B in all but only 2.7B active. With no total
+        # in the name the active count is all we have, and 2.7B is below the
+        # threshold, so the model is not flagged: a lower bound under the
+        # threshold proves nothing, and there must be no false alarm.
+        self.assertFalse(
+            is_model_heavy_for_live("hf.co/Qwen/Qwen1.5-MoE-A2.7B-Chat-GGUF"))
+
+    def test_moe_with_an_active_parameter_suffix_is_heavy(self):
+        # 30B in all (~18 GB to load), well above the 9B live threshold.
+        for name in ("qwen3:30b-a3b", "qwen3:30b-a3b-q4_K_M", "qwen3:30b-a2.7b"):
+            with self.subTest(name=name):
+                self.assertTrue(is_model_heavy_for_live(name))
+
+    def test_estimate_reads_a_size_in_the_family_part(self):
+        # A Hugging Face GGUF reference carries the size in the repository name,
+        # after a version number ("2.5") that must not be read as the size.
+        self.assertEqual(
+            estimate_model_params_b("hf.co/bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"), 7.0)
+
     def test_estimate_handles_case_and_surrounding_space(self):
         self.assertEqual(estimate_model_params_b("  Qwen3:32B  "), 32.0)
         self.assertEqual(estimate_model_params_b("LLAMA3:8B"), 8.0)

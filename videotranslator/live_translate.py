@@ -33,14 +33,27 @@ TIMEOUTS_S: dict[str, float] = {
 LIVE_HEAVY_PARAMS_B = 9.0
 
 # The parameter size in an Ollama tag: a number directly before a "b"/"B" that
-# is not part of a longer token (so "qwen3:32b" -> 32, "llama3.1:8b" -> 8, while
-# a version like "qwen2.5" or "8bit" is not mistaken for a size).
-_MODEL_PARAMS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])", re.IGNORECASE)
+# is not part of a longer token on either side (so "qwen3:32b" -> 32,
+# "llama3.1:8b" -> 8, while a version like "qwen2.5" or "8bit" is not mistaken
+# for a size). The number must also start its token (not preceded by a letter,
+# digit or dot): a mixture-of-experts tag adds the parameters active per token
+# as "a<N>b" after the total ("qwen3:30b-a3b" is 30B in all, 3B active;
+# "qwen3:235b-a22b"), and the whole model is still loaded, so that suffix, the
+# tail "2b" of its "22b" or the "7b" after the dot of a decimal "a2.7b", is
+# never read as the size.
+_MODEL_PARAMS_RE = re.compile(r"(?<![a-z0-9.])(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])",
+                              re.IGNORECASE)
 # Mixture-of-experts tag "NxMb" (e.g. "mixtral:8x7b", "8x22b"): the load cost is
 # the total N*M billion parameters (8x7b -> 56, 8x22b -> 176), not the M of one
 # expert, so this form is resolved before the plain size above.
 _MODEL_MOE_RE = re.compile(r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])",
                            re.IGNORECASE)
+# The active-parameter suffix "a<N>b" of a mixture-of-experts tag, on its own
+# ("Hunyuan-A13B" is 80B in all, 13B active). It is not the size, so
+# estimate_model_params_b never reads it, but the active count is a true lower
+# bound on the total: is_model_heavy_for_live uses it when no total is exposed.
+_MODEL_ACTIVE_RE = re.compile(r"(?<![a-z0-9.])a(\d+(?:\.\d+)?)\s*b(?![a-z0-9.])",
+                              re.IGNORECASE)
 
 
 def estimate_model_params_b(model_name: str | None) -> float | None:
@@ -48,9 +61,11 @@ def estimate_model_params_b(model_name: str | None) -> float | None:
 
     Pure and side-effect free. A mixture-of-experts tag ("mixtral:8x7b" -> 56.0)
     counts the total experts; otherwise the number attached to the size "b"
-    ("qwen3:32b" -> 32.0, "qwen2.5:14b" -> 14.0, "llama3.1:8b" -> 8.0). Returns
-    ``None`` when the name does not expose a size, so the caller never warns on
-    a guess.
+    ("qwen3:32b" -> 32.0, "qwen2.5:14b" -> 14.0, "llama3.1:8b" -> 8.0). The
+    active-parameter suffix of a mixture-of-experts tag is not the size
+    ("qwen3:30b-a3b" -> 30.0, not 3.0): the whole model still has to load.
+    Returns ``None`` when the name does not expose a size, so the caller never
+    warns on a guess.
     """
     name = model_name or ""
     moe = _MODEL_MOE_RE.findall(name)
@@ -74,10 +89,25 @@ def is_model_heavy_for_live(model_name: str | None, *,
     """Whether ``model_name`` is likely too heavy for real-time translation.
 
     True only when the estimated size is strictly above ``threshold_b`` (so 8b
-    passes, 14b/27b/30b/32b/70b do not); an unknown size never counts as heavy.
+    passes, 14b/27b/30b/32b/70b do not); an unknown size never counts as heavy,
+    unless a mixture-of-experts active-parameter count alone ("a<N>b", e.g.
+    "Hunyuan-A13B") already exceeds the threshold, which proves the whole model
+    (larger still) is heavy.
     """
     params = estimate_model_params_b(model_name)
-    return params is not None and params > threshold_b
+    if params is not None:
+        return params > threshold_b
+    # No total size in the name. A mixture-of-experts active-parameter suffix is
+    # a lower bound: when the active parameters alone clear the threshold the
+    # total, always larger, does too. Below the threshold the total is unknown,
+    # so it still never warns on a guess.
+    active = _MODEL_ACTIVE_RE.findall(model_name or "")
+    if active:
+        try:
+            return float(active[-1]) > threshold_b
+        except ValueError:
+            return False
+    return False
 
 
 @dataclass(frozen=True)
