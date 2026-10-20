@@ -8,7 +8,9 @@ faster-whisper
 yt-dlp
 demucs
 soundfile
-edge-tts
+# 7.3.1 or newer: older clients get HTTP 403 from the Edge read-aloud service,
+# and the installer only upgrades a package that is below its floor.
+edge-tts>=7.3.1
 deep-translator
 # Used directly by DeepL and the local Ollama LLM engine. It is often a
 # transitive dependency, but keeping it explicit makes broken installs obvious.

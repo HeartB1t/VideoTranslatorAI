@@ -52,7 +52,6 @@ class RequirementsStaticTests(unittest.TestCase):
         gpu = set(_requirement_lines(ROOT / "requirements-gpu-cu124.txt"))
 
         self.assertIn("faster-whisper", core)
-        self.assertIn("edge-tts", core)
         self.assertIn("requests", core)
         self.assertIn("coqui-tts>=0.27.5", optional)
         self.assertIn("pyannote.audio>=3.1,<4.0", optional)
@@ -62,6 +61,17 @@ class RequirementsStaticTests(unittest.TestCase):
         self.assertIn("torch>=2.6.0,<2.8", gpu)
         self.assertIn("torchaudio==2.6.0", gpu)
 
+
+    def test_edge_tts_floor_is_the_same_in_requirements_and_pyproject(self):
+        # Field bug (2026-10-20): edge-tts 7.2.8 gets HTTP 403 from the Edge
+        # read-aloud service, 7.3.1 works. The installer runs pip without
+        # --upgrade, so only a floor makes a repair or an update replace an
+        # old copy: the default TTS (file dub and live voice) depends on it.
+        core = set(_requirement_lines(ROOT / "requirements-core.txt"))
+        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        self.assertIn("edge-tts>=7.3.1", core)
+        self.assertIn("edge-tts>=7.3.1", project["project"]["dependencies"])
 
     def test_player_profile_pins_python_mpv_everywhere_the_same(self):
         from videotranslator.libmpv_runtime import PYTHON_MPV_REQUIREMENT
