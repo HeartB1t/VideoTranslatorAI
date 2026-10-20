@@ -856,7 +856,7 @@ class OnlineEnginePauseTests(unittest.TestCase):
     HTTP 429: 75 sentences kept original in 3 s, the dub silent)."""
 
     def _start(self, tmp, online, *, media=0.0, marian=None, mode="live", items=10,
-               clock_view=None):
+               clock_view=None, breaker=_FastBreaker):
         from dataclasses import replace
         from unittest import mock
         from videotranslator.live_asr import LanguageLock
@@ -872,7 +872,7 @@ class OnlineEnginePauseTests(unittest.TestCase):
         sess._emit_segment = sess._emitted
         for n in range(items):
             sess._mt_q.put(_sentence(n))
-        patcher = mock.patch("videotranslator.live_session.CircuitBreaker", _FastBreaker)
+        patcher = mock.patch("videotranslator.live_session.CircuitBreaker", breaker)
         patcher.start()
         self.addCleanup(patcher.stop)
         worker = threading.Thread(target=sess._mt_loop)
@@ -953,6 +953,331 @@ class OnlineEnginePauseTests(unittest.TestCase):
         self.assertEqual(final, [(0.0, None)] + [(float(n), "ciao.") for n in range(1, 5)])
         self.assertNotEqual(st.state, "failed")
         self.assertIn("live: translation engine switched to marian", sess._logs)
+
+    # The breaker of an engine that never answers again (a revoked DeepL key, no
+    # network, a crashed Ollama) keeps probing it: only a quota pauses it for
+    # good. In delayed mode the picture waits for the held sentences, so past
+    # the bound on one pause (_MAX_HOLD_S, 120 s of session time) it stops
+    # waiting for them: a held sentence goes out in the original once the video
+    # needs it, the rest still waits for the engine. Here the picture stands at
+    # 0 s and the pacer resumes with 8 s of buffer: what the scheduler has must
+    # reach 8.5 s (the 0.5 s margin of _HELD_DUE_S).
+
+    def _start_on_clock(self, tmp, online, **kw):
+        """_start on a session clock the test moves by hand (the bound counts
+        session time). The breaker runs on the same clock with its default
+        schedule (30 s of pause, doubling at every failed probe), so the test
+        decides when a pause ends. The sentences are queued once that clock is
+        in place."""
+        clock = SimpleNamespace(now=1000.0)
+        sess = self._start(tmp, online, items=0,
+                           breaker=lambda **_kw: _Breaker(clock=lambda: clock.now), **kw)
+        sess._clock = lambda: clock.now
+        return sess, clock
+
+    @staticmethod
+    def _waits(sess, start):
+        """How many times the sentence at ``start`` went back to wait for the
+        paused engine (logged once the breaker recorded its failure)."""
+        return sum(f"{start:.1f}s waits for" in line for line in list(sess._logs))
+
+    def _held(self, sess, start):
+        """Wait until the sentence at ``start`` waits for the paused engine."""
+        return _wait(lambda: self._waits(sess, start) >= 1)
+
+    def _past_the_bound(self, sess, clock, head=2.0):
+        """Move the clock along the breaker's schedule to the end of the bound:
+        the head sentence, held at 1000.0, is probed at 1030 and 1090 (pauses of
+        30 s, then 60 s) and fails both times; 1120.0 ends the bound with the
+        engine paused until 1210. Returns what was emitted at 1119.9, just before."""
+        for now in (1030.0, 1090.0):
+            probes = self._waits(sess, head)
+            clock.now = now
+            self.assertTrue(_wait(lambda: self._waits(sess, head) > probes))
+        clock.now = 1119.9
+        time.sleep(0.3)                     # more than one turn of the MT loop
+        before = self._emitted(sess)
+        clock.now = 1120.0
+        return before
+
+    def test_a_pause_that_outlasts_the_bound_shows_the_original_the_video_needs(self):
+        # The head sentence used to go back to wait at every failed probe and the
+        # end marker waited behind it: the picture stayed paused for ever.
+        from videotranslator.live_session import _PipelineEnd
+        online = _ScriptedOnline(error="unavailable")
+        view = _FakeClockView(0.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed", clock_view=view)
+            buffer_s = sess._pacer.resume_ahead_s
+            for n in range(16):
+                sess._mt_q.put(_sentence(n))
+            sess._mt_q.put(_PipelineEnd(0))
+            self.assertTrue(self._held(sess, 2.0))
+            before = self._past_the_bound(sess, clock)
+            # Sentences 2-8 reach 9.0 s, past the 8.5 s the frozen video needs.
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 9))
+            time.sleep(0.3)
+            at_the_bound, done_at_the_bound = self._emitted(sess), sess._source_done
+            view.media = 6.0                    # the video plays on: 14.5 s needed
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 15))
+            time.sleep(0.3)
+            playing, done_playing = self._emitted(sess), sess._source_done
+            view.media = 7.0                    # the last sentence, then the end
+            done = _wait(lambda: sess._source_done)
+            final = self._emitted(sess)
+            italic = [c.kwargs["italic"] for c in sess._emitted.call_args_list]
+        self.assertEqual(buffer_s, 8.0)
+        self.assertEqual(before, [(0.0, None), (1.0, None)])
+        self.assertEqual(at_the_bound, [(float(n), None) for n in range(9)])
+        self.assertFalse(done_at_the_bound)
+        self.assertEqual(playing, [(float(n), None) for n in range(15)])
+        self.assertFalse(done_playing)
+        self.assertTrue(done)
+        self.assertEqual(final, [(float(n), None) for n in range(16)])
+        self.assertEqual(italic, [True] * 16)
+        # No call past the bound: the engine stays paused until 1210.
+        self.assertEqual(online.calls, ["sentence 0", "sentence 1"] + ["sentence 2"] * 3)
+        self.assertEqual([line for line in sess._logs if "still paused" in line],
+                         ["live: google still paused after 120 s; "
+                          "showing the original so the video plays on"])
+
+    def test_past_the_bound_what_the_video_does_not_need_yet_still_waits(self):
+        # Past the bound a sentence inside the 8.5 s goes out at once, with no
+        # call and no wait for the engine's pause to end; one beyond still waits,
+        # and a failed probe holds its sentence again.
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed")
+            for n in range(3):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 3))
+            sess._mt_q.put(_sentence(3))            # inside: shown at once
+            at_once = _wait(lambda: len(self._emitted(sess)) >= 4, timeout=1.0)
+            for n in range(4, 12):                  # 4-8 inside, 9-11 beyond
+                sess._mt_q.put(_sentence(n))
+            _wait(lambda: len(self._emitted(sess)) >= 9)
+            time.sleep(0.3)
+            ahead = self._emitted(sess)
+            clock.now = 1210.0                      # the pause ends: a probe
+            probed = _wait(lambda: self._waits(sess, 9.0) >= 1)
+            time.sleep(0.3)
+            final = self._emitted(sess)
+            waits = [line.split(" waits for")[0] for line in sess._logs
+                     if " waits for" in line]
+            bounds = [line for line in sess._logs if "still paused" in line]
+        self.assertTrue(at_once)
+        self.assertEqual(ahead, [(float(n), None) for n in range(9)])
+        self.assertTrue(probed)
+        self.assertEqual(final, ahead)
+        self.assertEqual(online.calls, ["sentence 0", "sentence 1"] + ["sentence 2"] * 3
+                         + ["sentence 9"])
+        self.assertEqual(waits, ["live: 2.0s"] * 3 + ["live: 9.0s"])
+        self.assertEqual(len(bounds), 1)
+
+    def test_past_the_bound_a_silence_longer_than_the_buffer_does_not_stop_the_video(self):
+        # The pacer takes the silence before a sentence it has for covered, but
+        # knows nothing past its last one: the sentence after a long silence
+        # goes out too, or the video would wait for it for ever.
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed")
+            for n in (0, 1, 2, 40, 41):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 3))
+            time.sleep(0.3)
+            final = self._emitted(sess)
+        self.assertEqual(final, [(0.0, None), (1.0, None), (2.0, None), (40.0, None)])
+
+    def test_past_the_bound_the_translated_buffer_counts(self):
+        # The sentences translated before the pause already give the video its
+        # buffer: past the bound nothing goes out in the original before the
+        # video needs it.
+        online = _ScriptedOnline(fail=0, error="unavailable")
+        view = _FakeClockView(0.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed", clock_view=view)
+            for n in range(10):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 10))
+            online._fail = 10 ** 6              # the engine stops answering
+            for n in range(10, 14):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 12.0))
+            self._past_the_bound(sess, clock, head=12.0)
+            time.sleep(0.3)
+            at_the_bound = self._emitted(sess)
+            view.media = 4.0                    # the video needs 12.5 s from now on
+            _wait(lambda: len(self._emitted(sess)) >= 13)
+            time.sleep(0.3)
+            final = self._emitted(sess)
+        self.assertEqual(at_the_bound, [(float(n), "tradotta") for n in range(10)]
+                         + [(10.0, None), (11.0, None)])
+        self.assertEqual(final, at_the_bound + [(12.0, None)])
+
+    def test_the_bound_passes_quietly_while_nothing_waits(self):
+        # A sentence whose time comes during the pause goes out as before. With
+        # nothing waiting at the bound nothing changes, until a sentence waits
+        # again: the probe that fails on it.
+        online = _ScriptedOnline(error="unavailable")
+        view = _FakeClockView(0.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed", clock_view=view)
+            for n in range(3):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            view.media = 2.0                    # the video reaches sentence 2
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 3))
+            clock.now = 1120.0
+            time.sleep(0.3)
+            quiet = [line for line in sess._logs if "still paused" in line]
+            sess._mt_q.put(_sentence(3))        # probed (the pause is over), it fails
+            _wait(lambda: len(self._emitted(sess)) >= 4)
+            final = self._emitted(sess)
+            bounds = [line for line in sess._logs if "still paused" in line]
+        self.assertEqual(quiet, [])
+        self.assertEqual(final, [(float(n), None) for n in range(4)])
+        self.assertEqual(online.calls, [f"sentence {n}" for n in range(4)])
+        self.assertEqual(len(bounds), 1)
+
+    def test_an_engine_that_answers_after_the_bound_translates_what_still_waits(self):
+        # The held head stays the breaker's probe past the bound: when the engine
+        # answers again, what the video did not need yet is translated, and the
+        # banner (offering MarianMT until then) goes away.
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed")
+            for n in range(12):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 9))
+            banner = sess.status()
+            online._fail = 0                    # the next probe is answered
+            clock.now = 1210.0
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 12))
+            final = self._emitted(sess)
+            st = sess.status()
+        self.assertEqual((banner.warning_key, banner.warning_action),
+                         ("live_warn_engine_slow", "live_btn_switch_marian"))
+        self.assertEqual(final, [(float(n), None) for n in range(9)]
+                         + [(float(n), "tradotta") for n in range(9, 12)])
+        self.assertIsNone(st.warning_key)
+
+    def test_the_switch_to_marian_after_the_bound_translates_what_still_waits(self):
+        from videotranslator.live_session import _PipelineEnd
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed")
+            for n in range(12):
+                sess._mt_q.put(_sentence(n))
+            sess._mt_q.put(_PipelineEnd(0))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 9))
+            done_before = sess._source_done
+            sess.set_engine("marian")           # the banner's button
+            sess._drain_control(0)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 12))
+            done = _wait(lambda: sess._source_done)
+            final = self._emitted(sess)
+        self.assertEqual(final, [(float(n), None) for n in range(9)]
+                         + [(float(n), "ciao.") for n in range(9, 12)])
+        self.assertFalse(done_before)
+        self.assertTrue(done)
+
+    def test_the_bound_applies_only_while_the_mode_is_delayed(self):
+        # Live mode never pauses the video: the bound would only show in the
+        # original what the engine may still translate before its time. The
+        # mode is read as the session goes, since set_sync_mode can change it.
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="live")
+            for n in range(12):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            time.sleep(0.3)
+            live = self._emitted(sess)
+            live_bounds = [line for line in sess._logs if "still paused" in line]
+            sess.set_sync_mode("delayed")
+            sess._drain_control(0)
+            _wait(lambda: len(self._emitted(sess)) >= 9)
+            time.sleep(0.3)
+            delayed = self._emitted(sess)
+            bounds = [line for line in sess._logs if "still paused" in line]
+        self.assertEqual(live, [(0.0, None), (1.0, None)])
+        self.assertEqual(live_bounds, [])
+        self.assertEqual(delayed, [(float(n), None) for n in range(9)])
+        self.assertEqual(len(bounds), 1)
+
+    def test_after_the_engine_answers_a_new_pause_holds_again(self):
+        # The bound is per pause: once the engine answers, the next pause holds
+        # the sentences still ahead again, for 120 s from its own start.
+        online = _ScriptedOnline(error="unavailable")
+        view = _FakeClockView(0.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed", clock_view=view)
+            for n in range(10):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)       # 2-8 shown, 9 still waits
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 9))
+            online._fail = 0                        # the engine answers again...
+            clock.now = 1210.0                      # ...to the probe after its pause
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 10))
+            online._fail = 10 ** 6                  # then fails again: paused at 1210
+            view.media = 4.0                        # the video needs 12.5 s from now on
+            for n in range(10, 14):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 12.0))
+            clock.now = 1329.9                      # 119.9 s into the new pause, whose
+            self.assertTrue(_wait(lambda: self._waits(sess, 12.0) >= 2))  # probe fails
+            time.sleep(0.3)
+            before = self._emitted(sess)
+            clock.now = 1330.0
+            _wait(lambda: len(self._emitted(sess)) >= 13)
+            time.sleep(0.3)
+            final = self._emitted(sess)
+        self.assertEqual(before, [(float(n), None) for n in range(9)]
+                         + [(9.0, "tradotta"), (10.0, None), (11.0, None)])
+        self.assertEqual(final, before + [(12.0, None)])
+
+    def test_past_the_bound_a_seek_starts_a_new_pause(self):
+        # A seek that drops the held sentences ends the pause: those of the new
+        # position wait for the engine again, for 120 s from then on. Decoding
+        # restarted at 0 s, before what the old position already showed.
+        online = _ScriptedOnline(error="unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, clock = self._start_on_clock(tmp, online, mode="delayed")
+            for n in range(12):
+                sess._mt_q.put(_sentence(n))
+            self.assertTrue(self._held(sess, 2.0))
+            self._past_the_bound(sess, clock)
+            self.assertTrue(_wait(lambda: len(self._emitted(sess)) >= 9))
+            sess._gen = 1                       # the seek restarted decoding
+            for n in (1, 2, 3):
+                sess._mt_q.put(SimpleNamespace(gen=1, start=float(n), end=n + 1.0,
+                                               text=f"again {n}"))
+            time.sleep(0.3)
+            after_seek = self._emitted(sess)
+            clock.now = 1210.0                  # the engine's pause ends: a probe
+            probed = _wait(lambda: self._waits(sess, 1.0) >= 1)
+            clock.now = 1239.9                  # 119.9 s after the seek
+            time.sleep(0.3)
+            before = self._emitted(sess)
+            clock.now = 1240.0
+            _wait(lambda: len(self._emitted(sess)) >= 12)
+            time.sleep(0.3)
+            final = self._emitted(sess)
+        self.assertEqual(after_seek, [(float(n), None) for n in range(9)])
+        self.assertTrue(probed)
+        self.assertEqual(before, after_seek)
+        self.assertEqual(final[9:], [(1.0, None), (2.0, None), (3.0, None)])
+        self.assertEqual(len(final), 12)
 
 
 class LiveSessionLifecycleTests(unittest.TestCase):

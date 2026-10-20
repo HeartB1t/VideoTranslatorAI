@@ -291,6 +291,13 @@ from collections import deque
 _MAX_HELD = 2000
 # A held sentence is due (shown in the original) this close to its start.
 _HELD_DUE_S = 0.5
+# How long the delayed-mode picture may wait for a paused online engine in one
+# pause episode (about two breaker probes at the default 30 s doubling
+# cooldown): only a quota pauses the breaker for good, so it bounds the frozen
+# picture when the engine never recovers (a revoked key, no network, a crashed
+# Ollama). Past it a held sentence is shown in the original once the picture
+# needs it; the ones further ahead still wait for the engine.
+_MAX_HOLD_S = 120.0
 
 
 @dataclass(frozen=True)
@@ -1439,6 +1446,7 @@ class LiveSession:
             MarianMT", or the row's engine box during a session). A translator
             that cannot prepare leaves the running one in place."""
             nonlocal translator, engine, online, prepared, timeout, breaker
+            nonlocal hold_since, hold_expired
             src = self._langlock.locked or self._cfg.lang_source
             candidate = self._factories.translator(wanted)
             try:
@@ -1459,6 +1467,7 @@ class LiveSession:
             online = bool(getattr(translator, "online", False))
             timeout = TIMEOUTS_S.get(self._timeout_key(engine), 5.0)
             breaker = CircuitBreaker()
+            hold_since, hold_expired = None, False      # a new engine: no pause yet
             prepared = prepared or self._langlock.locked is not None
             self._clear_warning()
             self._log(f"live: translation engine switched to {engine}")
@@ -1472,6 +1481,23 @@ class LiveSession:
         held: deque = deque()
         can_hold = self._cfg.source_kind in ("file", "url")
         quota_fallback_tried = False
+        # One pause episode starts with the first sentence held for the paused
+        # engine and ends when it answers again, on an engine switch, or when a
+        # seek drops the held sentences. In delayed mode the pacer freezes the
+        # picture once the held sentences leave it no buffer: with an engine
+        # that never recovers it would stay frozen for ever, the head sentence
+        # re-sent at every probe. Past _MAX_HOLD_S a held sentence no longer
+        # waits for its time to come but goes out in the original as soon as
+        # the picture needs it (picture_waits). The rest still waits, its head
+        # still the breaker's probe: an engine that answers again, or a switch
+        # to MarianMT, still translates what is ahead.
+        hold_since: float | None = None     # session clock at the episode's first hold
+        hold_gen = 0                        # the generation whose sentences it holds
+        hold_expired = False
+        # The end of the last sentence handed to the scheduler, translated or
+        # not, and its generation: how far the pacer's coverage reaches.
+        sent_until: float | None = None
+        sent_gen = 0
 
         def media_now() -> float | None:
             try:
@@ -1479,21 +1505,44 @@ class LiveSession:
             except Exception:                   # noqa: BLE001 - no position: nothing is due
                 return None
 
+        def sent(sentence) -> None:
+            """The scheduler has ``sentence`` now (see sent_until)."""
+            nonlocal sent_until, sent_gen
+            if sent_until is None or sent_gen != sentence.gen:
+                sent_until, sent_gen = sentence.end, sentence.gen
+            else:
+                sent_until = max(sent_until, sentence.end)
+
         def keep_original(sentence) -> None:
             self._log(f"live: {sentence.start:.1f}s kept original "
                       f"({self._timeout_key(engine)} paused after errors): "
                       f"{sentence.text[:120]}")
             self._emit_segment(sentence.start, sentence.end, sentence.text, None,
                                italic=True, gen=sentence.gen, seg_id=None)
+            sent(sentence)
 
         def end_of_source(marker) -> None:
             with self._decode_lock:
                 if marker.gen == self._gen:
                     self._source_done = True
 
+        def picture_waits(now: float) -> bool:
+            """Past the bound, whether the picture would wait for the held head.
+            The delayed-mode pacer stops the picture when the coverage runs
+            short and plays on once it reaches the resume buffer; it takes the
+            silence before a sentence it has for covered, but knows nothing
+            past its last one (ready_until). So the head is needed while what
+            the scheduler has stops short of that buffer, plus the _HELD_DUE_S
+            margin, even when a long silence comes first."""
+            if not hold_expired or not self._pacer.can_pause:
+                return False
+            reach = sent_until if sent_gen == self._gen else None
+            return reach is None or reach < now + self._pacer.resume_ahead_s + _HELD_DUE_S
+
         def release_due() -> None:
-            """Show in the original the held sentences whose time has come. The
-            end marker leaves only after every sentence before it: a done source
+            """Show in the original the held sentences whose time has come, or
+            that the picture needs past the bound (picture_waits). The end
+            marker leaves only after every sentence before it: a done source
             stops the delayed-mode pacer from buffering."""
             now = media_now()
             while held:
@@ -1502,12 +1551,22 @@ class LiveSession:
                     held.popleft()
                 elif isinstance(head, _PipelineEnd):
                     end_of_source(held.popleft())
-                elif now is not None and head.start <= now + _HELD_DUE_S:
+                elif now is not None and (head.start <= now + _HELD_DUE_S
+                                          or picture_waits(now)):
                     keep_original(held.popleft())
                 else:
                     return
 
+        def begin_episode(item) -> None:
+            """The first sentence held for the paused engine starts the pause
+            episode; after a seek, the new generation's first one starts anew."""
+            nonlocal hold_since, hold_gen, hold_expired
+            gen = getattr(item, "gen", 0)
+            if hold_since is None or hold_gen < gen:
+                hold_since, hold_gen, hold_expired = self._clock(), gen, False
+
         def hold(item) -> None:
+            begin_episode(item)
             held.append(item)
             if len(held) > _MAX_HELD:
                 oldest = held.popleft()
@@ -1531,6 +1590,17 @@ class LiveSession:
                     wanted, self._engine_requested = self._engine_requested, None
                 if wanted and wanted != engine:
                     switch(wanted)
+                if hold_since is not None and hold_gen < self._gen:
+                    hold_since, hold_expired = None, False   # a seek dropped the held sentences
+                if (hold_since is not None and not hold_expired and held
+                        and self._pacer.can_pause
+                        and self._clock() - hold_since >= _MAX_HOLD_S):
+                    # The engine did not come back in time: the picture no
+                    # longer waits for it (release_due), and the banner still
+                    # offers MarianMT. Live mode never pauses: no bound there.
+                    hold_expired = True
+                    self._log(f"live: {engine} still paused after {_MAX_HOLD_S:.0f} s; "
+                              f"showing the original so the video plays on")
                 holding = can_hold and online and breaker.holding()
                 from_held = bool(held) and not holding
                 if from_held:
@@ -1586,6 +1656,7 @@ class LiveSession:
                     if outcome.ok:
                         breaker.record_success()
                         self._clear_warning()
+                        hold_since, hold_expired = None, False   # the pause is over
                     else:
                         warn = breaker.record_failure(kind=outcome.error or "error")
                         if warn:
@@ -1605,6 +1676,7 @@ class LiveSession:
                                 action=None if engine == "marian" else "live_btn_switch_marian")
                         if can_hold and breaker.holding():
                             # This failure paused the engine: the sentence waits too.
+                            begin_episode(sentence)
                             self._log(f"live: {sentence.start:.1f}s waits for "
                                       f"{self._timeout_key(engine)} ({outcome.error}, "
                                       f"{outcome.latency_s:.1f} s): {sentence.text[:120]}")
@@ -1622,6 +1694,7 @@ class LiveSession:
                     sentence.start, sentence.end, sentence.text,
                     outcome.text if outcome.ok else None, italic=not outcome.ok,
                     gen=sentence.gen, seg_id=None)
+                sent(sentence)
         except LiveTranslateError as exc:
             self._fail(exc.key, "")
         except Exception as exc:            # noqa: BLE001

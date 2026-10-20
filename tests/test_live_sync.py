@@ -140,6 +140,16 @@ class FilePacerLiveTests(unittest.TestCase):
                          user_paused=False, self_paused=True)
         self.assertEqual(act.kind, "resume")
 
+    def test_only_delayed_mode_can_pause_and_it_follows_set_mode(self):
+        # The live session asks while it runs (a held sentence waits for a
+        # paused engine only while the video can wait for it).
+        pacer = FilePacer(mode="delayed", min_ahead_s=8.0, resume_ahead_s=8.0)
+        delayed = pacer.can_pause
+        pacer.set_mode("live")
+        live = pacer.can_pause
+        pacer.set_mode("delayed")
+        self.assertEqual((delayed, live, pacer.can_pause), (True, False, True))
+
 
 class EdgeEstimatorTests(unittest.TestCase):
     def test_default_gap_before_min_gaps(self):

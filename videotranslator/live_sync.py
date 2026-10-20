@@ -106,6 +106,13 @@ class FilePacer:
         self._mode = mode
 
     @property
+    def can_pause(self) -> bool:
+        """Whether the picture may wait for the translation: only delayed mode
+        pauses (``step``). Read by the MT thread while it runs, since the mode
+        can change during a session."""
+        return self._mode != "live"
+
+    @property
     def resume_ahead_s(self) -> float:
         return self._resume_ahead
 
