@@ -169,6 +169,10 @@ def separate_instrumental(
     original sample rate and channel layout and writes it to ``out_path`` as a
     WAV. The Demucs logic is duplicated on purpose so ``separate_audio`` stays
     byte-for-byte unchanged. Returns ``out_path``.
+
+    ``audio_path`` must be a decoded stereo WAV at the model rate (44.1 kHz):
+    ``extract_music`` decodes it with ffmpeg first, since torchaudio's soundfile
+    backend cannot open video or web containers and htdemucs takes 2 channels.
     """
     if log_cb is not None:
         log_cb("[music] Separating the instrumental with Demucs...")

@@ -20,7 +20,11 @@ from videotranslator.input_source import (
     is_probable_url,
     normalize_input_path,
 )
-from videotranslator.media import run_ffmpeg, separate_instrumental
+from videotranslator.media import (
+    build_extract_audio_cmd,
+    run_ffmpeg,
+    separate_instrumental,
+)
 
 
 @dataclass(frozen=True)
@@ -172,8 +176,9 @@ def extract_music(
     final output path.
 
     - A URL source is downloaded audio-only into a temp dir first.
-    - ``instrumental=True`` removes the voice with Demucs (a temp wav), then the
-      ffmpeg conversion runs on that wav; otherwise it runs on the source.
+    - ``instrumental=True`` decodes the source to a 44.1 kHz stereo WAV, removes
+      the voice from it with Demucs (a temp wav), then the ffmpeg conversion runs
+      on that wav; otherwise it runs on the source.
     - An output that would be the source itself (same name, format and folder)
       gets a " (extracted)" suffix, so the source is never overwritten.
     - Temporary files live in a TemporaryDirectory and are cleaned up on exit.
@@ -199,8 +204,15 @@ def extract_music(
             out_path = f"{base} (extracted){ext}"
 
         if instrumental:
+            # Demucs loads through torchaudio, whose soundfile backend cannot
+            # open video or web containers (mp4, mkv, webm, m4a), and htdemucs
+            # is a 2-channel 44.1 kHz model: decode to that PCM WAV first, as
+            # the translation pipeline does before separate_audio.
+            decoded_wav = os.path.join(tmp, "decoded.wav")
+            ffmpeg_runner(build_extract_audio_cmd(media_path, decoded_wav),
+                          "decode audio")
             instrumental_wav = os.path.join(tmp, "instrumental.wav")
-            convert_source = separator(media_path, instrumental_wav, log_cb=log_cb)
+            convert_source = separator(decoded_wav, instrumental_wav, log_cb=log_cb)
         else:
             convert_source = media_path
 

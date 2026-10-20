@@ -1,4 +1,7 @@
+import importlib.util
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -141,9 +144,13 @@ class ExtractMusicOrchestratorTests(unittest.TestCase):
             self.assertIn("320k", cmds[0])
             self.assertTrue(out_dir.is_dir())
 
-    def test_instrumental_runs_the_separator_then_converts_the_wav(self):
+    def test_instrumental_decodes_the_source_to_a_44k_stereo_wav_first(self):
+        # Demucs loads through torchaudio, whose soundfile backend cannot open
+        # video or web containers (mp4, webm, m4a), and htdemucs is a 2-channel
+        # 44.1 kHz model: the separator gets ffmpeg's decoded WAV, never the
+        # source itself.
         with tempfile.TemporaryDirectory() as tmp:
-            src = Path(tmp) / "song.wav"
+            src = Path(tmp) / "concert.mp4"
             src.write_bytes(b"x")
             out_dir = Path(tmp) / "out"
             cmds: list[list[str]] = []
@@ -162,11 +169,20 @@ class ExtractMusicOrchestratorTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                out, os.path.join(str(out_dir), "song (instrumental).flac"))
+                out, os.path.join(str(out_dir), "concert (instrumental).flac"))
+            self.assertEqual(len(cmds), 2)
+            decode, convert = cmds
+            self.assertEqual(decode[3], str(src))
+            self.assertEqual(decode[decode.index("-ar") + 1], "44100")
+            self.assertEqual(decode[decode.index("-ac") + 1], "2")
+            self.assertTrue(decode[-1].endswith(".wav"))
+            # A temp file: nothing lands next to the source or in the output.
+            self.assertFalse(decode[-1].startswith(tmp))
             self.assertEqual(len(sep_calls), 1)
-            self.assertEqual(sep_calls[0][0], str(src))
-            # ffmpeg converts the separator output, not the original source.
-            self.assertEqual(cmds[0][3], sep_calls[0][1])
+            # Demucs reads the decoded WAV, and ffmpeg converts its output.
+            self.assertEqual(sep_calls[0][0], decode[-1])
+            self.assertEqual(convert[3], sep_calls[0][1])
+            self.assertEqual(convert[-1], out)
 
     def test_source_named_like_the_output_is_never_overwritten(self):
         # Field bug (ultrareview 2026-10-20): `--extract-audio song.mp3` writes
@@ -236,6 +252,57 @@ class ExtractMusicOrchestratorTests(unittest.TestCase):
     def test_unknown_format_raises_before_any_work(self):
         with self.assertRaises(ValueError):
             extract_music("/x/y.mp4", "/out", fmt="aiff")
+
+
+@unittest.skipUnless(
+    shutil.which("ffmpeg") and importlib.util.find_spec("soundfile"),
+    "ffmpeg and soundfile are required for the real decode test",
+)
+class ExtractMusicRealDecodeTests(unittest.TestCase):
+    def test_separator_reads_a_44k_stereo_wav_decoded_from_a_5_1_video(self):
+        # Field bug (ultrareview 2026-10-20): "Instrumental only" on an mp4
+        # failed with "Format not recognised" (Demucs loads through torchaudio,
+        # whose soundfile backend cannot open video containers) and a 5.1 track
+        # crashed the 2-channel htdemucs. Real ffmpeg, real soundfile.
+        import numpy
+        import soundfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "concert.mp4"
+            self._create_5_1_video(src)
+            seen: list[tuple[int, int]] = []
+
+            def probing_sep(audio_path, out_path, *, log_cb=None):
+                try:
+                    info = soundfile.info(audio_path)
+                except Exception as exc:  # noqa: BLE001
+                    self.fail(f"Demucs cannot read its input "
+                              f"{os.path.basename(audio_path)}: {exc}")
+                seen.append((info.samplerate, info.channels))
+                soundfile.write(out_path,
+                                numpy.zeros((info.frames, 2), dtype="float32"),
+                                info.samplerate)
+                return out_path
+
+            out = extract_music(str(src), str(Path(tmp) / "out"), fmt="wav",
+                                instrumental=True, separator=probing_sep)
+
+            self.assertEqual(seen, [(44100, 2)])
+            self.assertTrue(os.path.isfile(out))
+
+    def _create_5_1_video(self, output: Path) -> None:
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "testsrc=size=96x64:rate=10:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+            "-filter:a", "pan=5.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0",
+            "-shortest", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", str(output),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=20)
+        if proc.returncode != 0:
+            self.skipTest(f"ffmpeg 5.1 fixture failed: {proc.stderr.strip()}")
 
 
 if __name__ == "__main__":
