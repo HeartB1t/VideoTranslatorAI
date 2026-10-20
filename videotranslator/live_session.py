@@ -417,6 +417,11 @@ class LiveSession:
         self._last_media_now: float | None = None
         self._drain_anchor_mono: float | None = None
         self._drain_anchor_media = 0.0
+        # The user's last seek as (monotonic stamp, clock epoch), recorded before
+        # the seek reaches mpv (notify_user_seek); (-inf, -1): none yet. Until mpv
+        # has run that seek, its eof-reached still reports the position before
+        # it, so such a marker is stale (_tick_once).
+        self._eof_seek_mark: tuple[float, int] = (-math.inf, -1)
         self._last_pacer_mono = -1e9
         self._last_status_mono = -1e9
         self._overlay: str | None = None
@@ -602,6 +607,17 @@ class LiveSession:
         self._control.put(("subs", bool(on)))
 
     def notify_user_seek(self, t: float) -> None:
+        # Besides queueing, the seek is marked here, on the caller's thread: the
+        # GUI calls this before it sends the seek to mpv, so every eof-reached
+        # mpv reports for the new position has a later (on a coarse clock, an
+        # equal) stamp, even one that lands before the scheduler drains this
+        # command, and comes once mpv has restarted playback there, which the
+        # GUI marks by bumping the clock epoch. An older marker, or one from
+        # before that restart (mpv ran the seek late and reached the old end
+        # first), still reports the position before the seek (_tick_once). One
+        # tuple store keeps the pair consistent for the scheduler thread, and
+        # the put below publishes it.
+        self._eof_seek_mark = (self._clock(), getattr(self._clock_view, "epoch", 0))
         self._control.put(("seek", float(t)))
 
     def notify_user_pause(self, paused: bool) -> None:
@@ -709,11 +725,21 @@ class LiveSession:
         self._drain_sched_in()
         self._drain_synth()
         real_now = self._clock_view.now(mono)
+        epoch = getattr(self._clock_view, "epoch", 0)
         if self._bridge is not None:
             marker = self._bridge.latest("eof-reached")
-            self._media_eof = bool(marker and marker[0])
+            # After the user's last seek, a marker counts only once mpv has run
+            # that seek: stamped no earlier than it AND after mpv restarted
+            # playback since it (a later clock epoch). Before that its True
+            # still reports the position before the seek (a stale one, or a
+            # seek run late, after mpv reached the old end): it would run the
+            # drain clock on from there with the clock invalid, expiring the
+            # lines that on_seek just re-armed and stopping the session as the
+            # user seeks back. A seek to the very end counts once mpv restarts.
+            seek_stamp, seek_epoch = self._eof_seek_mark
+            self._media_eof = bool(marker and marker[0] and marker[1] >= seek_stamp
+                                   and epoch > seek_epoch)
         now = self._drain_now(real_now, mono)
-        epoch = getattr(self._clock_view, "epoch", 0)
         if mono - self._last_pacer_mono >= 1.0:
             self._last_pacer_mono = mono
             self._run_pacer(now)
@@ -787,8 +813,10 @@ class LiveSession:
         monotonic wall clock, anchored to the last real position: the scheduler
         then expires the last caption's display window (_clear_time) and the tail
         dub's slot (_slot_end / _still_voiceable), so both drain gates can conclude
-        and None never blocks the stop forever. Re-armed on a seek that restarts
-        decoding (``_source_done`` cleared, see _drain_control).
+        and None never blocks the stop forever. Disarmed by every user seek (see
+        _drain_control), covered or not, so it re-anchors from the new real
+        position when mpv reports eof-reached again; a marker from before mpv
+        ran the seek is ignored (_tick_once).
         """
         if not self._source_done:
             self._drain_anchor_mono = None
@@ -947,12 +975,17 @@ class LiveSession:
             elif kind == "seek":
                 self._last_seek_mono = self._clock()
                 restart = not self._scheduler.covers(value)
+                # Every seek leaves the end of the media, covered or not: disarm
+                # the end-of-source drain so it re-anchors from the new real
+                # position when mpv reports eof-reached again. A covered seek
+                # back from EOF keeps _source_done, and with the old anchor the
+                # drain ran on past the end of the file.
+                self._media_eof = False
+                self._drain_anchor_mono = None
                 if restart:
                     with self._decode_lock:
                         self._gen += 1
                         self._source_done = False
-                        self._media_eof = False
-                        self._drain_anchor_mono = None
                         self._decode_cancel.set()
                         self._decode_cancel = threading.Event()
                         self._decode_request = (self._gen, max(0.0, value - 0.5),

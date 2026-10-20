@@ -2119,6 +2119,186 @@ class LiveSessionAutoStopTests(unittest.TestCase):
             self.assertNotEqual(sess.status().state, "ended")
             self.assertFalse(sess._stop.is_set())
 
+    # -- a seek away from the end while the drain runs -----------------------
+    #
+    # mpv keeps reporting eof-reached True until it has processed a seek, and
+    # the GUI tells the session first (notify_user_seek, then controller.seek).
+    # A marker stamped before the seek, or before mpv restarted playback after
+    # it, is stale: it must not keep the drain clock running past the end of
+    # the file once the user seeks back.
+
+    def _dubbed_session(self, tmp):
+        """A dubbed file session played to 24.8 s through the real tick, with
+        mpv's eof-reached on an EventBridge. Line 1 (20-23 s) is a caption; line
+        2 (25-28 s) is dubbed and its clip, started at 24.8 s, speaks until 28.5
+        s, past the last frame (27.9 s). ``tick(mono, media)`` keeps the
+        session's own monotonic clock (the seek stamp) in step with the tick
+        time, and ``user_seek(target, mono)`` follows the GUI order: the clock
+        goes invalid (expect_restart), then notify_user_seek, then mpv gets the
+        seek. mpv runs it later: its playback-restart makes the GUI bump the
+        clock epoch (``clock.epoch += 1`` in the tests).
+        """
+        from videotranslator.live_scheduler import PreloadClip, StartClip
+        sess, _, _ = _session(tmp, media=19.0, overrides={"live_dub_enabled": True})
+        clock = _EofClockView(19.0)
+        bridge = pe.EventBridge()
+        synth = _FakeSynth()
+        wall = [0.0]
+        sess._clock_view, sess._bridge, sess._synth = clock, bridge, synth
+        sess._clock = lambda: wall[0]
+        sess._source_done = True            # the decoder ran far ahead of the picture
+
+        def tick(mono, media=None):
+            wall[0] = mono
+            if media is not None:
+                clock.media = media
+            return sess._tick_once(mono)
+
+        def user_seek(target, mono):
+            wall[0] = mono
+            clock.invalid = True
+            sess.notify_user_seek(target)
+
+        sess.submit_segment(LiveSegment(1, 0, 20.0, 23.0, "one", text_tgt="uno"))
+        sess.submit_segment(LiveSegment(2, 0, 25.0, 28.0, "two", text_tgt="due",
+                                        dub_ok=True))
+        tick(0.0)                               # line 2 asks the TTS for its clip
+        synth.push(2, 0, Clip(2, 0, "/due.mp3", 3.6, "+0%", 0.1, 3.6))   # 3.5 s audible
+        tick(1.0, 20.0)
+        self.assertTrue(any(isinstance(a, PreloadClip) for a in tick(4.5, 23.5)))
+        self.assertTrue(any(isinstance(a, StartClip) for a in tick(5.8, 24.8)))
+        return SimpleNamespace(sess=sess, clock=clock, bridge=bridge, tick=tick,
+                               user_seek=user_seek)
+
+    def _dubbed_session_at_eof(self, tmp):
+        """_dubbed_session played on to its last frame (27.9 s): line 2 still
+        speaks, so the drain clock is armed but the session has not auto-stopped.
+        """
+        env = self._dubbed_session(tmp)
+        env.bridge.set_latest("eof-reached", True, 9.0)   # the picture hits its last frame
+        env.tick(9.0, 27.9)
+        env.tick(9.5)                           # frozen there: the drain clock arms
+        self.assertEqual(env.sess._drain_anchor_mono, 9.5)
+        self.assertEqual(env.sess._voice_state, "playing")
+        self.assertNotEqual(env.sess.status().state, "ended")
+        return env
+
+    def test_covered_seek_back_from_eof_ignores_the_stale_eof_marker(self):
+        # The user seeks back into line 1 (covered: no decoder restart, so
+        # _source_done stays True) while line 2 still speaks past the last
+        # frame. Until mpv processes the seek the bridge still holds the
+        # pre-seek eof-reached True and the clock is invalid: the drain clock
+        # then ran on from the old anchor, past the end of the file, dropped the
+        # line that on_seek had just re-armed (as late), stamped the captions at
+        # that time and auto-stopped the session. After the seek both lines play
+        # again, and back at the last frame the drain re-anchors and ends it.
+        from videotranslator.live_scheduler import (
+            Drop, PreloadClip, ShowSubtitle, StartClip)
+
+        def seg_ids(actions, kind):
+            return [a.seg_id for a in actions if isinstance(a, kind)]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._dubbed_session_at_eof(tmp)
+            sess, clock, bridge, tick = env.sess, env.clock, env.bridge, env.tick
+            env.user_seek(21.0, 10.0)
+            stale = tick(10.02) + tick(12.0)    # mpv has not seeked yet (a slow seek)
+            self.assertEqual([a for a in stale if isinstance(a, Drop)], [])
+            self.assertEqual(sess._scheduler._dub_state[2], "ready")   # re-armed, waiting
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+            bridge.set_latest("eof-reached", False, 12.05)   # mpv performed the seek
+            clock.epoch += 1                    # and its playback-restart reaches the GUI
+            clock.invalid = False
+            self.assertEqual(seg_ids(tick(12.1, 21.0), ShowSubtitle), [1])
+            self.assertEqual(seg_ids(tick(15.1, 24.0), PreloadClip), [2])
+            self.assertEqual(seg_ids(tick(15.9, 24.8), StartClip), [2])
+            self.assertEqual(seg_ids(tick(16.1, 25.0), ShowSubtitle), [2])
+            metrics = sess._scheduler.metrics()
+            self.assertEqual((metrics["voiced"], metrics["voice_dropped"]), (2.0, 0.0))
+            # Back at the last frame the drain re-anchors there, not on the old
+            # anchor, and ends the session once line 2 has finished speaking.
+            bridge.set_latest("eof-reached", True, 19.4)
+            tick(19.4, 27.9)
+            tick(19.6)
+            self.assertEqual(sess._drain_anchor_mono, 19.6)
+            self.assertNotEqual(sess.status().state, "ended")
+            bridge.extra_latest("voice-eof", (1, "eof"), 20.0)   # the clip ended
+            tick(20.5)
+            self.assertEqual(sess.status().state, "ended")
+
+    def test_seek_to_the_very_end_still_autostops_on_a_fresh_eof_marker(self):
+        # forward_10 near the end clamps the target to the duration, and mpv is
+        # at EOF again before the next tick: it restarts playback there, then
+        # reports eof-reached (libmpv 0.41), which is not stale and must still
+        # end the session. It carries the seek's own stamp here (time.monotonic
+        # ticks every 15.6 ms on Windows before Python 3.13): not older than the
+        # seek, so it counts. The drain re-anchors at the seek instead of running
+        # on from the pre-seek anchor, and the caption under the target shows
+        # again for its full window before the stop.
+        from videotranslator.live_scheduler import ShowSubtitle
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._dubbed_session_at_eof(tmp)
+            sess, tick = env.sess, env.tick
+            env.user_seek(27.9, 10.0)           # inside line 2 (25-28 s): covered
+            env.clock.epoch += 1                # mpv ran it: playback-restart
+            env.bridge.set_latest("eof-reached", True, 10.0)   # at the end again
+            shown = tick(10.02)
+            self.assertEqual(sess._drain_anchor_mono, 10.02)   # not the pre-seek 9.5
+            self.assertIn(2, [a.seg_id for a in shown if isinstance(a, ShowSubtitle)])
+            tick(11.0)                          # 28.88 s: inside line 2's 1.5 s window
+            self.assertNotEqual(sess.status().state, "ended")
+            tick(11.6)                          # 29.48 s: past 27.9 + 1.5
+            self.assertEqual(sess.status().state, "ended")
+            self.assertTrue(sess._stop.is_set())
+
+    def test_eof_reached_before_mpv_runs_a_late_seek_is_ignored(self):
+        # The user seeks back into line 1 a moment before the last frame and
+        # mpv runs the seek late (2.5 s here): it reaches the old end first, so
+        # this eof-reached True is stamped AFTER the seek, yet it still reports
+        # the position before it. Honoured, it armed the drain clock on the
+        # pre-seek position while the clock was invalid: line 2 showed again,
+        # its re-armed voice was dropped as late and the session ended before
+        # mpv had seeked. A marker counts only once mpv has restarted playback
+        # since the seek (its playback-restart bumps the clock epoch).
+        from videotranslator.live_scheduler import (
+            Drop, PreloadClip, ShowSubtitle, StartClip)
+
+        def seg_ids(actions, kind):
+            return [a.seg_id for a in actions if isinstance(a, kind)]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._dubbed_session(tmp)
+            sess, clock, bridge, tick = env.sess, env.clock, env.bridge, env.tick
+            tick(8.8, 27.8)                     # line 2 speaks, 0.1 s before the end
+            env.user_seek(21.0, 8.85)           # back into line 1 (covered)
+            bridge.set_latest("eof-reached", True, 8.95)   # the old end, seek not run
+            pending = tick(8.96) + tick(10.0) + tick(11.3)
+            self.assertEqual(seg_ids(pending, ShowSubtitle) + seg_ids(pending, Drop), [])
+            self.assertEqual(sess._scheduler._dub_state[2], "ready")   # re-armed, waiting
+            self.assertIsNone(sess._drain_anchor_mono)
+            self.assertNotEqual(sess.status().state, "ended")
+            self.assertFalse(sess._stop.is_set())
+            bridge.set_latest("eof-reached", False, 11.35)   # mpv runs the seek
+            clock.epoch += 1                    # and its playback-restart reaches the GUI
+            clock.invalid = False
+            self.assertEqual(seg_ids(tick(11.4, 21.0), ShowSubtitle), [1])
+            self.assertEqual(seg_ids(tick(14.4, 24.0), PreloadClip), [2])
+            self.assertEqual(seg_ids(tick(15.2, 24.8), StartClip), [2])
+            self.assertEqual(seg_ids(tick(15.4, 25.0), ShowSubtitle), [2])
+            metrics = sess._scheduler.metrics()
+            self.assertEqual((metrics["voiced"], metrics["voice_dropped"]), (2.0, 0.0))
+            # Back at the last frame after the restart, eof-reached counts again:
+            # the drain arms there and ends the session once line 2 is spoken.
+            bridge.set_latest("eof-reached", True, 18.3)
+            tick(18.3, 27.9)
+            tick(18.5)
+            self.assertEqual(sess._drain_anchor_mono, 18.5)
+            self.assertNotEqual(sess.status().state, "ended")
+            bridge.extra_latest("voice-eof", (1, "eof"), 18.8)   # the clip ended
+            tick(19.4)                          # 28.8 s: past line 2's window (28.3)
+            self.assertEqual(sess.status().state, "ended")
+
     def test_frozen_clock_expires_the_tail_dub_and_ends(self):
         # The tail dub gate: with the clock frozen below seg.end the tail line
         # stays _still_voiceable (slot_end = end + overhang > frozen now), so it
