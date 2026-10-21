@@ -85,7 +85,12 @@ def build_ytdlp_options(
         "restrictfilenames": True,
         "socket_timeout": 30,
         "retries": 5,
-        "extractor_args": {"youtube": {"player_client": ["web", "ios", "android"]}},
+        # YouTube restricted progressive (muxed) formats for web/ios/android; the
+        # tv and android_vr clients still serve itag 18 for VODs. android_vr may
+        # require a GVS PO token and can then 403 at runtime.
+        "extractor_args": {
+            "youtube": {"player_client": ["tv", "web", "android_vr", "ios", "android"]}
+        },
     }
     browser = _detect_browser()
     if browser:
