@@ -1066,24 +1066,75 @@ class SkinTests(unittest.TestCase):
 class TalkingLogTests(unittest.TestCase):
     """Every click, choice and error reaches the Log panel and the log file."""
 
-    def _panel(self, app):
+    def _drain(self, app, settle=0.05, max_quiet=1.2, timeout=20.0):
+        """Run the Tk event loop until every pending log line is in the panel.
+
+        A line reaches the panel widget by one of several asynchronous routes,
+        none of which has necessarily run when the test reads the panel right
+        after an action:
+          1. print() output is buffered in a _TkStreamRedirect and written out
+             on a 100ms Tk timer (after(100, _flush_buf));
+          2. an app event raised off the Tk thread is posted with after(0);
+          3. the applied state of a check box or radio button is logged from an
+             after_idle callback;
+          4. a button pressed with the keyboard runs its command (which logs
+             the result) only from Tk's own after(100) press-animation timer
+             (tk::ButtonInvoke -> ButtonInvokeEnd), so the result line lands
+             100ms after the key, not synchronously.
+        There is no log event bus and no 4 Hz log poll: the 4 Hz after() is the
+        live-session status poll, unrelated to the panel.
+
+        The read is made deterministic by draining to quiescence instead of
+        sleeping a fixed time. Each turn the redirect buffers are flushed
+        straight into the widget (route 1 then needs no 100ms wait) and every
+        ready idle callback and after(0) post is run (routes 2 and 3); the
+        moment the panel last grew is remembered. The loop stops only once the
+        panel has stopped changing AND Tk has no after() timer left that could
+        still write a line (route 4 and the redirect timers): that is the queue
+        being empty, not a guess that enough time has passed. The quiet window
+        resets on every new line, so a slow CI host just makes the drain wait
+        longer, never read early; a fixed sleep cannot do that, and whichever
+        callback it outran is the line the read misses (a different line each
+        run, the flake seen on Windows). max_quiet lets a self-rescheduling
+        poll that never touches the log (live status, the hardware probe retry)
+        end the wait, and timeout is a hard stop so the drain can never hang.
+        """
         import video_translator_gui as gui
-        app.update()
-        app.after(150)
-        app.update()
-        # print() output reaches the widget through a redirect that buffers and
-        # flushes on a 100ms Tk timer. Under load (the full suite on Windows CI)
-        # that timer can lag, so a just-written line may not be in the widget
-        # yet. Flush the active redirect synchronously so the read is
-        # deterministic instead of timing dependent.
-        for redir in (getattr(app, "_own_default_redirect", None), gui._DEFAULT_REDIRECT):
-            flush = getattr(redir, "_flush_buf", None)
-            if flush is not None:
-                try:
-                    flush()
-                except Exception:                    # noqa: BLE001
-                    pass
-        app.update()
+        redirects = (getattr(app, "_own_default_redirect", None), gui._DEFAULT_REDIRECT)
+
+        def buffered():
+            return any(getattr(redir, "_buf", None) for redir in redirects)
+
+        def timers_pending():
+            try:
+                return bool(app.tk.splitlist(app.tk.call("after", "info")))
+            except Exception:                        # noqa: BLE001
+                return False
+
+        deadline = time.monotonic() + timeout
+        last_change = time.monotonic()
+        while time.monotonic() < deadline:
+            for redir in redirects:
+                flush = getattr(redir, "_flush_buf", None)
+                if flush is not None:
+                    try:
+                        flush()
+                    except Exception:                # noqa: BLE001
+                        pass
+            before = app._log.get("1.0", "end")
+            app.update_idletasks()
+            app.update()
+            now = time.monotonic()
+            if buffered() or app._log.get("1.0", "end") != before:
+                last_change = now
+                continue
+            quiet = now - last_change
+            if quiet >= settle and (not timers_pending() or quiet >= max_quiet):
+                break
+            app.after(10)
+
+    def _panel(self, app):
+        self._drain(app)
         return app._log.get("1.0", "end")
 
     def test_clicks_toggles_disabled_controls_and_errors_are_logged(self):
