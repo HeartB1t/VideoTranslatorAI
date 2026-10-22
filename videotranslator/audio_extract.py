@@ -166,6 +166,7 @@ def extract_music(
     fmt: str = "mp3",
     bitrate: int | None = None,
     instrumental: bool = False,
+    out_file: str | None = None,
     log_cb: Callable[[str], None] | None = None,
     ytdlp_cls: Callable[[dict[str, Any]], Any] | None = None,
     ffmpeg_runner: Callable[[list[str], str], Any] = run_ffmpeg,
@@ -179,6 +180,9 @@ def extract_music(
     - ``instrumental=True`` decodes the source to a 44.1 kHz stereo WAV, removes
       the voice from it with Demucs (a temp wav), then the ffmpeg conversion runs
       on that wav; otherwise it runs on the source.
+    - ``out_file`` overrides the derived name: the audio is written exactly
+      there (its folder is created) instead of ``out_dir``/<stem><ext>; ``fmt``
+      still drives the codec, so pass an extension that matches it.
     - An output that would be the source itself (same name, format and folder)
       gets a " (extracted)" suffix, so the source is never overwritten.
     - Temporary files live in a TemporaryDirectory and are cleaned up on exit.
@@ -195,8 +199,13 @@ def extract_music(
         else:
             media_path = normalize_input_path(source)
 
-        out_path = resolve_output_path(media_path, out_dir, fmt,
-                                       instrumental=instrumental)
+        if out_file is not None:
+            out_path = out_file
+            os.makedirs(os.path.dirname(os.path.abspath(out_path)),
+                        exist_ok=True)
+        else:
+            out_path = resolve_output_path(media_path, out_dir, fmt,
+                                           instrumental=instrumental)
         if _same_file(out_path, media_path):
             # e.g. song.mp3 to mp3 next to it: ffmpeg -y would truncate the file
             # it is still reading (or refuse, when both paths are spelled alike).

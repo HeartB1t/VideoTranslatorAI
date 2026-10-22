@@ -208,6 +208,12 @@ def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -
 
     cfg = legacy.load_config()
     out_dir_opt = args.output_dir or cfg.get("output_dir")
+    # -o/--output names one output file, so it only applies to a single input;
+    # for a batch it is ignored in favour of --output-dir (said once, not silent).
+    out_file_opt = args.output if len(files) == 1 else None
+    if args.output and len(files) > 1:
+        print("[!] -o/--output ignored for multiple inputs; use --output-dir",
+              flush=True)
 
     failed = 0
     for source in files:
@@ -225,6 +231,7 @@ def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -
                 fmt=args.audio_format,
                 bitrate=args.audio_bitrate,
                 instrumental=args.instrumental,
+                out_file=out_file_opt,
                 log_cb=lambda line: print(line, flush=True),
             )
         except Exception as exc:  # noqa: BLE001
@@ -242,6 +249,7 @@ def _run_extract_audio(args: argparse.Namespace, files: Sequence[str], legacy) -
 def _cli(argv: Sequence[str] | None = None) -> None:
     """Full CLI implementation (extracted from the legacy monolith)."""
     import video_translator_gui as legacy
+    from videotranslator.input_source import is_probable_url
     from videotranslator.jobs import TranslationJobConfig
     from videotranslator.pipeline import run_translation_job
     from videotranslator.translation import TranslationUnavailableError
@@ -322,7 +330,9 @@ def _cli(argv: Sequence[str] | None = None) -> None:
         sys.exit(2)
 
     for f in files:
-        if not os.path.exists(f):
+        # A URL is downloaded by the pipeline, like --extract-audio and the GUI;
+        # only a local path that does not exist is a "file not found".
+        if not is_probable_url(f) and not os.path.exists(f):
             print(f"[!] File not found: {f}")
             continue
         job = TranslationJobConfig(

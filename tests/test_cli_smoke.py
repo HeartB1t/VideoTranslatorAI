@@ -166,6 +166,55 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "https://youtu.be/abc")
 
+    def test_extract_audio_honours_output_file_for_single_input(self):
+        # Field bug (collaudo 2026-10-22): -o/--output was silently ignored in
+        # --extract-audio, so a single input went next to the source instead of
+        # the requested file. It must now reach extract_music as out_file.
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as video:
+            calls = self._extract_calls_for(
+                {}, [video.name, "--extract-audio", "-o", "/data/song.mp3"])
+        _source, _out_dir, kwargs = calls[0]
+        self.assertEqual(kwargs["out_file"], "/data/song.mp3")
+
+    def test_extract_audio_ignores_output_file_for_a_batch(self):
+        # One -o cannot name the output of many inputs: it is dropped (with a
+        # notice) and out_file stays None so each input keeps its derived name.
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as a, \
+                tempfile.NamedTemporaryFile(suffix=".mp4") as b:
+            calls, code, out = self._run_extract(
+                {}, ["--batch", a.name, b.name, "--extract-audio",
+                     "-o", "/data/song.mp3"])
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(calls[0][2]["out_file"])
+        self.assertIsNone(calls[1][2]["out_file"])
+        self.assertIn("-o/--output ignored for multiple inputs", out)
+
+    def test_translate_accepts_a_url_input_without_existence_check(self):
+        # Field bug (collaudo 2026-10-22, Linux+Windows): the translate path
+        # checked only os.path.exists, so a YouTube URL was rejected with
+        # "File not found" although --extract-audio and the GUI accept URLs.
+        # The pipeline downloads a URL source, so the CLI must let it through.
+        import video_translator_gui as legacy
+        from videotranslator.cli import _cli
+
+        captured = {}
+
+        def fake_translate(**kwargs):
+            captured.update(kwargs)
+            return {"video": "/tmp/out.mp4", "segments": []}
+
+        url = "https://youtu.be/abc"
+        out = io.StringIO()
+        with mock.patch.object(legacy, "check_dependencies", return_value=([], [])), \
+                mock.patch.object(legacy, "load_config", return_value={}), \
+                mock.patch.object(legacy, "load_hf_token", return_value=""), \
+                mock.patch.object(legacy, "translate_video", side_effect=fake_translate), \
+                contextlib.redirect_stdout(out):
+            _cli([url, "--lang-target", "it"])
+        self.assertNotIn("File not found", out.getvalue())
+        self.assertEqual(captured.get("video_in"), url)
+
     def test_extract_audio_skips_a_missing_local_file_and_exits_non_zero(self):
         # Nothing was produced: a script must not read the run as a success.
         calls, code, out = self._run_extract(

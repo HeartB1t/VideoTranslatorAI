@@ -144,6 +144,27 @@ class ExtractMusicOrchestratorTests(unittest.TestCase):
             self.assertIn("320k", cmds[0])
             self.assertTrue(out_dir.is_dir())
 
+    def test_out_file_overrides_the_derived_output_path(self):
+        # -o/--output from the CLI: the audio goes exactly to out_file (its
+        # folder created), not to out_dir/<stem><ext>.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "lecture.mp4"
+            src.write_bytes(b"x")
+            dest = Path(tmp) / "custom" / "my song.mp3"
+            cmds: list[list[str]] = []
+
+            out = extract_music(
+                str(src), str(Path(tmp) / "out"), fmt="mp3",
+                out_file=str(dest),
+                ffmpeg_runner=lambda cmd, step: cmds.append(cmd),
+                separator=lambda *_a, **_k: self.fail("no separator"),
+                downloader=lambda *_a, **_k: self.fail("no downloader"),
+            )
+
+            self.assertEqual(out, str(dest))
+            self.assertTrue(dest.parent.is_dir())
+            self.assertEqual(cmds[0][-1], str(dest))
+
     def test_instrumental_decodes_the_source_to_a_44k_stereo_wav_first(self):
         # Demucs loads through torchaudio, whose soundfile backend cannot open
         # video or web containers (mp4, webm, m4a), and htdemucs is a 2-channel
