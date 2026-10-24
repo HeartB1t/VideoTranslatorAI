@@ -10,8 +10,9 @@ from paths.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
+
+from .platforms import private_temp_dir
 
 # Skin -> phosphor tint (r, g, b multipliers).
 CRT_TINTS: dict[str, tuple[float, float, float]] = {
@@ -51,7 +52,7 @@ def shader_for_theme(theme: str, cache_dir: Path | None = None) -> str | None:
     tint = CRT_TINTS.get(theme)
     if tint is None:
         return None
-    folder = Path(cache_dir) if cache_dir else Path(tempfile.gettempdir()) / "VideoTranslatorAI"
+    folder = Path(cache_dir) if cache_dir else private_temp_dir()
     path = folder / f"{theme}.glsl"
     source = crt_shader_source(tint)
     try:

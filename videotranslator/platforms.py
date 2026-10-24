@@ -194,6 +194,44 @@ def runtime_app_paths(
     )
 
 
+def private_temp_dir(name: str = "VideoTranslatorAI", *, base: str | None = None) -> Path:
+    """A per-user temp folder that, on POSIX, must be ours: a real dir, not a
+    symlink, owned by us, mode 0700.
+
+    A fixed name under a world-writable ``/tmp`` can be pre-created or symlinked
+    by another user. When the existing entry is not a directory we own, fall
+    back to a fresh ``mkdtemp`` instead of trusting it. On Windows ``%TEMP`` is
+    already per-user, so we just create the folder.
+    """
+    import stat
+
+    root = Path(base) if base is not None else Path(tempfile.gettempdir())
+    path = root / name
+
+    if os.name != "posix":
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    except OSError:
+        return Path(tempfile.mkdtemp(prefix=name + "-", dir=root))
+
+    try:
+        st = os.lstat(path)
+        if stat.S_ISDIR(st.st_mode) and not stat.S_ISLNK(st.st_mode) \
+                and st.st_uid == os.getuid():
+            if stat.S_IMODE(st.st_mode) != 0o700:
+                os.chmod(path, 0o700)
+            return path
+    except OSError:
+        pass
+    return Path(tempfile.mkdtemp(prefix=name + "-", dir=root))
+
+
 def linux_xdg_videos_dir(
     *,
     run: Callable[..., Any] = subprocess.run,

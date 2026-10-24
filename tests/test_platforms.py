@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from subprocess import CompletedProcess, CalledProcessError, TimeoutExpired
+from unittest import mock
 
 import os
 
@@ -13,6 +14,7 @@ from videotranslator.platforms import (
     parse_xrandr_monitors,
     default_output_dir,
     loopback_ipv4,
+    private_temp_dir,
     default_videos_dir,
     linux_xdg_videos_dir,
     pid_alive,
@@ -636,6 +638,64 @@ class MonitorGeometryTests(unittest.TestCase):
         full = (0, 0, 1440, 900)
         self.assertEqual(
             monitor_bounds_at(10, 10, fallback=full, sys_platform="darwin"), full)
+
+
+@unittest.skipIf(os.name != "posix", "POSIX file modes and symlinks")
+class PrivateTempDirTests(unittest.TestCase):
+    def setUp(self):
+        import stat
+        self.stat = stat
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.base = Path(self._tmp.name)
+
+    def _mode(self, path):
+        return self.stat.S_IMODE(os.stat(path).st_mode)
+
+    def test_creates_a_0700_dir_owned_by_us(self):
+        path = private_temp_dir("VideoTranslatorAI", base=str(self.base))
+        self.assertEqual(path, self.base / "VideoTranslatorAI")
+        self.assertTrue(path.is_dir())
+        self.assertEqual(self._mode(path), 0o700)
+
+    def test_tightens_a_loose_dir_we_own(self):
+        loose = self.base / "VideoTranslatorAI"
+        loose.mkdir(mode=0o755)
+        os.chmod(loose, 0o755)
+        path = private_temp_dir("VideoTranslatorAI", base=str(self.base))
+        self.assertEqual(path, loose)
+        self.assertEqual(self._mode(path), 0o700)
+
+    def test_a_planted_symlink_is_not_followed(self):
+        outside = self.base / "outside"
+        outside.mkdir()
+        link = self.base / "VideoTranslatorAI"
+        link.symlink_to(outside, target_is_directory=True)
+        path = private_temp_dir("VideoTranslatorAI", base=str(self.base))
+        self.assertNotEqual(path, link)
+        self.assertFalse(path.is_symlink())
+        self.assertEqual(self._mode(path), 0o700)
+        self.assertEqual(path.parent, self.base)
+
+    def test_a_dir_owned_by_someone_else_is_avoided(self):
+        import videotranslator.platforms as plat
+        foreign = self.base / "VideoTranslatorAI"
+        foreign.mkdir(mode=0o700)
+        real_lstat = os.lstat
+
+        def fake_lstat(p, *a, **kw):
+            st = real_lstat(p, *a, **kw)
+            if Path(p) == foreign:
+                return os.stat_result(
+                    (st.st_mode, st.st_ino, st.st_dev, st.st_nlink,
+                     st.st_uid + 1, st.st_gid, st.st_size,
+                     st.st_atime, st.st_mtime, st.st_ctime))
+            return st
+
+        with mock.patch.object(plat.os, "lstat", side_effect=fake_lstat):
+            path = private_temp_dir("VideoTranslatorAI", base=str(self.base))
+        self.assertNotEqual(path, foreign)
+        self.assertEqual(self._mode(path), 0o700)
 
 
 if __name__ == "__main__":
