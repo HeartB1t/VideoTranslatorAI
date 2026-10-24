@@ -1,7 +1,9 @@
 import json
 import os
+import stat
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from videotranslator.config import (
@@ -46,6 +48,47 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"lang": "it"})
             if os.name != "nt":
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    @unittest.skipIf(os.name != "posix", "POSIX file modes")
+    def test_config_is_never_group_or_world_readable_while_written(self):
+        # A secret (hf_token) must never touch the disk at 0644, not even for
+        # the instant between open() and chmod(): create it 0600 from the start.
+        seen = []
+        real_dump = json.dump
+
+        def spy(obj, handle, **kw):
+            seen.append(stat.S_IMODE(os.fstat(handle.fileno()).st_mode))
+            return real_dump(obj, handle, **kw)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            old = os.umask(0o022)
+            try:
+                with mock.patch("json.dump", side_effect=spy):
+                    write_json_config(path, {"hf_token": "secret"})
+            finally:
+                os.umask(old)
+            self.assertEqual(seen, [0o600])
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+
+    @unittest.skipIf(os.name != "posix", "POSIX file modes")
+    def test_migration_writes_the_new_config_without_a_0644_copy(self):
+        # copy2 would first clone the legacy 0644 mode, then chmod to 0600,
+        # a window where a secret sits world-readable. Migration must instead
+        # write the new file (created 0600 from the start), never copy2.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            legacy = get_legacy_config_path(home)
+            legacy.write_text(json.dumps({"hf_token": "secret"}), encoding="utf-8")
+            os.chmod(legacy, 0o644)
+            with mock.patch("shutil.copy2", side_effect=AssertionError("no copy2")):
+                migrated = migrate_legacy_config_if_needed(
+                    sys_platform="linux", env={}, home=home)
+            self.assertTrue(migrated)
+            new_path = get_default_config_path(sys_platform="linux", env={}, home=home)
+            self.assertEqual(json.loads(new_path.read_text(encoding="utf-8")),
+                             {"hf_token": "secret"})
+            self.assertEqual(stat.S_IMODE(os.stat(new_path).st_mode), 0o600)
 
     def test_merge_json_config_preserves_existing_keys(self):
         with tempfile.TemporaryDirectory() as tmp:

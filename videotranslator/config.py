@@ -11,10 +11,11 @@ used up to v1.9.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
-import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -38,16 +39,23 @@ def load_json_config(path: Path) -> dict[str, Any]:
 
 
 def write_json_config(path: Path, cfg: dict[str, Any]) -> None:
-    """Write a full config dict atomically with owner-only permissions."""
+    """Write a full config dict atomically with owner-only permissions.
+
+    The temp file is created 0600 from the start (mkstemp), so a secret in the
+    config is never on disk group/world-readable, not even for the instant
+    between open() and a later chmod.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = Path(str(path) + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(cfg, handle, indent=2)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    tmp = Path(tmp_name)
     try:
-        os.chmod(tmp, 0o600)
-    except Exception:
-        pass
-    tmp.replace(path)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(cfg, handle, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
 
 
 def merge_json_config(path: Path, data: dict[str, Any]) -> dict[str, Any]:
@@ -135,12 +143,11 @@ def migrate_legacy_config_if_needed(
         return False
 
     try:
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(legacy_path, new_path)
-        try:
-            os.chmod(new_path, 0o600)
-        except Exception:
-            pass
+        # Write through write_json_config (created 0600 from the start) rather
+        # than copy2, which would first clone the legacy 0644 mode: a secret
+        # must never sit on disk group/world-readable, not even briefly.
+        legacy = load_json_config(legacy_path)
+        write_json_config(new_path, legacy)
         return True
     except Exception:
         return False
