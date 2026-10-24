@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
 import shutil
 import subprocess
@@ -342,6 +343,12 @@ def _ollama_find_binary() -> str | None:
     p = shutil.which("ollama")
     if p:
         return p
+    # The app's own per-user install (no root), on POSIX.
+    if not sys.platform.startswith("win"):
+        with contextlib.suppress(OSError):
+            user_bin = ollama_user_dir() / "bin" / "ollama"
+            if user_bin.is_file():
+                return str(user_bin)
     if sys.platform.startswith("win"):
         local_app_data = os.environ.get("LOCALAPPDATA", "")
         candidates = [
@@ -493,69 +500,162 @@ def _ollama_start_daemon(
     return False, f"Daemon did not become ready within {wait_seconds:.0f}s. Log: {log_path}"
 
 
-def _ollama_install_linux(log_cb=None, timeout_s: int = 300) -> tuple[bool, str]:
-    """Install Ollama via the official `curl -fsSL … | sh` script.
+# Pinned Ollama release for the app's own install: the installer runs with
+# elevated rights, so it is executed only when it matches the digest published
+# with that release. To bump: change OLLAMA_VERSION, copy the digests from the
+# release's sha256sum.txt and re-hash one downloaded asset to confirm.
+OLLAMA_VERSION = "v0.40.2"
+OLLAMA_RELEASE_BASE = f"https://github.com/ollama/ollama/releases/download/{OLLAMA_VERSION}"
+OLLAMA_WINDOWS_SETUP_SHA256 = "e78ea4ffc8fdc1a0bbcb4f8404c7ee1bd0898ed3a65d9cc08d79eb2235cd5a9e"
+OLLAMA_LINUX_ASSETS: dict[str, tuple[str, str]] = {
+    "x86_64": ("ollama-linux-amd64.tar.zst",
+               "726bee78706c281b0eeef00746efe51a044d71c592c3f0b195820707f31fdf04"),
+    "aarch64": ("ollama-linux-arm64.tar.zst",
+                "92b3ef3d5e10f5849273bfa1345000f2a8ce8bc834e95061ff5b9df5d08e3c3f"),
+}
 
-    Requires sudo to write to /usr/local/bin. If sudo is not available,
-    returns an actionable message instead of failing silently.
+
+def ollama_user_dir(*, system: str | None = None) -> Path:
+    """Where the app keeps its own (per-user, no-root) Ollama install."""
+    from . import js_runtime
+    return js_runtime.app_data_dir(system=system) / "ollama"
+
+
+def _ollama_linux_asset(machine: str) -> tuple[str, str]:
+    """(asset filename, sha256) of the Ollama Linux build for ``machine``."""
+    arch = (machine or "").lower()
+    if arch in ("x86_64", "amd64", "x64"):
+        return OLLAMA_LINUX_ASSETS["x86_64"]
+    if arch in ("aarch64", "arm64"):
+        return OLLAMA_LINUX_ASSETS["aarch64"]
+    raise RuntimeError(f"Nessun build Ollama per l'architettura {machine!r}")
+
+
+def _sha256_file(path: str | os.PathLike[str]) -> str:
+    """Streamed SHA256 of a file (archives are ~1.5 GB, never read whole)."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download_to_file(url: str, path: Path, log, timeout: float = 300.0) -> None:
+    """Stream ``url`` into ``path`` with a one-line percentage like the .exe path."""
+    from urllib.request import Request, urlopen
+    req = Request(url, headers={"User-Agent": "VideoTranslatorAI/2.0"})
+    progress_open = False
+    try:
+        with urlopen(req, timeout=timeout) as r, open(path, "wb") as out:
+            total = int(r.headers.get("Content-Length") or 0)
+            downloaded = 0
+            last_pct = -1
+            while True:
+                buf = r.read(256 * 1024)
+                if not buf:
+                    break
+                out.write(buf)
+                downloaded += len(buf)
+                if total > 0:
+                    pct = min(100, downloaded * 100 // total)
+                    if pct // 5 != last_pct // 5:
+                        log(f"\r     Download... {pct}%")
+                        progress_open = True
+                        last_pct = pct
+    finally:
+        if progress_open:
+            log("\n")
+
+
+def _ollama_install_linux(
+    log_cb=None,
+    timeout_s: int = 600,
+    *,
+    machine: str | None = None,
+    dest_dir: str | os.PathLike[str] | None = None,
+    downloader: Callable[[str, Path], Any] | None = None,
+    digests: dict[str, str] | None = None,
+) -> tuple[bool, str]:
+    """Install Ollama per-user from the pinned, SHA256-verified release archive.
+
+    No root and no `curl | sh`: the standalone tarball is unpacked into the
+    app data dir and the daemon is later started from there by
+    `_ollama_start_daemon`. ``downloader`` and ``digests`` are injected by tests.
     """
-    log = log_cb or (lambda s: None)
+    import platform
 
-    if not shutil.which("curl"):
+    log = log_cb or (lambda s: None)
+    machine = machine if machine is not None else platform.machine()
+    try:
+        asset, pinned = _ollama_linux_asset(machine)
+    except RuntimeError as exc:
+        return False, str(exc)
+    expected = (digests or {}).get(asset, pinned).lower()
+
+    if not shutil.which("tar"):
+        return False, "tar non trovato. Installa tar e riprova."
+    if not shutil.which("zstd"):
         return False, (
-            "curl non trovato. Installa curl (es. `sudo apt install curl`) "
-            "e riprova, oppure installa Ollama manualmente da https://ollama.com/download"
+            "zstd non trovato (serve per l'archivio Ollama). "
+            "Installalo (es. `sudo apt install zstd`) e riprova."
         )
 
-    # The official script requires root privileges. Try pkexec then sudo.
-    prefixes: list[list[str]] = []
-    if shutil.which("pkexec"):
-        prefixes.append(["pkexec", "sh", "-c"])
-    if shutil.which("sudo"):
-        prefixes.append(["sudo", "sh", "-c"])
-    prefixes.append(["sh", "-c"])  # root-less fallback (works only if already root)
+    dest = Path(dest_dir) if dest_dir is not None else ollama_user_dir()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    url = f"{OLLAMA_RELEASE_BASE}/{asset}"
+    # Staging on the same filesystem as dest, so the final swap is an atomic rename.
+    work = Path(tempfile.mkdtemp(prefix=".vtai-ollama-", dir=dest.parent))
+    archive = work / asset
+    try:
+        log(f"     Scaricando Ollama {OLLAMA_VERSION} per utente (~1 GB) da {url}...\n")
+        def fetch(u: str, out: Path) -> None:
+            if downloader is not None:
+                downloader(u, out)
+            else:
+                _download_to_file(u, out, log, timeout=timeout_s)
 
-    install_cmd = "curl -fsSL https://ollama.com/install.sh | sh"
-    last_err = ""
-    for prefix in prefixes:
-        cmd = prefix + [install_cmd]
-        log(f"     Running: {' '.join(prefix)} <install.sh>\n")
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL, text=True,
-                encoding="utf-8", errors="replace",
+            fetch(url, archive)
+        except Exception as exc:                               # noqa: BLE001
+            return False, f"Download fallito: {exc}"
+
+        actual = _sha256_file(archive)
+        if actual != expected:
+            return False, (
+                f"SHA256 dell'archivio Ollama non corrisponde alla release {OLLAMA_VERSION} "
+                f"(atteso {expected[:12]}..., ottenuto {actual[:12]}...). Archivio scartato."
             )
-        except FileNotFoundError as e:
-            last_err = f"{e.__class__.__name__}: {e}"
-            continue
 
-        _register_subprocess(proc)
-        watchdog = threading.Timer(timeout_s, proc.kill)
-        watchdog.daemon = True
-        watchdog.start()
-        try:
-            for line in proc.stdout:
-                line = line.rstrip()
-                if line:
-                    log(f"     {line}\n")
-            proc.wait(timeout=30)
-        except Exception:
-            with contextlib.suppress(Exception):
-                proc.kill(); proc.wait(timeout=10)
-        finally:
-            watchdog.cancel()
-            _unregister_subprocess(proc)
+        # Reject an archive that would write outside its tree before extracting.
+        listing = subprocess.run(["tar", "--zstd", "-tf", str(archive)],
+                                 capture_output=True, text=True)
+        if listing.returncode != 0:
+            return False, f"Archivio Ollama illeggibile: {listing.stderr.strip()[:200]}"
+        for member in listing.stdout.splitlines():
+            name = member.strip()
+            if name.startswith("/") or ".." in Path(name).parts:
+                return False, f"Archivio Ollama non sicuro, membro rifiutato: {name}"
 
-        if proc.returncode == 0:
-            return True, ""
-        last_err = f"exit {proc.returncode} (prefix={prefix[0]})"
+        staging = work / "root"
+        staging.mkdir()
+        extract = subprocess.run(["tar", "--zstd", "-xf", str(archive), "-C", str(staging)],
+                                 capture_output=True, text=True)
+        if extract.returncode != 0:
+            return False, f"Estrazione fallita: {extract.stderr.strip()[:200]}"
 
-    return False, (
-        f"Ollama install script failed ({last_err}). "
-        f"Installa manualmente: curl -fsSL https://ollama.com/install.sh | sh"
-    )
+        binary = staging / "bin" / "ollama"
+        if not binary.is_file():
+            return False, "bin/ollama assente nell'archivio Ollama."
+        binary.chmod(0o755)
+
+        if dest.exists():
+            shutil.rmtree(dest)
+        os.replace(staging, dest)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    log(f"     Ollama installato in {dest / 'bin' / 'ollama'}\n")
+    return True, ""
 
 
 def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, str]:
@@ -576,75 +676,89 @@ def _ollama_install_windows(log_cb=None, timeout_s: int = 600) -> tuple[bool, st
     restarting the GUI.
     """
     log = log_cb or (lambda s: None)
-    url = "https://ollama.com/download/OllamaSetup.exe"
-    setup_path = Path(tempfile.gettempdir()) / "OllamaSetup.exe"
+    url = f"{OLLAMA_RELEASE_BASE}/OllamaSetup.exe"
+    # A private folder, not the predictable shared %TEMP%\OllamaSetup.exe:
+    # another user cannot pre-plant the file we are about to run elevated.
+    work_dir = Path(tempfile.mkdtemp(prefix="vtai-ollama-"))
+    setup_path = work_dir / "OllamaSetup.exe"
 
-    log(f"     Scaricando Ollama (~1 GB) da {url}...\n")
-    progress_open = False        # a "\r" progress line still waits for its newline
     try:
-        from urllib.request import Request, urlopen
-        req = Request(url, headers={"User-Agent": "VideoTranslatorAI/2.0"})
-        downloaded = 0
-        last_pct = -1
-        with urlopen(req, timeout=120) as r, open(setup_path, "wb") as out:
-            total = int(r.headers.get("Content-Length") or 0)
-            chunk = 256 * 1024
-            while True:
-                buf = r.read(chunk)
-                if not buf:
-                    break
-                out.write(buf)
-                downloaded += len(buf)
-                if total > 0:
-                    pct = min(100, downloaded * 100 // total)
-                    # Every 5%, on one line rewritten in place (\r) like a
-                    # terminal progress bar: the log panel keeps a single
-                    # advancing line and the log file its last state.
-                    if pct // 5 != last_pct // 5:
-                        log(f"\r     Download... {pct}%")
-                        progress_open = True
-                        last_pct = pct
-        if progress_open:
-            log("\n")
-    except Exception as e:
-        if progress_open:
-            log("\n")
-        with contextlib.suppress(Exception):
-            setup_path.unlink(missing_ok=True)
-        return False, f"Download fallito: {e}"
+        log(f"     Scaricando Ollama {OLLAMA_VERSION} (~1 GB) da {url}...\n")
+        progress_open = False    # a "\r" progress line still waits for its newline
+        try:
+            from urllib.request import Request, urlopen
+            req = Request(url, headers={"User-Agent": "VideoTranslatorAI/2.0"})
+            downloaded = 0
+            last_pct = -1
+            digest = hashlib.sha256()
+            with urlopen(req, timeout=120) as r, open(setup_path, "wb") as out:
+                total = int(r.headers.get("Content-Length") or 0)
+                chunk = 256 * 1024
+                while True:
+                    buf = r.read(chunk)
+                    if not buf:
+                        break
+                    out.write(buf)
+                    digest.update(buf)
+                    downloaded += len(buf)
+                    if total > 0:
+                        pct = min(100, downloaded * 100 // total)
+                        # Every 5%, on one line rewritten in place (\r) like a
+                        # terminal progress bar: the log panel keeps a single
+                        # advancing line and the log file its last state.
+                        if pct // 5 != last_pct // 5:
+                            log(f"\r     Download... {pct}%")
+                            progress_open = True
+                            last_pct = pct
+            if progress_open:
+                log("\n")
+        except Exception as e:
+            if progress_open:
+                log("\n")
+            return False, f"Download fallito: {e}"
 
-    log("     Avvio installer silent (richiede UAC)...\n")
-    # Inno Setup silent install
-    try:
-        proc = subprocess.Popen(
-            [str(setup_path),
-             "/VERYSILENT", "/SUPPRESSMSGBOXES",
-             "/NORESTART", "/NOCANCEL"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace",
-        )
-    except Exception as e:
-        return False, f"Impossibile lanciare installer: {e}"
+        # The installer runs elevated: execute it only if it is exactly the
+        # binary published with the pinned release.
+        actual = digest.hexdigest()
+        if actual != OLLAMA_WINDOWS_SETUP_SHA256.lower():
+            return False, (
+                f"SHA256 di OllamaSetup.exe non corrisponde alla release {OLLAMA_VERSION} "
+                f"(atteso {OLLAMA_WINDOWS_SETUP_SHA256[:12]}..., ottenuto {actual[:12]}...). "
+                "Installer scartato. Scarica Ollama manualmente da https://ollama.com/download"
+            )
 
-    _register_subprocess(proc)
-    watchdog = threading.Timer(timeout_s, proc.kill)
-    watchdog.daemon = True
-    watchdog.start()
-    try:
-        for line in proc.stdout:
-            line = line.rstrip()
-            if line:
-                log(f"     {line}\n")
-        proc.wait(timeout=30)
-    except Exception:
-        with contextlib.suppress(Exception):
-            proc.kill(); proc.wait(timeout=10)
+        log("     Avvio installer silent (richiede UAC)...\n")
+        # Inno Setup silent install
+        try:
+            proc = subprocess.Popen(
+                [str(setup_path),
+                 "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                 "/NORESTART", "/NOCANCEL"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+            )
+        except Exception as e:
+            return False, f"Impossibile lanciare installer: {e}"
+
+        _register_subprocess(proc)
+        watchdog = threading.Timer(timeout_s, proc.kill)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    log(f"     {line}\n")
+            proc.wait(timeout=30)
+        except Exception:
+            with contextlib.suppress(Exception):
+                proc.kill(); proc.wait(timeout=10)
+        finally:
+            watchdog.cancel()
+            _unregister_subprocess(proc)
     finally:
-        watchdog.cancel()
-        _unregister_subprocess(proc)
-        with contextlib.suppress(Exception):
-            setup_path.unlink(missing_ok=True)
+        shutil.rmtree(work_dir, ignore_errors=True)
 
     if proc.returncode != 0:
         # rc=1223 = ERROR_CANCELLED on Windows (user clicked "No" on the
