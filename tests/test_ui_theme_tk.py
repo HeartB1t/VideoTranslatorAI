@@ -12,10 +12,53 @@ from unittest import mock
 
 from videotranslator.ui_theme import resolve_palette
 
+def _win_station_visible() -> bool:
+    """True when the Windows window station is interactive (WSF_VISIBLE).
+
+    tk.Tk() can succeed over an SSH / service session on a non-interactive
+    station, where the GUI tests then fail instead of skipping. This mirrors
+    .NET's Environment.UserInteractive.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class USEROBJECTFLAGS(ctypes.Structure):
+        _fields_ = [("fInherit", wintypes.BOOL),
+                    ("fReserved", wintypes.BOOL),
+                    ("dwFlags", wintypes.DWORD)]
+
+    user32 = ctypes.windll.user32
+    hwinsta = user32.GetProcessWindowStation()
+    flags = USEROBJECTFLAGS()
+    needed = wintypes.DWORD()
+    UOI_FLAGS = 1
+    WSF_VISIBLE = 0x0001
+    ok = user32.GetUserObjectInformationW(
+        hwinsta, UOI_FLAGS, ctypes.byref(flags), ctypes.sizeof(flags),
+        ctypes.byref(needed))
+    if not ok:
+        raise OSError("GetUserObjectInformationW failed")
+    return bool(flags.dwFlags & WSF_VISIBLE)
+
+
+def _interactive_window_station(platform=sys.platform, probe=_win_station_visible) -> bool:
+    """On Windows, whether we have an interactive desktop; True elsewhere.
+
+    Fails open (True) if the check cannot run, so it never hides tests that
+    would otherwise pass.
+    """
+    if not platform.startswith("win"):
+        return True
+    try:
+        return probe()
+    except Exception:
+        return True
+
+
 try:
     _probe = tk.Tk()
     _probe.destroy()
-    HAS_DISPLAY = True
+    HAS_DISPLAY = _interactive_window_station()
 except tk.TclError:
     HAS_DISPLAY = False
 
@@ -565,6 +608,25 @@ class BuiltAppStreamsTests(unittest.TestCase):
                 with built_app({}):
                     pass
         self.assertEqual((sys.stdout, sys.stderr), before)
+
+
+class InteractiveWindowStationTests(unittest.TestCase):
+    def test_non_windows_is_always_interactive(self):
+        called = []
+        self.assertTrue(_interactive_window_station(
+            platform="linux", probe=lambda: called.append(1) or False))
+        self.assertEqual(called, [])          # the Windows probe is never consulted
+
+    def test_windows_visible_station_is_interactive(self):
+        self.assertTrue(_interactive_window_station(platform="win32", probe=lambda: True))
+
+    def test_windows_hidden_station_is_not_interactive(self):
+        self.assertFalse(_interactive_window_station(platform="win32", probe=lambda: False))
+
+    def test_a_failing_probe_fails_open(self):
+        def boom():
+            raise OSError("no window station")
+        self.assertTrue(_interactive_window_station(platform="win32", probe=boom))
 
 
 class HeaderProbeThreadTests(unittest.TestCase):
