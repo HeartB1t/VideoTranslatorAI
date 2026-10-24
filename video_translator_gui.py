@@ -488,6 +488,7 @@ UI_STRINGS = {
         "msg_deps_python":    "Pacchetti Python mancanti:\n  • ",
         "msg_deps_bins":      "Programmi mancanti:\n  • ",
         "msg_deps_ffmpeg":    "\n\nffmpeg non trovato. Installalo per continuare.",
+        "msg_secret_session_only": "Keyring non disponibile: la chiave vale solo per questa sessione (non salvata su disco).",
         "msg_deps_install":   "\n\nInstalla automaticamente?",
         "msg_installed":      "Pacchetti installati.",
         "msg_install_failed": "Installazione fallita:\n{}",
@@ -632,6 +633,7 @@ UI_STRINGS = {
         "msg_deps_python":    "Missing Python packages:\n  • ",
         "msg_deps_bins":      "Missing programs:\n  • ",
         "msg_deps_ffmpeg":    "\n\nffmpeg not found. Please install it to continue.",
+        "msg_secret_session_only": "Keyring unavailable: the key is kept only for this session (not saved to disk).",
         "msg_deps_install":   "\n\nInstall automatically?",
         "msg_installed":      "Packages installed.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -758,6 +760,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nلم يتم العثور على ffmpeg. يرجى تثبيته للمتابعة.",
+        "msg_secret_session_only": "خزنة المفاتيح غير متاحة: يُحتفظ بالمفتاح لهذه الجلسة فقط (لا يُحفظ على القرص).",
         "msg_deps_install": "هل تريد التثبيت تلقائيًا؟",
         "msg_installed": "تم تثبيت الحزم.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -899,6 +902,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\n未找到 ffmpeg。请安装后继续。",
+        "msg_secret_session_only": "密钥环不可用：密钥仅在本次会话中保留（不会保存到磁盘）。",
         "msg_deps_install": "自动安装？",
         "msg_installed": "已安装软件包。",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1040,6 +1044,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg nebyl nalezen. Nainstalujte jej prosím.",
+        "msg_secret_session_only": "Klíčenka není dostupná: klíč je uchován pouze pro tuto relaci (neukládá se na disk).",
         "msg_deps_install": "Instalovat automaticky?",
         "msg_installed": "Nainstalované balíčky.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1181,6 +1186,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg blev ikke fundet. Installer det venligst.",
+        "msg_secret_session_only": "Nøglering ikke tilgængelig: nøglen bevares kun i denne session (gemmes ikke på disken).",
         "msg_deps_install": "Installer automatisk?",
         "msg_installed": "Pakker installeret.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1322,6 +1328,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg niet gevonden. Installeer het alstublieft.",
+        "msg_secret_session_only": "Sleutelring niet beschikbaar: de sleutel wordt alleen voor deze sessie bewaard (niet op schijf opgeslagen).",
         "msg_deps_install": "Automatisch installeren?",
         "msg_installed": "Pakketten geïnstalleerd.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1463,6 +1470,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg ei löytynyt. Asenna se jatkaaksesi.",
+        "msg_secret_session_only": "Avainnippu ei käytettävissä: avain säilytetään vain tätä istuntoa varten (ei tallenneta levylle).",
         "msg_deps_install": "Asennetaan automaattisesti?",
         "msg_installed": "Paketit asennettu.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1604,6 +1612,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg introuvable. Veuillez l'installer.",
+        "msg_secret_session_only": "Trousseau indisponible : la clé est conservée uniquement pour cette session (non enregistrée sur le disque).",
         "msg_deps_install": "Installer automatiquement ?",
         "msg_installed": "Paquets installés.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1745,6 +1754,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg nicht gefunden. Bitte installieren.",
+        "msg_secret_session_only": "Schlüsselbund nicht verfügbar: Der Schlüssel wird nur für diese Sitzung behalten (nicht auf der Festplatte gespeichert).",
         "msg_deps_install": "Automatisch installieren?",
         "msg_installed": "Pakete installiert.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -1886,6 +1896,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nΤο ffmpeg δεν βρέθηκε. Παρακαλώ εγκαταστήστε το.",
+        "msg_secret_session_only": "Η θήκη κλειδιών δεν είναι διαθέσιμη: το κλειδί διατηρείται μόνο για αυτήν τη συνεδρία (δεν αποθηκεύεται στον δίσκο).",
         "msg_deps_install": "Αυτόματη εγκατάσταση;",
         "msg_installed": "Εγκατεστημένα πακέτα.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2027,6 +2038,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg नहीं मिला। कृपया इसे इंस्टॉल करें।",
+        "msg_secret_session_only": "कीरिंग उपलब्ध नहीं: कुंजी केवल इस सत्र के लिए रखी जाती है (डिस्क पर सहेजी नहीं जाती)।",
         "msg_deps_install": "स्वचालित रूप से इंस्टॉल करें?",
         "msg_installed": "संकुल स्थापित.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2168,6 +2180,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg nem található. Kérjük, telepítse.",
+        "msg_secret_session_only": "A kulcstartó nem érhető el: a kulcs csak erre a munkamenetre marad meg (nem kerül lemezre mentésre).",
         "msg_deps_install": "Automatikus telepítés?",
         "msg_installed": "Csomagok telepítve.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2309,6 +2322,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg tidak ditemukan. Silakan instal.",
+        "msg_secret_session_only": "Keyring tidak tersedia: kunci hanya disimpan untuk sesi ini (tidak disimpan ke disk).",
         "msg_deps_install": "Instal secara otomatis?",
         "msg_installed": "Paket diinstal.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2450,6 +2464,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpegが見つかりません。インストールしてください。",
+        "msg_secret_session_only": "キーリングを利用できません。キーはこのセッションのみ保持されます（ディスクには保存されません）。",
         "msg_deps_install": "自動的にインストールしますか?",
         "msg_installed": "パッケージがインストールされました。",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2591,6 +2606,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg를 찾을 수 없습니다. 설치해 주세요.",
+        "msg_secret_session_only": "키링을 사용할 수 없습니다. 키는 이 세션에만 유지됩니다(디스크에 저장되지 않음).",
         "msg_deps_install": "자동으로 설치하시겠습니까?",
         "msg_installed": "패키지가 설치되었습니다.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2732,6 +2748,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg ble ikke funnet. Vennligst installer det.",
+        "msg_secret_session_only": "Nøkkelring utilgjengelig: nøkkelen beholdes kun for denne økten (lagres ikke på disk).",
         "msg_deps_install": "Installere automatisk?",
         "msg_installed": "Pakker installert.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -2873,6 +2890,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nNie znaleziono ffmpeg. Zainstaluj go.",
+        "msg_secret_session_only": "Pęk kluczy niedostępny: klucz jest przechowywany tylko dla tej sesji (nie zapisywany na dysku).",
         "msg_deps_install": "Zainstalować automatycznie?",
         "msg_installed": "Pakiety zainstalowane.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3014,6 +3032,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg não encontrado. Por favor, instale.",
+        "msg_secret_session_only": "Keyring indisponível: a chave é mantida apenas para esta sessão (não salva no disco).",
         "msg_deps_install": "Instalar automaticamente?",
         "msg_installed": "Pacotes instalados.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3155,6 +3174,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg nu a fost găsit. Vă rugăm să îl instalați.",
+        "msg_secret_session_only": "Breloc de chei indisponibil: cheia este păstrată doar pentru această sesiune (nu este salvată pe disc).",
         "msg_deps_install": "Instalați automat?",
         "msg_installed": "Pachetele instalate.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3296,6 +3316,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg не найден. Пожалуйста, установите его.",
+        "msg_secret_session_only": "Хранилище ключей недоступно: ключ сохраняется только для этого сеанса (не записывается на диск).",
         "msg_deps_install": "Установить автоматически?",
         "msg_installed": "Пакеты установлены.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3437,6 +3458,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg no encontrado. Por favor, instálalo.",
+        "msg_secret_session_only": "Llavero no disponible: la clave se conserva solo para esta sesión (no se guarda en el disco).",
         "msg_deps_install": "¿Instalar automáticamente?",
         "msg_installed": "Paquetes instalados.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3578,6 +3600,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg hittades inte. Installera det.",
+        "msg_secret_session_only": "Nyckelring ej tillgänglig: nyckeln behålls endast för denna session (sparas inte på disken).",
         "msg_deps_install": "Installera automatiskt?",
         "msg_installed": "Paket installerade.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3719,6 +3742,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg bulunamadı. Lütfen yükleyin.",
+        "msg_secret_session_only": "Anahtarlık kullanılamıyor: anahtar yalnızca bu oturum için tutulur (diske kaydedilmez).",
         "msg_deps_install": "Otomatik olarak yüklensin mi?",
         "msg_installed": "Paketler kuruldu.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -3860,6 +3884,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nffmpeg не знайдено. Будь ласка, встановіть його.",
+        "msg_secret_session_only": "Сховище ключів недоступне: ключ зберігається лише для цього сеансу (не записується на диск).",
         "msg_deps_install": "Встановити автоматично?",
         "msg_installed": "Встановлені пакети.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -4001,6 +4026,7 @@ UI_STRINGS = {
         "msg_deps_python": "Missing Python packages:\n  • ",
         "msg_deps_bins": "Missing programs:\n  • ",
         "msg_deps_ffmpeg": "\n\nKhông tìm thấy ffmpeg. Vui lòng cài đặt.",
+        "msg_secret_session_only": "Không có keyring: khóa chỉ được giữ cho phiên này (không lưu vào đĩa).",
         "msg_deps_install": "Cài đặt tự động?",
         "msg_installed": "Các gói đã được cài đặt.",
         "msg_install_failed": "Installation failed:\n{}",
@@ -5393,29 +5419,49 @@ def load_elevenlabs_key() -> str:
         config_key=_el.CONFIG_KEY)
 
 
-def save_elevenlabs_key(key: str) -> None:
+# A cleartext secret in the JSON config is acceptable on Linux/macOS (home is
+# 0700 and the file is 0600), but not on Windows, where %APPDATA% is not locked
+# down the same way. There, without a keyring the secret stays in memory for
+# the session only.
+_ALLOW_PLAINTEXT_SECRETS = not sys.platform.startswith("win")
+
+
+def save_elevenlabs_key(key: str) -> str:
+    """Persist the ElevenLabs key. Returns 'keyring', 'plaintext' or 'session'."""
     from videotranslator import elevenlabs_tts as _el
-    _save_secret_token(
+    stored = _save_secret_token(
         key, keyring_backend=_keyring_available(), config_path=CONFIG_PATH,
         service_name=KEYRING_SERVICE, username=_el.KEYRING_USERNAME,
-        config_key=_el.CONFIG_KEY)
+        config_key=_el.CONFIG_KEY, allow_plaintext=_ALLOW_PLAINTEXT_SECRETS)
+    if stored:
+        return "keyring"
+    return "plaintext" if _ALLOW_PLAINTEXT_SECRETS else "session"
 
 
-def save_hf_token(token: str) -> None:
-    """Save the HF token to the system keyring. Falls back to JSON if keyring is unavailable."""
+def save_hf_token(token: str) -> str:
+    """Persist the HF token. Returns 'keyring', 'plaintext' or 'session'.
+
+    On Windows without a keyring the token is NOT written in cleartext: it is
+    kept in memory for the session only (status 'session').
+    """
     token = (token or "").strip()
     if not token:
-        return
+        return "keyring"
     stored_in_keyring = _save_secret_token(
         token,
         keyring_backend=_keyring_available(),
         config_path=CONFIG_PATH,
         service_name=KEYRING_SERVICE,
         username=KEYRING_USERNAME,
+        allow_plaintext=_ALLOW_PLAINTEXT_SECRETS,
     )
-    if not stored_in_keyring:
+    if stored_in_keyring:
+        return "keyring"
+    if _ALLOW_PLAINTEXT_SECRETS:
         print(f"     ! keyring backend unavailable, "
               f"storing HF token in plaintext at {CONFIG_PATH}", flush=True)
+        return "plaintext"
+    return "session"
 
 
 def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
@@ -9425,8 +9471,8 @@ class App(tk.Tk):
 
     def _save_elevenlabs_settings(self, settings: dict, api_key: str) -> None:
         save_config({self._ELEVENLABS_KEY: dict(settings)})
-        if api_key:
-            save_elevenlabs_key(api_key)
+        if api_key and save_elevenlabs_key(api_key) == "session":
+            self._log_line("app", self._s("msg_secret_session_only"), level="warn")
         self._refresh_live_voice_info()
 
     def _live_tts_opts(self) -> dict | None:
@@ -9657,7 +9703,7 @@ class App(tk.Tk):
             # Chosen in the 'Models for this PC' window (not on the bar).
             "live_asr_model": load_config().get("live_asr_model", "auto"),
         })
-        cache_dir = Path(tempfile.gettempdir()) / "VideoTranslatorAI" / "live"
+        cache_dir = _platforms.private_temp_dir() / "live"
         # Sweep leftover session dirs from crashed or killed runs so they do not
         # pile up in TEMP (best effort; never blocks a new session).
         with contextlib.suppress(Exception):
@@ -11060,8 +11106,8 @@ class App(tk.Tk):
         ollama_slot_aware = bool(self._ollama_slot_aware.get())
         ollama_thinking = bool(self._ollama_thinking.get())
         # Persist HF token for next launch
-        if hf_token and use_diarization:
-            save_hf_token(hf_token)
+        if hf_token and use_diarization and save_hf_token(hf_token) == "session":
+            self._log_line("app", self._s("msg_secret_session_only"), level="warn")
         # Persist Ollama prefs (model/url/slot_aware/thinking) when the user
         # has selected this engine - so the fields are pre-filled on next launch.
         if self._use_voicebox.get():

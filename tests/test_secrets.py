@@ -91,6 +91,37 @@ class SecretsTests(unittest.TestCase):
             self.assertFalse(stored_in_keyring)
             self.assertEqual(load_json_config(config_path), {"hf_token": "fallback-token"})
 
+    def test_no_plaintext_fallback_when_disallowed(self):
+        # On Windows without a keyring we must not write a secret in cleartext:
+        # the key stays in memory for the session only, never on disk.
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.json"
+
+            stored = save_secret_token(
+                "session-token",
+                keyring_backend=None,
+                config_path=config_path,
+                allow_plaintext=False,
+            )
+
+            self.assertFalse(stored)
+            self.assertFalse(config_path.exists())
+
+    def test_disallowing_plaintext_does_not_block_keyring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.json"
+            keyring = FakeKeyring()
+
+            stored = save_secret_token(
+                "kept",
+                keyring_backend=keyring,
+                config_path=config_path,
+                allow_plaintext=False,
+            )
+
+            self.assertTrue(stored)
+            self.assertEqual(keyring.get_password("VideoTranslatorAI", "hf_token"), "kept")
+
 
 if __name__ == "__main__":
     unittest.main()

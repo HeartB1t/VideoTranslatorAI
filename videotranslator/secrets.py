@@ -65,8 +65,14 @@ def save_secret_token(
     service_name: str = KEYRING_SERVICE,
     username: str = HF_TOKEN_USERNAME,
     config_key: str = "hf_token",
+    allow_plaintext: bool = True,
 ) -> bool:
-    """Save a token. Return True when stored in keyring, False for JSON fallback."""
+    """Save a token. Return True when stored in keyring, False otherwise.
+
+    When the keyring is unavailable and ``allow_plaintext`` is False (e.g. on
+    Windows without a keyring backend), the token is NOT written to the JSON
+    config in cleartext: the caller keeps it in memory for the session only.
+    """
     token = (token or "").strip()
     if not token:
         return keyring_backend is not None
@@ -81,6 +87,9 @@ def save_secret_token(
             return True
         except Exception:
             pass
+
+    if not allow_plaintext:
+        return False
 
     merge_json_config(config_path, {config_key: token})
     return False
