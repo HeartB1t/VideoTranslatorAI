@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Možnost CLI | Popis | Výchozí |
 |------|-------------|---------|
-| `--lang-source` | Zdrojový jazyk (`auto` pro automatickou detekci) | `auto` |
-| `--lang-target` | Kód cílového jazyka (např. `it`, `fr`, `de`) | `it` |
-| `--voice` | Název hlasu Edge-TTS | auto |
-| `--model` | Model Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Nastavení rychlosti TTS (např. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` nebo `deepl` | `google` |
-| `--deepl-key` | Klíč API DeepL Free | - |
-| `--diarize` | Povolit identifikaci mluvících lidí (diarizace) (pyannote) | - |
-| `--hf-token` | Token HuggingFace pro diarizování | - |
-| `--lipsync` | Po hlasovém dabingu použijte synchronizaci rtů Wav2Lip | - |
-| `--subs-only` | Generovat pouze `.srt`, přeskočit hlasový dabing | - |
-| `--no-subs` | Přeskočte generaci `.srt` | - |
-| `--no-demucs` | Přeskočte oddělení hlasu a hudby | - |
-| `--output` / `-o` | Cesta k výstupnímu souboru | auto |
-| `--output-dir` | Složka pro přeložené soubory (jedno místo, Windows a Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Zpracujte více souborů | - |
-| `--voicebox` | Klonuje hlas přes spuštěný server Voicebox | - |
-| `--voicebox-url` | Adresa Voiceboxu | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Engine Voiceboxu (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output` / `-o` | Cesta výstupního souboru | auto |
+| `--output-dir` | Složka přeložených souborů (jedno místo, Windows a Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Spustit místní diagnostiku a výstup bez překladu | - |
+| `--preflight-lipsync` | S`--preflight`, požadovat balíky Wav2Lip (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | S`--preflight`, požadovat integrovaný přehrávač (python-mpv + libmpv) | - |
+| `--model` | Šeptající model (`tiny`až`large-v3-turbo`) | `small` |
+| `--lang-source` | Zdrojový jazyk (`auto`pro automatický detektor) | `auto` |
+| `--lang-target` | Kód cílového jazyka (např.`it`,`fr`,`de`) | `it` |
+| `--voice` | Hlasové jméno Edge-TTS | auto |
+| `--tts-rate` | Nastavení rychlosti TTS (např.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Generovat`.srt`pouze přeskočit dabing | - |
+| `--no-subs` | Přeskočit`.srt`generování | - |
+| `--no-demucs` | Přeskočit hlasové/hudební oddělení | - |
+| `--no-original-audio` | Nepřidávejte zdrojový zvuk jako alternativní stopu | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, nebo`llm_ollama` | `google` |
+| `--deepl-key` | DeepL zdarma API klíč | - |
+| `--ollama-model` | Štítek modelu Ollama | `qwen3:8b` |
+| `--ollama-url` | Ollama démon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Zakázat slot-aware promotion (rychlejší, méně omezující) | - |
+| `--ollama-thinking` | Povolit režim myšlení Qwen3 (pomaleji, méně idiom/grammar chyb) | off |
+| `--no-document-context` | Zakázat kontext na úrovni dokumentu vložený do Ollama podnětů | - |
+| `--no-cove` | Zakázat druhý průchod Řetězce ověření (Ollama) | - |
+| `--diarize` | Povolit diarizaci reproduktoru (pyannote) | - |
+| `--hf-token` | ObjímáníFace token pro diarizaci (odpadne zpět do konfiguračního souboru) | - |
+| `--lipsync` | Použít Wav2Lip synchronizace rtů po dabing (první spuštění ke stažení ~416 MB) | - |
+| `--xtts` | Použít Coqui XTTS v2 hlasové klonování (~1.8 GB first run) | - |
+| `--xtts-speed` | XTTS nativní faktor rychlosti (0,5-2.0); automaticky naladěný na pár jazyků, pokud je vynechán | auto |
+| `--voicebox` | Klonovat hlas přes běžící Voicebox server | - |
+| `--voicebox-url` | Adresa hlasové schránky | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Hlasový motor (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Komunikace oddělená hotwords k předpojatí Whisper dekódování | - |
+| `--hotwords-file` | JSON soubor s hotwords (flat list nebo per-language dict) | - |
+| `--no-slot-expansion` | Zakázat chytrý slot expanze / čas výpůjčky pro úzké segmenty | - |
+| `--no-sentence-repair` | Zakázat inteligentní opravu s omezením trestu | - |
+| `--no-whisper-sanity` | Vypněte kontrolu po šeptání. | - |
+| `--no-overlap-fade` | Zakázat překrytí vyblednout, vrátit se k tvrdé-truncate při překročení TTS | - |
+| `--difficulty-override` | Profil obtížnosti (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Zakázat orchestrátora s profilem obtížnosti (použijte MEDIUM) | - |
+| `--batch` | Zpracovat více souborů | - |
+| `--extract-audio` | Extrahovat audio stopu místo překladu | - |
+| `--audio-format` | Výstupní formát pro`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrát (kbps) pro ztrátový`--audio-format`(např. 320) | auto |
+| `--instrumental` | S`--extract-audio`, udržet pouze instrumentální (Demucs) | - |
 
 ### integrační testy s reálnými modely
 

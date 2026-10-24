@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | opțiunea CLI | Descriere | Implicit |
 |------|-------------|---------|
-| `--lang-source` | Limba sursă (`auto` pentru detectarea automată) | `auto` |
-| `--lang-target` | Codul limbii țintă (de exemplu, `it`, `fr`, `de`) | `it` |
-| `--voice` | Numele vocal Edge-TTS | auto |
-| `--model` | Model Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Ajustarea vitezei TTS (de exemplu, `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` sau `deepl` | `google` |
-| `--deepl-key` | DeepL Free cheie API | - |
-| `--diarize` | Activați identificarea persoanelor care vorbesc (diarizare) (pyannote) | - |
-| `--hf-token` | Jeton HuggingFace pentru diarizare | - |
-| `--lipsync` | Aplicați sincronizarea buzelor Wav2Lip după dublarea vocală | - |
-| `--subs-only` | Generați numai `.srt`, omiteți dublarea vocală | - |
-| `--no-subs` | Omiteți generația `.srt` | - |
-| `--no-demucs` | Omiteți separarea voce/muzică | - |
 | `--output` / `-o` | Calea fișierului de ieșire | auto |
-| `--output-dir` | Dosar pentru fișierele traduse (un singur loc, Windows și Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Procesați mai multe fișiere | - |
-| `--voicebox` | Clonează vocea printr-un server Voicebox pornit | - |
-| `--voicebox-url` | Adresa Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Motorul Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output-dir` | Dosar pentru fișiere traduse (un singur loc, Windows și Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Rulați diagnostice locale și de ieșire fără a traduce | - |
+| `--preflight-lipsync` | Cu`--preflight`, necesită pachetele Wav2Lip (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Cu`--preflight`, necesită jucător integrat (python-mpv + libmpv) | - |
+| `--model` | Modelul șoptit (`tiny`la`large-v3-turbo`) | `small` |
+| `--lang-source` | Limba sursă (`auto`pentru autodetectare) | `auto` |
+| `--lang-target` | Codul lingvistic al țintei (de exemplu:`it`,`fr`,`de`) | `it` |
+| `--voice` | Nume voce Edge-TTS | auto |
+| `--tts-rate` | Reglarea vitezei TTS (de exemplu:`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Generează`.srt`Doar, sari peste dubbing. | - |
+| `--no-subs` | Sari`.srt`generare | - |
+| `--no-demucs` | Sari peste separarea vocii/muzica | - |
+| `--no-original-audio` | Nu adăugați audio sursă ca o pistă alternativă | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, sau`llm_ollama` | `google` |
+| `--deepl-key` | DeepL gratuit API cheie | - |
+| `--ollama-model` | Model Ollama tag | `qwen3:8b` |
+| `--ollama-url` | URL- ul demonului Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Dezactivează pornirea slot-aware-ului (mai rapidă, mai puțin constrânsă) | - |
+| `--ollama-thinking` | Activează modul de gândire Qwen3 (mai lent, mai puține erori idiom/grammar) | off |
+| `--no-document-context` | Dezactivează contextul la nivel de document injectat în aplicaţiile Ollama | - |
+| `--no-cove` | Dezactivează a doua trecere a lanțului de verificare (Ollama) | - |
+| `--diarize` | Activează diarizarea difuzorului (pyannote) | - |
+| `--hf-token` | HuggingFace token pentru diarizare (căde înapoi la fișierul de configurare) | - |
+| `--lipsync` | Aplică sincronizarea buzei Wav2Lip după dublare (primul rulează descărcări ~416 MB) | - |
+| `--xtts` | Utilizaţi clonarea vocală Coqui XTTS v2 (~1,8 GB pentru prima dată) | - |
+| `--xtts-speed` | Factorul de viteză nativ XTTS (0,5-1,0); automatizat per pereche lingvistică, dacă este omis | auto |
+| `--voicebox` | Clona vocea printr-un server Voicebox rulează | - |
+| `--voicebox-url` | Adresa casetei vocale | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Motor cu cutie vocală (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Cuvinte fierbinţi separate de părtinire Whisper decodare | - |
+| `--hotwords-file` | Fișier JSON cu cuvinte fierbinți (listă plată sau dict per limbă) | - |
+| `--no-slot-expansion` | Dezactivează expansiunea inteligentă a sloturilor/împrumutarea timpului pentru segmente strânse | - |
+| `--no-sentence-repair` | Dezactivează reparațiile inteligente legate de fraze | - |
+| `--no-whisper-sanity` | Dezactivează verificarea stării de sănătate mintală post-Whisper | - |
+| `--no-overlap-fade` | Dezactivează suprapunerea se estompează, revenind la hard-truncate pe TTS depășire | - |
+| `--difficulty-override` | Forţează profilul de dificultate (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Dezactivează orchestratorul cu profil de dificultate (utilizați MEDIUM) | - |
+| `--batch` | Procesează mai multe fișiere | - |
+| `--extract-audio` | Extragerea piesei audio în loc de traducere | - |
+| `--audio-format` | Format de ieșire pentru`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) pentru o pierdere`--audio-format`(de exemplu 320) | auto |
+| `--instrumental` | Cu`--extract-audio`, păstrați numai instrumental (Demucs) | - |
 
 ### teste de integrare cu modele reale
 

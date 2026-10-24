@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI-alternativ | Beskrivning | Standard |
 |------|-------------|---------|
-| `--lang-source` | Källspråk (`auto` för automatisk identifiering) | `auto` |
-| `--lang-target` | Målspråkskod (t.ex. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS röstnamn | auto |
-| `--model` | Whisper-modell (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS-hastighetsjustering (t.ex. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` eller `deepl` | `google` |
-| `--deepl-key` | DeepL Free API-nyckel | - |
-| `--diarize` | Aktivera identifiering av personer som talar (diarisering) (pyannote) | - |
-| `--hf-token` | HuggingFace token för diarisering | - |
-| `--lipsync` | Applicera Wav2Lip läppsynk efter röstdubbning | - |
-| `--subs-only` | Generera endast `.srt`, hoppa över röstdubbning | - |
-| `--no-subs` | Hoppa över `.srt`-generationen | - |
-| `--no-demucs` | Hoppa över röst-/musikseparation | - |
-| `--output` / `-o` | Utdatafilens sökväg | auto |
-| `--output-dir` | Mapp för översatta filer (ett ställe, Windows och Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Bearbeta flera filer | - |
-| `--voicebox` | Klonar rösten via en körande Voicebox-server | - |
-| `--voicebox-url` | Voicebox-adress | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox-motor (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output` / `-o` | Utmatningsfilsökväg | auto |
+| `--output-dir` | Mapp för översatta filer (en plats, Windows och Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Kör lokal diagnostik och avsluta utan att översätta | - |
+| `--preflight-lipsync` | med`--preflight`, kräva Wav2Lip-paketen (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | med`--preflight`, kräver den integrerade spelaren (python-mpv + libmpv) | - |
+| `--model` | Viskarmodell (`tiny`till`large-v3-turbo`) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `small` |
+| `--lang-source` | Källspråk (`auto`för automatisk upptäckt) | `auto` |
+| `--lang-target` | Målspråkskod (t.ex.`it`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`fr`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`de`) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `it` |
+| `--voice` | Kant-TTS röstnamn | auto |
+| `--tts-rate` | TTS-hastighetsjustering (t.ex.`+10%`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`-20%`) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `+0%` |
+| `--subs-only` | Generera`.srt`endast, hoppa över dubbning | - |
+| `--no-subs` | Hoppa över`.srt`generation | - |
+| `--no-demucs` | Hoppa över röst- och musikseparation | - |
+| `--no-original-audio` | Lägg inte till källljudet som ett alternativt spår | - |
+| `--translation-engine` | `google`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`deepl`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`marian`, eller`llm_ollama` | `google` |
+| `--deepl-key` | DeepL- gratis API- nyckel | - |
+| `--ollama-model` | Ollama modellmärke | `qwen3:8b` |
+| `--ollama-url` | Ollama- demonens webbadress | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Inaktivera slot-aware uppmaning (snabbare, mindre begränsad) | - |
+| `--ollama-thinking` | Aktivera Qwen3-tänkläge (lägre, färre idiom/grammarfel) | off |
+| `--no-document-context` | Inaktivera sammanhang på dokumentnivå som injiceras i Ollamaprompter | - |
+| `--no-cove` | Inaktivera andra passerkortet för Verifieringskedjan (Ollama) | - |
+| `--diarize` | Aktivera högtalardiarisering (pyannote) | - |
+| `--hf-token` | HuggingFace token för diarization (faller tillbaka till inställningsfilen) | - |
+| `--lipsync` | Applicera Wav2Lip läpp synkronisering efter dubbning (första körning nedladdningar ~416 MB) | - |
+| `--xtts` | Använd Coqui XTTS v2 röstkloning (~1,8 GB första körningen) | - |
+| `--xtts-speed` | XTTS inmatad hastighetsfaktor (0,5-2,0); automatisk inställning per språkpar om utelämnad | auto |
+| `--voicebox` | Clone rösten genom en kör Voicebox server | - |
+| `--voicebox-url` | Röstboxens adress | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Röstlådasmotor (`chatterbox`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`qwen`, . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `chatterbox` |
+| `--hotwords` | Komma-separerade hotwords till partisk Whisper avkodning | - |
+| `--hotwords-file` | JSON fil med hotwords (platt lista eller per språk dikt) | - |
+| `--no-slot-expansion` | Inaktivera smart slot expansion / tidsupplåning för snäva segment | - |
+| `--no-sentence-repair` | Inaktivera smarta meningsbegränsningsreparationer | - |
+| `--no-whisper-sanity` | Inaktivera kontrollen efter whisper sanity | - |
+| `--no-overlap-fade` | Inaktivera överlappning bleknar, återgå till hårdtrunkat vid TTS-överskott | - |
+| `--difficulty-override` | Tvinga svårighetsprofilen (`easy`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`medium`, , . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`hard`) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | auto |
+| `--no-difficulty-profile` | Inaktivera svårighetsprofilorkestern (använd MEDIUM) | - |
+| `--batch` | Behandla flera filer | - |
+| `--extract-audio` | Extrahera ljudspåret istället för att översätta | - |
+| `--audio-format` | Utmatningsformat för`--extract-audio`( )`mp3`- Vad är det med dig?`m4a`- Vad är det med dig?`opus`- Vad är det med dig?`ogg`- Vad är det med dig?`flac`- Vad är det med dig?`wav`) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `mp3` |
+| `--audio-bitrate` | Bitrat (kbps) för förlust`--audio-format`(t.ex. 320) | auto |
+| `--instrumental` | med`--extract-audio`, behålla endast instrumental (Demucs) | - |
 
 ### integrationstester med riktiga modeller
 

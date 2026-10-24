@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI-optie | Beschrijving | Standaard |
 |------|-------------|---------|
-| `--lang-source` | Brontaal (`auto` voor automatische detectie) | `auto` |
-| `--lang-target` | Doeltaalcode (bijv. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS-stemnaam | auto |
-| `--model` | Whisper-model (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS-snelheidsaanpassing (bijv. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` of `deepl` | `google` |
-| `--deepl-key` | DeepL Free API-sleutel | - |
-| `--diarize` | Identificatie van sprekende mensen mogelijk maken (diariseren) (pyannote) | - |
-| `--hf-token` | HuggingFace-token voor dagboekschrijven | - |
-| `--lipsync` | Pas Wav2Lip-lipsynchronisatie toe na het nasynchroniseren van stemmen | - |
-| `--subs-only` | Genereer alleen `.srt`, sla spraaknasynchronisatie over | - |
-| `--no-subs` | Sla de `.srt`-generatie over | - |
-| `--no-demucs` | Stem-/muziekscheiding overslaan | - |
-| `--output` / `-o` | Pad voor uitvoerbestand | auto |
+| `--output` / `-o` | Pad naar uitvoerbestand | auto |
 | `--output-dir` | Map voor vertaalde bestanden (één plaats, Windows en Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Verwerk meerdere bestanden | - |
-| `--voicebox` | Kloont de stem via een draaiende Voicebox-server | - |
-| `--voicebox-url` | Adres van Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox-engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--preflight` | Voer lokale diagnostiek en uitgang zonder te vertalen | - |
+| `--preflight-lipsync` | Met`--preflight`, vereisen de Wav2Lip-pakketten (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Met`--preflight`, vereisen de geïntegreerde speler (python-mpv + libmpv) | - |
+| `--model` | Fluistermodel (`tiny`tot`large-v3-turbo`) | `small` |
+| `--lang-source` | Brontaal (`auto`voor automatisch detecteren) | `auto` |
+| `--lang-target` | Doeltaalcode (bv.`it`,`fr`,`de`) | `it` |
+| `--voice` | Rand-TTS-stemnaam | auto |
+| `--tts-rate` | TTS-snelheidsaanpassing (bv.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Genereren`.srt`alleen, naaien overslaan | - |
+| `--no-subs` | Overslaan`.srt`generatie | - |
+| `--no-demucs` | Spraak/muziekscheiding overslaan | - |
+| `--no-original-audio` | De bron audio niet toevoegen als een alternatieve track | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, of`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Gratis API sleutel | - |
+| `--ollama-model` | Ollama model tag | `qwen3:8b` |
+| `--ollama-url` | Ollama daemon-URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Uitschakelen slot-aware prompting (sneller, minder beperkt) | - |
+| `--ollama-thinking` | Qwen3 denkmodus inschakelen (lager, minder idioom/grammaticafouten) | off |
+| `--no-document-context` | De document-niveaucontext in Ollama-prompts uitschakelen | - |
+| `--no-cove` | Schakel de Ketting-van-Verificatie tweede pas uit (Ollama) | - |
+| `--diarize` | Speakerdiarisatie inschakelen (pyannote) | - |
+| `--hf-token` | HuggingFace token voor diarization (valt terug naar het configuratiebestand) | - |
+| `--lipsync` | Wav2Lip lip sync toepassen na na nasynchronisatie (eerste run downloads ~416 MB) | - |
+| `--xtts` | Gebruik Coqui XTTS v2 stemklonen (~1,8 GB eerste run) | - |
+| `--xtts-speed` | Inheemse XTTS-snelheidsfactor (0,5-2,0); automatisch afgestemd per taalpaar indien weggelaten | auto |
+| `--voicebox` | Kloon de stem via een draaiende Voicebox-server | - |
+| `--voicebox-url` | Voicebox-adres | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox-motor (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Door komma's gescheiden hotwords naar bias Whisper decodering | - |
+| `--hotwords-file` | JSON-bestand met hotwords (flat list of per-language dict) | - |
+| `--no-slot-expansion` | Uitschakelen van slimme slot uitbreiding / tijd lenen voor strakke segmenten | - |
+| `--no-sentence-repair` | Slimme zinsgrensherstel uitschakelen | - |
+| `--no-whisper-sanity` | Schakel de post-Whisper sanity check uit | - |
+| `--no-overlap-fade` | Overlap uitschakelen fade, terug naar hard-truncate op TTS-overschrijding | - |
+| `--difficulty-override` | Het probleemprofiel forceren (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Uitschakelen van de moeilijk-profiel orkestrator (gebruik MEDIUM) | - |
+| `--batch` | Meerdere bestanden verwerken | - |
+| `--extract-audio` | De audiotrack uitpakken in plaats van vertalen | - |
+| `--audio-format` | Uitvoerformaat voor`--extract-audio`(`mp3`'`m4a`'`opus`'`ogg`'`flac`'`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) voor een lossy`--audio-format`(bv. 320) | auto |
+| `--instrumental` | Met`--extract-audio`, alleen het instrumentaal bewaren (Demucs) | - |
 
 ### integratietesten met echte modellen
 

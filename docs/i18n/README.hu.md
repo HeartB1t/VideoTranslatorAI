@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI opció | Leírás | Alapértelmezett |
 |------|-------------|---------|
-| `--lang-source` | Forrásnyelv (`auto` az automatikus felismeréshez) | `auto` |
-| `--lang-target` | Célnyelvi kód (pl. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS hangnév | auto |
-| `--model` | Whisper modell (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS sebességbeállítás (pl. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` vagy `deepl` | `google` |
-| `--deepl-key` | DeepL Free API kulcs | - |
-| `--diarize` | A beszélő emberek azonosításának engedélyezése (naplóírás) (pyannote) | - |
-| `--hf-token` | HuggingFace token naplózáshoz | - |
-| `--lipsync` | A hangszinkronizálás után alkalmazza a Wav2Lip ajakszinkronizálást | - |
-| `--subs-only` | Csak a `.srt` generálása, a hangszinkron kihagyása | - |
-| `--no-subs` | `.srt` generáció kihagyása | - |
-| `--no-demucs` | A hang/zene szétválasztásának kihagyása | - |
 | `--output` / `-o` | Kimeneti fájl elérési útja | auto |
-| `--output-dir` | Mappa a lefordított fájlokhoz (egy helyen, Windows és Linux) | `<videos>/VideoTranslatorAI` |
+| `--output-dir` | Lefordított fájlok mappája (egy hely, Windows és Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Helyi diagnosztika futtatása és kilépés fordítás nélkül | - |
+| `--preflight-lipsync` | With`--preflight`, szükség van a Wav2Lip csomagok (dlib, facexlib, alapozó) | - |
+| `--preflight-player` | With`--preflight`, szükség van az integrált játékosra (python-mpv + libmpv) | - |
+| `--model` | Suttogó modell (`tiny`-`large-v3-turbo`) | `small` |
+| `--lang-source` | Forrásnyelv (`auto`automatikus detektálás esetén) | `auto` |
+| `--lang-target` | Célnyelvi kód (pl.`it`,`fr`,`de`) | `it` |
+| `--voice` | Edge-TTS hangnév | auto |
+| `--tts-rate` | TTS sebességbeállítás (pl.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Létrehozás`.srt`csak: skip dubbing | - |
+| `--no-subs` | SkipCity name (optional, probably does not need a translation)`.srt`generáció | - |
+| `--no-demucs` | A hang/zene szétválasztásának kihagyása | - |
+| `--no-original-audio` | Ne add hozzá a forrás audiót alternatív vágányként | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, vagy`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Free API kulcs | - |
+| `--ollama-model` | Ollama modellcímkéje | `qwen3:8b` |
+| `--ollama-url` | Ollama démon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Kiiktatható slotware promping (gyorsabb, kevésbé korlátozott) | - |
+| `--ollama-thinking` | Qwen3 gondolkodási mód engedélyezése (alacsonyabb, kevesebb idiom/grammar hiba) | off |
+| `--no-document-context` | Az Ollama prompts-be fecskendezett dokumentumszintű kontextus kikapcsolása | - |
+| `--no-cove` | A második hágó letiltása (Ollama) | - |
+| `--diarize` | Hangszóródiarizáció engedélyezése (pyannote) | - |
+| `--hf-token` | HuggingFace token for diarization (falls back to the config file) | - |
+| `--lipsync` | Alkalmazza a Wav2Lip ajak szinkronizálást a szinkronizálás után (első futtatás letöltések ~416 MB) | - |
+| `--xtts` | Coqui XTTS v2 hang klónozása (~1.8 GB első futtatás) | - |
+| `--xtts-speed` | XTTS native speed factor (0.5-2.0); automatikus hangolás nyelvpáronként, ha hiányzik | auto |
+| `--voicebox` | Klónozza le a hangot egy futó Voicebox szerveren keresztül | - |
+| `--voicebox-url` | Hangpostacím | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Hangdobozos motor (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | A Whisper dekódolás elfogultságának vesszővel elválasztott forrószavai | - |
+| `--hotwords-file` | JSON fájl hotwords (laplista vagy per-language dict) | - |
+| `--no-slot-expansion` | A szűk szegmensek intelligens résidő-bővítésének / időbérlésének letiltása | - |
+| `--no-sentence-repair` | Intelligens mondathatáros javítás letiltása | - |
+| `--no-whisper-sanity` | A Whisper utáni épelméjűségi ellenőrzés kikapcsolása | - |
+| `--no-overlap-fade` | Az átfedések kikapcsolása elhalványul, visszaállás a TTS túllövésére | - |
+| `--difficulty-override` | A nehézségi profil megnyomása (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | A nehézségi profil zenekarának kikapcsolása (a MEDIUM használatával) | - |
 | `--batch` | Több fájl feldolgozása | - |
-| `--voicebox` | A hangot egy futó Voicebox-szerverrel klónozza | - |
-| `--voicebox-url` | A Voicebox címe | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox-motor (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--extract-audio` | Kivonat a hangsáv helyett fordítás | - |
+| `--audio-format` | Kimeneti formátum`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitráta (kbps) vesztes`--audio-format`(pl. 320) | auto |
+| `--instrumental` | With`--extract-audio`, csak az instrumentális (Demucs) | - |
 
 ### integrációs tesztek valós modellekkel
 

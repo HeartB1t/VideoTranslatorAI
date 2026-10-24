@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI 选项 | 描述 | 默认 |
 |------|-------------|---------|
-| `--lang-source` | 源语言（`auto` 用于自动检测） | `auto` |
-| `--lang-target` | 目标语言代码（例如 `it`、`fr`、`de`） | `it` |
-| `--voice` | Edge-TTS 语音名称 | auto |
-| `--model` | Whisper 型号 (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS速度调整（例如`+10%`、`-20%`） | `+0%` |
-| `--translation-engine` | `google`、`marian` 或 `deepl` | `google` |
-| `--deepl-key` | DeepL Free API 密钥 | - |
-| `--diarize` | 启用说话人识别（分类）(pyannote) | - |
-| `--hf-token` | 用于二值化的 HuggingFace 令牌 | - |
-| `--lipsync` | 配音后应用 Wav2Lip 唇形同步 | - |
-| `--subs-only` | 仅生成`.srt`，跳过配音 | - |
-| `--no-subs` | 跳过`.srt`生成 | - |
-| `--no-demucs` | 跳过语音/音乐分离 | - |
 | `--output` / `-o` | 输出文件路径 | auto |
-| `--output-dir` | 已翻译文件的文件夹（一处，Windows 和 Linux） | `<videos>/VideoTranslatorAI` |
+| `--output-dir` | 翻译文件的文件夹( 一个地方, Windows 和 Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | 运行本地诊断并退出而不翻译 | - |
+| `--preflight-lipsync` | 与`--preflight`,需要 Wav2Lip 软件包(lib、facexlib、fasysr) | - |
+| `--preflight-player` | 与`--preflight`,需要整合播放器(python-mpv + libmpv) | - |
+| `--model` | 耳语模式(`tiny`至`large-v3-turbo`) | `small` |
+| `--lang-source` | 源语言( 源语言 )`auto`自动检测) | `auto` |
+| `--lang-target` | 目标语言代码(例如:`it`,`fr`,`de`) | `it` |
+| `--voice` | 边缘- TTS 语音名称 | auto |
+| `--tts-rate` | TTS 速度调整(例如:`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | 生成生成`.srt`只有,跳跳 dubbing | - |
+| `--no-subs` | 跳过`.srt`代 代 代 | - |
+| `--no-demucs` | 跳过语音/音乐分离 | - |
+| `--no-original-audio` | 不将源音频添加为备用音轨 | - |
+| `--translation-engine` | `google`,`deepl`,`marian`,或`llm_ollama` | `google` |
+| `--deepl-key` | DeepL 自由 API 密钥 | - |
+| `--ollama-model` | Ollama 模型标记 | `qwen3:8b` |
+| `--ollama-url` | Ollama 守护进程 URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | 禁用对空洞感应提示( 较快、 较节制) | - |
+| `--ollama-thinking` | 启用 Quen3 思维模式( 更慢、 更少idom/ 语法错误) | off |
+| `--no-document-context` | 禁用输入 Ollama 提示器的文件级别环境 | - |
+| `--no-cove` | 禁用核查链第二通过( 亚马) | - |
+| `--diarize` | 启用扬声器diariziz化( 亮注) | - |
+| `--hf-token` | 用于 Diarization 的 Hugging 纸面标记( 返回到配置文件) | - |
+| `--lipsync` | 调试后应用 Wav2Lip 嘴唇同步( 第一次下载 ~ 416 MB) | - |
+| `--xtts` | 使用 Coqui XTTS v2 语音克隆 (~ 1.8 GB 首跑) | - |
+| `--xtts-speed` | XTTS 本地速度因数(0.5-2.0);如果省略,每对语文自动调换 | auto |
+| `--voicebox` | 通过运行中的语音箱服务器克隆声音 | - |
+| `--voicebox-url` | 语音箱地址 | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | 语音箱发动机(`chatterbox`,`qwen`,......) | `chatterbox` |
+| `--hotwords` | 以逗号分隔的偏偏 Whiseper 解码的热词 | - |
+| `--hotwords-file` | JSON 带有热字的 JSON 文件( 缩放列表或每个语言的文字) | - |
+| `--no-slot-expansion` | 为紧紧区段借用时间 | - |
+| `--no-sentence-repair` | 智能智能句外修理 | - |
+| `--no-whisper-sanity` | 禁用后私语后理智检查 | - |
+| `--no-overlap-fade` | 禁用重重叠 淡出, 返回到 TTS 反射的硬调 | - |
+| `--difficulty-override` | 强制执行难度配置( F)`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | 禁用难度描述导管( 使用 MEDIUM) | - |
 | `--batch` | 处理多个文件 | - |
-| `--voicebox` | 通过正在运行的 Voicebox 服务器克隆声音 | - |
-| `--voicebox-url` | Voicebox 地址 | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox 引擎（`chatterbox`、`qwen`、...） | `chatterbox` |
+| `--extract-audio` | 提取音频音轨而不是翻译 | - |
+| `--audio-format` | 输出格式`--extract-audio`( ( ) (`mp3`/ 调 调 调`m4a`/ 调 调 调`opus`/ 调 调 调`ogg`/ 调 调 调`flac`/ 调 调 调`wav`) | `mp3` |
+| `--audio-bitrate` | 损失的位速率( kbps)`--audio-format`(例如320) | auto |
+| `--instrumental` | 与`--extract-audio`,只保留工具 (Demucs) | - |
 
 ### 与真实模型的集成测试
 

@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI オプション | 説明 | デフォルト |
 |------|-------------|---------|
-| `--lang-source` | ソース言語 (自動検出の場合は `auto`) | `auto` |
-| `--lang-target` | ターゲット言語コード (例: `it`、`fr`、`de`) | `it` |
-| `--voice` | Edge-TTS 音声名 | auto |
-| `--model` | Whisperモデル（`tiny`→`large-v3-turbo`） | `small` |
-| `--tts-rate` | TTS 速度調整 (例: `+10%`、`-20%`) | `+0%` |
-| `--translation-engine` | `google`、`marian`、または `deepl` | `google` |
-| `--deepl-key` | DeepL Free API キー | - |
-| `--diarize` | 話している人の識別を有効にする (日記化) (pyannote) | - |
-| `--hf-token` | 日記用のHuggingFaceトークン | - |
-| `--lipsync` | 音声アフレコ後に Wav2Lip リップシンクを適用する | - |
-| `--subs-only` | `.srt` のみを生成し、音声ダビングをスキップします | - |
-| `--no-subs` | `.srt` 世代をスキップします | - |
-| `--no-demucs` | 音声と音楽の分離をスキップする | - |
 | `--output` / `-o` | 出力ファイルのパス | auto |
-| `--output-dir` | 翻訳済みファイルのフォルダー (1 か所、Windows および Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | 複数のファイルを処理する | - |
-| `--voicebox` | 起動中の Voicebox サーバーで声をクローンします | - |
-| `--voicebox-url` | Voicebox のアドレス | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox のエンジン（`chatterbox`、`qwen`、...） | `chatterbox` |
+| `--output-dir` | 翻訳ファイル用のフォルダ (一つの場所, Windows, Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | ローカルの診断を実行して、翻訳せずに終了 | - |
+| `--preflight-lipsync` | と`--preflight`)には、Wav2Lipパッケージ (dlib, facexlib, baser) が必須です。 | - |
+| `--preflight-player` | と`--preflight`)には、統合プレイヤーが必要です (python-mpv + libmpv) | - |
+| `--model` | サウンドモデル(S)`tiny`の`large-v3-turbo`) | `small` |
+| `--lang-source` | ソース言語 (言語)`auto`(自動検出) | `auto` |
+| `--lang-target` | ターゲット言語コード (例)`it`とします。`fr`とします。`de`) | `it` |
+| `--voice` | エッジ-TTS ボイス名 | auto |
+| `--tts-rate` | TOTS 速度調整 (例: p.`+10%`とします。`-20%`) | `+0%` |
+| `--subs-only` | 生成`.srt`呼び出しをスキップするのみ | - |
+| `--no-subs` | スキップ`.srt`生成 | - |
+| `--no-demucs` | 音声/音楽の分離をスキップ | - |
+| `--no-original-audio` | ソースオーディオを別のトラックとして追加しない | - |
+| `--translation-engine` | `google`とします。`deepl`とします。`marian`または`llm_ollama` | `google` |
+| `--deepl-key` | ディープL Free API キー | - |
+| `--ollama-model` | オーラマモデルタグ | `qwen3:8b` |
+| `--ollama-url` | Orama デーモンの URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | スロット情報エフェクトを無効にする (高速、低制限) | - |
+| `--ollama-thinking` | Qwen3 思考モードを有効に (小文字を区別する/grammar エラーを低減) | off |
+| `--no-document-context` | Oramaプロンプトに注入された文書レベルの背景を無効にします | - |
+| `--no-cove` | チェーン F-Veration セカンドパスを無効化 (Olaama) | - |
+| `--diarize` | スピーカーディクショナリ (ピアンノート) を有効にする | - |
+| `--hf-token` | 書式設定用印刷用印刷用印刷用印刷用印刷スラッシュをひねる (設定ファイルに戻る) | - |
+| `--lipsync` | Wav2Lip 同期を適用する (最初の起動ダウンロード数 ~416 MB) | - |
+| `--xtts` | Koki XTTS v2 ボイスクローニングを使う (~1.8 GB ファーストラン) | - |
+| `--xtts-speed` | XTTS ネイティブ速度係数 (0.5-2.0); 省略した場合は言語ペアごとの自動調整 | auto |
+| `--voicebox` | 実行中のボイスボックスサーバで音声をクローニングします | - |
+| `--voicebox-url` | ボイスbox のアドレス | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | ボイスボックスエンジン (Office)`chatterbox`とします。`qwen`)をいう. | `chatterbox` |
+| `--hotwords` | コンマで区切られたホットワードをバイアスデコードします | - |
+| `--hotwords-file` | ホットワードを含む JAPAN ファイル (フラットリストまたは言語辞書ごと) | - |
+| `--no-slot-expansion` | スマートスロットの拡張 / タイトな線分を借りる時間を無効にする | - |
+| `--no-sentence-repair` | スマートな文列の修復を無効にする | - |
+| `--no-whisper-sanity` | 次の Wissper スペシャルチェックを無効にする | - |
+| `--no-overlap-fade` | 重複を無効化し、TTS オーバーライドのハードランキングに戻します | - |
+| `--difficulty-override` | 難易度プロファイルを強制 (Name)`easy`とします。`medium`とします。`hard`) | auto |
+| `--no-difficulty-profile` | 難易度指定のオーケストラを無効にします (Usmusic-amount) | - |
+| `--batch` | 複数のファイルを処理 | - |
+| `--extract-audio` | 翻訳せずにオーディオトラックを吸い出す | - |
+| `--audio-format` | 出力フォーマット`--extract-audio`(2) ^ a b c d e f g h i f g h i f g h i j k l e f g h i j k l e f g h i`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | TIFF (kbps) を欠落させる`--audio-format`(320) | auto |
+| `--instrumental` | と`--extract-audio`、ツール (Demcus) だけを保持します | - |
 
 ### 実際のモデルとの統合テスト
 

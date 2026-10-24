@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI-vaihtoehto | Kuvaus | Oletus |
 |------|-------------|---------|
-| `--lang-source` | Alkuperäinen kieli (`auto` automaattista tunnistusta varten) | `auto` |
-| `--lang-target` | Kohdekielikoodi (esim. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS-äänen nimi | auto |
-| `--model` | Whisper-malli (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS-nopeuden säätö (esim. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` tai `deepl` | `google` |
-| `--deepl-key` | DeepL Free API-avain | - |
-| `--diarize` | Ota käyttöön puhuvien ihmisten tunnistaminen (diarisointi) (pyannote) | - |
-| `--hf-token` | HuggingFace-merkki päiväkirjaa varten | - |
-| `--lipsync` | Käytä Wav2Lip-huulisynkronointia äänen jälkiäänityksen jälkeen | - |
-| `--subs-only` | Luo vain `.srt`, ohita äänen jälkiäänitys | - |
-| `--no-subs` | Ohita `.srt`-sukupolvi | - |
-| `--no-demucs` | Ohita äänen ja musiikin erottelu | - |
 | `--output` / `-o` | Tulostustiedoston polku | auto |
 | `--output-dir` | Kansio käännetyille tiedostoille (yksi paikka, Windows ja Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Suorita paikallinen diagnostiikka ja lopeta kääntämättä | - |
+| `--preflight-lipsync` | yy) kanssa.`--preflight`, vaadi Wav2Lip-paketit (liuska, facexlib, basicsr) | - |
+| `--preflight-player` | yy) kanssa.`--preflight`, vaadi integroitu pelaaja (python-mpv + libmpv) | - |
+| `--model` | Whisper-malli (`tiny`Kohtiin`large-v3-turbo`) | `small` |
+| `--lang-source` | Lähdekieli (`auto`automaattihavaitseminen) | `auto` |
+| `--lang-target` | Kohdekielen koodi (esim.`it`,`fr`,`de`) | `it` |
+| `--voice` | Edge-TTS-ääninimi | auto |
+| `--tts-rate` | TTS-nopeuden säätö (esim.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Luo`.srt`Ainoastaan skip dubbing | - |
+| `--no-subs` | Ohita`.srt`sukupolvi | - |
+| `--no-demucs` | Ohita äänen ja musiikin erottaminen | - |
+| `--no-original-audio` | Älä lisää lähdeääntä vaihtoehtoisena kappaleena | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, tai`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Free API -avain | - |
+| `--ollama-model` | Ollama-mallilappu | `qwen3:8b` |
+| `--ollama-url` | Ollama- daemon- osoite | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Poista slot-aware-houkutus käytöstä (nopeampi, vähemmän rajoitettu) | - |
+| `--ollama-thinking` | Ota käyttöön Qwen3-ajattelutila (hitaampi, vähemmän idiomi- tai kielioppivirheitä) | off |
+| `--no-document-context` | Poista Ollaman kehotuksiin ruiskutettu asiakirjakonteksti käytöstä | - |
+| `--no-cove` | Poista verifiointiketjun toinen syöttö käytöstä (Ollama) | - |
+| `--diarize` | Ota kaiuttimen diarisointi käyttöön (pyannote) | - |
+| `--hf-token` | HinausFace-kyltti diarisointia varten (putoaa takaisin konfiguraatioon) | - |
+| `--lipsync` | Toteuta Wav2Lip -huulisynkronointi soiton jälkeen (ensimmäisen kierroksen lataukset ~416 MB) | - |
+| `--xtts` | Käytä Coqui XTTS v2 -äänikloonausta (~1,8 GB ensimmäinen kerta) | - |
+| `--xtts-speed` | XTTS:n natiivinopeuskerroin (0,5-2,0); automaattisesti viritetty kieliparia kohti, jos se jätetään pois | auto |
+| `--voicebox` | Kloonaaa ääni käynnissä olevan Voicebox-palvelimen kautta | - |
+| `--voicebox-url` | Puhelinlaatikon osoite | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Äänirasian moottori (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Komma-erotetut kuumasanat puolueelliseen Whisper-dekoodaukseen | - |
+| `--hotwords-file` | JSON-tiedosto, jossa on hakusanoja (flat list tai per-language sanelu) | - |
+| `--no-slot-expansion` | Poista älykkään lähtö- ja saapumisajan laajennus / aikalainaus tiukoille segmenteille | - |
+| `--no-sentence-repair` | Poista älykäs lauseen korjaus käytöstä | - |
+| `--no-whisper-sanity` | Poista Whisperin jälkeisen mielenterveyden tarkistus käytöstä | - |
+| `--no-overlap-fade` | Kytke päällekkäisyydet pois päältä ja palaa TTS:n ylitykseen kovalla juoksulla | - |
+| `--difficulty-override` | Pakota vaikeusprofiili (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Poista vaikeusprofiilin orkesteri (käytä MEDIUMia) | - |
 | `--batch` | Käsittele useita tiedostoja | - |
-| `--voicebox` | Kloonaa äänen käynnissä olevan Voicebox-palvelimen kautta | - |
-| `--voicebox-url` | Voiceboxin osoite | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voiceboxin moottori (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--extract-audio` | Poista ääniraita kääntämisen sijaan | - |
+| `--audio-format` | Tulostusmuoto`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bittinopeus (kbps) häviölliselle`--audio-format`(esim. 320) | auto |
+| `--instrumental` | yy) kanssa.`--extract-audio`, Pidä vain instrumentaali (valitukset) | - |
 
 ### integraatiotestit todellisten mallien kanssa
 

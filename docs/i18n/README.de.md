@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI-Option | Beschreibung | Standard |
 |------|-------------|---------|
-| `--lang-source` | Quellsprache (`auto` für automatische Erkennung) | `auto` |
-| `--lang-target` | Code der Zielsprache (z. B. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS-Sprachname | auto |
-| `--model` | Whisper-Modell (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS-Geschwindigkeitsanpassung (z. B. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` oder `deepl` | `google` |
-| `--deepl-key` | DeepL Free API-Schlüssel | - |
-| `--diarize` | Ermöglichen Sie die Identifizierung sprechender Personen (Diarisierung) (pyannote) | - |
-| `--hf-token` | HuggingFace-Token zur Diarisierung | - |
-| `--lipsync` | Wenden Sie Wav2Lip Lip Sync nach der Synchronisation an | - |
-| `--subs-only` | Generieren Sie nur `.srt`, überspringen Sie die Synchronisierung | - |
-| `--no-subs` | Generation `.srt` überspringen | - |
-| `--no-demucs` | Überspringen Sie die Trennung von Stimme und Musik | - |
-| `--output` / `-o` | Pfad der Ausgabedatei | auto |
+| `--output` / `-o` | Ausgabedateipfad | auto |
 | `--output-dir` | Ordner für übersetzte Dateien (ein Ort, Windows und Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Mehrere Dateien verarbeiten | - |
-| `--voicebox` | Stimme über einen laufenden Voicebox-Server klonen | - |
+| `--preflight` | Lokale Diagnose und Exit ausführen, ohne zu übersetzen | - |
+| `--preflight-lipsync` | Mit`--preflight`, die Wav2Lip-Pakete benötigen (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Mit`--preflight`, benötigen Sie den integrierten Player (python-mpv + libmpv) | - |
+| `--model` | Flüstermodell (`tiny`zu`large-v3-turbo`) | `small` |
+| `--lang-source` | Quellensprache (`auto`für Auto-Detektion) | `auto` |
+| `--lang-target` | Zielsprachencode (z.B.`it`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`fr`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`de`) | `it` |
+| `--voice` | Name der Edge-TTS-Stimme | auto |
+| `--tts-rate` | TTS-Geschwindigkeitseinstellung (z.B.`+10%`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`-20%`) | `+0%` |
+| `--subs-only` | Erzeugen`.srt`Nur, überspringen Synchronisieren | - |
+| `--no-subs` | Überspringen`.srt`Erzeugung | - |
+| `--no-demucs` | Stimme/Musik trennen überspringen | - |
+| `--no-original-audio` | Den Quell-Audio nicht als alternativen Track hinzufügen | - |
+| `--translation-engine` | `google`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`deepl`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`marian`, oder`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Kostenloser API-Schlüssel | - |
+| `--ollama-model` | Ollama Modell-Tag | `qwen3:8b` |
+| `--ollama-url` | Ollama-Daemon-URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Deaktivieren von Slot-aware-Prompten (schneller, weniger eingeschränkt) | - |
+| `--ollama-thinking` | Qwen3-Denkmodus aktivieren (niedriger, weniger Idiom/grammar-Fehler) | off |
+| `--no-document-context` | Deaktivieren des Kontexts auf Dokumentebene, der Ollama-Prompten injiziert wird | - |
+| `--no-cove` | Deaktivieren Sie den Chain-of-Verification-Zweitpass (Ollama) | - |
+| `--diarize` | Lautsprecher-Diarisierung aktivieren (Pyannote) | - |
+| `--hf-token` | HuggingFace Token für die Diarisierung (fällt zurück zur Konfigurationsdatei) | - |
+| `--lipsync` | Wav2Lip Lippensynchronisierung nach dem Synchronisieren anwenden (Downloads zum ersten Mal ~416 MB ausführen) | - |
+| `--xtts` | Coqui XTTS v2 Sprachklonen verwenden (~1,8 GB erster Lauf) | - |
+| `--xtts-speed` | XTTS nativer Geschwindigkeitsfaktor (0.5-2.0); automatisch abgestimmt pro Sprachpaar, falls weggelassen | auto |
+| `--voicebox` | Klonen Sie die Stimme über einen laufenden Voicebox-Server | - |
 | `--voicebox-url` | Voicebox-Adresse | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox-Engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--voicebox-engine` | Voicebox-Engine (`chatterbox`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`qwen`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . | `chatterbox` |
+| `--hotwords` | Komma-getrennte Hotwords zu Bias Whisper-Dekodierung | - |
+| `--hotwords-file` | JSON-Datei mit Hotwords (flache Liste oder per-language dict) | - |
+| `--no-slot-expansion` | Deaktivieren Sie Smart Slot Expansion / Zeitaufnahme für enge Segmente | - |
+| `--no-sentence-repair` | Intelligente satzgebundene Reparatur deaktivieren | - |
+| `--no-whisper-sanity` | Deaktivieren Sie die Post-Whisper-Sinity-Kontrolle | - |
+| `--no-overlap-fade` | Überlappung abschalten, beim Überschießen von TTS zu hart abschneiden | - |
+| `--difficulty-override` | Erzwingen Sie das Schwierigkeitsprofil (`easy`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`medium`. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .`hard`) | auto |
+| `--no-difficulty-profile` | Deaktivieren Sie die Schwierigkeitsprofil-Orchester (verwenden Sie MEDIUM) | - |
+| `--batch` | Mehrere Dateien verarbeiten | - |
+| `--extract-audio` | Extrahieren Sie die Audiospur statt zu übersetzen | - |
+| `--audio-format` | Ausgabeformat für`--extract-audio`(`mp3`- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein`m4a`- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein`opus`- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein`ogg`- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein`flac`- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) für eine verlustreiche`--audio-format`(z. B. 320) | auto |
+| `--instrumental` | Mit`--extract-audio`, nur das Instrumental halten (Demucs) | - |
 
 ### Integrationstests mit realen Modellen
 

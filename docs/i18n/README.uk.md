@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Опція CLI | опис | За замовчуванням |
 |------|-------------|---------|
-| `--lang-source` | Мова оригіналу (`auto` для автоматичного визначення) | `auto` |
-| `--lang-target` | Код цільової мови (наприклад, `it`, `fr`, `de`) | `it` |
-| `--voice` | Голосове ім'я Edge-TTS | auto |
-| `--model` | Модель Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Регулювання швидкості TTS (наприклад, `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` або `deepl` | `google` |
-| `--deepl-key` | Ключ API DeepL Free | - |
-| `--diarize` | Увімкнути ідентифікацію людей, які говорять (діаризація) (pyannote) | - |
-| `--hf-token` | Токен HuggingFace для щоденника | - |
-| `--lipsync` | Застосуйте синхронізацію губ Wav2Lip після голосового дубляжу | - |
-| `--subs-only` | Згенерувати лише `.srt`, пропустити голосовий дубляж | - |
-| `--no-subs` | Пропустити покоління `.srt` | - |
-| `--no-demucs` | Пропустити розділення голосу та музики | - |
-| `--output` / `-o` | Шлях вихідного файлу | auto |
-| `--output-dir` | Папка для перекладених файлів (одне місце, Windows і Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Обробка кількох файлів | - |
-| `--voicebox` | Клонує голос через запущений сервер Voicebox | - |
-| `--voicebox-url` | Адреса Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Рушій Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output` / `-o` | Шлях до файла виводу | auto |
+| `--output-dir` | Тека для перекладених файлів (одне місце, Windows і Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Запустити локальні діагностики і вийти без перекладу | - |
+| `--preflight-lipsync` | З`--preflight`, потрібен пакунки Wav2Lip (dlib, facexlib, basesr) | - |
+| `--preflight-player` | З`--preflight`, потрібен інтегрований гравець (python- mpv + libmpv) | - |
+| `--model` | Материльна модель (`tiny`до`large-v3-turbo`) | `small` |
+| `--lang-source` | Початкова мова (`auto`для автоматичного визначення) | `auto` |
+| `--lang-target` | Код мови призначення (наприклад,`it`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`fr`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`de`) | `it` |
+| `--voice` | Назва голосу Edge- TTS | auto |
+| `--tts-rate` | Налаштування швидкості TTS (наприклад,`+10%`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`-20%`) | `+0%` |
+| `--subs-only` | Створити`.srt`Тільки, пропустити гуляння | - |
+| `--no-subs` | Пропустити`.srt`створення | - |
+| `--no-demucs` | Пропустити поділ голосу/ музики | - |
+| `--no-original-audio` | Не додавати звуковий код як альтернативну доріжку | - |
+| `--translation-engine` | `google`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`deepl`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`marian`, або`llm_ollama` | `google` |
+| `--deepl-key` | Вільний ключ API DeleepL | - |
+| `--ollama-model` | Шаблонний теґ Ollama | `qwen3:8b` |
+| `--ollama-url` | Адреса фонової служби Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Вимкнути запит на слотів (швидше, менш обмежено) | - |
+| `--ollama-thinking` | Увімкнути режим мислення Qwen3 (повільніше, менше ідіом) | off |
+| `--no-document-context` | Вимкнути контекст документа, введену у запрошення Ollama | - |
+| `--no-cove` | Вимкнути другий прохід ланцюга (Оллама) | - |
+| `--diarize` | Увімкнути диалізацію мовлення (pyannote) | - |
+| `--hf-token` | Обнімання маркера для розмивання (повернено до файла налаштувань) | - |
+| `--lipsync` | Застосовувати синхронізацію губ Wav2Lip (перший запуск звантажень ~416 МБ) | - |
+| `--xtts` | Використовувати клонування голосів Coqui XTTS v2 (~1. 8 Перший запуск GB) | - |
+| `--xtts-speed` | Коефіцієнт швидкості XTTS (0. 5- 2. 0); автоматично налаштований на пару мов, якщо не вказано | auto |
+| `--voicebox` | Клонувати голос за допомогою запущеного сервера голосових скриньок | - |
+| `--voicebox-url` | Адреса поля право голосу | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Рушій голосового зв' язку (`chatterbox`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`qwen`,...) | `chatterbox` |
+| `--hotwords` | Розділений комами, гарячі слова для декодування викривлення Whiper | - |
+| `--hotwords-file` | Файл JSON з гарячими словами (zoo list або spec- language diction) | - |
+| `--no-slot-expansion` | Вимкнути розширення слоту/ час позичання для тісних відрізків | - |
+| `--no-sentence-repair` | Вимкнути кмітливу конфігурацію речень | - |
+| `--no-whisper-sanity` | Вимкнути перевірку після- віспи пам'яті | - |
+| `--no-overlap-fade` | Вимкнути перекриття зменшується, повертається до жорсткого переходу на вихідну точку | - |
+| `--difficulty-override` | Примусово використовувати профіль складності (`easy`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`medium`, Description of a condition. Do not translate key words (# V1S #, # V1 #,...)`hard`) | auto |
+| `--no-difficulty-profile` | Вимкнути оркестратор з профілем складності (використовуйте MEDIUM) | - |
+| `--batch` | Обробка декількох файлів | - |
+| `--extract-audio` | Видобути звукову доріжку замість перекладу | - |
+| `--audio-format` | Формат виводу для`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Бітова швидкість (кб/ с) для втрати даних`--audio-format`(e. g. 320) | auto |
+| `--instrumental` | З`--extract-audio`, залишити лише інструмент (Demucs) | - |
 
 ### інтеграційні тести з реальними моделями
 

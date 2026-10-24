@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Opzione CLI | Descrizione | Predefinito |
 |------|-------------|---------|
-| `--lang-source` | Lingua di origine (`auto` per rilevamento automatico) | `auto` |
-| `--lang-target` | Codice della lingua di destinazione (es. `it`, `fr`, `de`) | `it` |
-| `--voice` | Nome della voce Edge-TTS | auto |
-| `--model` | Modello Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Regolazione velocità TTS (es. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` o `deepl` | `google` |
-| `--deepl-key` | Chiave API DeepL Free | - |
-| `--diarize` | Abilita la diarizzazione dei parlanti (pyannote) | - |
-| `--hf-token` | Token HuggingFace per la diarizzazione | - |
-| `--lipsync` | Applica la sincronizzazione labiale Wav2Lip dopo il doppiaggio vocale | - |
-| `--subs-only` | Genera solo `.srt`, salta il doppiaggio vocale | - |
-| `--no-subs` | Salta la generazione `.srt` | - |
-| `--no-demucs` | Salta la separazione voce/musica | - |
-| `--output` / `-o` | Percorso del file di output | auto |
+| `--output` / `-o` | Percorso file di output | auto |
 | `--output-dir` | Cartella per i file tradotti (un posto, Windows e Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Elabora più file | - |
-| `--voicebox` | Clona la voce tramite un server Voicebox avviato | - |
-| `--voicebox-url` | Indirizzo di Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Motore Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--preflight` | Eseguire la diagnostica locale ed uscire senza tradurre | - |
+| `--preflight-lipsync` | Con`--preflight`, richiedere i pacchetti Wav2Lip (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Con`--preflight`, richiedere il lettore integrato (python-mpv + libmpv) | - |
+| `--model` | Modello di sussurro (`tiny`a`large-v3-turbo`) | `small` |
+| `--lang-source` | Lingua di origine (`auto`per rilevamento automatico) | `auto` |
+| `--lang-target` | Codice del linguaggio di destinazione (ad es.`it`,`fr`,`de`) | `it` |
+| `--voice` | Nome voce Edge-TTS | auto |
+| `--tts-rate` | Regolazione della velocità TTS (ad es.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Genera`.srt`Solo, saltare il doppiaggio | - |
+| `--no-subs` | Salta`.srt`generazione | - |
+| `--no-demucs` | Salta la separazione voce/musica | - |
+| `--no-original-audio` | Non aggiungere l'audio sorgente come traccia alternativa | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, oppure`llm_ollama` | `google` |
+| `--deepl-key` | Chiave API DeepL Free | - |
+| `--ollama-model` | Tag modello Ollama | `qwen3:8b` |
+| `--ollama-url` | URL demone Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Disabilita il suggerimento slot-aware (più veloce, meno vincolato) | - |
+| `--ollama-thinking` | Abilita la modalità di pensiero Qwen3 (più lento, meno errori di idioma/grammatica) | off |
+| `--no-document-context` | Disabilita il contesto a livello di documento iniettato nei prompt di Ollama | - |
+| `--no-cove` | Disabilita il secondo pass Chain-of-Verification (Ollama) | - |
+| `--diarize` | Abilita la diarizzazione degli altoparlanti (pyannote) | - |
+| `--hf-token` | Token HuggingFace per la diarizzazione (rientra nel file di configurazione) | - |
+| `--lipsync` | Applica sincronizzazione labbro Wav2Lip dopo il doppiaggio (primo download eseguito ~416 MB) | - |
+| `--xtts` | Utilizzare Coqui XTTS v2 clonazione vocale (~1.8 GB prima esecuzione) | - |
+| `--xtts-speed` | Fattore di velocità nativo XTTS (0.5-2.0); sintonizzato automaticamente per coppia di lingue se omesso | auto |
+| `--voicebox` | Clonare la voce attraverso un server Voicebox in esecuzione | - |
+| `--voicebox-url` | Indirizzo casella vocale | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Motore Voicebox (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Hotwords separati da virgole a bias Decodifica Whisper | - |
+| `--hotwords-file` | File JSON con hotwords (lista piatta o dict per lingua) | - |
+| `--no-slot-expansion` | Disabilita espansione smart slot / prestito di tempo per segmenti stretti | - |
+| `--no-sentence-repair` | Disabilita la riparazione intelligente del limite di frase | - |
+| `--no-whisper-sanity` | Disabilita il controllo della sanita' mentale post-sussurro | - |
+| `--no-overlap-fade` | Disabilita lo sbiadimento della sovrapposizione, ritorna a "hard-truncate" in caso di superamento del TTS | - |
+| `--difficulty-override` | Forzare il profilo di difficoltà (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Disabilita l'orchestratore a profilo di difficoltà (usare MEDIUM) | - |
+| `--batch` | Elabora file multipli | - |
+| `--extract-audio` | Estrarre la traccia audio invece di tradurre | - |
+| `--audio-format` | Formato di uscita per`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) per una perdita`--audio-format`(ad es. 320) | auto |
+| `--instrumental` | Con`--extract-audio`, mantenere solo il strumentale (Demucs) | - |
 
 ### test di integrazione con modelli reali
 

@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Opção CLI | Descrição | Padrão |
 |------|-------------|---------|
-| `--lang-source` | Idioma de origem (`auto` para detecção automática) | `auto` |
-| `--lang-target` | Código do idioma de destino (por exemplo, `it`, `fr`, `de`) | `it` |
+| `--output` / `-o` | Caminho do ficheiro de saída | auto |
+| `--output-dir` | Pasta para arquivos traduzidos (um lugar, Windows e Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Executar diagnósticos locais e sair sem traduzir | - |
+| `--preflight-lipsync` | Com`--preflight`, exigir os pacotes Wav2Lip (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Com`--preflight`, exigir o jogador integrado (python-mpv + libmpv) | - |
+| `--model` | Modelo de Sussurro (`tiny`E-mail`large-v3-turbo`) | `small` |
+| `--lang-source` | Língua de origem (`auto`para auto-detecção) | `auto` |
+| `--lang-target` | Código de idioma de destino (ex.`it`,`fr`,`de`) | `it` |
 | `--voice` | Nome de voz Edge-TTS | auto |
-| `--model` | Modelo Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Ajuste de velocidade TTS (por exemplo, `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` ou `deepl` | `google` |
-| `--deepl-key` | Chave de API DeepL Free | - |
-| `--diarize` | Habilitar identificação de pessoas falando (diarização) (pyannote) | - |
-| `--hf-token` | Token HuggingFace para diarização | - |
-| `--lipsync` | Aplicar sincronização labial Wav2Lip após dublagem de voz | - |
-| `--subs-only` | Gere apenas `.srt`, pule a dublagem de voz | - |
-| `--no-subs` | Pular geração `.srt` | - |
-| `--no-demucs` | Pular separação voz/música | - |
-| `--output` / `-o` | Caminho do arquivo de saída | auto |
-| `--output-dir` | Pasta para arquivos traduzidos (um só lugar, Windows e Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Processar vários arquivos | - |
-| `--voicebox` | Clona a voz através de um servidor Voicebox em execução | - |
-| `--voicebox-url` | Endereço do Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Motor do Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--tts-rate` | Ajuste de velocidade TTS (ex.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Gerar`.srt`apenas, pula dublagem | - |
+| `--no-subs` | Skip`.srt`geração | - |
+| `--no-demucs` | Ignorar a separação de voz/música | - |
+| `--no-original-audio` | Não adicione o áudio de origem como uma faixa alternativa | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, ou`llm_ollama` | `google` |
+| `--deepl-key` | Chave API grátis | - |
+| `--ollama-model` | tag modelo ollama | `qwen3:8b` |
+| `--ollama-url` | Ollama daemon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Desativar o aviso de reconhecimento de slot (mais rápido, menos restrito) | - |
+| `--ollama-thinking` | Ativar o modo de pensamento Qwen3 (mais lento, menos erros de linguagem/gramática) | off |
+| `--no-document-context` | Desativar o contexto em nível de documento injetado nos prompts de Ollama | - |
+| `--no-cove` | Desativar o segundo passe da Cadeia de Verificação (Ollama) | - |
+| `--diarize` | Habilitar diarização de alto-falante (pyannote) | - |
+| `--hf-token` | Token HuggingFace para diarização (cai de volta para o arquivo de configuração) | - |
+| `--lipsync` | Aplicar a sincronização do lábio Wav2Lip após a dublagem (downloads pela primeira vez 416 MB) | - |
+| `--xtts` | Use Coqui XTTS v2 clonagem de voz ( 1,8 GB primeira execução) | - |
+| `--xtts-speed` | Fator de velocidade nativo XTTS (0.5-2.0); auto-afinado por par de idiomas se omitido | auto |
+| `--voicebox` | Clone a voz através de um servidor Voicebox em execução | - |
+| `--voicebox-url` | Endereço da caixa de voz | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Motor de caixa de voz (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | hotwords separados por vírgulas para decodificação de Whisper | - |
+| `--hotwords-file` | Arquivo JSON com hotwords (lista plana ou dict por idioma) | - |
+| `--no-slot-expansion` | Desabilitar expansão de slots inteligentes / empréstimo de tempo para segmentos apertados | - |
+| `--no-sentence-repair` | Desabilitar a reparação inteligente de frases-limite | - |
+| `--no-whisper-sanity` | Desativar a verificação de sanidade pós-sussurro | - |
+| `--no-overlap-fade` | Desativar a sobreposição desaparecer, reverter para difícil truncar em TTS overshoot | - |
+| `--difficulty-override` | Forçar o perfil de dificuldade (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Desabilitar o orquestrador de perfil de dificuldade (usar MEDIUM) | - |
+| `--batch` | processar vários arquivos | - |
+| `--extract-audio` | Extrair a faixa de áudio em vez de traduzir | - |
+| `--audio-format` | Formato de saída para`--extract-audio`E:`mp3`E-mail`m4a`E-mail`opus`E-mail`ogg`E-mail`flac`E-mail`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) para uma perda`--audio-format`(ex. 320) | auto |
+| `--instrumental` | Com`--extract-audio`, mantenha apenas o instrumental (Demucs) | - |
 
 ### testes de integração com modelos reais
 

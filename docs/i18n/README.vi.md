@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Tùy chọn CLI | Mô tả | Mặc định |
 |------|-------------|---------|
-| `--lang-source` | Ngôn ngữ nguồn (`auto` để tự động phát hiện) | `auto` |
-| `--lang-target` | Mã ngôn ngữ đích (ví dụ: `it`, `fr`, `de`) | `it` |
-| `--voice` | Tên giọng nói Edge-TTS | auto |
-| `--model` | Mẫu Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Điều chỉnh tốc độ TTS (ví dụ `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` hoặc `deepl` | `google` |
-| `--deepl-key` | Khóa API DeepL Free | - |
-| `--diarize` | Cho phép nhận dạng người đang nói (diarization) (pyannote) | - |
-| `--hf-token` | Mã thông báo HuggingFace để ghi nhật ký | - |
-| `--lipsync` | Áp dụng đồng bộ hóa môi Wav2Lip sau khi lồng tiếng | - |
-| `--subs-only` | Chỉ tạo `.srt`, bỏ qua lồng tiếng | - |
-| `--no-subs` | Bỏ qua thế hệ `.srt` | - |
-| `--no-demucs` | Bỏ qua việc tách giọng nói/âm nhạc | - |
-| `--output` / `-o` | Đường dẫn tập tin đầu ra | auto |
-| `--output-dir` | Thư mục chứa các tệp đã dịch (một nơi, Windows và Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Xử lý nhiều tập tin | - |
-| `--voicebox` | Nhân bản giọng qua máy chủ Voicebox đang chạy | - |
-| `--voicebox-url` | Địa chỉ Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Bộ máy Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output` / `-o` | Không có nhiều trường trường chính chính chính chính chính trường trường chính chính giải giải trường trường chính chính chính trường. | auto |
+| `--output-dir` | Không tìm thấy tập tin từ tập tin nằm nằm nằm trong tập tin nằm trong tập tin nằm nằm trong tập nằm nằm nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm trong tập nằm nằm nằm trong tập nằm nằm trong tập nằm trong vì vì vì vì vì vì vì vì vì vì vì vì vì vì vì nằm tập từ từ từ từ từ từ từ từ từ tập nằm trong tập khẩu từ tập đơnu khởi khởi khởi khởi khởi | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Comment | - |
+| `--preflight-lipsync` | & chứa`--preflight`, cần thiết các gói Wav2Lrip (ddli, facex cur), cơ bản) | - |
+| `--preflight-player` | & chứa`--preflight`không cung cần thiết vùng ghi (mpt- lt- mmpv & ngoạid & ngoạid & ngoại bộ) | - |
+| `--model` | & mẫu`tiny`& Xuất ra danh sách`large-v3-turbo`__ __________________________________________________________________________________________________________________________ | `small` |
+| `--lang-source` | %d dạng dạng dạng giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản 16 giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản 16 giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản giản`auto`Tự động khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi khởi | `auto` |
+| `--lang-target` | Đường dẫn đồ thị chuẩn (v. d.`it`_ chứa`fr`_ chứa`de`__ __________________________________________________________________________________________________________________________ | `it` |
+| `--voice` | Không tìm tìm âm âm âm tìm cùng âm âm tìm âm âm âm tìm cùng âm tìm âm tìm âm âm tìm cùng tìm âm tìm âm tìm âm tìm âm tìm cùng tìm âm âm âm tìm âm âm âm tìm cùng tìm âm âm tìm âm âm âm tìm âm âm tìm cùng tìm âm âm âm âm âm tìm cùng tìm âm âm âm âm âm tìm âm tìm âm tìm âm âm tìm âm tìm âm tìm âm tìm cùng tìm âm tìm âm tìm âm tìm cùng tìm âm tìm cùngy âm âm âm âm âm âm âm tìm âm âm âm âm âm âm âm tìm âm âm âm âm tìm cùngy âm âm âm âm âm | auto |
+| `--tts-rate` | Tốc độ tối đa (v. d.`+10%`_ chứa`-20%`__ __________________________________________________________________________________________________________________________ | `+0%` |
+| `--subs-only` | Không có`.srt`mớit | - |
+| `--no-subs` | & chứa`.srt`Thêm gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói gói | - |
+| `--no-demucs` | nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ nhỏ | - |
+| `--no-original-audio` | Không cho phép thêm động cơ băng tải | - |
+| `--translation-engine` | `google`_ chứa`deepl`_ chứa`marian`________________ _______________ __________________ __________________________ __________________________________ _________ _`llm_ollama` | `google` |
+| `--deepl-key` | Comment | - |
+| `--ollama-model` | Mô | `qwen3:8b` |
+| `--ollama-url` | Không tìm thấy URL qua Mạng qua MạngComment | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Không thể mở rộng tham chiếu do trường giải riêng cho tới khi giải quyết phần mở rộng cho tới khi giải quyết phần mở rộng phần mềm | - |
+| `--ollama-thinking` | Tự động khởi động chế độ đồng ý với tốc độ của mình (slower, càng ít, càng sớm giải quyết càng sớm càng tốt | off |
+| `--no-document-context` | tắt cách thoát khỏi điều khoá quan hệ văn bản thiết lập thiết lập bộ nhắcComment | - |
+| `--no-cove` | Tắt đường dẫn thứ hai gặp lỗi khi thoát không sẵn sàng | - |
+| `--diarize` | Không khởi khởi khởi động khởi khởi động khởi động khởi động khởi động khởi động khởi động khởi động khởi động | - |
+| `--hf-token` | Gặp ghi tránh ghi tránh ghi tránh ghi tránh ghi tránh ghi tránh ghi tránh ra ảnh ( quay lại tập tin tập tin lay động khởi chạy) | - |
+| `--lipsync` | Không thể mở tập tin ảnh | - |
+| `--xtts` | Không có giọng nói & đơn giản | - |
+| `--xtts-speed` | Đơn giản cục cục cục cục cục cục cục cục cục cục cục cục cục cục cục cục bộ của máy tính mũ mũ của máy tính nhỏ nhất bán diện tích (không phải chia sẻ).); tự động- tự động- tự động- tự động- tự động- y môi môi môi môi môi môi môi trường trong vòng | auto |
+| `--voicebox` | máy chủ qua một máy chủ máy chủ mạng | - |
+| `--voicebox-url` | Ngày đêm đêm qua đêm đêm đêm qua đêm đêm đêm đêm đêm đêm đêm đêm đêm qua không không đêm đêm đêm qua đêm đêm đêm không không không không không không không đêm đêm đêm đêm đêm không không không không không không không không không không không không không không không không không không đêm đêm đêm đêm đêm đêm đêm không không không không không không không không không không không không không không không không không không không không không không không đêm đêm đêm đêm đêm đêm đêm đêm đêm đêm đêm không không không không không không không không không không không không không không không không không không không không không không không không không không không không | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Comment`chatterbox`_ chứa`qwen`_, ... | `chatterbox` |
+| `--hotwords` | ♪ Những lời ca hát khiêu vũ ca hát khiêu vũ ♪ Cho đến khi khiêu vũ ♪ | - |
+| `--hotwords-file` | @ info/ rich | - |
+| `--no-slot-expansion` | Comment | - |
+| `--no-sentence-repair` | Cần điều có có Yes Yes Yes Yes Yes Yes Yes Yes Yes Yes Yes | - |
+| `--no-whisper-sanity` | Không cho phép kiểm tra mật mã nào | - |
+| `--no-overlap-fade` | Không phát giải, không phát, không xấu, không, giải, không khó khó khó khó khó-t giải giải giải giải giải giải giải giải, dựa trên những gì trên các giải | - |
+| `--difficulty-override` | Gặp lỗi khi khởi động bộ nhớ tạm đĩa ảnh`easy`_ chứa`medium`_ chứa`hard`__ __________________________________________________________________________________________________________________________ | auto |
+| `--no-difficulty-profile` | Tắt các ảnh chụp có phải không? | - |
+| `--batch` | Không bao bao bao bao bao bao bao bao bao bao bao bao bao bao bao bao bao bao bao rất rất rất rất rất rất rất nhiều, rất rất rất rất rất rất nhiều, rất rất rất rất rất rất rất, rất rất rất rất rất rất rất rất, rất rất rất rất rất, rất rất rất rất rất rất rất, rất rất rất rất rất rất rất rất rất rất rất, rất rất rất rất rất rất rất rất rất rất rất rất, rất rất rất rất rất rất rất rất, rất rất rất rất rất, rất rất rất rất rất rất rất rất rất rất rất rất rất rất,,,, | - |
+| `--extract-audio` | thu thu âm thay thế thu nhỏ thay thế thu nhỏ thay thế thu | - |
+| `--audio-format` | Hiện trường trường trường trường trường trường trường trường trường không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không chúng không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không không`--extract-audio`& Xuất ra danh sách`mp3`& Xuất ra danh sách`m4a`& Xuất ra danh sách`opus`& Xuất ra danh sách`ogg`& Xuất ra danh sách`flac`& Xuất ra danh sách`wav`__ __________________________________________________________________________________________________________________________ | `mp3` |
+| `--audio-bitrate` | Độ trên trên trên trên trên đầy ( ít ( ít) để làm mất thông tin ảnh để tìm tập chạy bộ phải trên trên cùng trên cùng trên nội bộ trên trên cùng trên bộ nội bộ phải trên bộ nội bộ trên trên cùng trên bộ nội bộ nội bộ ( còn đầy đơn đầy đơn đầy đơn đầy đơn đầy đơn giản bộ phải trên bộ nội bộ trên bộ nội bộ trên bộ nội bộ nội bộ nội bộ trên bộ nội bộ nội bộ nội bộ nội bộ nội bộ trên bộ nội bộ nội bộ nội bộ nội bộ nội bộ nội bộ nội bộ nội bộ nội bộ trên bộ trên đơn đầy đơn đầy đơn đầy đơn`--audio-format`(v. d. d.) | auto |
+| `--instrumental` | & chứa`--extract-audio`, giữ chỉ các chữ viết hoa | - |
 
 ### kiểm thử tích hợp với mô hình thực
 

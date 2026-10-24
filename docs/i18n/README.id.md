@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | opsi CLI | Deskripsi | Bawaan |
 |------|-------------|---------|
-| `--lang-source` | Bahasa sumber (`auto` untuk deteksi otomatis) | `auto` |
-| `--lang-target` | Kode bahasa target (misalnya `it`, `fr`, `de`) | `it` |
+| `--output` / `-o` | Path berkas keluaran | auto |
+| `--output-dir` | Folder untuk berkas yang telah diterjemahkan (satu tempat, Windows dan Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Jalankan diagnosa lokal dan keluar tanpa menerjemahkan | - |
+| `--preflight-lipsync` | Dengan`--preflight`, membutuhkan Wav2Lip paket (dlib, facexlib, dasar) | - |
+| `--preflight-player` | Dengan`--preflight`, membutuhkan pemutar terintegrasi (python-mpv + libmpv) | - |
+| `--model` | Model Berbisik (`tiny`ke`large-v3-turbo`) | `small` |
+| `--lang-source` | Bahasa sumber (`auto`untuk auto-detect) | `auto` |
+| `--lang-target` | Target kode bahasa (misalnya.`it`,`fr`,`de`) | `it` |
 | `--voice` | Nama suara Edge-TTS | auto |
-| `--model` | Model Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Penyesuaian kecepatan TTS (misalnya `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian`, atau `deepl` | `google` |
-| `--deepl-key` | Kunci API DeepL Free | - |
-| `--diarize` | Aktifkan identifikasi orang yang berbicara (diarisasi) (pyannote) | - |
-| `--hf-token` | Token HuggingFace untuk diarisasi | - |
-| `--lipsync` | Terapkan sinkronisasi bibir Wav2Lip setelah sulih suara suara | - |
-| `--subs-only` | Hasilkan `.srt` saja, lewati dubbing suara | - |
-| `--no-subs` | Lewati generasi `.srt` | - |
+| `--tts-rate` | TTS penyesuaian kecepatan (misalnya.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Hasilkan`.srt`hanya, lewati dubbing | - |
+| `--no-subs` | Lewati`.srt`generasi | - |
 | `--no-demucs` | Lewati pemisahan suara/musik | - |
-| `--output` / `-o` | Jalur file keluaran | auto |
-| `--output-dir` | Folder untuk file yang diterjemahkan (satu tempat, Windows dan Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Memproses banyak file | - |
-| `--voicebox` | Mengkloning suara lewat server Voicebox yang berjalan | - |
-| `--voicebox-url` | Alamat Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Mesin Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--no-original-audio` | Jangan tambahkan audio sumber sebagai trek alternatif | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, atau`llm_ollama` | `google` |
+| `--deepl-key` | Kunci API Bebas DeepL | - |
+| `--ollama-model` | Tag model Ollama | `qwen3:8b` |
+| `--ollama-url` | URL daemon Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Matikan slot-aware prompting (cepat, kurang terbatas) | - |
+| `--ollama-thinking` | Aktifkan mode berpikir Qwen3 (lower, kurang idiom/grammar errors) | off |
+| `--no-document-context` | Nonaktifkan konteks tingkat-dokumen yang disuntikkan ke prompt Ollama | - |
+| `--no-cove` | Nonaktifkan Penyaringan Verifikasi kedua lewat (Ollama) | - |
+| `--diarize` | Aktifkan diarisasi speaker (pyannote) | - |
+| `--hf-token` | Huggingface token untuk diarisasi (jatuh kembali ke berkas konfigurasi) | - |
+| `--lipsync` | Terapkan lip sync Wav2Lip setelah dubbing (unduhan pertama ~416 MB) | - |
+| `--xtts` | Gunakan Coqui XTTS v2 voice clone (~1,8 GB run pertama) | - |
+| `--xtts-speed` | XTTS faktor kecepatan asli (0.5-2.0); pasangan auto-tuned per bahasa jika diabaikan | auto |
+| `--voicebox` | Kloning suara melalui server Voicebox yang sedang berjalan | - |
+| `--voicebox-url` | Alamat kotak suara | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Mesin voicebox (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Kata panas dipisahkan koma untuk bias Pemecahan Whisper | - |
+| `--hotwords-file` | Berkas JSON dengan hotwords (daftar datar atau per-bahasa dict) | - |
+| `--no-slot-expansion` | Nonaktifkan ekspansi slot pintar / waktu meminjam untuk segmen ketat | - |
+| `--no-sentence-repair` | Nonaktifkan perbaikan batas-kalimat pintar | - |
+| `--no-whisper-sanity` | Nonaktifkan pemeriksaan kewarasan post-Whisper | - |
+| `--no-overlap-fade` | Nonaktifkan memudar tumpang tindih, kembali ke hard-truncate di TTS overshoot | - |
+| `--difficulty-override` | Paksa profil kesulitan (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Nonaktifkan orchestrator kesulitan profil (gunakan MEDIUM) | - |
+| `--batch` | Proses beberapa berkas | - |
+| `--extract-audio` | Ekstrak trek audio dan bukan menerjemahkan | - |
+| `--audio-format` | Format keluaran bagi`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) untuk sebuah lossy`--audio-format`(e.g. 320) | auto |
+| `--instrumental` | Dengan`--extract-audio`, hanya menjaga instrumental (Demucs) | - |
 
 ### tes integrasi dengan model nyata
 

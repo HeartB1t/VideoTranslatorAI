@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI mulighed | Beskrivelse | Standard |
 |------|-------------|---------|
-| `--lang-source` | Kildesprog (`auto` til automatisk registrering) | `auto` |
-| `--lang-target` | Målsprogskode (f.eks. `it`, `fr`, `de`) | `it` |
-| `--voice` | Edge-TTS stemmenavn | auto |
-| `--model` | Whisper model (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS-hastighedsjustering (f.eks. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` eller `deepl` | `google` |
-| `--deepl-key` | DeepL Free API nøgle | - |
-| `--diarize` | Aktiver identifikation af personer, der taler (diarisering) (pyannote) | - |
-| `--hf-token` | HuggingFace token til diarisering | - |
-| `--lipsync` | Anvend Wav2Lip lip sync efter stemmedubbing | - |
-| `--subs-only` | Generer kun `.srt`, spring stemmedubbing over | - |
-| `--no-subs` | Spring `.srt` generation over | - |
-| `--no-demucs` | Spring stemme-/musikadskillelse over | - |
-| `--output` / `-o` | Output filsti | auto |
-| `--output-dir` | Mappe til oversatte filer (én sted, Windows og Linux) | `<videos>/VideoTranslatorAI` |
+| `--output` / `-o` | Sti til uddatafil | auto |
+| `--output-dir` | Mappe til oversatte filer (et sted, Windows og Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Kør lokal diagnostik og exit uden at oversætte | - |
+| `--preflight-lipsync` | Med`--preflight`, kræver Wav2Lip-pakkerne (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | Med`--preflight`, kræver den integrerede spiller (python-mpv + libmpv) | - |
+| `--model` | Hviskemodel (`tiny`til`large-v3-turbo`) | `small` |
+| `--lang-source` | Kildesprog (`auto`for automatisk detektering) | `auto` |
+| `--lang-target` | Målsprogskode (f.eks.`it`,`fr`,`de`) | `it` |
+| `--voice` | Kant- TTS- stemmenavn | auto |
+| `--tts-rate` | TTS-hastighedsjustering (f.eks.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Generér`.srt`Kun, springe dubbing | - |
+| `--no-subs` | Skip`.srt`generation | - |
+| `--no-demucs` | Spring stemme/musikseparation over | - |
+| `--no-original-audio` | Tilføj ikke kildelyden som et alternativt spor | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, eller`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Free API- nøgle | - |
+| `--ollama-model` | Ollama modelmærke | `qwen3:8b` |
+| `--ollama-url` | Ollama daemon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Deaktiver slot-aware prompting (hurtigere, mindre begrænset) | - |
+| `--ollama-thinking` | Aktivér Qwen3- tænketilstand (lavere, færre idiom/grammar fejl) | off |
+| `--no-document-context` | Deaktivér dokument- niveau- konteksten injiceret i Ollama-prompter | - |
+| `--no-cove` | Deaktivér anden adgangskode for Kæde af Verification (Ollama) | - |
+| `--diarize` | Aktivér højttalerdiarisering (pyannote) | - |
+| `--hf-token` | HuggingFace token til diarization (falder tilbage til config-filen) | - |
+| `--lipsync` | Anvend Wav2Lip-læbesynkronisering efter eftersyn (første run downloads ~ 416 MB) | - |
+| `--xtts` | Brug Coqui XTTS v2 stemmekloning (~1.8 GB første kørsel) | - |
+| `--xtts-speed` | XTTS native hastighedsfaktor (0,5-2,0); automatisk tunet pr. sprogpar, hvis udeladt | auto |
+| `--voicebox` | Klon stemmen gennem en kørende Voicebox-server | - |
+| `--voicebox-url` | Stemmeboksens adresse | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Stemmekassemotor (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Kommaadskilt hotwords to bias Whisper dekodning | - |
+| `--hotwords-file` | JSON fil med hotwords (flad liste eller pr-sprog dict) | - |
+| `--no-slot-expansion` | Deaktivér smart slot ekspansion / tid lån til stramme segmenter | - |
+| `--no-sentence-repair` | Deaktivér smart sætningsbundet reparation | - |
+| `--no-whisper-sanity` | Deaktivér post- hviskens sanitetstjek | - |
+| `--no-overlap-fade` | Deaktivér overlapningsfade, vend tilbage til hårdt afkortet på TTS-overskridelse | - |
+| `--difficulty-override` | Tving sværhedsgraden (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Deaktivér problemprofilorkestratoren (brug MEDIUM) | - |
 | `--batch` | Behandle flere filer | - |
-| `--voicebox` | Kloner stemmen via en kørende Voicebox-server | - |
-| `--voicebox-url` | Voicebox-adresse | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox-motor (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--extract-audio` | Uddrag lydsporet i stedet for at oversætte | - |
+| `--audio-format` | Outputformat til`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) for en lossy`--audio-format`(f.eks. 320) | auto |
+| `--instrumental` | Med`--extract-audio`, kun holde instrumental (Demucs) | - |
 
 ### integrationstest med rigtige modeller
 

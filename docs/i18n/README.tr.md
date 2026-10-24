@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | CLI seçeneği | Açıklama | Varsayılan |
 |------|-------------|---------|
-| `--lang-source` | Kaynak dili (otomatik algılama için `auto`) | `auto` |
-| `--lang-target` | Hedef dil kodu (ör. `it`, `fr`, `de`) | `it` |
+| `--output` / `-o` | Çıktı dosya yolu | auto |
+| `--output-dir` | Çevirilen dosyalar için dizin (tek bir yer, Windows ve Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Yerel tanıları çalıştır ve çevirmeden çık | - |
+| `--preflight-lipsync` | ile`--preflight`, Wav2Lip paketlerini gerektirir (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | ile`--preflight`, entegre oyuncu gerektirir (python-mpv + libmpv) | - |
+| `--model` | Fısıltı modeli (`tiny`için`large-v3-turbo`) | `small` |
+| `--lang-source` | Kaynak dil (`auto`Otomatik algılama için) | `auto` |
+| `--lang-target` | Hedef dil kodu (örn.`it`,`fr`,`de`) | `it` |
 | `--voice` | Edge-TTS ses adı | auto |
-| `--model` | Whisper modeli (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | TTS hız ayarı (örn. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` veya `deepl` | `google` |
-| `--deepl-key` | DeepL Free API anahtarı | - |
-| `--diarize` | Konuşan kişilerin tanımlanmasını etkinleştirin (günlükleştirme) (pyannote) | - |
-| `--hf-token` | Günlük tutma için HuggingFace jetonu | - |
-| `--lipsync` | Ses dublajından sonra Wav2Lip dudak senkronizasyonunu uygulayın | - |
-| `--subs-only` | Yalnızca `.srt` oluşturun, sesli dublajı atlayın | - |
-| `--no-subs` | `.srt` oluşturmayı atla | - |
+| `--tts-rate` | TTS hız ayarı (örn.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Oluştur`.srt`sadece, dublaj atlama | - |
+| `--no-subs` | Atla`.srt`nesil | - |
 | `--no-demucs` | Ses/müzik ayrımını atla | - |
-| `--output` / `-o` | Çıkış dosyası yolu | auto |
-| `--output-dir` | Çevrilen dosyalar için klasör (tek yer, Windows ve Linux) | `<videos>/VideoTranslatorAI` |
+| `--no-original-audio` | Kaynak sesi alternatif parça olarak eklemeyin | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, veya`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Free API anahtarı | - |
+| `--ollama-model` | Ollama model etiketi | `qwen3:8b` |
+| `--ollama-url` | Ollama daemon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Slot-aware istemini devre dışı bırak (daha hızlı, daha az kısıtlanmış) | - |
+| `--ollama-thinking` | Qwen3 düşünme modunu etkinleştirin (daha yavaş, daha az idiom / grammar hatası) | off |
+| `--no-document-context` | Ollama istemlerine enjekte edilen belge düzeyindeki bağlamı devre dışı bırak | - |
+| `--no-cove` | Doğrulama Zinciri ikinci geçişini devre dışı bırak (Ollama) | - |
+| `--diarize` | Hoparlör diarizasyonunu etkinleştir (pyannote) | - |
+| `--hf-token` | Diarizasyon için HuggingFace jetonu (config dosyasına geri döner) | - |
+| `--lipsync` | Wav2Lip dudak senkronizasyonunu dublajdan sonra uygula (ilk çalıştırma indirmeleri 416 MB) | - |
+| `--xtts` | Coqui XTTS v2 ses klonlama kullan ( 1.8 GB ilk çalıştırma) | - |
+| `--xtts-speed` | XTTS yerel hız faktörü (0,5-2.0); atlanırsa dil çifti başına otomatik ayarlı | auto |
+| `--voicebox` | Sesi çalışan bir Voicebox sunucusu aracılığıyla klonlayın | - |
+| `--voicebox-url` | Sesli kutu adresi | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Voicebox motoru (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Comma-ayrık hotwords için önyargı Whisper decoding | - |
+| `--hotwords-file` | Hotwords ile JSON dosyası (düz liste veya dil başına dikte) | - |
+| `--no-slot-expansion` | Sıkı segmentler için akıllı slot genişletme / zaman borçlanmasını devre dışı bırak | - |
+| `--no-sentence-repair` | Akıllı cümle-sınır onarımını devre dışı bırak | - |
+| `--no-whisper-sanity` | Fısıltı sonrası akıl kontrolünü devre dışı bırak | - |
+| `--no-overlap-fade` | Üst üste binmeyi devre dışı bırak, TTS overshoot'ta sert kısma geri dön | - |
+| `--difficulty-override` | Zorluk profilini zorla (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Zorluk profilli orkestratoru devre dışı bırak (MEDIUM kullanın) | - |
 | `--batch` | Birden fazla dosyayı işle | - |
-| `--voicebox` | Sesi çalışan bir Voicebox sunucusuyla klonlar | - |
-| `--voicebox-url` | Voicebox adresi | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Voicebox motoru (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--extract-audio` | Çevirmek yerine ses parçasını ayıklayın | - |
+| `--audio-format` | için çıktı biçimi`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bir kayıp için Bitrate (kbps)`--audio-format`(örn. 320) | auto |
+| `--instrumental` | ile`--extract-audio`, sadece enstrümantal tutmak (Demucs) | - |
 
 ### gerçek modellerle entegrasyon testleri
 

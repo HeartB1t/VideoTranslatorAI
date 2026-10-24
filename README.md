@@ -440,25 +440,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--output` / `-o` | Output file path | auto |
+| `--output-dir` | Folder for translated files (one place, Windows and Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Run local diagnostics and exit without translating | - |
+| `--preflight-lipsync` | With `--preflight`, require the Wav2Lip packages (dlib, facexlib, basicsr) | - |
+| `--preflight-player` | With `--preflight`, require the integrated player (python-mpv + libmpv) | - |
+| `--model` | Whisper model (`tiny` to `large-v3-turbo`) | `small` |
 | `--lang-source` | Source language (`auto` for auto-detect) | `auto` |
 | `--lang-target` | Target language code (e.g. `it`, `fr`, `de`) | `it` |
 | `--voice` | Edge-TTS voice name | auto |
-| `--model` | Whisper model (`tiny` → `large-v3-turbo`) | `small` |
 | `--tts-rate` | TTS speed adjustment (e.g. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian`, or `deepl` | `google` |
-| `--deepl-key` | DeepL Free API key | - |
-| `--diarize` | Enable speaker diarization (pyannote) | - |
-| `--hf-token` | HuggingFace token for diarization | - |
-| `--lipsync` | Apply Wav2Lip lip sync after dubbing | - |
 | `--subs-only` | Generate `.srt` only, skip dubbing | - |
 | `--no-subs` | Skip `.srt` generation | - |
 | `--no-demucs` | Skip voice/music separation | - |
-| `--output` / `-o` | Output file path | auto |
-| `--output-dir` | Folder for translated files (one place, Windows and Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Process multiple files | - |
+| `--no-original-audio` | Do not add the source audio as an alternate track | - |
+| `--translation-engine` | `google`, `deepl`, `marian`, or `llm_ollama` | `google` |
+| `--deepl-key` | DeepL Free API key | - |
+| `--ollama-model` | Ollama model tag | `qwen3:8b` |
+| `--ollama-url` | Ollama daemon URL | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Disable slot-aware prompting (faster, less constrained) | - |
+| `--ollama-thinking` | Enable Qwen3 thinking mode (slower, fewer idiom/grammar errors) | off |
+| `--no-document-context` | Disable the document-level context injected into Ollama prompts | - |
+| `--no-cove` | Disable the Chain-of-Verification second pass (Ollama) | - |
+| `--diarize` | Enable speaker diarization (pyannote) | - |
+| `--hf-token` | HuggingFace token for diarization (falls back to the config file) | - |
+| `--lipsync` | Apply Wav2Lip lip sync after dubbing (first run downloads ~416 MB) | - |
+| `--xtts` | Use Coqui XTTS v2 voice cloning (~1.8 GB first run) | - |
+| `--xtts-speed` | XTTS native speed factor (0.5-2.0); auto-tuned per language pair if omitted | auto |
 | `--voicebox` | Clone the voice through a running Voicebox server | - |
 | `--voicebox-url` | Voicebox address | `http://127.0.0.1:17493` |
 | `--voicebox-engine` | Voicebox engine (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--hotwords` | Comma-separated hotwords to bias Whisper decoding | - |
+| `--hotwords-file` | JSON file with hotwords (flat list or per-language dict) | - |
+| `--no-slot-expansion` | Disable smart slot expansion / time borrowing for tight segments | - |
+| `--no-sentence-repair` | Disable smart sentence-boundary repair | - |
+| `--no-whisper-sanity` | Disable the post-Whisper sanity check | - |
+| `--no-overlap-fade` | Disable overlap fade, revert to hard-truncate on TTS overshoot | - |
+| `--difficulty-override` | Force the difficulty profile (`easy`, `medium`, `hard`) | auto |
+| `--no-difficulty-profile` | Disable the difficulty-profile orchestrator (use MEDIUM) | - |
+| `--batch` | Process multiple files | - |
+| `--extract-audio` | Extract the audio track instead of translating | - |
+| `--audio-format` | Output format for `--extract-audio` (`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) for a lossy `--audio-format` (e.g. 320) | auto |
+| `--instrumental` | With `--extract-audio`, keep only the instrumental (Demucs) | - |
 
 ### Heavy Smoke Tests
 

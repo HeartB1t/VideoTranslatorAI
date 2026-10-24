@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Opcja CLI | Opis | Domyślne |
 |------|-------------|---------|
-| `--lang-source` | Język źródłowy (`auto` do automatycznego wykrywania) | `auto` |
-| `--lang-target` | Kod języka docelowego (np. `it`, `fr`, `de`) | `it` |
-| `--voice` | Nazwa głosu Edge-TTS | auto |
-| `--model` | Model Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Regulacja prędkości TTS (np. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` lub `deepl` | `google` |
-| `--deepl-key` | Klucz API DeepL Free | - |
-| `--diarize` | Włącz identyfikację osób mówiących (diaryzacja) (pyannote) | - |
-| `--hf-token` | Token HuggingFace do diaryzacji | - |
-| `--lipsync` | Zastosuj synchronizację warg Wav2Lip po kopiowaniu głosu | - |
-| `--subs-only` | Wygeneruj tylko `.srt`, pomiń dubbing głosowy | - |
-| `--no-subs` | Pomiń generowanie `.srt` | - |
-| `--no-demucs` | Pomiń separację głosu/muzyki | - |
 | `--output` / `-o` | Ścieżka pliku wyjściowego | auto |
-| `--output-dir` | Folder na przetłumaczone pliki (jedno miejsce, Windows i Linux) | `<videos>/VideoTranslatorAI` |
+| `--output-dir` | Katalog dla przetłumaczonych plików (jedno miejsce, Windows i Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Uruchom lokalną diagnostykę i wyjdź bez tłumaczenia | - |
+| `--preflight-lipsync` | Z`--preflight`, wymagać pakietów Wav2Lip (dlib, facexlib, basedsr) | - |
+| `--preflight-player` | Z`--preflight`, wymaga zintegrowanego odtwarzacza (python-mpv + libmpv) | - |
+| `--model` | Wzór szepta (`tiny`do`large-v3-turbo`) | `small` |
+| `--lang-source` | Język źródłowy (`auto`dla automatycznego wykrywania) | `auto` |
+| `--lang-target` | Kod języka docelowego (np.`it`,`fr`,`de`) | `it` |
+| `--voice` | Nazwa głosu krawędzi- TTS | auto |
+| `--tts-rate` | Dostosowanie prędkości TTS (np.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Wygeneruj`.srt`Wyłącznie, przeskakuj dubbing | - |
+| `--no-subs` | Pomiń`.srt`generacja | - |
+| `--no-demucs` | Pomiń oddzielenie głosu/muzyki | - |
+| `--no-original-audio` | Nie dodawaj dźwięku źródłowego jako alternatywnego utworu | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, lub`llm_ollama` | `google` |
+| `--deepl-key` | DeepL Wolny klawisz API | - |
+| `--ollama-model` | Tag modelu Ollama | `qwen3:8b` |
+| `--ollama-url` | URL demona Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Wyłącz wskazówki na slot (szybsze, mniej ograniczone) | - |
+| `--ollama-thinking` | Włącz tryb myślenia Qwen3 (powolniejsze, mniej błędów idiom/grama) | off |
+| `--no-document-context` | Wyłącz kontekst na poziomie dokumentu wstrzyknięty do pytań Ollamy | - |
+| `--no-cove` | Wyłączenie drugiego przepustki łańcucha weryfikacji (Ollama) | - |
+| `--diarize` | Włącz diaryzację głośnika (pyannote) | - |
+| `--hf-token` | Token do diaryzacji (wraca do pliku konfiguracyjnego) | - |
+| `--lipsync` | Zastosuj Wav2Lip synchronizację lip po dubbingu (pierwsza run downloads ~416 MB) | - |
+| `--xtts` | Użyj klonowania głosu Coqui XTTS v2 (~1.8 GB) | - |
+| `--xtts-speed` | Właściwy współczynnik prędkości XTTS (0,5-2,0); automatycznie dostosowywany na parę językową, jeżeli pominiemy | auto |
+| `--voicebox` | Klonuj głos przez uruchomiony serwer Voicebox | - |
+| `--voicebox-url` | Adres skrzynki głosowej | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Silnik głośnikowy (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Rozdzielone przecięciami słowa gorące do uprzedniej dekodacji Szeptaj | - |
+| `--hotwords-file` | Plik JSON z gorącymi słowami (płaska lista lub dykt na język) | - |
+| `--no-slot-expansion` | Wyłącz inteligentną ekspansję slot / czas pożyczki dla ścisłych segmentów | - |
+| `--no-sentence-repair` | Wyłącz inteligentne naprawy zdań | - |
+| `--no-whisper-sanity` | Wyłącz kontrolę rozsądności po Whisper | - |
+| `--no-overlap-fade` | Wyłącz nakładanie się znika, powrócić do twardego trunkcate przy przekroczeniu TTS | - |
+| `--difficulty-override` | Wymuś profil trudności (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Wyłącz orkiestratora profilu trudności (użyj MEDIUM) | - |
 | `--batch` | Przetwarzaj wiele plików | - |
-| `--voicebox` | Klonuje głos przez działający serwer Voicebox | - |
-| `--voicebox-url` | Adres Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Silnik Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--extract-audio` | Rozpakuj utwór audio zamiast tłumaczenia | - |
+| `--audio-format` | Format wyjściowy dla`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitowa prędkość (kbps) dla straty`--audio-format`(np. 320) | auto |
+| `--instrumental` | Z`--extract-audio`, zachować tylko instrumentalne (Demucs) | - |
 
 ### testy integracyjne z modelami rzeczywistymi
 

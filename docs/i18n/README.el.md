@@ -402,25 +402,49 @@ videotranslatorai video.mp4 --lang-target en
 
 | Επιλογή CLI | Περιγραφή | Προεπιλογή |
 |------|-------------|---------|
-| `--lang-source` | Γλώσσα πηγής (`auto` για αυτόματη ανίχνευση) | `auto` |
-| `--lang-target` | Κωδικός γλώσσας προορισμού (π.χ. `it`, `fr`, `de`) | `it` |
-| `--voice` | Όνομα φωνής Edge-TTS | auto |
-| `--model` | Μοντέλο Whisper (`tiny` → `large-v3-turbo`) | `small` |
-| `--tts-rate` | Ρύθμιση ταχύτητας TTS (π.χ. `+10%`, `-20%`) | `+0%` |
-| `--translation-engine` | `google`, `marian` ή `deepl` | `google` |
-| `--deepl-key` | Κλειδί API DeepL Free | - |
-| `--diarize` | Ενεργοποίηση αναγνώρισης ατόμων που μιλούν (diarization) (pyannote) | - |
-| `--hf-token` | Token HuggingFace για diarization | - |
-| `--lipsync` | Εφαρμόστε το συγχρονισμό χειλιών Wav2Lip μετά τη φωνητική μεταγλώττιση | - |
-| `--subs-only` | Δημιουργήστε μόνο `.srt`, παραλείψτε τη φωνητική μεταγλώττιση | - |
-| `--no-subs` | Παράλειψη γενιάς `.srt` | - |
-| `--no-demucs` | Παράλειψη διαχωρισμού φωνής/μουσικής | - |
 | `--output` / `-o` | Διαδρομή αρχείου εξόδου | auto |
-| `--output-dir` | Φάκελος για μεταφρασμένα αρχεία (ένα μέρος, Windows και Linux) | `<videos>/VideoTranslatorAI` |
-| `--batch` | Επεξεργασία πολλών αρχείων | - |
-| `--voicebox` | Κλωνοποιεί τη φωνή μέσω ενεργού διακομιστή Voicebox | - |
-| `--voicebox-url` | Διεύθυνση του Voicebox | `http://127.0.0.1:17493` |
-| `--voicebox-engine` | Μηχανή του Voicebox (`chatterbox`, `qwen`, ...) | `chatterbox` |
+| `--output-dir` | Φάκελος για μεταφρασμένα αρχεία (μία θέση, Windows και Linux) | `<videos>/VideoTranslatorAI` |
+| `--preflight` | Εκτέλεση τοπικών διαγνωστικών και εξόδου χωρίς μετάφραση | - |
+| `--preflight-lipsync` | Με`--preflight`, απαιτούν τα πακέτα Wav2Lip (dlib, facexlib, basisr) | - |
+| `--preflight-player` | Με`--preflight`, απαιτούν τον ενσωματωμένο παίκτη (python-mpv + libmpv) | - |
+| `--model` | Μοντέλο ψιθυριστή (`tiny`έως`large-v3-turbo`) | `small` |
+| `--lang-source` | Γλώσσα πηγής (`auto`για αυτόματη ανίχνευση) | `auto` |
+| `--lang-target` | Κωδικός γλώσσας-στόχου (π.χ.`it`,`fr`,`de`) | `it` |
+| `--voice` | Όνομα φωνής Edge-TTS | auto |
+| `--tts-rate` | Ρύθμιση ταχύτητας TTS (π.χ.`+10%`,`-20%`) | `+0%` |
+| `--subs-only` | Δημιουργία`.srt`Μόνο, skip dubbing | - |
+| `--no-subs` | Παράκαμψη`.srt`γενιά | - |
+| `--no-demucs` | Παράκαμψη φωνής/διαχωρισμός μουσικής | - |
+| `--no-original-audio` | Μην προσθέσετε τον ήχο πηγής ως εναλλασσόμενο κομμάτι | - |
+| `--translation-engine` | `google`,`deepl`,`marian`, ή`llm_ollama` | `google` |
+| `--deepl-key` | Κλειδί DeepL Free API | - |
+| `--ollama-model` | Μοντέλο Ollama | `qwen3:8b` |
+| `--ollama-url` | URL δαίμονας Ollama | `http://localhost:11434` |
+| `--ollama-no-slot-aware` | Απενεργοποίηση υποκίνησης slot-aware (γρήγορη, λιγότερο περιορισμένη) | - |
+| `--ollama-thinking` | Ενεργοποιήστε τη λειτουργία σκέψης Qwen3 (πιο αργά, λιγότερα λάθη ιδιωματισμού/γραμματίου) | off |
+| `--no-document-context` | Απενεργοποίηση του πλαισίου του εγγράφου που εγχέεται στην Ollama | - |
+| `--no-cove` | Απενεργοποιήστε το δεύτερο πέρασμα αλυσίδας επαλήθευσης (Ollama) | - |
+| `--diarize` | Ενεργοποίηση διαριοποίησης ηχείων (pyannote) | - |
+| `--hf-token` | HuggingFace Point for diarization (πέφτει πίσω στο αρχείο ρυθμίσεων) | - |
+| `--lipsync` | Εφαρμογή συγχρονισμού χειλιών Wav2Lip μετά από μετουσίωση (first run downloads ~416 MB) | - |
+| `--xtts` | Χρήση της κλωνοποίησης φωνής Coqui XTTS v2 (~1,8 GB first run) | - |
+| `--xtts-speed` | Συντελεστής τοπικής ταχύτητας XTTS (0,5-2,0), αυτόματου tuned ανά ζεύγος γλωσσών, εάν παραλειφθεί | auto |
+| `--voicebox` | Κλείστε τη φωνή μέσα από ένα τρέξιμο διακομιστή Voicebox | - |
+| `--voicebox-url` | Διεύθυνση Voicebox | `http://127.0.0.1:17493` |
+| `--voicebox-engine` | Κινητήρας Voicebox (`chatterbox`,`qwen`, ...) | `chatterbox` |
+| `--hotwords` | Αποκωδικοποίηση ψιθυριστάς | - |
+| `--hotwords-file` | Αρχείο JSON με hotwords (flat list ή per-language dist) | - |
+| `--no-slot-expansion` | Απενεργοποίηση smart slot επέκτασης / χρονοδανεισμού για σφιχτά τμήματα | - |
+| `--no-sentence-repair` | Απενεργοποιήστε την έξυπνη επισκευή ορίου ποινής | - |
+| `--no-whisper-sanity` | Απενεργοποιήστε τον έλεγχο λογικής μετά τον ψίθυρο | - |
+| `--no-overlap-fade` | Απενεργοποίηση της επικάλυψης ξεθωριάζει, επανέρχεται σε σκληρό-τρυπάνι για υπερβολή TTS | - |
+| `--difficulty-override` | Εξαναγκάστε το προφίλ δυσκολίας (`easy`,`medium`,`hard`) | auto |
+| `--no-difficulty-profile` | Απενεργοποιήστε τον ενορχηστρωτή δυσκολίας (χρησιμοποιήστε το melitensis) | - |
+| `--batch` | Επεξεργασία πολλαπλών αρχείων | - |
+| `--extract-audio` | Εκχύλισε το ακουστικό κομμάτι αντί της μετάφρασης | - |
+| `--audio-format` | Μορφή εξόδου για`--extract-audio`(`mp3`/`m4a`/`opus`/`ogg`/`flac`/`wav`) | `mp3` |
+| `--audio-bitrate` | Bitrate (kbps) for a lossy`--audio-format`(π.χ. 320) | auto |
+| `--instrumental` | Με`--extract-audio`, κρατήστε μόνο το όργανο (Δημούκης) | - |
 
 ### δοκιμές ολοκλήρωσης με πραγματικά μοντέλα
 
