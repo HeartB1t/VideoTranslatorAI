@@ -28,11 +28,19 @@ class MediaPathArgTests(unittest.TestCase):
         self.assertFalse(out.startswith("-"))
 
     def test_an_absolute_path_is_kept(self):
-        self.assertEqual(media_path_arg("/tmp/x/out.wav"), "/tmp/x/out.wav")
+        # Build an already-absolute path for the running OS, so this holds on
+        # Windows too (where "/tmp/x" is not absolute).
+        absolute = os.path.abspath(os.path.join(os.sep, "x", "out.wav"))
+        self.assertTrue(os.path.isabs(absolute))
+        self.assertEqual(media_path_arg(absolute), absolute)
+
+    def test_is_idempotent(self):
+        once = media_path_arg("clip.mp4")
+        self.assertEqual(media_path_arg(once), once)
 
     def test_accepts_os_pathlike(self):
         from pathlib import Path
-        self.assertEqual(media_path_arg(Path("/tmp/a.flac")), "/tmp/a.flac")
+        self.assertEqual(media_path_arg(Path("a.flac")), media_path_arg("a.flac"))
 
 
 class MediaTests(unittest.TestCase):
