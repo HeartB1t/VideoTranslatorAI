@@ -204,6 +204,7 @@ class InputSourceTests(unittest.TestCase):
         cases = (
             ("ERROR: Sign in to confirm you're not a bot", "VPN"),
             ("HTTP Error 429: Too Many Requests", "VPN"),
+            ("ERROR: unable to download video data: HTTP Error 403: Forbidden", "VPN"),
             ("ERROR: Join this channel to get access to members-only content", "members"),
             ("ERROR: Video unavailable", None),
         )

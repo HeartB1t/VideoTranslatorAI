@@ -39,8 +39,11 @@ def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
 
 # yt-dlp error texts that mean an IP / anti-bot block (the VPN advice helps)
 # or a video only paying members can watch (the VPN advice would mislead).
+# "http error 403" on YouTube video data (after the manifest extracted fine)
+# is an IP / token throttle too: the data URLs are refused without a valid
+# session, so the same VPN / logged-in-cookies advice applies.
 _BOT_BLOCK_MARKERS = ("not a bot", "sign in to confirm", "http error 429",
-                      "too many requests")
+                      "too many requests", "http error 403")
 _MEMBERS_ONLY_MARKERS = ("members-only", "members only", "join this channel",
                          "available to this channel's members")
 
