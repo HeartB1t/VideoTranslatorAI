@@ -51,7 +51,8 @@ class ApplyLipsyncTests(unittest.TestCase):
             model = tmp / "model.pth"
             repo.mkdir()
             work.mkdir()
-            (work / "temp").mkdir()
+            # NB: temp/ is NOT pre-created: apply_lipsync must create it, because
+            # Wav2Lip writes temp/result.avi relative to its CWD.
             (repo / "inference.py").write_text("# stub", encoding="utf-8")
             model.write_bytes(b"model")
 
@@ -66,6 +67,12 @@ class ApplyLipsyncTests(unittest.TestCase):
             timer = mock.Mock()
             registered = []
             unregistered = []
+            temp_at_launch = {}
+
+            def fake_popen(*args, **kwargs):
+                # Wav2Lip needs temp/ to exist the moment it starts.
+                temp_at_launch["exists"] = (work / "temp").is_dir()
+                return proc
 
             result = apply_lipsync(
                 "input.mp4",
@@ -77,16 +84,17 @@ class ApplyLipsyncTests(unittest.TestCase):
                 ensure_assets=lambda: None,
                 register_subprocess=registered.append,
                 unregister_subprocess=unregistered.append,
-                popen=mock.Mock(return_value=proc),
+                popen=fake_popen,
                 timer_factory=mock.Mock(return_value=timer),
                 device_selector=lambda: "cpu",
                 log=lambda *args, **kwargs: None,
             )
 
         self.assertEqual(result, str(tmp / "video_lipsync.mp4"))
+        self.assertTrue(temp_at_launch["exists"])      # created before launch
         self.assertEqual(registered, [proc])
         self.assertEqual(unregistered, [proc])
-        self.assertFalse((work / "temp").exists())
+        self.assertFalse((work / "temp").exists())     # cleaned up after
         timer.start.assert_called_once()
         timer.cancel.assert_called_once()
 

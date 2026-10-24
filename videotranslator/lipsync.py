@@ -90,6 +90,11 @@ def apply_lipsync(
 
     try:
         wav2lip_work_dir.mkdir(parents=True, exist_ok=True)
+        # inference.py writes temp/result.avi and temp/temp.wav relative to its
+        # CWD (here wav2lip_work_dir). Without this dir cv2.VideoWriter fails
+        # silently, result.avi is never written, and the final mux aborts with
+        # "temp/result.avi: No such file or directory" (exit 0, no outfile).
+        (wav2lip_work_dir / "temp").mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError) as exc:
         raise RuntimeError(
             f"Wav2Lip work directory is not writable: {wav2lip_work_dir}"
