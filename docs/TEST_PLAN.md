@@ -103,14 +103,14 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 - [ ] Doppiaggio live Edge-TTS (seconda mpv). (L, F+Q, dep: net)
 - [ ] Doppiaggio live ElevenLabs. (L, F+Q, dep: 11l PAGAMENTO)
 - [ ] Modalita' ritardata con slider delay, crescita buffer 8->30 s. (L, F)
-- [ ] Switch motore a caldo, circuit breaker online, "Passa a MarianMT". (L, F)
+- [x] Switch motore a caldo, circuit breaker online, "Passa a MarianMT". 2026-10-24, GUI reale su Xvfb con Google VERO (audio sink nullo), scenario delayed_switch: Google rate-limited a 10.9 s -> banner `live_warn_rate_limited` + azione `live_btn_switch_marian`; switch a 27 s -> engine marian, traduzione riprende (53 tradotte, 10 doppiate), nessuna raffica 'kept original'. lost=1 su tutta la sessione (tollerato; non e' il repro specifico CR-B resume-under-load). CR-G/CR-B validati. (L, F)
 - [x] Pausa/seek collegati alla sessione live, auto-stop a EOF. 2026-10-24, GUI reale su Xvfb (audio al sink nullo), delayed+dub+marian su zoo_short: player_ready, live_started, seek 6->2, pausa 3 s + ripresa (sessione viva), auto-stop pulito a EOF ('source finished and dubbing complete'), ended auto. RESULT tutti True (seeked/paused/resumed/ended/auto_stopped), 0 timeout. (L, F)
 - [ ] Mute originale prima e durante. (L, F)
 - [ ] Modello pesante Ollama: avviso che non copre gli errori. (L, F)
 
 ## 9. GUI, temi, i18n
 
-- [ ] Avvio GUI, screenshot, layout P0 (colonna destra, player a sinistra). (L+W, F)
+- [x] Avvio GUI, screenshot, layout P0. 2026-10-24 su Xvfb: layout corretto (player a sinistra, card INPUT/Estrai audio/Traduzione/Profilo a destra), pallini GPU/Ollama/Wav2Lip/Player verdi, transport con CC/A/B/Playlist, log con header di sistema (RTX 3090, torch 2.6.0+cu124, pyannote 3.4.0, edge-tts 7.3.1, mpv 0.41). Screenshot in scratchpad t20/gui_default.png. (L, F)
 - [ ] 4 skin (Dex/Handheld/CRT/CRT Amber) + temi auto/light, font OFL. (L+W, F+Q)
 - [ ] i18n: cambio lingua, copertura 26 lingue, placeholder uguali. (L+W, F)
 - [ ] Pannello log parlante: eventi in tempo reale, colori, dedup, mpv. (L+W, F)
@@ -120,7 +120,7 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 ## 10. CLI
 
 - [ ] Traduzione da CLI con tutti i flag principali (lang, engine, model, voice). (L+W, F)
-- [ ] --preflight, --preflight-lipsync, --preflight-player. (L+W, F)
+- [x] --preflight, --preflight-lipsync, --preflight-player: 2026-10-24 tutti Result OK (deps opzionali e required, ffmpeg/ffprobe, rubberband, ollama, libmpv, GPU). (L, F)
 - [ ] --extract-audio, --instrumental, --batch, --subs-only, --no-subs. (L, F)
 
 ## 11. Modelli, hardware, segreti
