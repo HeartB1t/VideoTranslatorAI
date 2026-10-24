@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
+from unittest import mock
 
 from videotranslator import voicebox_engine as vb
 
@@ -20,15 +21,37 @@ class _Resp(io.BytesIO):
 class _FakeVoicebox:
     """In-memory stand-in for the Voicebox REST API."""
 
-    def __init__(self, *, down=False, fail_generate=False):
+    def __init__(self, *, down=False, fail_generate=False, model_cached=True,
+                 polls_until_ready=1, no_model_api=False):
         self.down, self.fail_generate = down, fail_generate
         self.profiles, self.samples, self.generated, self.deleted = {}, [], [], []
+        self.model_cached = model_cached
+        self.polls_until_ready = polls_until_ready
+        self.no_model_api = no_model_api
+        self.download_calls = []
+        self._polls_after_download = None
 
     def __call__(self, req, timeout):
         if self.down:
             raise urllib.error.URLError("Connection refused")
         path = req.full_url.split("17493", 1)[1]
         method = req.get_method()
+        if (method, path) == ("GET", "/models/status"):
+            if self.no_model_api:
+                raise urllib.error.HTTPError(req.full_url, 404, "not found", {},
+                                             io.BytesIO(b'{"detail": "no such route"}'))
+            downloaded = self.model_cached
+            if not downloaded and self._polls_after_download is not None:
+                self._polls_after_download += 1
+                if self._polls_after_download >= self.polls_until_ready:
+                    self.model_cached = downloaded = True
+            return _Resp(json.dumps({"models": [
+                {"model_name": "chatterbox-tts", "downloaded": downloaded,
+                 "downloading": not downloaded}]}).encode())
+        if (method, path) == ("POST", "/models/download"):
+            self.download_calls.append(json.loads(req.data)["model_name"])
+            self._polls_after_download = 0
+            return _Resp(b"{}")
         if (method, path) == ("GET", "/health"):
             return _Resp(json.dumps({"status": "healthy", "gpu_available": True,
                                      "gpu_type": "CUDA"}).encode())
@@ -168,6 +191,66 @@ class GenerateTests(unittest.TestCase):
         self.assertIsNone(self._run(_FakeVoicebox(), lang="vi")[0])
         self.assertIsNone(self._run(_FakeVoicebox(), reference_ok=False)[0])
         self.assertIsNone(self._run(_FakeVoicebox(), transcript="")[0])
+
+    def test_a_cached_model_is_not_downloaded_again(self):
+        fake = _FakeVoicebox()                 # model_cached=True by default
+        files, _, _ = self._run(fake)
+        self.assertEqual(files and [Path(f).name for f in files][0], "seg_0000.wav")
+        self.assertEqual(fake.download_calls, [])
+
+    def test_a_missing_model_is_downloaded_then_generation_proceeds(self):
+        fake = _FakeVoicebox(model_cached=False, polls_until_ready=2)
+        with mock.patch.object(vb.time, "sleep"):
+            files, existing, logs = self._run(fake)
+        self.assertEqual(fake.download_calls, ["chatterbox-tts"])
+        self.assertEqual(existing, [True, False, True])
+        self.assertTrue(any("chatterbox-tts" in line for line in logs))
+
+    def test_an_old_server_without_the_models_api_still_generates(self):
+        fake = _FakeVoicebox(no_model_api=True)
+        files, _, _ = self._run(fake)
+        self.assertEqual(fake.download_calls, [])
+        self.assertEqual([g["text"] for g in fake.generated], ["Ciao a tutti.", "Seconda voce."])
+
+
+class EnsureModelTests(unittest.TestCase):
+    def _client(self, fake):
+        return vb.VoiceboxClient(opener=fake)
+
+    def test_cached_model_is_a_noop(self):
+        fake = _FakeVoicebox()
+        vb.ensure_model(self._client(fake), "chatterbox", log=lambda *a, **k: None)
+        self.assertEqual(fake.download_calls, [])
+
+    def test_missing_model_is_triggered_and_awaited(self):
+        fake = _FakeVoicebox(model_cached=False, polls_until_ready=3)
+        clock = [0.0]
+        vb.ensure_model(self._client(fake), "chatterbox", log=lambda *a, **k: None,
+                        poll_s=1.0, wait_s=100.0,
+                        sleep=lambda s: clock.__setitem__(0, clock[0] + s),
+                        clock=lambda: clock[0])
+        self.assertEqual(fake.download_calls, ["chatterbox-tts"])
+        self.assertTrue(fake.model_cached)
+
+    def test_timeout_raises_voicebox_error(self):
+        fake = _FakeVoicebox(model_cached=False, polls_until_ready=10_000)
+        clock = [0.0]
+        with self.assertRaises(vb.VoiceboxError) as ctx:
+            vb.ensure_model(self._client(fake), "chatterbox", log=lambda *a, **k: None,
+                            poll_s=1.0, wait_s=3.0,
+                            sleep=lambda s: clock.__setitem__(0, clock[0] + s),
+                            clock=lambda: clock[0])
+        self.assertEqual(ctx.exception.kind, "timeout")
+
+    def test_old_server_without_models_api_is_a_noop(self):
+        fake = _FakeVoicebox(no_model_api=True)
+        vb.ensure_model(self._client(fake), "chatterbox", log=lambda *a, **k: None)
+        self.assertEqual(fake.download_calls, [])
+
+    def test_unknown_engine_is_a_noop(self):
+        fake = _FakeVoicebox(model_cached=False)
+        vb.ensure_model(self._client(fake), "no-such-engine", log=lambda *a, **k: None)
+        self.assertEqual(fake.download_calls, [])
 
 
 if __name__ == "__main__":

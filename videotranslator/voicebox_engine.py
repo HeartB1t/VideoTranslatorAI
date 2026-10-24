@@ -41,6 +41,17 @@ LANGUAGES = frozenset(("zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it
 # European languages, Qwen3-TTS is Voicebox's default.
 ENGINES = ("chatterbox", "qwen", "chatterbox_turbo", "tada", "luxtts", "kokoro")
 DEFAULT_ENGINE = "chatterbox"
+# Engine -> the model_name GET /models/status reports (Voicebox backend source,
+# default size for the engines that have sizes). Used to pre-download the model
+# on a fresh server, which otherwise answers HTTP 400 "model not downloaded yet".
+ENGINE_MODELS: dict[str, str] = {
+    "chatterbox": "chatterbox-tts",
+    "chatterbox_turbo": "chatterbox-turbo",
+    "qwen": "qwen-tts-1.7B",
+    "tada": "tada-1b",
+    "luxtts": "luxtts",
+    "kokoro": "kokoro",
+}
 
 
 class VoiceboxError(RuntimeError):
@@ -127,6 +138,15 @@ class VoiceboxClient:
     def health(self) -> dict:
         return self._json("GET", "/health", timeout=5.0) or {}
 
+    def model_status(self) -> list[dict]:
+        """Status of the server's TTS models (raises on an old server w/o the route)."""
+        data = self._json("GET", "/models/status", timeout=10.0)
+        return list((data or {}).get("models") or [])
+
+    def start_download(self, model_name: str) -> None:
+        """Ask the server to start downloading ``model_name`` (background task)."""
+        self._json("POST", "/models/download", {"model_name": model_name}, timeout=30.0)
+
     def profiles(self) -> list[dict]:
         return list(self._json("GET", "/profiles") or [])
 
@@ -167,6 +187,52 @@ def describe_health(health: dict) -> str:
     return "CPU"
 
 
+def ensure_model(
+    client: "VoiceboxClient",
+    engine: str,
+    *,
+    log: Callable[..., None] = print,
+    wait_s: float = 1800.0,
+    poll_s: float = 5.0,
+    sleep: Callable[[float], Any] | None = None,
+    clock: Callable[[], float] | None = None,
+) -> None:
+    """Make sure the engine's model is downloaded on the server.
+
+    On a fresh Voicebox the model is absent and generation answers HTTP 400;
+    here we trigger POST /models/download and wait for GET /models/status to
+    report it downloaded. A server too old for the models API (404), an unknown
+    engine, or a model the server does not list are left alone (the caller then
+    behaves as before). Raises ``VoiceboxError('timeout')`` if it never finishes.
+    """
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
+    model = ENGINE_MODELS.get(engine)
+    if not model:
+        return
+    try:
+        statuses = client.model_status()
+    except VoiceboxError:
+        return  # old server without the models API: let generation proceed/fallback
+    entry = next((m for m in statuses if m.get("model_name") == model), None)
+    if entry is None or entry.get("downloaded"):
+        return
+    log(f"     Voicebox: scaricamento del modello {model} (primo utilizzo)...", flush=True)
+    client.start_download(model)
+    deadline = clock() + wait_s
+    while clock() < deadline:
+        sleep(poll_s)
+        try:
+            statuses = client.model_status()
+        except VoiceboxError:
+            continue
+        entry = next((m for m in statuses if m.get("model_name") == model), None)
+        if entry and entry.get("downloaded"):
+            log(f"     Voicebox: modello {model} pronto.", flush=True)
+            return
+    raise VoiceboxError("timeout", f"model {model} download did not finish in {wait_s:.0f}s")
+
+
 def _transcribe_reference(path: str, language: str) -> str:
     """Text spoken in the reference clip (Voicebox needs it for cloning)."""
     from faster_whisper import WhisperModel
@@ -192,6 +258,8 @@ def generate_tts_voicebox(
     speaker_reference: Callable[..., str | None] = extract_speaker_reference,
     transcribe: Callable[[str, str], str] = _transcribe_reference,
     log: Callable[..., None] = print,
+    model_wait_s: float = 1800.0,
+    model_poll_s: float = 5.0,
 ) -> list[str] | None:
     """Voice-cloned TTS through Voicebox. None means: use Edge-TTS instead.
 
@@ -206,6 +274,9 @@ def generate_tts_voicebox(
     try:
         client = client or VoiceboxClient(base_url)
         health = client.health()
+        # Fresh server: the engine's model may need downloading first, otherwise
+        # generation answers HTTP 400 and we would needlessly fall back.
+        ensure_model(client, engine, log=log, wait_s=model_wait_s, poll_s=model_poll_s)
     except VoiceboxError as exc:
         log(f"[!] Voicebox not available at {base_url} ({exc}); falling back to Edge-TTS.",
             flush=True)
