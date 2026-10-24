@@ -22,6 +22,7 @@ from videotranslator.input_source import (
 )
 from videotranslator.media import (
     build_extract_audio_cmd,
+    media_path_arg,
     run_ffmpeg,
     separate_instrumental,
 )
@@ -197,15 +198,15 @@ def extract_music(
         if is_probable_url(source):
             media_path = downloader(source, tmp, ytdlp_cls=ytdlp_cls, log_cb=log_cb)
         else:
-            media_path = normalize_input_path(source)
+            # Absolute, so a user path like "-weird.mp4" is never read as an option.
+            media_path = media_path_arg(normalize_input_path(source))
 
         if out_file is not None:
-            out_path = out_file
-            os.makedirs(os.path.dirname(os.path.abspath(out_path)),
-                        exist_ok=True)
+            out_path = media_path_arg(out_file)
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
         else:
-            out_path = resolve_output_path(media_path, out_dir, fmt,
-                                           instrumental=instrumental)
+            out_path = media_path_arg(resolve_output_path(
+                media_path, out_dir, fmt, instrumental=instrumental))
         if _same_file(out_path, media_path):
             # e.g. song.mp3 to mp3 next to it: ffmpeg -y would truncate the file
             # it is still reading (or refuse, when both paths are spelled alike).

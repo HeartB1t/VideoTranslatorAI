@@ -251,6 +251,7 @@ def _cli(argv: Sequence[str] | None = None) -> None:
     import video_translator_gui as legacy
     from videotranslator.input_source import is_probable_url
     from videotranslator.jobs import TranslationJobConfig
+    from videotranslator.media import media_path_arg
     from videotranslator.pipeline import run_translation_job
     from videotranslator.translation import TranslationUnavailableError
 
@@ -335,8 +336,11 @@ def _cli(argv: Sequence[str] | None = None) -> None:
         if not is_probable_url(f) and not os.path.exists(f):
             print(f"[!] File not found: {f}")
             continue
+        # A local path becomes absolute, so a name like "-weird.mp4" is never
+        # read as an option by the ffmpeg steps downstream (URLs pass through).
+        video_in = f if is_probable_url(f) else media_path_arg(f)
         job = TranslationJobConfig(
-            video_in=f,
+            video_in=video_in,
             output=args.output if len(files) == 1 else None,
             output_dir=args.output_dir or cfg_cli.get("output_dir") or None,
             model=args.model,

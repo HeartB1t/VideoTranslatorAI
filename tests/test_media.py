@@ -4,14 +4,35 @@ import types
 import unittest
 from unittest import mock
 
+import os
+
 from videotranslator.media import (
     build_extract_audio_cmd,
     build_resample_vocals_cmd,
     demucs_apply_kwargs,
     extract_audio,
+    media_path_arg,
     run_ffmpeg,
     separate_instrumental,
 )
+
+
+class MediaPathArgTests(unittest.TestCase):
+    def test_a_relative_path_becomes_absolute(self):
+        self.assertEqual(media_path_arg("clip.mp4"),
+                         os.path.join(os.getcwd(), "clip.mp4"))
+
+    def test_a_leading_dash_name_is_neutralized(self):
+        out = media_path_arg("-weird.mp3")
+        self.assertTrue(os.path.isabs(out))
+        self.assertFalse(out.startswith("-"))
+
+    def test_an_absolute_path_is_kept(self):
+        self.assertEqual(media_path_arg("/tmp/x/out.wav"), "/tmp/x/out.wav")
+
+    def test_accepts_os_pathlike(self):
+        from pathlib import Path
+        self.assertEqual(media_path_arg(Path("/tmp/a.flac")), "/tmp/a.flac")
 
 
 class MediaTests(unittest.TestCase):

@@ -14,6 +14,14 @@ SubprocessRun = Callable[..., Any]
 LogCallback = Callable[[str], None]
 
 
+def media_path_arg(path: str | os.PathLike[str]) -> str:
+    """Absolute form of a media path, so a leading-dash filename never looks
+    like an option to ffmpeg/ffprobe/rubberband and a relative path is
+    unambiguous. Apply it to user-reachable input/output paths at the entry
+    boundary; the pure argv builders keep taking paths verbatim."""
+    return os.path.abspath(os.fspath(path))
+
+
 def run_ffmpeg(
     cmd: list[str],
     step: str = "ffmpeg",
