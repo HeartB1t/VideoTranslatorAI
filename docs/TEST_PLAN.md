@@ -23,6 +23,7 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 - [x] Suite unitaria completa su Windows VM via SSH: 2026-10-24, `C:\Program Files\Python311\python.exe -m unittest discover -s tests` sul main clonato (`d0dd3e4`): **2105 test OK, 0 fallimenti, 211 skip**. Valida il Task 10: prima (21/10) 34 test GUI FALLIVANO via SSH (window station non interattiva), ora skippano correttamente. Windows 10 22H2, Python 3.11.9. (W, U)
 - [x] Task 2 deno su Windows reale: `install_deno()` scarica `deno 2.9.7 x86_64-pc-windows-msvc`, SHA256 verificato, `deno.exe` estratto e `--version` OK. (W, F)
 - [x] Task 8 segreti su Windows reale: senza keyring utilizzabile e allow_plaintext=False il segreto NON viene scritto (stored=False, nessun file); keyring = WinVaultKeyring (Credential Manager), via SSH non accessibile (WinError 1312) -> ripiego 'session only' corretto, mai in chiaro. (W, F)
+- [x] ffmpeg libopus/libvorbis su Windows (DA RIPRENDERE 04/10): scaricato il build che usa l'installer (gyan.dev ffmpeg-release-essentials, 9.0.2) sulla VM: encoder `libopus`, `libvorbis`, `libmp3lame`, `flac` TUTTI presenti. I 6 formati di estrazione audio (MP3/M4A/Opus/OGG/FLAC/WAV) sono supportati su Windows. (W, F)
 - [x] CI su `main`: tutti i 5 job verdi, windows-tests compreso. (L+W, U)
 - [x] Installer/updater: update 2.1.4 -> 2.1.5 via `setup_windows.bat [2]`, SHA256 verificato, handover ok, RESULT repair complete. (W, F)
 
