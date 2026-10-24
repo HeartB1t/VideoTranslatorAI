@@ -11578,8 +11578,12 @@ class App(tk.Tk):
             elif tries > 0:
                 self.after(200, collect, tries - 1)
 
-        threading.Thread(target=probe, name="log-hardware", daemon=True).start()
+        self._spawn_header_probe(probe)
         self.after(200, collect)
+
+    def _spawn_header_probe(self, probe) -> None:
+        """Run the session-header probe off the Tk thread (tests run it inline)."""
+        threading.Thread(target=probe, name="log-hardware", daemon=True).start()
 
     def _log_system(self, facts: dict) -> None:
         """System lines of the session header (on the Tk thread)."""

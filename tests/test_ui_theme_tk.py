@@ -510,7 +510,12 @@ def built_app(config):
                     mock.patch.object(gui.App, "_check_deps_on_start", lambda self: None), \
                     mock.patch.object(gui.App, "_upgrade_ytdlp_in_background", lambda self: None), \
                     mock.patch.object(gui.App, "_refresh_player_status", lambda self, **kw: None), \
-                    mock.patch.object(gui.App, "_fit_to_screen", lambda self: None):
+                    mock.patch.object(gui.App, "_fit_to_screen", lambda self: None), \
+                    mock.patch.object(gui.App, "_spawn_header_probe",
+                                      lambda self, probe: probe()):
+                # The header probe runs inline: on a worker its allocations can
+                # trigger the cyclic GC there, and the __del__ of a Tk image the
+                # test dropped then fails without a mainloop (windows-tests).
                 app = None
                 try:
                     app = gui.App()
@@ -548,7 +553,7 @@ class BuiltAppStreamsTests(unittest.TestCase):
 
         class ExplodingApp:
             _check_deps_on_start = _upgrade_ytdlp_in_background = _fit_to_screen = \
-                _refresh_player_status = lambda self, **kw: None
+                _refresh_player_status = _spawn_header_probe = lambda self, *a, **kw: None
 
             def __init__(self):
                 sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
@@ -560,6 +565,36 @@ class BuiltAppStreamsTests(unittest.TestCase):
                 with built_app({}):
                     pass
         self.assertEqual((sys.stdout, sys.stderr), before)
+
+
+class HeaderProbeThreadTests(unittest.TestCase):
+    def test_the_app_runs_the_header_probe_on_a_daemon_worker(self):
+        import video_translator_gui as gui
+
+        with mock.patch.object(gui.threading, "Thread") as thread:
+            gui.App._spawn_header_probe(None, print)
+        thread.assert_called_once()
+        kwargs = thread.call_args.kwargs
+        self.assertEqual((kwargs["target"], kwargs["name"], kwargs["daemon"]),
+                         (print, "log-hardware", True))
+        thread.return_value.start.assert_called_once_with()
+
+    @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
+    def test_built_app_runs_the_probe_inline(self):
+        # On a worker the probe's allocations can trigger the cyclic GC, which then
+        # runs the __del__ of Tk images other code dropped: without a mainloop Tk
+        # raises "main thread is not in main loop" there (windows-tests, 24/10/2026).
+        started = []
+        real_start = threading.Thread.start
+
+        def spy(worker):
+            started.append(worker.name)
+            return real_start(worker)
+
+        with mock.patch.object(threading.Thread, "start", spy):
+            with built_app({}):
+                pass
+        self.assertNotIn("log-hardware", started)
 
 
 @unittest.skipUnless(HAS_DISPLAY, "needs a display (Tk)")
