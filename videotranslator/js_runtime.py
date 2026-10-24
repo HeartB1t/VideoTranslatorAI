@@ -10,8 +10,8 @@ Policy implemented here (two tiers):
 * **Tier 1 - no install:** if a runtime is already reachable (on PATH or in the
   app-local bin dir), tell yt-dlp to use it. Zero download.
 * **Tier 2 - auto-install:** if none is present, fetch the standalone ``deno``
-  binary (single self-contained file, no admin) into the app-local bin dir and
-  point yt-dlp at it.
+  binary (single self-contained file, no admin) of a pinned release, check its
+  SHA256, extract it into the app-local bin dir and point yt-dlp at it.
 
 The pure helpers (asset name, URLs, path resolution) are split from the
 side-effecting ones (download/extract) so the policy is unit-testable without
@@ -20,13 +20,15 @@ touching the network.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import io
 import os
 import platform
 import shutil
 import sys
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +37,24 @@ from typing import Any
 # common on dev machines and fully supported.
 JS_RUNTIME_PREFERENCE: tuple[str, ...] = ("deno", "node", "bun")
 
-# deno publishes per-target zips on every GitHub release; "latest" always
-# resolves to the newest stable.
-DENO_RELEASE_BASE = "https://github.com/denoland/deno/releases/latest/download"
+# Pinned deno release: the binary runs yt-dlp's JavaScript, so an archive is
+# executed only when it matches the digest published with that release. To
+# bump: change DENO_VERSION, copy every digest from the release's
+# <asset>.sha256sum files, and re-hash one downloaded asset to confirm.
+DENO_VERSION = "v2.9.7"
+DENO_RELEASE_BASE = f"https://github.com/denoland/deno/releases/download/{DENO_VERSION}"
+DENO_SHA256: dict[str, str] = {
+    "deno-x86_64-unknown-linux-gnu.zip":
+        "c6527f24f4b16031d3ae4fa9f658d5f11534c8d84ce7dc8502420280919c3490",
+    "deno-aarch64-unknown-linux-gnu.zip":
+        "c832298b1ad4422481334855f6003e0f54145762c5a134f20a489511d2f65bbf",
+    "deno-x86_64-pc-windows-msvc.zip":
+        "a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238",
+    "deno-x86_64-apple-darwin.zip":
+        "95daaff11c116a52ad54785e7914c8e9c9cdcaba793c5ed929c74ca2d8e6259a",
+    "deno-aarch64-apple-darwin.zip":
+        "5cd46d6268f6f78f5d88bdc7159d20bd44cdaa4b3303474839f87ec6fe7ae25c",
+}
 
 # Network read timeout for the binary download (seconds).
 DENO_DOWNLOAD_TIMEOUT = 180
@@ -173,10 +190,14 @@ def install_deno(
     bin_dir: str | os.PathLike[str] | None = None,
     downloader: Callable[[str], bytes] | None = None,
     log_cb: Callable[[str], None] | None = None,
+    digests: Mapping[str, str] | None = None,
 ) -> str:
-    """Download and extract the standalone deno binary; return its path.
+    """Download, verify and extract the standalone deno binary; return its path.
 
-    ``downloader`` is injectable so tests exercise extraction without network.
+    The archive must match the pinned SHA256 of its asset (``digests``, the
+    release table by default) before anything is written, and the binary is
+    renamed into place only once complete. ``downloader`` and ``digests`` are
+    injectable so tests exercise extraction without network.
     """
     system = system if system is not None else sys.platform
     machine = machine if machine is not None else platform.machine()
@@ -184,19 +205,30 @@ def install_deno(
     exe = runtime_binary_name("deno", system)
     target = resolved_bin / exe
 
+    asset = deno_asset_name(system, machine)
     url = deno_download_url(system, machine)
-    resolved_bin.mkdir(parents=True, exist_ok=True)
+    expected = (DENO_SHA256 if digests is None else digests).get(asset, "").lower()
     if log_cb:
-        log_cb(f"     Downloading deno JS runtime (yt-dlp dependency) → {target}")
+        log_cb(f"     Downloading deno {DENO_VERSION} JS runtime (yt-dlp dependency) → {target}")
 
     data = (downloader or _default_download)(url)
-    with zipfile.ZipFile(io.BytesIO(data)) as zf:
-        member = _deno_member(zf, exe)
-        with zf.open(member) as src, open(target, "wb") as dst:
-            shutil.copyfileobj(src, dst)
+    actual = hashlib.sha256(data).hexdigest()
+    if not expected or actual != expected:
+        raise RuntimeError(f"deno download SHA256 mismatch for {asset} (got {actual})")
 
-    if not _is_windows(system):
-        os.chmod(target, 0o755)
+    resolved_bin.mkdir(parents=True, exist_ok=True)
+    part = target.with_name(target.name + ".part")
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            member = _deno_member(zf, exe)
+            with zf.open(member) as src, open(part, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        if not _is_windows(system):
+            os.chmod(part, 0o755)
+        os.replace(part, target)
+    finally:
+        with contextlib.suppress(OSError):
+            part.unlink()
     if log_cb:
         log_cb(f"     deno installed: {target}")
     return str(target)

@@ -1,3 +1,4 @@
+import hashlib
 import io
 import os
 import tempfile
@@ -5,6 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from videotranslator import js_runtime
 from videotranslator.js_runtime import (
     app_bin_dir,
     app_data_dir,
@@ -41,10 +43,19 @@ class AssetNamingTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             deno_asset_name("win32", "arm64")  # no windows-arm deno build
 
-    def test_download_url_uses_latest_base(self):
+    def test_download_url_is_pinned(self):
         url = deno_download_url("linux", "x86_64")
         self.assertTrue(url.endswith("deno-x86_64-unknown-linux-gnu.zip"))
-        self.assertIn("releases/latest/download", url)
+        self.assertIn(f"/releases/download/{js_runtime.DENO_VERSION}/", url)
+        self.assertNotIn("latest", url)
+
+    def test_every_supported_asset_has_a_digest(self):
+        for system, machine in (("linux", "x86_64"), ("linux", "aarch64"),
+                                ("win32", "AMD64"), ("darwin", "x86_64"),
+                                ("darwin", "arm64")):
+            with self.subTest(system=system, machine=machine):
+                asset = deno_asset_name(system, machine)
+                self.assertRegex(js_runtime.DENO_SHA256[asset], r"^[0-9a-f]{64}$")
 
 
 class PathTests(unittest.TestCase):
@@ -96,37 +107,92 @@ class FindRuntimeTests(unittest.TestCase):
         self.assertEqual(runtimes, {"deno": {"path": "/usr/local/bin/deno"}})
 
 
-def _fake_deno_zip(exe: str = "deno") -> bytes:
+def _fake_deno_zip(exe: str = "deno", body: bytes = b"#!/bin/sh\necho deno\n") -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr(exe, b"#!/bin/sh\necho deno\n")
+        zf.writestr(exe, body)
     return buf.getvalue()
+
+
+LINUX_ASSET = "deno-x86_64-unknown-linux-gnu.zip"
+
+
+def _digests_for(data: bytes) -> dict[str, str]:
+    """A digest table that accepts exactly ``data`` as the Linux x86_64 asset."""
+    return {LINUX_ASSET: hashlib.sha256(data).hexdigest()}
 
 
 class InstallDenoTests(unittest.TestCase):
     def test_extracts_binary_and_sets_executable_bit(self):
+        data = _fake_deno_zip("deno")
         with tempfile.TemporaryDirectory() as tmp:
             path = install_deno(
                 system="linux",
                 machine="x86_64",
                 bin_dir=tmp,
-                downloader=lambda _url: _fake_deno_zip("deno"),
+                downloader=lambda _url: data,
+                digests=_digests_for(data),
             )
             self.assertTrue(os.path.exists(path))
             self.assertTrue(os.access(path, os.X_OK))
+            self.assertEqual(sorted(os.listdir(tmp)), ["deno"])
 
     def test_missing_binary_in_archive_raises(self):
         empty = io.BytesIO()
         with zipfile.ZipFile(empty, "w") as zf:
             zf.writestr("readme.txt", b"no binary here")
+        data = empty.getvalue()
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(RuntimeError):
                 install_deno(
                     system="linux",
                     machine="x86_64",
                     bin_dir=tmp,
-                    downloader=lambda _url: empty.getvalue(),
+                    downloader=lambda _url: data,
+                    digests=_digests_for(data),
                 )
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_tampered_archive_is_rejected_and_nothing_is_written(self):
+        good = _fake_deno_zip("deno")
+        evil = _fake_deno_zip("deno", b"#!/bin/sh\necho pwned\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            with self.assertRaisesRegex(RuntimeError, "SHA256"):
+                install_deno(
+                    system="linux",
+                    machine="x86_64",
+                    bin_dir=bin_dir,
+                    downloader=lambda _url: evil,
+                    digests=_digests_for(good),
+                )
+            self.assertFalse(bin_dir.exists())
+
+    def test_the_official_digest_table_is_the_default(self):
+        # Without an explicit table the pinned release digests are enforced,
+        # so a fake archive is refused before anything reaches the disk.
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError, "SHA256"):
+                install_deno(
+                    system="linux",
+                    machine="x86_64",
+                    bin_dir=tmp,
+                    downloader=lambda _url: _fake_deno_zip("deno"),
+                )
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_downloads_the_pinned_url(self):
+        seen = []
+        data = _fake_deno_zip("deno")
+
+        def downloader(url):
+            seen.append(url)
+            return data
+
+        with tempfile.TemporaryDirectory() as tmp:
+            install_deno(system="linux", machine="x86_64", bin_dir=tmp,
+                         downloader=downloader, digests=_digests_for(data))
+        self.assertEqual(seen, [deno_download_url("linux", "x86_64")])
 
 
 class EnsureJsRuntimeTests(unittest.TestCase):
