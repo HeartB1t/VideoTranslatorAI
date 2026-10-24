@@ -62,7 +62,10 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 ## 5. TTS e doppiaggio
 
 - [ ] Edge-TTS: doppiaggio su file, voci multiple, tts-rate. (L+W, F+Q, dep: net)
-- [ ] XTTS v2 voice cloning: reference VAD, 17 lingue, parametri anti-hallucination, xtts-speed. (L, F+Q, GPU)
+- [x] XTTS v2 voice cloning: reference VAD, 17 lingue, parametri anti-hallucination, xtts-speed. (L, F+Q, GPU)
+  2026-10-24: `zoo_short.mp4` (19 s, voce umana) EN->IT, `--xtts --model small --translation-engine marian`:
+  XTTS su CUDA, reference VAD 17,3 s, nessun fallback a Edge-TTS, mp4 con traccia doppiata (-25,9 dB medi)
+  + originale, srt IT corretto, 48 s totali. Ascolto: all'operatore (CK-09).
 - [ ] XTTS fallback a Edge-TTS su errore. (L, F)
 - [ ] ElevenLabs (file e live): chiave in keyring, verifica, scelta voce/modello, fallback a Edge-TTS. (L, F+Q, dep: 11l PAGAMENTO - serve OK)
 - [ ] **Voicebox** (server locale): clona profilo, genera per frase, pulisce profili, fallback se server spento. (L, F+Q, dep: vbox)
@@ -166,7 +169,7 @@ Input: clip generata EN 22 s (parlato edge-tts su immagine fissa). Scope: core s
 - [x] Download YouTube reale via app (fix client tv/android_vr): video normale scaricato (22 MB -> mp3). yt-dlp dell'app = nightly 2026.10.10.233141. Il fix di 2.1.5 funziona per lo scaricamento.
 
 ### ANOMALIE TROVATE (Linux)
-- [!] **XTTS voice cloning NON parte** - errore import Numba (`cannot import name '_typeconv' from 'numba.core.typeconv'`, dal numba di SISTEMA in `/usr/lib/python3/dist-packages`). L'app fa fallback a Edge-TTS (corretto), ma il voice cloning XTTS e' inutilizzabile su questa macchina dev finche' non si sistema numba (python3.13 carica il numba di sistema incompatibile, strascico migrazione venv/py3.14). NON e' un bug del prodotto (fallback ok), e' ambiente. Da fixare l'ambiente per poter collaudare XTTS.
+- [x] RISOLTO 2026-10-24 (ambiente): **XTTS voice cloning NON parte** - errore import Numba (`cannot import name '_typeconv' from 'numba.core.typeconv'`, dal numba di SISTEMA in `/usr/lib/python3/dist-packages`). L'app fa fallback a Edge-TTS (corretto), ma il voice cloning XTTS e' inutilizzabile su questa macchina dev finche' non si sistema numba (python3.13 carica il numba di sistema incompatibile, strascico migrazione venv/py3.14). NON e' un bug del prodotto (fallback ok), e' ambiente. Da fixare l'ambiente per poter collaudare XTTS.
 - [!] **CLI: traduzione da URL rotta** - dare un URL YouTube alla traduzione da riga di comando stampa "File not found". Causa: `videotranslator/cli.py:325` controlla solo `os.path.exists(f)`, mentre il percorso `--extract-audio` (`cli.py:215`) controlla anche `is_probable_url`. Incoerenza reale: dalla CLI si puo' ESTRARRE audio da un URL ma non TRADURRE da un URL (la GUI invece scarica e traduce). Fix: aggiungere il ramo `is_probable_url` anche al percorso di traduzione.
 
 ### Note
@@ -198,7 +201,7 @@ Input: clip generata EN 22 s (parlato edge-tts su immagine fissa). Scope: core s
 ## Sintesi findings (ranked)
 
 1. [RISOLTO 2026-10-22] CLI non traduce da URL (`cli.py:325` controllava solo `os.path.exists`, mancava il ramo `is_probable_url` presente a `cli.py:215`). Confermato su Linux E Windows. Aggiunto il ramo `is_probable_url` al percorso di traduzione + 3 test.
-2. [MEDIA, ambiente] XTTS voice cloning rotto sulla macchina Linux dev: import Numba fallisce (numba di sistema incompatibile con python3.13). Fallback a Edge-TTS ok. Serve ricostruire l'ambiente XTTS per collaudarlo.
+2. [RISOLTO 2026-10-24, ambiente] XTTS voice cloning rotto sulla macchina Linux dev. Causa: python3.13 caricava da `/usr/lib/python3/dist-packages` pacchetti compilati solo per CPython 3.14 (numba 0.65.1, poi matplotlib 3.10.9 importato da `TTS/tts/utils/visual.py`; pyannote richiedeva anche pandas). Installati nel site utente di 3.13 `numba 0.63.1` + `llvmlite 0.46.0` e, con `--ignore-installed --no-deps` alle stesse versioni del sistema, `matplotlib 3.10.9`, `contourpy 1.3.3`, `kiwisolver 1.5.1`, `pandas 2.3.3`. numpy invariato (2.3.5). XTTS e pyannote ora si importano; collaudo XTTS reale PASS.
 3. [DECISIONE, ambiente/suite] Suite Windows via SSH: 34 test GUI falliscono perche' non si skippano senza window station interattiva (verdi in CI con desktop). Accettare o aggiungere skip headless.
 4. [FEATURE-GAP] Voicebox: integrazione col server reale validata; generazione reale bloccata dal modello non pre-scaricato e dall'app che non auto-innesca il download.
 5. [RISOLTO 2026-10-22] `-o` ignorato con `--extract-audio`. `extract_music` ora accetta `out_file`; `_run_extract_audio` lo onora per un singolo input e con un batch lo scarta con un avviso esplicito + 1 test.
