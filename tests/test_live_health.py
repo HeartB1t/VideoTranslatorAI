@@ -7,9 +7,7 @@ from videotranslator.live_health import (
     STATUS_KEYS,
     WARN_KEYS,
     CircuitBreaker,
-    FaultRule,
     RollingStats,
-    parse_fault_spec,
 )
 
 
@@ -160,24 +158,6 @@ class CodeMapTests(unittest.TestCase):
         for mapping in (STATUS_KEYS, WARN_KEYS, ERROR_KEYS):
             for key in mapping.values():
                 self.assertIn(key, en)
-
-
-class ParseFaultSpecTests(unittest.TestCase):
-    def test_empty(self):
-        self.assertEqual(parse_fault_spec(""), {})
-        self.assertEqual(parse_fault_spec("   "), {})
-
-    def test_count_and_at_forms(self):
-        rules = parse_fault_spec("mt_429:3,cuda_oom@60,tts_fail:2,ingest_stall@120")
-        self.assertEqual(rules["mt_429"], FaultRule("mt_429", 3, None))
-        self.assertEqual(rules["cuda_oom"], FaultRule("cuda_oom", None, 60.0))
-        self.assertEqual(rules["tts_fail"], FaultRule("tts_fail", 2, None))
-        self.assertEqual(rules["ingest_stall"], FaultRule("ingest_stall", None, 120.0))
-
-    def test_bare_name_and_whitespace(self):
-        rules = parse_fault_spec(" mt_429 , cuda_oom@5 ")
-        self.assertEqual(rules["mt_429"], FaultRule("mt_429", None, None))
-        self.assertEqual(rules["cuda_oom"], FaultRule("cuda_oom", None, 5.0))
 
 
 if __name__ == "__main__":

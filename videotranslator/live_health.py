@@ -1,13 +1,11 @@
 """Health primitives for the live translation subsystem (design 4.14, 4.9).
 
-Pure and dependency free: a per-engine circuit breaker, a small rolling
-percentile window, and a parser for the developer fault-injection spec (env
-``VTAI_LIVE_FAULTS``).
+Pure and dependency free: a per-engine circuit breaker and a small rolling
+percentile window.
 
 The status/warning/error code maps (``STATUS_KEYS``/``WARN_KEYS``/``ERROR_KEYS``
 and ``LIVE_STATES``) map internal codes to UI keys that exist in all 26 languages
-(``ui_strings_player``). ``wrap_factories_with_faults`` lands with the live
-session (it needs the ``LiveFactories`` protocol).
+(``ui_strings_player``).
 """
 
 from __future__ import annotations
@@ -15,7 +13,6 @@ from __future__ import annotations
 import time
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 
 # Warning code returned by CircuitBreaker.record_failure per failure kind.
@@ -224,35 +221,3 @@ ERROR_KEYS: dict[str, str] = {
     "asr": "live_err_asr",
     "internal": "live_err_internal",
 }
-
-
-@dataclass(frozen=True)
-class FaultRule:
-    """One developer fault: fail ``count`` times, or start failing at ``at_s``."""
-
-    kind: str
-    count: int | None
-    at_s: float | None
-
-
-def parse_fault_spec(spec: str) -> dict[str, FaultRule]:
-    """Parse ``VTAI_LIVE_FAULTS`` (dev only).
-
-    Grammar: comma separated ``name:count`` (fail the first ``count`` calls) or
-    ``name@seconds`` (start failing at that session time). Blank tokens and a
-    blank spec yield an empty mapping.
-    """
-    rules: dict[str, FaultRule] = {}
-    for token in (spec or "").split(","):
-        token = token.strip()
-        if not token:
-            continue
-        if "@" in token:
-            name, _, value = token.partition("@")
-            rules[name.strip()] = FaultRule(name.strip(), None, float(value))
-        elif ":" in token:
-            name, _, value = token.partition(":")
-            rules[name.strip()] = FaultRule(name.strip(), int(value), None)
-        else:
-            rules[token] = FaultRule(token, None, None)
-    return rules
