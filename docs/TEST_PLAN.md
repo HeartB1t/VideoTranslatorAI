@@ -75,7 +75,19 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 ## 6. Diarization e lip sync
 
 - [ ] pyannote 3.1 diarization, speaker propagato a XTTS (multi-voce). (L, F, GPU, dep: hf)
-- [ ] Wav2Lip GAN lip sync: download modello 416 MB (SHA256), subprocess, fallback su errore. (L, F+Q, GPU, dep: net)
+- [x] Wav2Lip GAN lip sync. 2026-10-24, GPU reale: modello `wav2lip_gan.pth` presente, SHA256
+  `ca9ab7b7...` = quello fissato nel .bat; dlib 20.0.1 + cv2 4.13.0 OK; download verificato.
+  BUG TROVATO E RISOLTO: il lip sync non produceva MAI output perche' `apply_lipsync` lanciava
+  Wav2Lip con cwd=`~/.cache/wav2lip` senza creare la sottocartella `temp/` che inference.py usa
+  hardcoded (`temp/result.avi`): cv2.VideoWriter falliva in silenzio, il mux finale abortiva
+  ('temp/result.avi: No such file or directory', exit 0, nessun outfile) e l'app ripiegava a
+  'senza lip sync'. Il test lo mascherava pre-creando `temp/`. Fix: `apply_lipsync` crea
+  `work_dir/temp` prima di lanciare; test aggiornato per non pre-crearlo (uccide il mutante).
+  Dopo il fix: su un talking-head H.264 il lip sync gira su CUDA (33/33 face + 5/5 inference),
+  '-> Lip sync done', frame di output modificato nella bocca (md5 diverso dall'input).
+  ALTRI 2 limiti: Wav2Lip non decodifica l'AV1 (0 frame -> ripiego); richiede un volto in OGNI
+  frame (zoo panna sugli elefanti -> 'Face not detected' -> ripiego). Il fallback funziona in
+  entrambi. (L, F+Q, GPU)
 - [ ] Wav2Lip su Windows: path unico, stack dlib/basicsr/facexlib. (W, F)
 
 ## 7. Player integrato
@@ -92,7 +104,7 @@ Principio guida: la logica e' gia' verde (2057 test unitari su CI, Linux e Windo
 - [ ] Doppiaggio live ElevenLabs. (L, F+Q, dep: 11l PAGAMENTO)
 - [ ] Modalita' ritardata con slider delay, crescita buffer 8->30 s. (L, F)
 - [ ] Switch motore a caldo, circuit breaker online, "Passa a MarianMT". (L, F)
-- [ ] Pausa/seek collegati alla sessione live, auto-stop a EOF. (L, F)
+- [x] Pausa/seek collegati alla sessione live, auto-stop a EOF. 2026-10-24, GUI reale su Xvfb (audio al sink nullo), delayed+dub+marian su zoo_short: player_ready, live_started, seek 6->2, pausa 3 s + ripresa (sessione viva), auto-stop pulito a EOF ('source finished and dubbing complete'), ended auto. RESULT tutti True (seeked/paused/resumed/ended/auto_stopped), 0 timeout. (L, F)
 - [ ] Mute originale prima e durante. (L, F)
 - [ ] Modello pesante Ollama: avviso che non copre gli errori. (L, F)
 
