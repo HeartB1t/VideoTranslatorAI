@@ -236,6 +236,82 @@ class LiveSessionTickTests(unittest.TestCase):
             self.assertEqual(sess._gen, 0)
             self.assertFalse(cancel.is_set())
 
+    def test_reenabling_dub_clears_the_voice_unavailable_banner(self):
+        # Auto dub-off set the "voice unavailable" banner; re-enabling the dub
+        # with a working worker must clear it, even before a fresh clip succeeds.
+        from dataclasses import replace
+        from videotranslator.live_health import WARN_KEYS
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess._factories = replace(sess._factories, tts=lambda **k: _FakeSynth())
+            sess._voice = object()
+            sess._set_warning("tts_unavailable", "Edge-TTS")
+            self.assertEqual(sess.status().warning_key, WARN_KEYS.get("tts_unavailable"))
+            self.assertTrue(sess._ensure_synth())
+            self.assertIsNone(sess.status().warning_key)
+
+    def test_reenabling_dub_keeps_an_unrelated_banner(self):
+        from dataclasses import replace
+        from videotranslator.live_health import WARN_KEYS
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp)
+            sess._factories = replace(sess._factories, tts=lambda **k: _FakeSynth())
+            sess._voice = object()
+            sess._set_warning("rate_limited", "google")
+            self.assertTrue(sess._ensure_synth())
+            self.assertEqual(sess.status().warning_key, WARN_KEYS.get("rate_limited"))
+
+    def test_timeout_key_follows_a_mid_session_mode_change(self):
+        # The Ollama live/delayed timeout must shift when the user flips the
+        # mode during a session; cfg.settings stays frozen, so it read stale.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _, _ = _session(tmp, overrides={"live_sync_mode": "delayed"})
+            self.assertEqual(sess._timeout_key("ollama"), "ollama_delayed")
+            self.assertEqual(sess._timeout_key("google"), "google")   # non-ollama unaffected
+            sess.set_sync_mode("live")
+            sess._drain_control(0.0)
+            self.assertEqual(sess._timeout_key("ollama"), "ollama_live")
+
+    def _eof_session(self, tmp):
+        from videotranslator import player_engine as pe
+        settings = normalize_live_settings(
+            {"live_dub_enabled": False, "live_subs_enabled": True,
+             "live_sync_mode": "delayed"})
+        cfg = build_live_config({"source": "/v.mp4", "lang_target": "it"},
+                                settings=settings, cache_dir=Path(tmp), now=1.0)
+        view = _FakeClockView(5.0)
+        view.epoch = 2
+        video = SimpleNamespace(rt=_FakeRt(), bridge=pe.EventBridge())
+        sess = LiveSession(cfg, video=video, clock_view=view, factories=_factories())
+        return sess, video
+
+    def test_eof_marker_counts_only_at_or_after_the_seek_stamp(self):
+        # Kills the mutants on the stamp half of the eof gate (>= -> > and no
+        # stamp check): an eof-reached stamped before the last seek is stale.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video = self._eof_session(tmp)
+            sess._eof_seek_mark = (100.0, 1)        # seek_stamp=100, seek_epoch=1
+            video.bridge.set_latest("eof-reached", True, 99.9)   # before the seek
+            sess._tick_once(0.0)
+            self.assertFalse(sess._media_eof)
+            video.bridge.set_latest("eof-reached", True, 100.0)  # exactly at the seek
+            sess._tick_once(0.02)
+            self.assertTrue(sess._media_eof)
+
+    def test_eof_marker_needs_a_restart_after_the_seek(self):
+        # The epoch half: a marker at/after the stamp but before mpv restarted
+        # playback (epoch not bumped past the seek's) is still stale.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, video = self._eof_session(tmp)
+            sess._eof_seek_mark = (100.0, 5)        # seek at epoch 5
+            sess._clock_view.epoch = 5              # mpv has not restarted yet
+            video.bridge.set_latest("eof-reached", True, 101.0)
+            sess._tick_once(0.0)
+            self.assertFalse(sess._media_eof)
+            sess._clock_view.epoch = 6              # restarted
+            sess._tick_once(0.02)
+            self.assertTrue(sess._media_eof)
+
     def test_translated_segment_becomes_a_caption(self):
         with tempfile.TemporaryDirectory() as tmp:
             sess, video, _ = _session(tmp, media=1.5)

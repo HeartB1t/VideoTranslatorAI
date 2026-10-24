@@ -358,6 +358,9 @@ class LiveSession:
         self._tick_interval = tick_interval
 
         s = cfg.settings
+        # Follows set_sync_mode during the session (cfg.settings stays frozen),
+        # so _timeout_key reflects the current mode, not only the initial one.
+        self._sync_mode = s.sync_mode
         self._timing = derive_live_timing(
             s.delay_s if s.delay_s is not None else (s.file_ahead_s or 8.0),
             mode=s.sync_mode, device=device, engine=cfg.engine, dub=s.dub_enabled)
@@ -528,6 +531,10 @@ class LiveSession:
             self._disable_dub(None)
             return False
         self._synth = synth
+        # The worker is up: a prior "voice unavailable" banner (set when the dub
+        # was auto-disabled) no longer holds, even if only held clips get dubbed
+        # next. Clear it now instead of waiting for a fresh clip to succeed.
+        self._clear_dub_warning()
         # The scheduler now owns the video volume so the Tk mixer defers to the duck.
         mixer = getattr(self._video, "mixer", None)
         if mixer is not None:
@@ -965,6 +972,7 @@ class LiveSession:
                 if rt is not None:
                     rt.set_pause(self._user_paused or self._self_paused)
             elif kind == "mode":
+                self._sync_mode = value
                 self._scheduler.set_mode(value)
                 self._pacer.set_mode(value)
             elif kind == "subs":
@@ -996,6 +1004,10 @@ class LiveSession:
                 # drain ran on past the end of the file.
                 self._media_eof = False
                 self._drain_anchor_mono = None
+                # Anchor the media baseline to the seek target now, so a stale
+                # pre-seek observe() cannot run the drain from the old position
+                # for a tick (a brief flash of the wrong caption).
+                self._last_media_now = value
                 if restart:
                     with self._decode_lock:
                         self._gen += 1
@@ -1281,6 +1293,14 @@ class LiveSession:
                 self._status.warning_params = {}
                 self._status.warning_action = None
 
+    def _clear_dub_warning(self) -> None:
+        """Drop the 'voice unavailable' banner only; leave other warnings be."""
+        with self._status_lock:
+            if self._status.warning_key == WARN_KEYS.get("tts_unavailable"):
+                self._status.warning_key = None
+                self._status.warning_params = {}
+                self._status.warning_action = None
+
     def _decode_loop(self) -> None:
         try:
             vad = self._factories.vad()
@@ -1431,7 +1451,7 @@ class LiveSession:
 
     def _timeout_key(self, engine: str) -> str:
         if engine == "ollama":
-            return "ollama_live" if self._cfg.settings.sync_mode == "live" else "ollama_delayed"
+            return "ollama_live" if self._sync_mode == "live" else "ollama_delayed"
         return engine
 
     def _mt_loop(self) -> None:
@@ -1648,6 +1668,9 @@ class LiveSession:
                     if online:
                         keep_original(sentence)
                         continue
+                # Recompute per sentence: a mid-session mode change (delayed<->live)
+                # must shift the Ollama timeout too, not keep the initial one.
+                timeout = TIMEOUTS_S.get(self._timeout_key(engine), 5.0)
                 outcome = translator.translate(sentence.text, context=(),
                                                timeout_s=timeout)
                 if sentence.gen != self._gen:
