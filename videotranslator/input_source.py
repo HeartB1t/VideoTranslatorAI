@@ -88,11 +88,13 @@ def build_ytdlp_options(
         "restrictfilenames": True,
         "socket_timeout": 30,
         "retries": 5,
-        # YouTube restricted progressive (muxed) formats for web/ios/android; the
-        # tv and android_vr clients still serve itag 18 for VODs. android_vr may
-        # require a GVS PO token and can then 403 at runtime.
+        # "default" keeps yt-dlp's own client choice, which it updates with each
+        # release as YouTube changes and adapts to cookies / JS runtime; a fixed
+        # list froze it (and android/ios are skipped once cookies are loaded).
+        # tv and android_vr are added because they still serve progressive
+        # itag 18 for VODs (live mode); android_vr may need a GVS PO token.
         "extractor_args": {
-            "youtube": {"player_client": ["tv", "web", "android_vr", "ios", "android"]}
+            "youtube": {"player_client": ["default", "tv", "android_vr"]}
         },
     }
     browser = _detect_browser()
