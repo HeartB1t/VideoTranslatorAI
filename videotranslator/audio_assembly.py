@@ -288,7 +288,7 @@ def build_dubbed_track(
         print(f"       truncated after atempo:              {trunc_count:>4d}  ({100.0*trunc_count/total:.1f}%)", flush=True)
         # Top 10 worst per ratio
         worst = sorted(_atempo_stats, key=lambda s: -s["pre_stretch_ratio"])[:10]
-        print(f"     --- Top 10 worst segments (highest ratio) ---", flush=True)
+        print("     --- Top 10 worst segments (highest ratio) ---", flush=True)
         for s in worst:
             mm, ss = divmod(int(s["start_s"]), 60)
             t_mark = "TRUNC" if s["stretch_truncated"] else "     "
@@ -299,7 +299,7 @@ def build_dubbed_track(
                 f"ratio={s['pre_stretch_ratio']:5.2f}  {t_mark}",
                 flush=True,
             )
-        print(f"     --- end diagnostic ---", flush=True)
+        print("     --- end diagnostic ---", flush=True)
         # TASK 2C-2: print the breakdown of stretch engines used.
         # Useful in production to verify that the tier strategy behaves
         # as expected (rubberband concentrated in the 1.15-1.50 band).
