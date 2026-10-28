@@ -33,6 +33,25 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("--audio-format", proc.stdout)
         self.assertIn("--audio-bitrate", proc.stdout)
         self.assertIn("--instrumental", proc.stdout)
+        self.assertIn("--cookies-file", proc.stdout)
+
+    def test_cookies_file_flag_sets_the_env_override(self):
+        from videotranslator.input_source import COOKIES_FILE_ENV
+
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os as _os
+            _os.environ.pop(COOKIES_FILE_ENV, None)
+            self._translate_kwargs_for({}, ["--cookies-file", "/my/cookies.txt"])
+            self.assertEqual(_os.environ.get(COOKIES_FILE_ENV), "/my/cookies.txt")
+
+    def test_no_cookies_file_flag_leaves_the_env_unset(self):
+        from videotranslator.input_source import COOKIES_FILE_ENV
+
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os as _os
+            _os.environ.pop(COOKIES_FILE_ENV, None)
+            self._translate_kwargs_for({}, [])
+            self.assertNotIn(COOKIES_FILE_ENV, _os.environ)
 
     def _translate_kwargs_for(self, config, extra_args):
         """Run the CLI with an isolated config and capture the kwargs that
