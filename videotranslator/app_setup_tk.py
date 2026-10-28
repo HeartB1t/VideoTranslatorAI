@@ -206,7 +206,10 @@ class SetupMixin:
         return False
 
     def _install_ffmpeg_windows(self) -> bool:
-        import hashlib, urllib.request, zipfile, ctypes
+        import hashlib
+        import urllib.request
+        import zipfile
+        import ctypes
         from videotranslator.libmpv_runtime import sha256_from_checksums
         # Download ffmpeg essentials build from GitHub releases
         release_url = "https://github.com/BtbN/ffmpeg-builds/releases/download/latest"

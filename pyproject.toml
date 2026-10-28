@@ -115,3 +115,34 @@ package-dir = { "videotranslator.assets" = "assets" }
 
 [tool.setuptools.dynamic]
 version = { attr = "videotranslator.__version__" }
+
+# ---------------------------------------------------------------------------
+# Ruff: gate di qualita' della CI. Primo giro volutamente PERMISSIVO: una
+# baseline VERDE che blocca le nuove violazioni ad alto valore (sintassi,
+# nomi non definiti in codice reale, mutable default, confronti errati,
+# ecc.), non una pulizia di massa del codice legacy. Le categorie stilistiche
+# o i falsi positivi gia' presenti sono in ignore e potranno essere stretti
+# in una fase di qualita' dedicata, file per file.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py310"
+# Gli asset/i binari e i profili non contengono sorgente da lintare.
+extend-exclude = ["assets", "docs"]
+
+[tool.ruff.lint]
+# E4 import, E7 statement, E9 sintassi, F pyflakes, B flake8-bugbear.
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = [
+  "E402",  # import non in cima: voluto dopo sys.path.insert e apply_startup_env
+  "E702",  # piu' statement con ; : blocco palette globals() in video_translator_gui
+  "E731",  # lambda assegnata: usate come callback brevi
+  "F401",  # import inutilizzato: il monolite RI-ESPORTA di proposito dal pacchetto
+  "F821",  # nome non definito: falsi positivi su closure e annotazioni differite
+  "F841",  # variabile locale non usata
+  "B008",  # chiamata nei default: FastAPI-style non in uso qui, evita rumore
+  "B018",  # espressione inutile: asserzioni di accesso nei test (es. _Host().x)
+  "B023",  # loop var nella closure: pattern di test (side_effect chiamato subito)
+  "B033",  # valori duplicati in set: liste di parole in whisper_sanity, innocue
+  "B904",  # raise senza from: catene d'errore nei test
+  "B905",  # zip senza strict: compat Python 3.10 (strict e' 3.10+, molti siti)
+]
