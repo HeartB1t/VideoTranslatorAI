@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GUI_PATH = ROOT / "video_translator_gui.py"
 # Tk glue modules call ui_s(...) too (spec 2.6): every key scan covers them.
 SOURCE_PATHS = [GUI_PATH, *sorted((ROOT / "videotranslator").glob("*_tk.py"))]
+# The App class: the GUI file plus its mixins.
+APP_SOURCE_PATHS = [GUI_PATH, *sorted((ROOT / "videotranslator").glob("app_*_tk.py"))]
 
 
 def _source_text() -> str:
@@ -221,9 +223,11 @@ class PanelAndAccordionTitleSourceTests(unittest.TestCase):
 
     @staticmethod
     def _title_calls():
-        tree = ast.parse(GUI_PATH.read_text(encoding="utf-8"), filename=str(GUI_PATH))
         calls = []
-        for node in ast.walk(tree):
+        nodes = []
+        for path in APP_SOURCE_PATHS:
+            nodes.extend(ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))))
+        for node in nodes:
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
             if node.func.attr == "_panel" and len(node.args) >= 3:
