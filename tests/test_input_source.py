@@ -342,5 +342,168 @@ class AudioDownloadTests(unittest.TestCase):
         self.assertTrue(any("VPN" in line for line in logs))
 
 
+def _touch(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
+    return path
+
+
+class DetectBrowserTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def detect(self, platform, env=None):
+        from videotranslator.input_source import _detect_browser
+
+        return _detect_browser(platform, env or {}, self.home)
+
+    def test_nothing_found_without_a_cookie_database(self):
+        (self.home / ".config" / "google-chrome").mkdir(parents=True)
+        (self.home / ".mozilla" / "firefox" / "abc.default").mkdir(parents=True)
+        self.assertIsNone(self.detect("linux"))
+
+    def test_linux_firefox_profile_is_found(self):
+        _touch(self.home / ".mozilla" / "firefox" / "abc.default" / "cookies.sqlite")
+        self.assertEqual(self.detect("linux"), ("firefox",))
+
+    def test_linux_snap_firefox_and_xdg_chromium(self):
+        _touch(self.home / "snap" / "firefox" / "common" / ".mozilla" / "firefox"
+               / "x.default" / "cookies.sqlite")
+        self.assertEqual(self.detect("linux"), ("firefox",))
+
+    def test_linux_xdg_config_home_is_honoured(self):
+        xdg = self.home / "xdg"
+        _touch(xdg / "chromium" / "Default" / "Cookies")
+        self.assertEqual(self.detect("linux", {"XDG_CONFIG_HOME": str(xdg)}), ("chromium",))
+
+    def test_windows_browsers_are_found_by_profile_not_by_path(self):
+        local, roaming = self.home / "Local", self.home / "Roaming"
+        env = {"LOCALAPPDATA": str(local), "APPDATA": str(roaming)}
+        _touch(local / "Microsoft" / "Edge" / "User Data" / "Default" / "Network" / "Cookies")
+        self.assertEqual(self.detect("win32", env), ("edge",))
+        _touch(roaming / "Mozilla" / "Firefox" / "Profiles" / "p.default" / "cookies.sqlite")
+        self.assertEqual(self.detect("win32", env), ("firefox",))
+
+    def test_chrome_comes_after_the_other_chromium_browsers(self):
+        local = self.home / "Local"
+        env = {"LOCALAPPDATA": str(local), "APPDATA": str(self.home / "Roaming")}
+        _touch(local / "Google" / "Chrome" / "User Data" / "Default" / "Network" / "Cookies")
+        self.assertEqual(self.detect("win32", env), ("chrome",))
+        _touch(local / "BraveSoftware" / "Brave-Browser" / "User Data" / "Default" / "Cookies")
+        self.assertEqual(self.detect("win32", env), ("brave",))
+
+    def test_macos_profile_is_found(self):
+        _touch(self.home / "Library" / "Application Support" / "Vivaldi" / "Default" / "Cookies")
+        self.assertEqual(self.detect("darwin"), ("vivaldi",))
+
+    def test_only_browsers_yt_dlp_supports_are_returned(self):
+        from videotranslator.input_source import _browser_profile_roots
+
+        supported = {"brave", "chrome", "chromium", "edge", "opera", "vivaldi", "whale",
+                     "firefox", "safari"}
+        for platform in ("linux", "win32", "darwin"):
+            names = {name for name, _, _ in _browser_profile_roots(platform, {}, self.home)}
+            self.assertLessEqual(names, supported, platform)
+
+
+class CookiesFileTests(unittest.TestCase):
+    def test_existing_cookies_file_replaces_browser_cookies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cookies = _touch(Path(tmp) / "cookies.txt")
+            with mock.patch("videotranslator.input_source._detect_browser",
+                            return_value=("firefox",)):
+                opts = build_ytdlp_options(tmp, js_runtimes={}, cookies_file=str(cookies))
+        self.assertEqual(opts["cookiefile"], str(cookies))
+        self.assertNotIn("cookiesfrombrowser", opts)
+
+    def test_missing_cookies_file_is_reported_and_browser_used(self):
+        logs = []
+        with mock.patch("videotranslator.input_source._detect_browser",
+                        return_value=("firefox",)):
+            opts = build_ytdlp_options("/tmp", js_runtimes={},
+                                       cookies_file="/nowhere/cookies.txt", log_cb=logs.append)
+        self.assertNotIn("cookiefile", opts)
+        self.assertEqual(opts["cookiesfrombrowser"], ("firefox",))
+        self.assertTrue(any("yt_dlp_cookies_file" in line for line in logs))
+
+    def test_cookies_file_is_read_from_the_user_config(self):
+        from videotranslator import input_source
+
+        with mock.patch("videotranslator.config.load_user_config",
+                        return_value={"yt_dlp_cookies_file": " ~/c.txt "}):
+            self.assertEqual(input_source._configured_cookies_file(), "~/c.txt")
+        with mock.patch("videotranslator.config.load_user_config", return_value={}):
+            self.assertIsNone(input_source._configured_cookies_file())
+
+
+class _CookieLoadError(Exception):
+    pass
+
+
+_CookieLoadError.__name__ = "CookieLoadError"
+
+
+class _FlakyCookiesYDL:
+    """Fails like yt-dlp when browser cookies cannot be read."""
+
+    calls = []
+
+    def __init__(self, opts):
+        self.opts = opts
+        type(self).calls.append(dict(opts))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def extract_info(self, url, download):
+        if "cookiesfrombrowser" in self.opts:
+            try:
+                raise _CookieLoadError("failed to load cookies")
+            except _CookieLoadError as cause:
+                raise RuntimeError("ERROR: could not copy Chrome cookie database") from cause
+        return {"title": "t", "url": "https://media/x", "acodec": "aac", "vcodec": "h264"}
+
+
+class CookieFallbackTests(unittest.TestCase):
+    def setUp(self):
+        _FlakyCookiesYDL.calls = []
+        patches = [
+            mock.patch("videotranslator.js_runtime.ensure_js_runtime", return_value={}),
+            mock.patch("videotranslator.input_source._detect_browser", return_value=("chrome",)),
+            mock.patch("videotranslator.input_source._configured_cookies_file", return_value=None),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_unreadable_browser_cookies_retry_without_them(self):
+        logs = []
+        url, title = resolve_stream_url("https://youtu.be/x", ytdlp_cls=_FlakyCookiesYDL,
+                                        log_cb=logs.append)
+        self.assertEqual(url, "https://media/x")
+        self.assertEqual(len(_FlakyCookiesYDL.calls), 2)
+        self.assertIn("cookiesfrombrowser", _FlakyCookiesYDL.calls[0])
+        self.assertNotIn("cookiesfrombrowser", _FlakyCookiesYDL.calls[1])
+        self.assertTrue(any("chrome cookies" in line for line in logs))
+
+    def test_other_errors_are_not_retried(self):
+        class Blocked(_FlakyCookiesYDL):
+            def extract_info(self, url, download):
+                raise RuntimeError("Sign in to confirm you're not a bot")
+
+        logs = []
+        with self.assertRaises(RuntimeError):
+            resolve_stream_url("https://youtu.be/x", ytdlp_cls=Blocked, log_cb=logs.append)
+        self.assertEqual(len(Blocked.calls), 1)
+        self.assertTrue(any("VPN" in line for line in logs))
+
+
 if __name__ == "__main__":
     unittest.main()

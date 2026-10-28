@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
-import shutil
-from collections.abc import Callable
+import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Protocol
+
+COOKIES_FILE_KEY = "yt_dlp_cookies_file"
 
 
 class _YoutubeDLLike(Protocol):
@@ -16,12 +18,151 @@ class _YoutubeDLLike(Protocol):
     def prepare_filename(self, info: dict[str, Any]) -> str: ...
 
 
-def _detect_browser() -> tuple[str, ...] | None:
-    """Return (browser_name,) for yt-dlp cookiesfrombrowser, or None if not found."""
-    for browser in ("firefox", "chromium", "chrome", "brave", "librewolf", "vivaldi"):
-        if shutil.which(browser):
+# Browsers yt-dlp can read cookies from, in order of preference: Firefox
+# first (its cookies read reliably on every OS), Edge and Chrome last (on
+# Windows their cookie store is often locked or app-bound encrypted).
+_CHROMIUM_ORDER = ("brave", "vivaldi", "opera", "whale", "chromium", "edge", "chrome")
+
+
+def _browser_profile_roots(
+    sys_platform: str, env: Mapping[str, str], home: Path
+) -> list[tuple[str, list[Path], str]]:
+    """(browser, profile roots, cookie database name), mirroring where yt-dlp looks."""
+    if sys_platform in ("win32", "cygwin"):
+        local = Path(env.get("LOCALAPPDATA", home / "AppData" / "Local"))
+        roaming = Path(env.get("APPDATA", home / "AppData" / "Roaming"))
+        firefox = [roaming / "Mozilla" / "Firefox" / "Profiles",
+                   local / "Packages" / "Mozilla.Firefox_n80bbvh6b1yt2" / "LocalCache"
+                   / "Roaming" / "Mozilla" / "Firefox" / "Profiles"]
+        chromium = {
+            "brave": local / "BraveSoftware" / "Brave-Browser" / "User Data",
+            "chrome": local / "Google" / "Chrome" / "User Data",
+            "chromium": local / "Chromium" / "User Data",
+            "edge": local / "Microsoft" / "Edge" / "User Data",
+            "opera": roaming / "Opera Software" / "Opera Stable",
+            "vivaldi": local / "Vivaldi" / "User Data",
+            "whale": local / "Naver" / "Naver Whale" / "User Data",
+        }
+    elif sys_platform == "darwin":
+        support = home / "Library" / "Application Support"
+        firefox = [support / "Firefox" / "Profiles"]
+        chromium = {
+            "brave": support / "BraveSoftware" / "Brave-Browser",
+            "chrome": support / "Google" / "Chrome",
+            "chromium": support / "Chromium",
+            "edge": support / "Microsoft Edge",
+            "opera": support / "com.operasoftware.Opera",
+            "vivaldi": support / "Vivaldi",
+            "whale": support / "Naver" / "Whale",
+        }
+    else:
+        config = Path(env.get("XDG_CONFIG_HOME") or home / ".config")
+        firefox = [config / "mozilla" / "firefox",
+                   home / ".mozilla" / "firefox",
+                   home / ".var" / "app" / "org.mozilla.firefox" / "config" / "mozilla" / "firefox",
+                   home / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox",
+                   home / "snap" / "firefox" / "common" / ".mozilla" / "firefox"]
+        chromium = {
+            "brave": config / "BraveSoftware" / "Brave-Browser",
+            "chrome": config / "google-chrome",
+            "chromium": config / "chromium",
+            "edge": config / "microsoft-edge",
+            "opera": config / "opera",
+            "vivaldi": config / "vivaldi",
+            "whale": config / "naver-whale",
+        }
+    return [("firefox", firefox, "cookies.sqlite")] + [
+        (name, [chromium[name]], "Cookies") for name in _CHROMIUM_ORDER
+    ]
+
+
+def _has_file_named(root: Path, filename: str, max_depth: int = 3) -> bool:
+    """True when ``filename`` exists in ``root`` or up to ``max_depth`` levels below."""
+    stack = [(root, 0)]
+    while stack:
+        folder, depth = stack.pop()
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    if entry.name == filename and entry.is_file():
+                        return True
+                    if depth < max_depth and entry.is_dir(follow_symlinks=False):
+                        stack.append((Path(entry.path), depth + 1))
+        except OSError:
+            continue
+    return False
+
+
+def _detect_browser(
+    sys_platform: str | None = None,
+    env: Mapping[str, str] | None = None,
+    home: Path | None = None,
+) -> tuple[str, ...] | None:
+    """Return (browser_name,) for yt-dlp cookiesfrombrowser, or None if not found.
+
+    A browser counts only when its cookie database exists: an installed but
+    never used browser (or an unsupported one) would make yt-dlp abort the
+    download with "failed to load cookies".
+    """
+    sys_platform = sys.platform if sys_platform is None else sys_platform
+    env = os.environ if env is None else env
+    home = Path.home() if home is None else home
+    for browser, roots, filename in _browser_profile_roots(sys_platform, env, home):
+        if any(_has_file_named(root, filename) for root in roots):
             return (browser,)
     return None
+
+
+def _configured_cookies_file() -> str | None:
+    """The cookies.txt path set as ``yt_dlp_cookies_file`` in the user config."""
+    from videotranslator.config import load_user_config
+
+    try:
+        value = load_user_config().get(COOKIES_FILE_KEY)
+    except Exception:
+        return None
+    if not value:
+        return None
+    return str(value).strip() or None
+
+
+def _is_cookie_load_error(exc: BaseException) -> bool:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if type(current).__name__ == "CookieLoadError":
+            return True
+        current = current.__cause__ or current.__context__
+    return "failed to load cookies" in str(exc).lower()
+
+
+def _run_ytdlp(
+    ytdlp_cls: Callable[[dict[str, Any]], _YoutubeDLLike],
+    opts: dict[str, Any],
+    action: Callable[[_YoutubeDLLike], Any],
+    log_cb: Callable[[str], None] | None,
+) -> Any:
+    """Run ``action`` on a yt-dlp instance; retry once without browser cookies
+    when they cannot be read (locked or encrypted store), instead of failing."""
+    try:
+        with ytdlp_cls(opts) as ydl:
+            return action(ydl)
+    except Exception as exc:
+        browser = opts.get("cookiesfrombrowser")
+        if not (browser and _is_cookie_load_error(exc)):
+            emit_download_advice(exc, log_cb)
+            raise
+        if log_cb is not None:
+            log_cb(f"[!] Could not read the {browser[0]} cookies (close the browser, or set "
+                   f"{COOKIES_FILE_KEY} to an exported cookies.txt): retrying without them.")
+    retry = {key: value for key, value in opts.items() if key != "cookiesfrombrowser"}
+    try:
+        with ytdlp_cls(retry) as ydl:
+            return action(ydl)
+    except Exception as exc:
+        emit_download_advice(exc, log_cb)
+        raise
 
 
 def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
@@ -33,7 +174,8 @@ def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
         "[!] YouTube may require anti-bot authentication ('Sign in to "
         "confirm you're not a bot'). The block is usually tied to IP "
         "reputation: switching IP with a VPN often clears it. Being logged "
-        "into YouTube in your browser also helps (cookies are read automatically)."
+        "into YouTube in your browser also helps (cookies are read automatically), "
+        f"or set {COOKIES_FILE_KEY} in config.json to a cookies.txt exported from it."
     )
 
 
@@ -68,12 +210,16 @@ def build_ytdlp_options(
     out_dir: str | os.PathLike[str],
     *,
     js_runtimes: dict[str, Any] | None = None,
+    cookies_file: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Return the project's standard yt-dlp options for one URL.
 
     ``js_runtimes`` overrides runtime selection; when None we auto-detect an
     already-available runtime (PATH or app-local bin) so yt-dlp can solve the
     YouTube signature challenge instead of falling back to bot-blocked clients.
+    ``cookies_file`` (default: ``yt_dlp_cookies_file`` from the user config) is
+    an exported cookies.txt; when it exists it replaces the browser cookies.
     """
     from videotranslator.js_runtime import resolve_js_runtimes
 
@@ -97,9 +243,15 @@ def build_ytdlp_options(
             "youtube": {"player_client": ["default", "tv", "android_vr"]}
         },
     }
-    browser = _detect_browser()
-    if browser:
-        opts["cookiesfrombrowser"] = browser
+    cookies_file = _configured_cookies_file() if cookies_file is None else cookies_file
+    if cookies_file and os.path.isfile(os.path.expanduser(cookies_file)):
+        opts["cookiefile"] = os.path.expanduser(cookies_file)
+    else:
+        if cookies_file and log_cb is not None:
+            log_cb(f"[!] {COOKIES_FILE_KEY} not found: {cookies_file} (using browser cookies)")
+        browser = _detect_browser()
+        if browser:
+            opts["cookiesfrombrowser"] = browser
 
     runtimes = js_runtimes if js_runtimes is not None else resolve_js_runtimes()
     if runtimes:
@@ -111,6 +263,8 @@ def build_ytdlp_audio_options(
     out_dir: str | os.PathLike[str],
     *,
     js_runtimes: dict[str, Any] | None = None,
+    cookies_file: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Return yt-dlp options for an audio-only download.
 
@@ -119,7 +273,8 @@ def build_ytdlp_audio_options(
     ``merge_output_format`` remux so yt-dlp keeps bestaudio's native container
     (.m4a/.webm/.opus) instead of wrapping it in mp4.
     """
-    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes)
+    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes,
+                               cookies_file=cookies_file, log_cb=log_cb)
     opts["format"] = "bestaudio/best"
     opts.pop("merge_output_format", None)
     return opts
@@ -175,15 +330,13 @@ def download_url(
 
     # Lazy: make sure yt-dlp has a JS runtime (auto-install deno if none).
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
-    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes)
-    try:
-        with ytdlp_cls(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = resolve_downloaded_filename(ydl.prepare_filename(info))
-    except Exception as exc:
-        emit_download_advice(exc, log_cb)
-        raise
+    opts = build_ytdlp_options(out_dir, js_runtimes=js_runtimes, log_cb=log_cb)
 
+    def action(ydl: _YoutubeDLLike) -> str:
+        info = ydl.extract_info(url, download=True)
+        return resolve_downloaded_filename(ydl.prepare_filename(info))
+
+    filename = _run_ytdlp(ytdlp_cls, opts, action, log_cb)
     if log_cb is not None:
         log_cb(f"[+] Downloaded: {filename}")
     return filename
@@ -211,18 +364,16 @@ def download_audio_url(
     from videotranslator.js_runtime import ensure_js_runtime
 
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
-    opts = build_ytdlp_audio_options(out_dir, js_runtimes=js_runtimes)
-    try:
-        with ytdlp_cls(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = resolve_downloaded_filename(
-                ydl.prepare_filename(info),
-                extensions=_AUDIO_DOWNLOAD_EXTENSIONS,
-            )
-    except Exception as exc:
-        emit_download_advice(exc, log_cb)
-        raise
+    opts = build_ytdlp_audio_options(out_dir, js_runtimes=js_runtimes, log_cb=log_cb)
 
+    def action(ydl: _YoutubeDLLike) -> str:
+        info = ydl.extract_info(url, download=True)
+        return resolve_downloaded_filename(
+            ydl.prepare_filename(info),
+            extensions=_AUDIO_DOWNLOAD_EXTENSIONS,
+        )
+
+    filename = _run_ytdlp(ytdlp_cls, opts, action, log_cb)
     if log_cb is not None:
         log_cb(f"[+] Downloaded audio: {filename}")
     return filename
@@ -282,17 +433,12 @@ def resolve_stream_url(
     from videotranslator.js_runtime import ensure_js_runtime
 
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
-    opts = build_ytdlp_options(".", js_runtimes=js_runtimes)
+    opts = build_ytdlp_options(".", js_runtimes=js_runtimes, log_cb=log_cb)
     opts["format"] = (
         f"best[acodec!=none][vcodec!=none][height<={max_height}]"
         "/best[acodec!=none][vcodec!=none]/best"
     )
-    try:
-        with ytdlp_cls(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as exc:
-        emit_download_advice(exc, log_cb)
-        raise
+    info = _run_ytdlp(ytdlp_cls, opts, lambda ydl: ydl.extract_info(url, download=False), log_cb)
     if info.get("entries"):
         entries = [e for e in info["entries"] if e]
         if not entries:

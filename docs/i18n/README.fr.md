@@ -375,7 +375,7 @@ Deux blocages différents peuvent survenir, avec des correctifs différents :
 
 | Bloquer | Symptôme | Corriger |
 |-------|---------|-----|
-| **Télécharger** (yt-dlp) | "Connectez-vous pour confirmer que vous n'êtes pas un robot", HTTP 429 | **VPN** / alterner IP, ou être connecté à YouTube dans votre navigateur (les cookies sont lus automatiquement) |
+| **Télécharger** (yt-dlp) | "Connectez-vous pour confirmer que vous n'êtes pas un robot", HTTP 429 / 403 | **VPN** / alterner IP, ou être connecté à YouTube dans votre navigateur (les cookies sont lus automatiquement); ou définissez `yt_dlp_cookies_file` dans config.json vers un cookies.txt exporté du navigateur |
 | **Traduction** (point de terminaison Google gratuit) | "Google Translate n'a pas pu traduire... taux de requêtes limité/bloqué" | Utilisez **MarianMT** (hors ligne) ou **Ollama** (local) - aucune limite de débit de requête. Un VPN aide également. Le flux de lots **revient désormais automatiquement** à MarianMT lorsque Google est bloqué. |
 
 ### Thèmes et apparence
