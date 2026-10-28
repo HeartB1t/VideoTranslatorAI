@@ -5,6 +5,9 @@
 # drift to an untested transitive torch version.
 
 faster-whisper
+# PyAV 19 dropped av.open(metadata_errors=...), which faster-whisper 1.2.1
+# passes when it decodes audio: every transcription failed with TypeError.
+av<19
 yt-dlp
 demucs
 soundfile
