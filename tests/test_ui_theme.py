@@ -586,13 +586,19 @@ class DetectSystemDarkTests(unittest.TestCase):
 
 
 GUI_SOURCE = Path(__file__).resolve().parents[1] / "video_translator_gui.py"
+# The App class lives in the GUI file and its mixins.
+GUI_SOURCES = [GUI_SOURCE, *sorted((GUI_SOURCE.parent / "videotranslator").glob("app_*_tk.py"))]
 
 
 class GuiSourceStaticTests(unittest.TestCase):
     """Guard rails: colours and fonts in the GUI come from the theme system."""
 
     def setUp(self):
-        self.src = GUI_SOURCE.read_text(encoding="utf-8")
+        self.src = "\n".join(path.read_text(encoding="utf-8") for path in GUI_SOURCES)
+
+    def test_scans_the_app_mixins(self):
+        self.assertGreater(len(GUI_SOURCES), 1)
+        self.assertIn("class BuildMixin", self.src)
 
     def test_no_font_tuples_left(self):
         hits = re.findall(r'font\s*=\s*\(', self.src)
@@ -633,9 +639,18 @@ class GuiSourceStaticTests(unittest.TestCase):
         self.assertIsNone(self.COLOR_OPTION_RE.search('text="white"'))
         self.assertTrue(re.search(r'font\s*=\s*\(', 'font = ("Inter", 9)'))
 
+    SCROLLBAR_RE = r"(?<![\w.])(?:_g\.)?tk\.Scrollbar\("
+
     def test_no_classic_tk_scrollbars(self):
-        # Lookbehind: "ttk.Scrollbar(" contains "tk.Scrollbar(" as a substring
-        self.assertNotRegex(self.src, r"(?<![\w.])tk\.Scrollbar\(")
+        # Lookbehind: "ttk.Scrollbar(" contains "tk.Scrollbar(" as a substring;
+        # the App mixins spell the module "_g.tk".
+        self.assertNotRegex(self.src, self.SCROLLBAR_RE)
+
+    def test_scrollbar_pattern_catches_both_spellings(self):
+        self.assertRegex("x = tk.Scrollbar(f)", self.SCROLLBAR_RE)
+        self.assertRegex("x = _g.tk.Scrollbar(f)", self.SCROLLBAR_RE)
+        self.assertNotRegex("x = ttk.Scrollbar(f)", self.SCROLLBAR_RE)
+        self.assertNotRegex("x = _g.ttk.Scrollbar(f)", self.SCROLLBAR_RE)
 
 
 if __name__ == "__main__":
