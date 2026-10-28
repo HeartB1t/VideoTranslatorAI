@@ -92,6 +92,11 @@ class RequirementsStaticTests(unittest.TestCase):
             for line in _requirement_lines(ROOT / name):
                 package = re.split(r"[<>=!~;\[\s]", line, maxsplit=1)[0].lower()
                 with self.subTest(file=name, line=line):
+                    if name == "requirements-core.txt" and package == "av":
+                        # A ceiling only: faster-whisper still brings av; PyAV 19
+                        # dropped the av.open() argument faster-whisper 1.2.1 passes.
+                        self.assertRegex(line, r"^av<\d+$")
+                        continue
                     # av and onnxruntime arrive with faster-whisper (spec R8);
                     # python-mpv would install a second mpv.py.
                     self.assertNotIn(package, {"av", "onnxruntime", "python-mpv"})
