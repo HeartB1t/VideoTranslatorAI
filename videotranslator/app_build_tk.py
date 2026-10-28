@@ -582,6 +582,35 @@ class BuildMixin:
             wraplength=_g._HINT_WRAP, justify="left")
         self._lbl_hotwords_hint.pack(anchor="w", pady=(0, 4))
 
+        # ── 9. YOUTUBE COOKIES ────────────────────────────────────────────
+        sect9, body9, _, self._lbl_section_cookies = self._make_accordion_section(
+            adv, self._s("section_cookies"))
+        sect9.pack(fill="x")
+        self._cookies_file_var = _g.tk.StringVar(
+            value=_g.load_config().get("yt_dlp_cookies_file", ""))
+        cookies_row = _g.tk.Frame(body9, bg=_g.SURFACE)
+        cookies_row.pack(anchor="w", fill="x", pady=4)
+        self._lbl_cookies_file = _g.tk.Label(
+            cookies_row, text=self._s("label_cookies_file"),
+            bg=_g.SURFACE, fg=_g.FG2, font="VT.Small")
+        self._lbl_cookies_file.pack(side="left")
+        self._cookies_file_entry = _g.tk.Entry(
+            cookies_row, textvariable=self._cookies_file_var, width=22,
+            bg=_g.FIELD, fg=_g.FG, **_g._field_colors(), relief="flat",
+            highlightthickness=1, highlightbackground=_g.BORDER, highlightcolor=_g.ACC,
+            font="VT.Mono")
+        self._cookies_file_entry.pack(side="left", padx=(4, 0), fill="x", expand=True)
+        self._cookies_file_entry.bind("<FocusOut>", lambda _e: self._persist_cookies_file())
+        _wc, self._btn_cookies_browse = self._flat_btn(
+            cookies_row, text=self._s("btn_browse"), command=self._browse_cookies_file,
+            padx=8, pady=2)
+        _wc.pack(side="left", padx=(4, 0))
+        self._lbl_cookies_hint = _g.tk.Label(
+            body9, text=self._s("hint_cookies_file"),
+            bg=_g.SURFACE, fg=_g.FG2, font="VT.Italic",
+            wraplength=_g._HINT_WRAP, justify="left")
+        self._lbl_cookies_hint.pack(anchor="w", pady=(0, 4))
+
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
         inner, self._lbl_panel_translation = self._panel(
