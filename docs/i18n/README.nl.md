@@ -375,7 +375,7 @@ Er kunnen twee verschillende blokkades optreden, met verschillende oplossingen:
 
 | Blok | Symptoom | Repareren |
 |-------|---------|-----|
-| **Download** (yt-dlp) | "Meld u aan om te bevestigen dat u geen bot bent", HTTP 429 | **VPN** / IP roteren, of ingelogd zijn op YouTube in je browser (cookies worden automatisch gelezen) |
+| **Download** (yt-dlp) | "Meld u aan om te bevestigen dat u geen bot bent", HTTP 429 / 403 | **VPN** / IP roteren, of ingelogd zijn op YouTube in je browser (cookies worden automatisch gelezen); of stel `yt_dlp_cookies_file` in config.json in op een uit de browser geëxporteerde cookies.txt |
 | **Vertaling** (gratis eindpunt van Google) | "Google Translate kon niet vertalen... verzoeksnelheid beperkt/geblokkeerd" | Gebruik **MarianMT** (offline) of **Ollama** (lokaal) - geen limiet voor het aantal verzoeken. Een VPN helpt ook. De batchstroom valt nu **automatisch terug naar MarianMT** wanneer Google wordt geblokkeerd. |
 
 ### Thema's en uitstraling

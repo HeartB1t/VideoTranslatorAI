@@ -375,7 +375,7 @@ Pueden ocurrir dos bloqueos diferentes, con diferentes soluciones:
 
 | Bloquear | Síntoma | Arreglar |
 |-------|---------|-----|
-| **Descargar** (yt-dlp) | "Inicia sesión para confirmar que no eres un bot", HTTP 429 | **VPN** / rotar IP, o iniciar sesión en YouTube en su navegador (las cookies se leen automáticamente) |
+| **Descargar** (yt-dlp) | "Inicia sesión para confirmar que no eres un bot", HTTP 429 / 403 | **VPN** / rotar IP, o iniciar sesión en YouTube en su navegador (las cookies se leen automáticamente); o define `yt_dlp_cookies_file` en config.json con un cookies.txt exportado del navegador |
 | **Traducción** (punto final gratuito de Google) | "Google Translate no se pudo traducir... tasa de solicitud limitada/bloqueada" | Utilice **MarianMT** (fuera de línea) o **Ollama** (local): sin límite de tasa de solicitud. Una VPN también ayuda. El flujo por lotes ahora **vuelve a MarianMT automáticamente** cuando se bloquea Google. |
 
 ### Temas y apariencia

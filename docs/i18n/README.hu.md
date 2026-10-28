@@ -375,7 +375,7 @@ Két különböző blokk történhet, különböző javításokkal:
 
 | Blokk | Tünet | Fix |
 |-------|---------|-----|
-| **Letöltés** (yt-dlp) | "Jelentkezzen be, hogy megerősítse, hogy nem bot", HTTP 429 | **VPN** / IP-cím elforgatása, vagy jelentkezzen be a YouTube-ra a böngészőjében (a cookie-k beolvasása automatikusan történik) |
+| **Letöltés** (yt-dlp) | "Jelentkezzen be, hogy megerősítse, hogy nem bot", HTTP 429 / 403 | **VPN** / IP-cím elforgatása, vagy jelentkezzen be a YouTube-ra a böngészőjében (a cookie-k beolvasása automatikusan történik); vagy állítsa a config.json `yt_dlp_cookies_file` kulcsát a böngészőből exportált cookies.txt fájlra |
 | **Fordítás** (Google ingyenes végpont) | "Google Translate nem tudta lefordítani... a kérés sebessége korlátozott/blokkolva" | Használja a **MarianMT** (offline) vagy **Ollama** (helyi) szolgáltatást - nincs kérési sebességkorlátozás. A VPN is segít. A kötegelt folyamat mostantól **automatikusan visszatér a MarianMT-hez**, ha a Google le van tiltva. |
 
 ### Témák és megjelenés

@@ -375,7 +375,7 @@ Kaksi erilaista lohkoa voi tapahtua eri korjauksin:
 
 | Estä | Oire | Korjaa |
 |-------|---------|-----|
-| **Lataa** (yt-dlp) | "Kirjaudu sisään vahvistaaksesi, että et ole robotti", HTTP 429 | **VPN** / käännä IP-osoitetta tai kirjaudu sisään YouTubeen selaimessasi (evästeet luetaan automaattisesti) |
+| **Lataa** (yt-dlp) | "Kirjaudu sisään vahvistaaksesi, että et ole robotti", HTTP 429 / 403 | **VPN** / käännä IP-osoitetta tai kirjaudu sisään YouTubeen selaimessasi (evästeet luetaan automaattisesti); tai aseta config.json-tiedostoon `yt_dlp_cookies_file` selaimesta viedyn cookies.txt-tiedoston polku |
 | **Käännös** (Googlen ilmainen päätepiste) | "Google Translate ei voinut kääntää... pyyntöjen määrä rajoitettu/estetty" | Käytä **MarianMT** (offline) tai **Ollama** (paikallinen) - ei pyyntöjen määrärajoitusta. VPN auttaa myös. Erävirta nyt **palautuu MarianMT:hen automaattisesti**, kun Google estetään. |
 
 ### Teemat ja ulkoasu

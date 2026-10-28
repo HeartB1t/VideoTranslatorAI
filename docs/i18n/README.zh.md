@@ -375,7 +375,7 @@ python video_translator_gui.py
 
 | 块 | 症状 | 修复 |
 |-------|---------|-----|
-| **下载** (yt-dlp) | “登录以确认您不是机器人”，HTTP 429 | **VPN** / 轮换 IP，或在浏览器中登录 YouTube（自动读取 cookie） |
+| **下载** (yt-dlp) | “登录以确认您不是机器人”，HTTP 429 / 403 | **VPN** / 轮换 IP，或在浏览器中登录 YouTube（自动读取 cookie）；或在 config.json 中将 `yt_dlp_cookies_file` 设为从浏览器导出的 cookies.txt |
 | **翻译**（Google 免费端点） | “Google Translate 无法翻译...请求速率受限/被阻止” | 使用 **MarianMT**（离线）或 **Ollama**（本地）- 无请求速率限制。 VPN 也有帮助。现在，当 Google 被阻止时，批处理流程**自动回退到 MarianMT**。 |
 
 ### 主题和外观

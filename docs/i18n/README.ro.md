@@ -375,7 +375,7 @@ Se pot întâmpla două blocuri diferite, cu remedieri diferite:
 
 | Blocați | Simptom | Fix |
 |-------|---------|-----|
-| **Descărcare** (yt-dlp) | „Conectează-te pentru a confirma că nu ești un bot”, HTTP 429 | **VPN** / rotiți IP, sau fiți conectat la YouTube în browser (cookie-urile sunt citite automat) |
+| **Descărcare** (yt-dlp) | „Conectează-te pentru a confirma că nu ești un bot”, HTTP 429 / 403 | **VPN** / rotiți IP, sau fiți conectat la YouTube în browser (cookie-urile sunt citite automat); sau setați `yt_dlp_cookies_file` în config.json la un cookies.txt exportat din browser |
 | **Traducere** (punct final gratuit Google) | „Google Translate nu a putut traduce... rata de solicitare limitată/blocata” | Utilizați **MarianMT** (offline) sau **Ollama** (local) - fără limită de solicitare. Un VPN ajută și el. Fluxul batch acum **revine automat la MarianMT** când Google este blocat. |
 
 ### Teme și aspect
