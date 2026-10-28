@@ -14,11 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = [ROOT / "video_translator_gui.py", *sorted((ROOT / "videotranslator").glob("*.py"))]
 
 
+def _is_tk_module(node):
+    # ``tk`` in the GUI file, ``_g.tk`` in the App mixins (app_host).
+    if isinstance(node, ast.Name):
+        return node.id == "tk"
+    return (isinstance(node, ast.Attribute) and node.attr == "tk"
+            and isinstance(node.value, ast.Name) and node.value.id == "_g")
+
+
 def entry_calls(tree):
     for node in ast.walk(tree):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "Entry" and isinstance(node.func.value, ast.Name)
-                and node.func.value.id == "tk"):
+                and node.func.attr == "Entry" and _is_tk_module(node.func.value)):
             yield node
 
 
