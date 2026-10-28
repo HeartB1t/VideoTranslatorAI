@@ -5690,7 +5690,7 @@ class App(_SetupMixin, _WidgetsMixin, _BuildMixin, _SettingsMixin, _EnginesMixin
         # Windows: a failed load of an optional native DLL (libmpv and its
         # dependencies) must raise an exception, never a modal hard-error box.
         # Mask it once for the whole GUI process; no-op off Windows.
-        from videotranslator import libmpv_runtime as _libmpv_runtime
+        from videotranslator import libmpv_runtime as _libmpv_runtime  # noqa: F811
         _libmpv_runtime.mask_hard_error_dialogs()
 
     def _s(self, key: str) -> str:

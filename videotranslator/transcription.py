@@ -67,8 +67,8 @@ def normalize_whisper_segments(raw_segments: Iterable[Any]) -> list[dict[str, An
         if text and text != prev_text:
             out.append(
                 {
-                    "start": getattr(segment, "start"),
-                    "end": getattr(segment, "end"),
+                    "start": segment.start,
+                    "end": segment.end,
                     "text": text,
                 }
             )
