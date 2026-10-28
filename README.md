@@ -410,7 +410,7 @@ Two different blocks can happen, with different fixes:
 
 | Block | Symptom | Fix |
 |-------|---------|-----|
-| **Download** (yt-dlp) | "Sign in to confirm you're not a bot", HTTP 429 | **VPN** / rotate IP, or be logged into YouTube in your browser (cookies are read automatically) |
+| **Download** (yt-dlp) | "Sign in to confirm you're not a bot", HTTP 429 / 403 | **VPN** / rotate IP, or be logged into YouTube in your browser (cookies are read automatically); or set `yt_dlp_cookies_file` in config.json to a cookies.txt exported from the browser |
 | **Translation** (Google free endpoint) | "Google Translate could not translate... rate limited/blocked" | Use **MarianMT** (offline) or **Ollama** (local) - no rate limit. A VPN also helps. The batch flow now **falls back to MarianMT automatically** when Google is blocked. |
 
 ### Themes and appearance

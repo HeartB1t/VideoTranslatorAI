@@ -375,7 +375,7 @@ Dua blok berbeda dapat terjadi, dengan perbaikan berbeda:
 
 | Blokir | Gejala | Perbaiki |
 |-------|---------|-----|
-| **Unduh** (yt-dlp) | "Masuk untuk mengonfirmasi bahwa Anda bukan bot", HTTP 429 | **VPN** / putar IP, atau masuk ke YouTube di browser Anda (cookie dibaca secara otomatis) |
+| **Unduh** (yt-dlp) | "Masuk untuk mengonfirmasi bahwa Anda bukan bot", HTTP 429 / 403 | **VPN** / putar IP, atau masuk ke YouTube di browser Anda (cookie dibaca secara otomatis); atau setel `yt_dlp_cookies_file` di config.json ke cookies.txt yang diekspor dari browser |
 | **Terjemahan** (titik akhir gratis Google) | "Google Translate tidak dapat menerjemahkan... tingkat permintaan dibatasi/diblokir" | Gunakan **MarianMT** (offline) atau **Ollama** (lokal) - tidak ada batasan tarif permintaan. VPN juga membantu. Aliran batch sekarang **kembali ke MarianMT secara otomatis** ketika Google diblokir. |
 
 ### Tema dan penampilan

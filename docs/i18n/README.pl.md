@@ -375,7 +375,7 @@ Mogą wystąpić dwa różne bloki z różnymi poprawkami:
 
 | Blok | Objaw | Napraw |
 |-------|---------|-----|
-| **Pobierz** (yt-dlp) | „Zaloguj się, aby potwierdzić, że nie jesteś botem”, HTTP 429 | **VPN** / zmień adres IP lub zaloguj się do YouTube w swojej przeglądarce (pliki cookie są odczytywane automatycznie) |
+| **Pobierz** (yt-dlp) | „Zaloguj się, aby potwierdzić, że nie jesteś botem”, HTTP 429 / 403 | **VPN** / zmień adres IP lub zaloguj się do YouTube w swojej przeglądarce (pliki cookie są odczytywane automatycznie); albo ustaw `yt_dlp_cookies_file` w config.json na plik cookies.txt wyeksportowany z przeglądarki |
 | **Tłumaczenie** (bezpłatny punkt końcowy Google) | „Google Translate nie mógł przetłumaczyć... liczba żądań ograniczona/zablokowana” | Użyj **MarianMT** (offline) lub **Ollama** (lokalnie) - brak limitu liczby żądań. VPN również pomaga. Przepływ wsadowy teraz **powraca automatycznie do MarianMT**, gdy Google jest zablokowany. |
 
 ### Motywy i wygląd
