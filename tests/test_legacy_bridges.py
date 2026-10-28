@@ -14,6 +14,13 @@ class LegacyDiarizationBridgeTests(unittest.TestCase):
         self.assertIs(legacy.assign_speakers, diarization.assign_speakers)
 
 
+class LegacyOllamaTranslateBridgeTests(unittest.TestCase):
+    def test_translate_with_ollama_is_the_package_function(self):
+        from videotranslator import ollama_translate
+
+        self.assertIs(legacy.translate_with_ollama, ollama_translate.translate_with_ollama)
+
+
 class LegacyTimingBridgeTests(unittest.TestCase):
     def test_timing_helpers_are_extracted_module_functions(self):
         self.assertIs(legacy._suggest_xtts_speed, timing.suggest_xtts_speed)
