@@ -38,6 +38,8 @@ classifiers = [
 ]
 dependencies = [
   "faster-whisper",
+  # PyAV 19 dropped av.open(metadata_errors=...), used by faster-whisper 1.2.1.
+  "av<19",
   "yt-dlp",
   "demucs",
   "soundfile",
