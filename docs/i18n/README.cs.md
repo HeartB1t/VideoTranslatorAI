@@ -375,7 +375,7 @@ Mohou nastat dva různé bloky s různými opravami:
 
 | Blokovat | Symptom | Opravit |
 |-------|---------|-----|
-| **Stáhnout** (yt-dlp) | „Přihlaste se a potvrďte, že nejste robot“, HTTP 429 | **VPN** / otočte IP nebo buďte přihlášeni na YouTube ve svém prohlížeči (soubory cookie se načítají automaticky) |
+| **Stáhnout** (yt-dlp) | „Přihlaste se a potvrďte, že nejste robot“, HTTP 429 / 403 | **VPN** / otočte IP nebo buďte přihlášeni na YouTube ve svém prohlížeči (soubory cookie se načítají automaticky); nebo nastavte `yt_dlp_cookies_file` v config.json na soubor cookies.txt exportovaný z prohlížeče |
 | **Překlad** (bezplatný koncový bod Google) | "Google Translate nelze přeložit... četnost požadavků omezena/blokována" | Použijte **MarianMT** (offline) nebo **Ollama** (místní) - žádný limit počtu požadavků. Pomáhá také VPN. Dávkový tok nyní **spadá zpět do MarianMT automaticky**, když je Google zablokován. |
 
 ### Témata a vzhled

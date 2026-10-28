@@ -375,7 +375,7 @@ Farklı düzeltmelerle iki farklı blok meydana gelebilir:
 
 | Blok | Belirti | Düzeltme |
 |-------|---------|-----|
-| **İndir** (yt-dlp) | "Bot olmadığınızı doğrulamak için oturum açın", HTTP 429 | **VPN** / IP döndürün veya tarayıcınızdan YouTube'da oturum açın (çerezler otomatik olarak okunur) |
+| **İndir** (yt-dlp) | "Bot olmadığınızı doğrulamak için oturum açın", HTTP 429 / 403 | **VPN** / IP döndürün veya tarayıcınızdan YouTube'da oturum açın (çerezler otomatik olarak okunur); ya da config.json içinde `yt_dlp_cookies_file` değerini tarayıcıdan dışa aktarılan bir cookies.txt dosyasına ayarlayın |
 | **Çeviri** (Google ücretsiz uç noktası) | "Google Translate çevrilemedi... istek hızı sınırlı/engellendi" | **MarianMT** (çevrimdışı) veya **Ollama** (yerel) kullanın; istek hızı sınırı yoktur. Bir VPN de yardımcı olur. Toplu akış artık Google engellendiğinde **otomatik olarak MarianMT'ye geri dönüyor**. |
 
 ### Temalar ve görünüm

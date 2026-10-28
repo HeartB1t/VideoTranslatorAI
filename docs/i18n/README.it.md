@@ -375,7 +375,7 @@ Possono verificarsi due blocchi diversi, con soluzioni diverse:
 
 | Blocco | Sintomo | Soluzione |
 |-------|---------|-----|
-| **Download** (yt-dlp) | "Accedi per confermare che non sei un bot", HTTP 429 | **VPN** / ruota l'IP o accedi a YouTube nel tuo browser (i cookie vengono letti automaticamente) |
+| **Download** (yt-dlp) | "Accedi per confermare che non sei un bot", HTTP 429 / 403 | **VPN** / ruota l'IP o accedi a YouTube nel tuo browser (i cookie vengono letti automaticamente); oppure imposta `yt_dlp_cookies_file` in config.json su un cookies.txt esportato dal browser |
 | **Traduzione** (endpoint gratuito di Google) | "Google Translate non è riuscito a tradurre... limite di richieste raggiunto o servizio bloccato" | Utilizza **MarianMT** (offline) o **Ollama** (locale) - nessun limite di richieste. Anche una VPN aiuta. Il flusso batch ora **ritorna automaticamente a MarianMT** quando Google viene bloccato. |
 
 ### Temi e aspetto

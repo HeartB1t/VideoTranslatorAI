@@ -375,7 +375,7 @@ To forskellige blokke kan ske med forskellige rettelser:
 
 | Bloker | Symptom | Fix |
 |-------|---------|-----|
-| **Download** (yt-dlp) | "Log ind for at bekræfte, at du ikke er en bot", HTTP 429 | **VPN** / roter IP, eller bliv logget ind på YouTube i din browser (cookies læses automatisk) |
+| **Download** (yt-dlp) | "Log ind for at bekræfte, at du ikke er en bot", HTTP 429 / 403 | **VPN** / roter IP, eller bliv logget ind på YouTube i din browser (cookies læses automatisk); eller sæt `yt_dlp_cookies_file` i config.json til en cookies.txt eksporteret fra browseren |
 | **Oversættelse** (Google gratis slutpunkt) | "Google Translate kunne ikke oversætte... anmodningshastighed begrænset/blokeret" | Brug **MarianMT** (offline) eller **Ollama** (lokalt) - ingen anmodningssatsgrænse. En VPN hjælper også. Batchflowet **falder nu automatisk tilbage til MarianMT**, når Google er blokeret. |
 
 ### Temaer og udseende

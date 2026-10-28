@@ -375,7 +375,7 @@ Två olika block kan hända, med olika korrigeringar:
 
 | Block | Symptom | Fixa |
 |-------|---------|-----|
-| **Ladda ned** (yt-dlp) | "Logga in för att bekräfta att du inte är en bot", HTTP 429 | **VPN** / rotera IP, eller logga in på YouTube i din webbläsare (cookies läses automatiskt) |
+| **Ladda ned** (yt-dlp) | "Logga in för att bekräfta att du inte är en bot", HTTP 429 / 403 | **VPN** / rotera IP, eller logga in på YouTube i din webbläsare (cookies läses automatiskt); eller ange `yt_dlp_cookies_file` i config.json till en cookies.txt exporterad från webbläsaren |
 | **Översättning** (Googles kostnadsfria slutpunkt) | "Google Translate kunde inte översätta... förfrågningsfrekvens begränsad/blockerad" | Använd **MarianMT** (offline) eller **Ollama** (lokalt) - ingen gräns för begäranden. En VPN hjälper också. Batchflödet **faller nu tillbaka till MarianMT automatiskt** när Google blockeras. |
 
 ### Teman och utseende

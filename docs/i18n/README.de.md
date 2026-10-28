@@ -375,7 +375,7 @@ Es können zwei verschiedene Blockaden mit unterschiedlichen Korrekturen auftret
 
 | Blockieren | Symptom | Beheben |
 |-------|---------|-----|
-| **Herunterladen** (yt-dlp) | „Melden Sie sich an, um zu bestätigen, dass Sie kein Bot sind“, HTTP 429 | **VPN** / IP wechseln oder in Ihrem Browser bei YouTube angemeldet sein (Cookies werden automatisch gelesen) |
+| **Herunterladen** (yt-dlp) | „Melden Sie sich an, um zu bestätigen, dass Sie kein Bot sind“, HTTP 429 / 403 | **VPN** / IP wechseln oder in Ihrem Browser bei YouTube angemeldet sein (Cookies werden automatisch gelesen); oder `yt_dlp_cookies_file` in config.json auf eine aus dem Browser exportierte cookies.txt setzen |
 | **Übersetzung** (kostenloser Google-Endpunkt) | „Google Translate konnte nicht übersetzen... Anforderungsrate begrenzt/blockiert“ | Verwenden Sie **MarianMT** (offline) oder **Ollama** (lokal) - keine Begrenzung der Anfragerate. Ein VPN hilft auch. Der Batch-Flow fällt jetzt **automatisch auf MarianMT zurück**, wenn Google blockiert ist. |
 
 ### Themen und Aussehen

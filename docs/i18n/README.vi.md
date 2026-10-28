@@ -375,7 +375,7 @@ Hai khối khác nhau có thể xảy ra với các cách khắc phục khác nh
 
 | Chặn | triệu chứng | sửa chữa |
 |-------|---------|-----|
-| **Tải xuống** (yt-dlp) | "Đăng nhập để xác nhận bạn không phải là bot", HTTP 429 | **VPN** / xoay IP hoặc đăng nhập vào YouTube trên trình duyệt của bạn (cookie được đọc tự động) |
+| **Tải xuống** (yt-dlp) | "Đăng nhập để xác nhận bạn không phải là bot", HTTP 429 / 403 | **VPN** / xoay IP hoặc đăng nhập vào YouTube trên trình duyệt của bạn (cookie được đọc tự động); hoặc đặt `yt_dlp_cookies_file` trong config.json thành tệp cookies.txt xuất từ trình duyệt |
 | **Dịch** (điểm cuối miễn phí của Google) | "Google Translate không thể dịch... tốc độ yêu cầu bị giới hạn/bị chặn" | Sử dụng **MarianMT** (ngoại tuyến) hoặc **Ollama** (cục bộ) - không giới hạn tỷ lệ yêu cầu. VPN cũng có ích. Luồng hàng loạt hiện **tự động quay trở lại MarianMT** khi Google bị chặn. |
 
 ### Chủ đề và sự xuất hiện
