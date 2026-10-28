@@ -21,6 +21,20 @@ class LegacyOllamaTranslateBridgeTests(unittest.TestCase):
         self.assertIs(legacy.translate_with_ollama, ollama_translate.translate_with_ollama)
 
 
+class LegacyUiStringsBridgeTests(unittest.TestCase):
+    def test_ui_strings_are_the_package_dict_with_merges_applied(self):
+        from videotranslator import ui_strings
+
+        # Same object: the GUI imports the base dict and the string submodules
+        # merge their keys into it in place.
+        self.assertIs(legacy.UI_STRINGS, ui_strings.UI_STRINGS)
+        self.assertIs(legacy.UI_LANG_OPTIONS, ui_strings.UI_LANG_OPTIONS)
+        self.assertIs(legacy.UI_LANG_CODES, ui_strings.UI_LANG_CODES)
+        self.assertEqual(set(legacy.UI_STRINGS), legacy.UI_LANG_CODES)
+        # A player key, merged only at GUI import, proves the merge ran on it.
+        self.assertIn("label_log_panel", legacy.UI_STRINGS["it"])
+
+
 class LegacyTimingBridgeTests(unittest.TestCase):
     def test_timing_helpers_are_extracted_module_functions(self):
         self.assertIs(legacy._suggest_xtts_speed, timing.suggest_xtts_speed)
