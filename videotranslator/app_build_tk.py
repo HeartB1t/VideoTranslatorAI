@@ -585,7 +585,7 @@ class BuildMixin:
     def _build_lang_voice_section(self, parent):
         """Right-pane card: language pair + voice chips + TTS rate slider."""
         inner, self._lbl_panel_translation = self._panel(
-            parent, "translation", self._s("panel_translation"), padx=4, pady=(0, 10))
+            parent, "translation", self._s("panel_translation"), pady=(0, 10))
 
         # Source language
         from_row = _g.tk.Frame(inner, bg=_g.CARD)
@@ -661,7 +661,7 @@ class BuildMixin:
     def _build_profile_section(self, parent):
         """Right-pane card: Fast / Balanced / Studio / Cinematic presets."""
         inner, self._lbl_panel_profile = self._panel(
-            parent, "profile", self._s("panel_profile"), padx=4, pady=(0, 10))
+            parent, "profile", self._s("panel_profile"), pady=(0, 10))
 
         btn_row = _g.tk.Frame(inner, bg=_g.CARD)
         btn_row.pack(fill="x")
@@ -701,7 +701,7 @@ class BuildMixin:
     def _build_start_section(self, parent):
         """Right-pane card: summary line + big Start button + status row."""
         inner, self._lbl_panel_start = self._panel(
-            parent, "start", self._s("panel_start"), padx=4, pady=(0, 10))
+            parent, "start", self._s("panel_start"), pady=(0, 10))
 
         # Summary line (auto-updated on lang/voice/profile changes)
         self._lbl_summary = _g.tk.Label(

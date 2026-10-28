@@ -297,6 +297,17 @@ class P0LayoutTests(unittest.TestCase):
             self.assertEqual(app._right_pane.winfo_reqwidth(), widest)
             self.assertEqual(int(app._right_canvas.cget("width")), want)
 
+    def test_every_card_shares_the_same_left_edge_and_width(self):
+        # The input and settings cards once lacked the 4 px side margin of the
+        # others and stuck out on both sides of the column.
+        with built_app(CFG) as (gui, app, _):
+            _show_at(self, app, *SIZES[1])
+            frames = {pid: outer for pid, (outer, _) in app._panels.items()}
+            self.assertGreaterEqual(len(frames), 5)
+            edges = {pid: (f.winfo_x(), f.winfo_width()) for pid, f in frames.items()}
+            _log("card edges", **{pid: edge for pid, edge in edges.items()})
+            self.assertEqual(len(set(edges.values())), 1, edges)
+
     def test_hiding_rows_and_column_hands_the_window_to_the_player(self):
         # Spec 3.1 "Fullscreen": P2 grid_remove()s rows 0, 2, 3 and the card
         # column. Nothing may keep their space: no minsize, no weight (spike
