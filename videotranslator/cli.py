@@ -157,6 +157,12 @@ def _build_parser(legacy) -> argparse.ArgumentParser:
              "{\"en\": [...], \"it\": [...]}. Merged with --hotwords "
              "(both can be passed; CLI string wins on duplicates).",
     )
+    parser.add_argument(
+        "--cookies-file", type=str, default=None, metavar="PATH",
+        help="Path to a cookies.txt (Netscape format) exported from a browser "
+             "logged into YouTube. Used for downloads instead of auto-reading "
+             "the browser; helps with 'Sign in to confirm you're not a bot' / "
+             "HTTP 403. Overrides the yt_dlp_cookies_file config key.")
     parser.add_argument("--batch", nargs="+", metavar="FILE")
     # Audio/music extraction mode (runs instead of translation).
     from videotranslator import audio_extract
@@ -257,6 +263,14 @@ def _cli(argv: Sequence[str] | None = None) -> None:
 
     parser = _build_parser(legacy)
     args = parser.parse_args(list(argv) if argv is not None else None)
+
+    # The download options are built deep in the pipeline (input_source), which
+    # reads VTAI_COOKIES_FILE; set it here so --cookies-file reaches every URL
+    # download (translation and --extract-audio) without threading a parameter.
+    if args.cookies_file:
+        from videotranslator.input_source import COOKIES_FILE_ENV
+
+        os.environ[COOKIES_FILE_ENV] = args.cookies_file
 
     if args.preflight:
         report = legacy._run_preflight(

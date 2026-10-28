@@ -433,11 +433,30 @@ class CookiesFileTests(unittest.TestCase):
     def test_cookies_file_is_read_from_the_user_config(self):
         from videotranslator import input_source
 
-        with mock.patch("videotranslator.config.load_user_config",
-                        return_value={"yt_dlp_cookies_file": " ~/c.txt "}):
-            self.assertEqual(input_source._configured_cookies_file(), "~/c.txt")
-        with mock.patch("videotranslator.config.load_user_config", return_value={}):
-            self.assertIsNone(input_source._configured_cookies_file())
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(input_source.COOKIES_FILE_ENV, None)
+            with mock.patch("videotranslator.config.load_user_config",
+                            return_value={"yt_dlp_cookies_file": " ~/c.txt "}):
+                self.assertEqual(input_source._configured_cookies_file(), "~/c.txt")
+            with mock.patch("videotranslator.config.load_user_config", return_value={}):
+                self.assertIsNone(input_source._configured_cookies_file())
+
+    def test_env_var_overrides_the_config(self):
+        from videotranslator import input_source
+
+        with mock.patch.dict(os.environ, {input_source.COOKIES_FILE_ENV: " /env/c.txt "}):
+            # The env value wins and the config is not even consulted.
+            with mock.patch("videotranslator.config.load_user_config",
+                            side_effect=AssertionError("config must not be read")):
+                self.assertEqual(input_source._configured_cookies_file(), "/env/c.txt")
+
+    def test_blank_env_var_falls_back_to_config(self):
+        from videotranslator import input_source
+
+        with mock.patch.dict(os.environ, {input_source.COOKIES_FILE_ENV: "   "}):
+            with mock.patch("videotranslator.config.load_user_config",
+                            return_value={"yt_dlp_cookies_file": "/cfg/c.txt"}):
+                self.assertEqual(input_source._configured_cookies_file(), "/cfg/c.txt")
 
 
 class _CookieLoadError(Exception):

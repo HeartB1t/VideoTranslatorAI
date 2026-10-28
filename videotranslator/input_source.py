@@ -113,8 +113,16 @@ def _detect_browser(
     return None
 
 
+COOKIES_FILE_ENV = "VTAI_COOKIES_FILE"
+
+
 def _configured_cookies_file() -> str | None:
-    """The cookies.txt path set as ``yt_dlp_cookies_file`` in the user config."""
+    """The cookies.txt path to use: the ``VTAI_COOKIES_FILE`` env var (set by the
+    CLI ``--cookies-file``) wins over the ``yt_dlp_cookies_file`` user config."""
+    env_value = os.environ.get(COOKIES_FILE_ENV, "").strip()
+    if env_value:
+        return env_value
+
     from videotranslator.config import load_user_config
 
     try:
