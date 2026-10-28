@@ -1065,3 +1065,36 @@ class FfmpegWindowsDownloadTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(left, [])
         self.assertIn("no published SHA256", log)
+
+
+class CookiesFileSettingTests(unittest.TestCase):
+    def test_persist_saves_the_stripped_path_under_the_config_key(self):
+        app = SimpleNamespace(_cookies_file_var=SimpleNamespace(
+            get=lambda: "  /home/me/cookies.txt  "))
+        with mock.patch.object(gui, "save_config") as save:
+            gui.App._persist_cookies_file(app)
+        save.assert_called_once_with({"yt_dlp_cookies_file": "/home/me/cookies.txt"})
+
+    def test_browse_sets_the_var_and_persists_the_chosen_file(self):
+        holder = {"value": ""}
+        app = SimpleNamespace(
+            _cookies_file_var=SimpleNamespace(
+                get=lambda: holder["value"],
+                set=lambda v: holder.__setitem__("value", v)),
+            _s=lambda key: key,
+            _persist_cookies_file=Mock())
+        with mock.patch.object(gui.filedialog, "askopenfilename",
+                               return_value="/picked/cookies.txt"):
+            gui.App._browse_cookies_file(app)
+        self.assertEqual(holder["value"], "/picked/cookies.txt")
+        app._persist_cookies_file.assert_called_once_with()
+
+    def test_browse_cancelled_changes_nothing(self):
+        app = SimpleNamespace(
+            _cookies_file_var=SimpleNamespace(get=lambda: "", set=Mock()),
+            _s=lambda key: key,
+            _persist_cookies_file=Mock())
+        with mock.patch.object(gui.filedialog, "askopenfilename", return_value=""):
+            gui.App._browse_cookies_file(app)
+        app._cookies_file_var.set.assert_not_called()
+        app._persist_cookies_file.assert_not_called()

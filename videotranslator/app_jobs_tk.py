@@ -239,6 +239,21 @@ class JobsMixin:
         """Save the configured output folder (empty string means the default)."""
         _g.save_config({"output_dir": self._output_dir_var.get().strip()})
 
+    def _browse_cookies_file(self):
+        """Pick a cookies.txt and persist it; input_source reads it for downloads."""
+        initial = self._cookies_file_var.get().strip()
+        chosen = _g.filedialog.askopenfilename(
+            title=self._s("label_cookies_file"),
+            initialdir=_g.os.path.dirname(initial) if initial else None,
+            filetypes=[("cookies.txt", "*.txt"), ("All files", "*.*")])
+        if chosen:
+            self._cookies_file_var.set(chosen)
+            self._persist_cookies_file()
+
+    def _persist_cookies_file(self):
+        """Save the cookies.txt path (empty string clears it)."""
+        _g.save_config({"yt_dlp_cookies_file": self._cookies_file_var.get().strip()})
+
     # ── Audio/music extraction ────────────────────────────────────────────────
 
     def _current_audio_format_key(self) -> str:
