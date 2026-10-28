@@ -28,6 +28,7 @@ class InputSourceTests(unittest.TestCase):
         self.assertTrue(opts["noplaylist"])
         self.assertIn("player_client", opts["extractor_args"]["youtube"])
         clients = opts["extractor_args"]["youtube"]["player_client"]
+        self.assertEqual(clients[0], "default")
         self.assertIn("tv", clients)
         self.assertIn("android_vr", clients)
         self.assertLess(clients.index("tv"), clients.index("android_vr"))
