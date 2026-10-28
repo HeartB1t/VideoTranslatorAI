@@ -5464,58 +5464,7 @@ def save_hf_token(token: str) -> str:
     return "session"
 
 
-def diarize_audio(audio_path: str, hf_token: str) -> list[dict]:
-    """Run pyannote speaker-diarization-3.1. Returns [{start,end,speaker}, ...]."""
-    from pyannote.audio import Pipeline
-    print("[3b] Running speaker diarization (pyannote)...", flush=True)
-    # Initialise pipeline to None before the try so the finally block does not
-    # crash with NameError if from_pretrained raises.
-    pipeline = None
-    try:
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token,
-        )
-        try:
-            import torch
-            if torch.cuda.is_available():
-                pipeline.to(torch.device("cuda"))
-        except Exception:
-            pass
-        diarization = pipeline(audio_path)
-        segments: list[dict] = []
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            segments.append({"start": float(turn.start), "end": float(turn.end), "speaker": str(speaker)})
-        speakers = sorted({s["speaker"] for s in segments})
-        print(f"     → {len(segments)} diarization turns | {len(speakers)} speakers: {', '.join(speakers)}", flush=True)
-        return segments
-    finally:
-        with contextlib.suppress(Exception):
-            if pipeline is not None:
-                del pipeline
-            import torch
-            torch.cuda.empty_cache()
-
-
-def assign_speakers(whisper_segments: list[dict], diar_segments: list[dict]) -> list[dict]:
-    """For each Whisper segment, assign the speaker with the largest temporal overlap."""
-    if not diar_segments:
-        return whisper_segments
-    for seg in whisper_segments:
-        s_start = seg["start"]
-        s_end = seg["end"]
-        best_speaker = None
-        best_overlap = 0.0
-        for d in diar_segments:
-            overlap = max(0.0, min(s_end, d["end"]) - max(s_start, d["start"]))
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_speaker = d["speaker"]
-        if best_speaker is not None:
-            seg["speaker"] = best_speaker
-    return whisper_segments
-
-
+from videotranslator.diarization import assign_speakers, diarize_audio  # noqa: E402,F401
 from videotranslator.pipeline_runner import (  # noqa: E402
     PipelineRuntime as _PipelineRuntime,
     translate_video as _translate_video_impl,

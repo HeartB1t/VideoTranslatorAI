@@ -5,7 +5,13 @@ from pathlib import Path
 from unittest import mock
 
 import video_translator_gui as legacy
-from videotranslator import config, secrets, segments, timing
+from videotranslator import config, diarization, secrets, segments, timing
+
+
+class LegacyDiarizationBridgeTests(unittest.TestCase):
+    def test_diarization_helpers_are_extracted_module_functions(self):
+        self.assertIs(legacy.diarize_audio, diarization.diarize_audio)
+        self.assertIs(legacy.assign_speakers, diarization.assign_speakers)
 
 
 class LegacyTimingBridgeTests(unittest.TestCase):
