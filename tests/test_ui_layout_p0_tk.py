@@ -180,7 +180,7 @@ class P0LayoutTests(unittest.TestCase):
     def test_accordions_do_not_resize_the_player(self):
         with built_app(CFG) as (gui, app, _):
             headers = _accordion_headers(app)
-            self.assertEqual(len(headers), 8)
+            self.assertEqual(len(headers), 9)
             for width, height in SIZES:
                 with self.subTest(size=f"{width}x{height}"):
                     _show_at(self, app, width, height)

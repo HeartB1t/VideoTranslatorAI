@@ -432,6 +432,10 @@ class SettingsMixin:
         self._lbl_section_hotwords.configure(text=self._s("section_hotwords"))
         self._lbl_hotwords.configure(text=self._s("label_hotwords"))
         self._lbl_hotwords_hint.configure(text=self._s("hint_hotwords"))
+        self._lbl_section_cookies.configure(text=self._s("section_cookies"))
+        self._lbl_cookies_file.configure(text=self._s("label_cookies_file"))
+        self._lbl_cookies_hint.configure(text=self._s("hint_cookies_file"))
+        self._btn_cookies_browse.configure(text=self._s("btn_browse"))
         # Log panel labels
         self._lbl_log_panel.configure(text=self._s("label_log_panel"))
         self._btn_log_toggle.configure(
