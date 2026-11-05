@@ -425,6 +425,27 @@ def detect_vo_failure(log_lines: Sequence[str], *, video_params_seen: bool,
 def stream_session_options(delay_max_s: float) -> dict[str, str]:
     if not math.isfinite(float(delay_max_s)) or float(delay_max_s) < 0:
         raise ValueError("delay_max_s must be a finite non-negative number")
+    # Resilience levers for a live HLS/DVR stream, forwarded to the ffmpeg HLS
+    # demuxer and its per-segment HTTP connections:
+    # - network-timeout (mpv rw_timeout, reliably propagated to the segment
+    #   connections) makes a stalled segment fail in ~10s instead of blocking
+    #   the demuxer for the 60s default; that 60s wait is what makes the live
+    #   translation and dubbing fall behind.
+    # - reconnect/reconnect_streamed/reconnect_delay_max are read by libavformat
+    #   hls.c and passed to the child HTTP connections, so a timed-out segment
+    #   becomes a transparent retry instead of a fatal "pull function"/IO error.
+    #   reconnect_streamed is required because the live edge is not seekable.
+    # - http_persistent=0 silences the noisy "keepalive request failed ...
+    #   Invalid argument" warning from hls.c: YouTube DVR rotates the googlevideo
+    #   host between segments, so keepalive reuse already fails on every segment
+    #   (a cheap local check, not a wasted handshake) and disabling it costs
+    #   nothing here while removing the log spam.
+    # Same mpv property names and semantics on Windows and Linux: libmpv wraps
+    # the same ffmpeg on both, the options live above the TLS backend.
+    demuxer_lavf_o = (
+        "reconnect=1,reconnect_streamed=1,"
+        f"reconnect_delay_max={int(delay_max_s)},http_persistent=0"
+    )
     return {
         "rebase_start_time": "no",
         "cache": "yes",
@@ -433,6 +454,8 @@ def stream_session_options(delay_max_s: float) -> dict[str, str]:
         "demuxer_max_back_bytes": str(32 * 1024 * 1024),
         "cache_pause": "yes",
         "cache_pause_wait": "1",
+        "network_timeout": "10",
+        "demuxer_lavf_o": demuxer_lavf_o,
     }
 
 

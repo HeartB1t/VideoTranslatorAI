@@ -14,8 +14,9 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
+from .input_source import is_probable_url
 from .output_media import segments_to_srt
-from .player_engine import BridgeSnapshot
+from .player_engine import BridgeSnapshot, stream_session_options
 from .player_settings import (
     PLAYER_AUDIO_KEY,
     PLAYER_MUTED_KEY,
@@ -39,6 +40,12 @@ STATUS_KEYS: dict[str, str] = {
     "vo-fallback": "player_vo_fallback_used",
     "busy": "player_busy",
 }
+
+
+# Upper bound (seconds) for the ffmpeg reconnect backoff on a live stream. Kept
+# short so a live edge that already fell behind retries quickly instead of
+# waiting out a long backoff.
+STREAM_RECONNECT_DELAY_MAX_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -117,6 +124,19 @@ class PlayerController:
             self.state = new_state
             self._on_change(new_state)
 
+    @staticmethod
+    def _load_options(item: MediaItem) -> dict[str, str] | None:
+        """Stream resilience options for a live URL source, else None.
+
+        The live source is the only MediaItem whose path is an http(s) URL
+        (local source files and finished dubbed results are filesystem paths,
+        even though both can carry kind="source"), so the URL scheme is the
+        discriminant, not the kind. Finished files keep options=None.
+        """
+        if is_probable_url(item.path):
+            return stream_session_options(STREAM_RECONNECT_DELAY_MAX_S)
+        return None
+
     def attach_backend(self, backend) -> None:
         self._backend = backend
         self._apply_initial_mix(backend)
@@ -126,7 +146,8 @@ class PlayerController:
             self._update(status="idle")
             return
         item, paused, start = pending
-        backend.load(item.path, paused=paused, start=start, options=None)
+        backend.load(item.path, paused=paused, start=start,
+                     options=self._load_options(item))
 
     def detach_backend(self) -> None:
         """Detach a failed backend and retain the current load for its replacement."""
@@ -163,7 +184,8 @@ class PlayerController:
             self._pending_load = (item, bool(paused), start)
             return
         self._pending_load = None
-        self._backend.load(item.path, paused=bool(paused), start=start, options=None)
+        self._backend.load(item.path, paused=bool(paused), start=start,
+                           options=self._load_options(item))
 
     def set_playlist(self, items: Sequence[MediaItem], index: int | None = None) -> None:
         self._playlist = list(items)
