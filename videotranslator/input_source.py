@@ -462,8 +462,14 @@ def resolve_stream_url(
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
     opts = build_ytdlp_options(".", js_runtimes=js_runtimes, log_cb=log_cb)
     opts["extractor_args"]["youtube"]["player_client"] = list(LIVE_PLAYER_CLIENTS)
+    # Muxed HLS first (evidence 2026-11-06, bgutil running, 4 VODs: the ios
+    # client's HLS formats answered 206 every time, the TVHTML5 / ANDROID_VR
+    # progressive itag 18 answered 403 in waves). At equal height "best" could
+    # still pick the progressive one (240p video), hence the explicit
+    # preference; the old selectors stay as fallbacks for sources without HLS.
     opts["format"] = (
-        f"best[acodec!=none][vcodec!=none][height<={max_height}]"
+        f"best[acodec!=none][vcodec!=none][protocol^=m3u8][height<={max_height}]"
+        f"/best[acodec!=none][vcodec!=none][height<={max_height}]"
         "/best[acodec!=none][vcodec!=none]/best"
     )
     info = _run_ytdlp(ytdlp_cls, opts, lambda ydl: ydl.extract_info(url, download=False), log_cb)
