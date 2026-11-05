@@ -339,7 +339,7 @@ A lebegés finoman színezett hátteret ad. A nem elérhető vezérlők semleges
 
 > Az yt-dlp támogatja a YouTube-ot, a Vimeót, a Twitter/X-et, a TikTokot és [1000+ egyéb webhelyet](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Fair use megjegyzés:** A videók yt-dlp-n keresztüli letöltése az olyan platformok által, mint a YouTube, automatikus hozzáférésnek minősül, és megsértheti az Általános Szerződési Feltételeket. Az azonos IP-címről történő intenzív vagy ismételt használat ideiglenes blokkolásokat eredményezhet (HTTP 429 / bejelentkezési hibák). Használjon VPN-t, vagy forgassa el az IP-címét, ha letöltési hibákat tapasztal. Ez az eszköz kizárólag személyes, nem kereskedelmi használatra készült. A lefordított tartalom továbbterjesztése sértheti a szerzői jogokat - mindig tartsa tiszteletben az eredeti alkotó jogait.
+> ⚠️ **Fair use megjegyzés:** A videók yt-dlp-n keresztüli letöltése az olyan platformok által, mint a YouTube, automatikus hozzáférésnek minősül, és megsértheti az Általános Szerződési Feltételeket. Az azonos IP-címről történő intenzív vagy ismételt használat ideiglenes blokkolásokat eredményezhet (HTTP 429 / bejelentkezési hibák). Használjon VPN-t, vagy forgassa el az IP-címét, ha letöltési hibákat tapasztal. Ez az eszköz kizárólag személyes, nem kereskedelmi használatra készült. A lefordított tartalom továbbterjesztése sértheti a szerzői jogokat - mindig tartsa tiszteletben az eredeti alkotó jogait. Egy 403-as hiba, amely VPN-nel és böngészős bejelentkezéssel is megmarad, általában a PO token: lásd a megjegyzést a hibaelhárítási táblázat alatt lejjebb.
 
 ### Valós idejű fordítás (feliratok és kísérleti hangszinkron)
 
@@ -377,6 +377,13 @@ Két különböző blokk történhet, különböző javításokkal:
 |-------|---------|-----|
 | **Letöltés** (yt-dlp) | "Jelentkezzen be, hogy megerősítse, hogy nem bot", HTTP 429 / 403 | **VPN** / IP-cím elforgatása, vagy jelentkezzen be a YouTube-ra a böngészőjében (a cookie-k beolvasása automatikusan történik); vagy állítsa a config.json `yt_dlp_cookies_file` kulcsát a böngészőből exportált cookies.txt fájlra |
 | **Fordítás** (Google ingyenes végpont) | "Google Translate nem tudta lefordítani... a kérés sebessége korlátozott/blokkolva" | Használja a **MarianMT** (offline) vagy **Ollama** (helyi) szolgáltatást - nincs kérési sebességkorlátozás. A VPN is segít. A kötegelt folyamat mostantól **automatikusan visszatér a MarianMT-hez**, ha a Google le van tiltva. |
+
+**PO token (olyan 403-as hiba, amelyet sem a VPN, sem a böngészős bejelentkezés nem szüntet meg).** A YouTube hullámokban kényszeríti ki a GVS Proof-of-Origin (PO) tokent a videó adataihoz: az oldal rendben kinyerhető, majd minden stream HTTP 403-mal válaszol, bármelyik klienssel. A megoldás egy PO token szolgáltató a yt-dlp-hez, a `bgutil-ytdlp-pot-provider`: egy Docker-konténer, amely a `127.0.0.1:4416` címen figyel, plusz egy pip bővítmény ugyanabban a Python-környezetben, amelyet az alkalmazás használ. Ha mindkettő fut, a `yt-dlp -v` kiírja a `PO Token Providers: bgutil` sort, és a 403 eltűnik (a gyakorlatban igazolva). Két őszinte fenntartás. Először: a token-blokkolást győzi le, nem az IP-hez kötött botellenőrzést; egy már megjelölt IP-n továbbra is szükség lehet a fenti sorban leírt böngésző-cookie-kra. Másodszor: a szolgáltató GPL-3.0 licencű szoftver, amelyet futásidőben saját maga telepít (mint a JS futtatókörnyezetet); nem része ennek az alkalmazásnak. Beállítási részletek, image- és bővítményverziók: a [yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) és a szolgáltató saját README-je.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Témák és megjelenés
 

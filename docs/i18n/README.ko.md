@@ -339,7 +339,7 @@ python video_translator_gui.py
 
 > yt-dlp는 YouTube, Vimeo, Twitter/X, TikTok 및 [1000개 이상의 기타 사이트](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)를 지원합니다.
 
-> ⚠️ **공정 사용 고지:** yt-dlp를 통해 동영상을 다운로드하는 것은 YouTube와 같은 플랫폼에서 자동 액세스로 간주되며 서비스 약관을 위반할 수 있습니다. 동일한 IP 주소를 과도하게 사용하거나 반복적으로 사용하면 임시 차단이 발생할 수 있습니다(HTTP 429/로그인 필요 오류). 다운로드에 실패하면 VPN을 사용하거나 IP를 교체하세요. 이 도구는 개인적이고 비상업적인 용도로만 사용하도록 만들어졌습니다. 번역된 콘텐츠를 재배포하면 저작권이 침해될 수 있습니다. 항상 원본 작성자의 권리를 존중하세요.
+> ⚠️ **공정 사용 고지:** yt-dlp를 통해 동영상을 다운로드하는 것은 YouTube와 같은 플랫폼에서 자동 액세스로 간주되며 서비스 약관을 위반할 수 있습니다. 동일한 IP 주소를 과도하게 사용하거나 반복적으로 사용하면 임시 차단이 발생할 수 있습니다(HTTP 429/로그인 필요 오류). 다운로드에 실패하면 VPN을 사용하거나 IP를 교체하세요. 이 도구는 개인적이고 비상업적인 용도로만 사용하도록 만들어졌습니다. 번역된 콘텐츠를 재배포하면 저작권이 침해될 수 있습니다. 항상 원본 작성자의 권리를 존중하세요. VPN과 브라우저 로그인으로도 사라지지 않는 403은 대개 PO token 때문입니다. 아래 문제 해결 표 밑의 참고 사항을 보세요.
 
 ### 실시간 번역(자막 및 실험적인 음성 더빙)
 
@@ -377,6 +377,13 @@ python video_translator_gui.py
 |-------|---------|-----|
 | **다운로드**(yt-dlp) | "봇이 아닌지 확인하려면 로그인하세요.", HTTP 429 / 403 | **VPN** / IP를 회전하거나 브라우저에서 YouTube에 로그인하세요(쿠키는 자동으로 읽혀집니다); 또는 config.json의 `yt_dlp_cookies_file`을(를) 브라우저에서 내보낸 cookies.txt로 설정하세요 |
 | **번역**(Google 무료 엔드포인트) | "Google Translate는 번역할 수 없습니다... 요청 속도가 제한/차단되었습니다." | **MarianMT**(오프라인) 또는 **Ollama**(로컬)를 사용하세요. 요청 속도 제한이 없습니다. VPN도 도움이 됩니다. 이제 Google이 차단되면 일괄 흐름이 **자동으로 MarianMT로 돌아갑니다**. |
+
+**PO token (VPN도 브라우저 로그인도 해결하지 못하는 403).** YouTube는 동영상 데이터에 대해 GVS Proof-of-Origin(PO) token을 단계적으로 강제하고 있습니다. 페이지 추출은 정상인데 어떤 클라이언트로도 모든 스트림이 HTTP 403을 돌려줍니다. 해결책은 yt-dlp용 PO token 제공자 `bgutil-ytdlp-pot-provider`입니다. `127.0.0.1:4416`에서 수신하는 Docker 컨테이너와, 앱이 쓰는 Python 환경에 설치하는 pip 플러그인의 조합입니다. 둘 다 실행 중이면 `yt-dlp -v`에 `PO Token Providers: bgutil`이 표시되고 403이 사라집니다(실제로 확인함). 정직한 주의 사항 두 가지. 첫째, token 차단은 뚫지만 IP에 묶인 봇 검사는 뚫지 못합니다. 이미 표시된 IP에서는 위 행에서 설명한 브라우저 쿠키가 여전히 필요할 수 있습니다. 둘째, 이 제공자는 GPL-3.0 소프트웨어이며 실행 시점에 사용자가 직접 설치합니다(JS 런타임처럼). 이 앱에 번들로 포함되지 않습니다. 설정 세부 사항, 이미지와 플러그인 버전: [yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)와 제공자의 README를 참고하세요.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### 테마 및 외관
 

@@ -339,7 +339,7 @@ Melayang menambahkan latar belakang berwarna halus. Kontrol yang tidak tersedia 
 
 > yt-dlp mendukung YouTube, Vimeo, Twitter/X, TikTok, dan [1000+ situs lain](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Pemberitahuan penggunaan wajar:** Mengunduh video melalui yt-dlp dianggap sebagai akses otomatis oleh platform seperti YouTube dan mungkin melanggar Persyaratan Layanan mereka. Penggunaan yang berat atau berulang dari alamat IP yang sama dapat mengakibatkan pemblokiran sementara (HTTP 429/kesalahan masuk diperlukan). Gunakan VPN atau putar IP Anda jika Anda mengalami kegagalan pengunduhan. Alat ini ditujukan untuk penggunaan pribadi dan non-komersial saja. Pendistribusian ulang konten terjemahan dapat melanggar hak cipta - selalu hormati hak pencipta aslinya.
+> ⚠️ **Pemberitahuan penggunaan wajar:** Mengunduh video melalui yt-dlp dianggap sebagai akses otomatis oleh platform seperti YouTube dan mungkin melanggar Persyaratan Layanan mereka. Penggunaan yang berat atau berulang dari alamat IP yang sama dapat mengakibatkan pemblokiran sementara (HTTP 429/kesalahan masuk diperlukan). Gunakan VPN atau putar IP Anda jika Anda mengalami kegagalan pengunduhan. Alat ini ditujukan untuk penggunaan pribadi dan non-komersial saja. Pendistribusian ulang konten terjemahan dapat melanggar hak cipta - selalu hormati hak pencipta aslinya. Error 403 yang tetap muncul meski dengan VPN dan login browser biasanya adalah PO token: lihat catatan di bawah tabel pemecahan masalah di bawah ini.
 
 ### Terjemahan waktu nyata (subtitel dan sulih suara eksperimental)
 
@@ -377,6 +377,13 @@ Dua blok berbeda dapat terjadi, dengan perbaikan berbeda:
 |-------|---------|-----|
 | **Unduh** (yt-dlp) | "Masuk untuk mengonfirmasi bahwa Anda bukan bot", HTTP 429 / 403 | **VPN** / putar IP, atau masuk ke YouTube di browser Anda (cookie dibaca secara otomatis); atau setel `yt_dlp_cookies_file` di config.json ke cookies.txt yang diekspor dari browser |
 | **Terjemahan** (titik akhir gratis Google) | "Google Translate tidak dapat menerjemahkan... tingkat permintaan dibatasi/diblokir" | Gunakan **MarianMT** (offline) atau **Ollama** (lokal) - tidak ada batasan tarif permintaan. VPN juga membantu. Aliran batch sekarang **kembali ke MarianMT secara otomatis** ketika Google diblokir. |
+
+**PO token (error 403 yang tidak hilang dengan VPN maupun login browser).** YouTube secara bergelombang mewajibkan token GVS Proof-of-Origin (PO) untuk data video: halaman berhasil diekstrak, lalu setiap stream menjawab HTTP 403, apa pun client-nya. Solusinya adalah penyedia PO token untuk yt-dlp, `bgutil-ytdlp-pot-provider`: sebuah kontainer Docker yang mendengarkan di `127.0.0.1:4416` plus plugin pip di lingkungan Python yang sama dengan yang dipakai aplikasi. Saat keduanya berjalan, `yt-dlp -v` menampilkan `PO Token Providers: bgutil` dan error 403 hilang (terbukti di lapangan). Dua catatan jujur. Pertama, ia mengatasi blokir token, bukan pemeriksaan bot yang terkait IP: pada IP yang sudah ditandai, cookie browser yang dijelaskan di baris atas mungkin masih diperlukan. Kedua, penyedia ini adalah perangkat lunak GPL-3.0 yang Anda pasang sendiri saat runtime (seperti runtime JS); tidak dibundel dengan aplikasi ini. Detail penyiapan, versi image dan plugin: [PO Token Guide yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) dan README penyedia itu sendiri.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Tema dan penampilan
 

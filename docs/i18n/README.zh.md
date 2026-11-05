@@ -339,7 +339,7 @@ python video_translator_gui.py
 
 > yt-dlp 支持 YouTube、Vimeo、Twitter/X、TikTok 和 [1000 多个其他网站](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)。
 
-> ⚠️ **合理使用声明：** 通过 yt-dlp 下载视频被 YouTube 等平台视为自动访问，可能违反其服务条款。大量或重复使用同一 IP 地址可能会导致临时阻止（HTTP 429/需要登录错误）。如果遇到下载失败，请使用 VPN 或轮换 IP。该工具仅供个人非商业用途。重新分发翻译内容可能会侵犯版权 - 请始终尊重原始作者的权利。
+> ⚠️ **合理使用声明：** 通过 yt-dlp 下载视频被 YouTube 等平台视为自动访问，可能违反其服务条款。大量或重复使用同一 IP 地址可能会导致临时阻止（HTTP 429/需要登录错误）。如果遇到下载失败，请使用 VPN 或轮换 IP。该工具仅供个人非商业用途。重新分发翻译内容可能会侵犯版权 - 请始终尊重原始作者的权利。即使使用 VPN 并登录浏览器仍然持续出现的 403，通常就是 PO token 问题：请参阅下方故障排除表格下面的说明。
 
 ### 实时翻译（字幕和实验配音）
 
@@ -377,6 +377,13 @@ python video_translator_gui.py
 |-------|---------|-----|
 | **下载** (yt-dlp) | “登录以确认您不是机器人”，HTTP 429 / 403 | **VPN** / 轮换 IP，或在浏览器中登录 YouTube（自动读取 cookie）；或在 config.json 中将 `yt_dlp_cookies_file` 设为从浏览器导出的 cookies.txt |
 | **翻译**（Google 免费端点） | “Google Translate 无法翻译...请求速率受限/被阻止” | 使用 **MarianMT**（离线）或 **Ollama**（本地）- 无请求速率限制。 VPN 也有帮助。现在，当 Google 被阻止时，批处理流程**自动回退到 MarianMT**。 |
+
+**PO token（VPN 和浏览器登录都无法解决的 403）。** YouTube 正在分批对视频数据强制要求 GVS Proof-of-Origin（PO）token：页面能正常解析，但随后无论使用哪个客户端，所有流都返回 HTTP 403。解决办法是为 yt-dlp 安装一个 PO token 提供程序 `bgutil-ytdlp-pot-provider`：一个监听 `127.0.0.1:4416` 的 Docker 容器，加上安装在应用所用 Python 环境中的 pip 插件。两者都运行后，`yt-dlp -v` 会显示 `PO Token Providers: bgutil`，403 随之消失（已实际验证）。两点坦诚的说明。第一，它绕过的是 token 封锁，而不是与 IP 绑定的机器人检测：在已被标记的 IP 上，可能仍需要上一行中描述的浏览器 cookie。第二，该提供程序是 GPL-3.0 软件，由你在运行时自行安装（与 JS 运行时相同）；它不随本应用一起打包。设置细节、镜像和插件版本：请参阅 [yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) 以及提供程序自己的 README。
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### 主题和外观
 

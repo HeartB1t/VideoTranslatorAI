@@ -339,7 +339,7 @@ Vznášení přidá jemné tónované pozadí. Nedostupné ovládací prvky jsou
 
 > yt-dlp podporuje YouTube, Vimeo, Twitter/X, TikTok a [1000+ dalších webů](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Oznámení o spravedlivém použití:** Stahování videí přes yt-dlp je platformami jako YouTube považováno za automatický přístup a může porušovat jejich smluvní podmínky. Silné nebo opakované používání ze stejné IP adresy může mít za následek dočasné blokování (chyby HTTP 429 / požadované přihlášení). Pokud dojde k selhání stahování, použijte VPN nebo otočte svou IP. Tento nástroj je určen pouze pro osobní, nekomerční použití. Redistribuce přeloženého obsahu může porušovat autorská práva - vždy respektujte práva původního tvůrce.
+> ⚠️ **Oznámení o spravedlivém použití:** Stahování videí přes yt-dlp je platformami jako YouTube považováno za automatický přístup a může porušovat jejich smluvní podmínky. Silné nebo opakované používání ze stejné IP adresy může mít za následek dočasné blokování (chyby HTTP 429 / požadované přihlášení). Pokud dojde k selhání stahování, použijte VPN nebo otočte svou IP. Tento nástroj je určen pouze pro osobní, nekomerční použití. Redistribuce přeloženého obsahu může porušovat autorská práva - vždy respektujte práva původního tvůrce. Chyba 403, která přetrvává i s VPN a přihlášením v prohlížeči, je obvykle PO token: viz poznámku pod tabulkou řešení problémů níže.
 
 ### Překlad v reálném čase (titulky a experimentální dabing)
 
@@ -377,6 +377,13 @@ Mohou nastat dva různé bloky s různými opravami:
 |-------|---------|-----|
 | **Stáhnout** (yt-dlp) | „Přihlaste se a potvrďte, že nejste robot“, HTTP 429 / 403 | **VPN** / otočte IP nebo buďte přihlášeni na YouTube ve svém prohlížeči (soubory cookie se načítají automaticky); nebo nastavte `yt_dlp_cookies_file` v config.json na soubor cookies.txt exportovaný z prohlížeče |
 | **Překlad** (bezplatný koncový bod Google) | "Google Translate nelze přeložit... četnost požadavků omezena/blokována" | Použijte **MarianMT** (offline) nebo **Ollama** (místní) - žádný limit počtu požadavků. Pomáhá také VPN. Dávkový tok nyní **spadá zpět do MarianMT automaticky**, když je Google zablokován. |
+
+**PO token (chyba 403, kterou neodstraní ani VPN, ani přihlášení v prohlížeči).** YouTube ve vlnách vynucuje token GVS Proof-of-Origin (PO) pro data videa: stránka se extrahuje správně, pak ale každý stream odpoví HTTP 403 bez ohledu na klienta. Nápravou je poskytovatel PO tokenů pro yt-dlp, `bgutil-ytdlp-pot-provider`: kontejner Docker naslouchající na `127.0.0.1:4416` plus pip plugin ve stejném prostředí Pythonu, které aplikace používá. Když běží oba, `yt-dlp -v` zobrazí `PO Token Providers: bgutil` a chyba 403 zmizí (ověřeno v praxi). Dvě poctivé výhrady. Zaprvé, překoná blokaci tokenu, ne kontrolu na bota vázanou na IP: na již označené IP mohou být stále potřeba cookies prohlížeče popsané v řádku výše. Zadruhé, poskytovatel je software pod licencí GPL-3.0, který si instalujete sami za běhu (jako JS runtime); není součástí této aplikace. Podrobnosti nastavení, verze image a pluginu: [PO Token Guide yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) a README poskytovatele.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Témata a vzhled
 
