@@ -199,10 +199,22 @@ class PlayerMixin:
         elif name == "volume":
             controller.set_volume(int(args.get("value", controller.state.volume)))
         elif name == "toggle_audio":
-            target = "original" if controller.state.audio == "dubbed" else "dubbed"
-            controller.select_audio(target)
+            previous_audio = controller.state.audio
+            target = "original" if previous_audio == "dubbed" else "dubbed"
+            if controller.select_audio(target):
+                self._player_log(
+                    f"[player] audio A/B: {previous_audio} -> {target} "
+                    f"at {controller.state.position:.1f}s")
+            else:
+                self._player_log(
+                    "[player] audio A/B: no switch (only one audio track "
+                    f"loaded); staying on {previous_audio}")
         elif name == "toggle_subtitles":
-            controller.set_subtitles_visible(not controller.state.subs_visible)
+            visible = not controller.state.subs_visible
+            controller.set_subtitles_visible(visible)
+            self._player_log(
+                f"[player] subtitles {'on' if visible else 'off'} "
+                f"at {controller.state.position:.1f}s")
         elif name == "mute":
             controller.toggle_mute()
         elif name == "snapshot":
