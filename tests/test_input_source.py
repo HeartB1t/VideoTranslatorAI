@@ -150,6 +150,21 @@ class InputSourceTests(unittest.TestCase):
         self.assertFalse(captured["download"])           # never downloads
         self.assertIn("acodec!=none", captured["opts"]["format"])
 
+    def test_resolve_stream_url_uses_the_live_client_list(self):
+        # Regression (2026-11-06): with yt-dlp's "default" client list the live
+        # resolver only sees the TVHTML5 progressive itag 18, which YouTube now
+        # answers with HTTP 403 in waves (verified on the real video). The old
+        # list adds the ios client, whose muxed HLS formats still play.
+        info = {"title": "Song", "url": "https://cdn/prog.mp4",
+                "acodec": "mp4a", "vcodec": "avc1"}
+        _result, captured = self._resolve(info)
+        clients = captured["opts"]["extractor_args"]["youtube"]["player_client"]
+        self.assertEqual(clients, ["tv", "android_vr", "web_embedded", "web", "ios", "android"])
+        # Downloads keep yt-dlp's own default choice (PR #1): live-only override.
+        with mock.patch("videotranslator.js_runtime.resolve_js_runtimes", return_value=None):
+            download_clients = build_ytdlp_options("/tmp/videos")["extractor_args"]["youtube"]["player_client"]
+        self.assertEqual(download_clients[0], "default")
+
     def test_resolve_stream_url_scans_formats_for_tallest_muxed(self):
         info = {"title": "Clip", "formats": [
             {"url": "a", "acodec": "aac", "vcodec": "none", "height": 0},     # audio only

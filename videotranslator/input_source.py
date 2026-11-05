@@ -426,6 +426,18 @@ def _pick_stream_url(info: dict[str, Any], max_height: int) -> str | None:
     return top
 
 
+# yt-dlp player clients for the LIVE resolver only (downloads keep "default").
+# Evidence 2026-11-06, live format filter, bgutil provider running, 4 VODs: with
+# ["default", "tv", "android_vr"] the only muxed format is the TVHTML5
+# progressive itag 18, which YouTube now answers with HTTP 403 in waves (403 on
+# the real video f2m3YaBw4oQ and on dQw4w9WgXcQ). This list brings back the ios
+# client, whose muxed HLS formats (91-96, 300/301 via manifest.googlevideo.com)
+# answered 206 on all four videos. The PR #1 "default" list stays for downloads,
+# which use web + DASH and benefit from the bgutil WebPO token.
+LIVE_PLAYER_CLIENTS: tuple[str, ...] = (
+    "tv", "android_vr", "web_embedded", "web", "ios", "android")
+
+
 def resolve_stream_url(
     url: str,
     *,
@@ -449,6 +461,7 @@ def resolve_stream_url(
 
     js_runtimes = ensure_js_runtime(log_cb=log_cb)
     opts = build_ytdlp_options(".", js_runtimes=js_runtimes, log_cb=log_cb)
+    opts["extractor_args"]["youtube"]["player_client"] = list(LIVE_PLAYER_CLIENTS)
     opts["format"] = (
         f"best[acodec!=none][vcodec!=none][height<={max_height}]"
         "/best[acodec!=none][vcodec!=none]/best"
