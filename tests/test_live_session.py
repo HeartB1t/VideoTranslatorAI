@@ -1716,6 +1716,28 @@ class LiveSessionDubTests(unittest.TestCase):
             self.assertTrue(sess._scheduler.dub_on)
             self.assertIsNone(sess.status().warning_key)
 
+    def test_tts_failure_detail_maps_to_the_generic_warning_and_elevenlabs_kinds_keep_theirs(self):
+        # The synth now reports the real exception as "error: <type>: <msg>"
+        # (live_tts.error_detail). That detail is developer-facing log text and
+        # must still map to the generic "dubbed voice unavailable" banner; the
+        # "elevenlabs_<kind>" reasons keep their dedicated banners untouched.
+        with tempfile.TemporaryDirectory() as tmp:
+            sess, _video, _voice, synth, _ = _dub_session(tmp, media=1.8)
+            sess._start_dub()
+            sess._last_pacer_mono = 1e9                 # isolate from the file pacer
+            sess.submit_segment(LiveSegment(1, 0, 2.0, 3.0, "a", text_tgt="uno",
+                                            dub_ok=True))
+            sess.submit_segment(LiveSegment(2, 0, 3.2, 4.0, "b", text_tgt="due",
+                                            dub_ok=True))
+            sess._tick_once(0.0)                        # both lines requested
+            self.assertEqual([s[0] for s in synth.submitted], [1, 2])
+            synth.push(1, 0, None, "error: RuntimeError: network down")
+            sess._drain_synth()
+            self.assertEqual(sess.status().warning_key, "live_warn_tts_unavailable")
+            synth.push(2, 0, None, "elevenlabs_quota")
+            sess._drain_synth()
+            self.assertEqual(sess.status().warning_key, "live_warn_el_quota")
+
     def test_tts_unavailable_disables_dub_with_warning(self):
         with tempfile.TemporaryDirectory() as tmp:
             synth = _FakeSynth(start_exc=LiveTtsUnavailable("no edge-tts"))
