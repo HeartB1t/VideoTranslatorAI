@@ -165,6 +165,21 @@ class InputSourceTests(unittest.TestCase):
             download_clients = build_ytdlp_options("/tmp/videos")["extractor_args"]["youtube"]["player_client"]
         self.assertEqual(download_clients[0], "default")
 
+    def test_resolve_stream_url_prefers_hls_muxed_before_progressive(self):
+        # Evidence 2026-11-06 (bgutil running, 4 VODs): the muxed HLS formats of
+        # the ios client answered 206 every time, the TVHTML5 / ANDROID_VR
+        # progressive itag 18 answered 403 in waves. At equal height yt-dlp's
+        # "best" could still pick the progressive one (240p video), so the live
+        # selector asks for HLS first and keeps the old selectors as fallbacks.
+        info = {"title": "Song", "url": "https://cdn/prog.mp4",
+                "acodec": "mp4a", "vcodec": "avc1"}
+        _result, captured = self._resolve(info, max_height=720)
+        fmt = captured["opts"]["format"]
+        self.assertTrue(fmt.startswith(
+            "best[acodec!=none][vcodec!=none][protocol^=m3u8][height<=720]/"), fmt)
+        self.assertIn("/best[acodec!=none][vcodec!=none][height<=720]"
+                      "/best[acodec!=none][vcodec!=none]/best", fmt)
+
     def test_resolve_stream_url_scans_formats_for_tallest_muxed(self):
         info = {"title": "Clip", "formats": [
             {"url": "a", "acodec": "aac", "vcodec": "none", "height": 0},     # audio only
