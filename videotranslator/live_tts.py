@@ -21,6 +21,26 @@ from pathlib import Path
 
 from .tts_text_sanitizer import sanitize_for_tts
 
+
+_ERROR_DETAIL_MAX = 200
+
+
+def error_detail(exc: BaseException) -> str:
+    """One-line failure reason for the live log: "error: <Type>: <message>".
+
+    The type name is kept because some exceptions (asyncio.TimeoutError) have
+    an empty message; whitespace and newlines are collapsed so the reason stays
+    a single log line, and the whole string is capped. Developer-facing English
+    log text, not a UI string. live_session maps any reason that does not
+    start with "elevenlabs_" to the generic "voice unavailable" banner, so the
+    "error:" prefix keeps that mapping unchanged.
+    """
+    message = " ".join(str(exc).split())
+    detail = f"error: {type(exc).__name__}"
+    if message:
+        detail = f"{detail}: {message}"
+    return detail[:_ERROR_DETAIL_MAX]
+
 # 48 kbit/s CBR mono mp3: bytes / 6000 equals the decoded duration to the
 # millisecond ([CT] C34).
 EDGE_BYTES_PER_SECOND = 6000
@@ -375,22 +395,23 @@ class EdgeClipSynth:
                 if deadline - self._clock() < 0.3:
                     self.results.put((seg_id, gen, None, "late"))
                     return
-                clip = await self._synth(seg_id, gen, clean, rate_pct,
-                                         deadline - self._clock())
+                clip, detail = await self._synth(seg_id, gen, clean, rate_pct,
+                                                 deadline - self._clock())
                 if clip is None:
                     self._breaker.record_failure(kind="tts")
                     if deadline - self._clock() > 3.0:
-                        clip = await self._synth(seg_id, gen, clean, rate_pct,
-                                                 deadline - self._clock())
+                        clip, detail = await self._synth(seg_id, gen, clean, rate_pct,
+                                                         deadline - self._clock())
                 if clip is not None:
                     self._breaker.record_success()
                     self.results.put((seg_id, gen, clip, None))
                 else:
-                    self.results.put((seg_id, gen, None, "error"))
+                    # detail is the latest attempt's "error: <Type>: <msg>"
+                    self.results.put((seg_id, gen, None, detail or "error"))
         except asyncio.CancelledError:
             raise
-        except Exception:                       # noqa: BLE001 - never crash the loop
-            self.results.put((seg_id, gen, None, "error"))
+        except Exception as exc:                # noqa: BLE001 - never crash the loop
+            self.results.put((seg_id, gen, None, error_detail(exc)))
         finally:
             with self._flight_lock:
                 self._in_flight = max(0, self._in_flight - 1)
@@ -408,15 +429,17 @@ class EdgeClipSynth:
             await asyncio.wait_for(self._stream_to(comm, part), timeout=max(0.1, timeout))
             size = part.stat().st_size if part.exists() else 0
             if size <= 0:
-                return None
+                return None, "error: empty audio stream"
             os.replace(part, final)
             duration = mp3_cbr_duration_s(size)
             bounds = (measure_silence(str(final), av_module=self._av)
                       if self._av is not None else None)
             vstart, vend = bounds if bounds else (0.0, duration)
-            return Clip(seg_id, gen, str(final), duration, f"+{rate_pct}%", vstart, vend)
-        except (asyncio.TimeoutError, Exception):   # noqa: BLE001
-            return None
+            return Clip(seg_id, gen, str(final), duration, f"+{rate_pct}%", vstart, vend), None
+        except (asyncio.TimeoutError, Exception) as exc:   # noqa: BLE001
+            # The real Edge-TTS failure travels with the result (returned, not
+            # stored on self: requests run concurrently under the semaphore).
+            return None, error_detail(exc)
         finally:
             try:
                 if part.exists():

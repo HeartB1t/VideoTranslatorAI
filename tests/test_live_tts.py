@@ -13,6 +13,7 @@ from videotranslator.live_tts import (
     LeadCalibrator,
     LiveTtsUnavailable,
     choose_rate,
+    error_detail,
     measure_silence,
     mp3_cbr_duration_s,
     silence_bounds,
@@ -166,7 +167,11 @@ class EdgeClipSynthTests(unittest.TestCase):
             _sid, _g, clip, reason = s.results.get(timeout=5)
             s.stop(3.0)
             self.assertIsNone(clip)
-            self.assertEqual(reason, "error")
+            # The real Edge-TTS exception reaches the log, not a bare "error".
+            self.assertTrue(reason.startswith("error:"), reason)
+            self.assertIn("RuntimeError", reason)
+            self.assertIn("network down", reason)
+            self.assertNotIn("\n", reason)
             self.assertGreaterEqual(s._breaker_ref.failures, 1)
 
     def test_submit_rejected_when_breaker_open_or_deadline_passed(self):
@@ -181,6 +186,28 @@ class EdgeClipSynthTests(unittest.TestCase):
             s.start()
             self.assertFalse(s.submit(0, 0, "x", 0, time.monotonic() - 1))   # past deadline
             s.stop(3.0)
+
+
+class ErrorDetailTests(unittest.TestCase):
+    """The failure reason handed to the live log: one line, type + message."""
+
+    def test_type_and_message_on_one_line(self):
+        self.assertEqual(error_detail(RuntimeError("network down")),
+                         "error: RuntimeError: network down")
+
+    def test_message_less_exception_keeps_the_type(self):
+        # asyncio.TimeoutError has an empty str(): the type is the only clue.
+        self.assertEqual(error_detail(asyncio.TimeoutError()), "error: TimeoutError")
+
+    def test_newlines_collapse_to_a_single_line(self):
+        detail = error_detail(ValueError("first line\n  second\tline"))
+        self.assertNotIn("\n", detail)
+        self.assertEqual(detail, "error: ValueError: first line second line")
+
+    def test_long_messages_are_truncated(self):
+        detail = error_detail(OSError("x" * 1000))
+        self.assertLessEqual(len(detail), 200)
+        self.assertTrue(detail.startswith("error: OSError: xxx"))
 
 
 class Mp3DurationTests(unittest.TestCase):
