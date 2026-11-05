@@ -185,6 +185,13 @@ def emit_download_warnings(log_cb: Callable[[str], None] | None) -> None:
         "into YouTube in your browser also helps (cookies are read automatically), "
         f"or set {COOKIES_FILE_KEY} in config.json to a cookies.txt exported from it."
     )
+    log_cb(
+        "[!] YouTube is also enforcing a Proof-of-Origin (PO) token for video "
+        "data. A plain 403 on the streams that no VPN or browser login clears "
+        "usually means this: the remedy is to run a PO token provider for "
+        "yt-dlp (bgutil-ytdlp-pot-provider). See the yt-dlp PO Token Guide: "
+        "https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide"
+    )
 
 
 # yt-dlp error texts that mean an IP / anti-bot block (the VPN advice helps)
