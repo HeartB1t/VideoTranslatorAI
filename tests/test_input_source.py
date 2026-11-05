@@ -244,6 +244,16 @@ class InputSourceTests(unittest.TestCase):
 
         self.assertTrue(any("VPN" in line for line in logs))
 
+    def test_emit_download_warnings_mentions_po_token(self):
+        # A plain 403 on the streams is now usually a missing Proof-of-Origin
+        # token, so the advice must name it and point to a provider.
+        logs: list[str] = []
+        emit_download_warnings(logs.append)
+
+        joined = " ".join(logs)
+        self.assertIn("PO", joined)
+        self.assertTrue(any("bgutil" in line for line in logs))
+
 
 class AudioDownloadTests(unittest.TestCase):
     def test_build_ytdlp_audio_options_requests_bestaudio_without_mp4_merge(self):
