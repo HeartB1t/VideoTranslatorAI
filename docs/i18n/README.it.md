@@ -339,7 +339,7 @@ Il passaggio del mouse aggiunge uno sfondo leggermente colorato. I controlli non
 
 > yt-dlp supporta YouTube, Vimeo, Twitter/X, TikTok e [oltre 1000 altri siti](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Avviso sul fair use:** Il download di video tramite yt-dlp è considerato accesso automatizzato da piattaforme come YouTube e potrebbe violare i loro Termini di servizio. L'uso intenso o ripetuto dello stesso indirizzo IP può causare blocchi temporanei (errori HTTP 429/accesso richiesto). Utilizza una VPN o ruota il tuo IP se riscontri errori di download. Questo strumento è destinato esclusivamente all'uso personale e non commerciale. La ridistribuzione del contenuto tradotto può violare il diritto d'autore: rispetta sempre i diritti del creatore originale.
+> ⚠️ **Avviso sul fair use:** Il download di video tramite yt-dlp è considerato accesso automatizzato da piattaforme come YouTube e potrebbe violare i loro Termini di servizio. L'uso intenso o ripetuto dello stesso indirizzo IP può causare blocchi temporanei (errori HTTP 429/accesso richiesto). Utilizza una VPN o ruota il tuo IP se riscontri errori di download. Questo strumento è destinato esclusivamente all'uso personale e non commerciale. La ridistribuzione del contenuto tradotto può violare il diritto d'autore: rispetta sempre i diritti del creatore originale. Un 403 che persiste anche con VPN e login nel browser di solito è il PO token: vedi la nota sotto la tabella di risoluzione dei problemi più avanti.
 
 ### Traduzione in tempo reale (sottotitoli e doppiaggio vocale sperimentale)
 
@@ -377,6 +377,13 @@ Possono verificarsi due blocchi diversi, con soluzioni diverse:
 |-------|---------|-----|
 | **Download** (yt-dlp) | "Accedi per confermare che non sei un bot", HTTP 429 / 403 | **VPN** / ruota l'IP o accedi a YouTube nel tuo browser (i cookie vengono letti automaticamente); oppure imposta `yt_dlp_cookies_file` in config.json su un cookies.txt esportato dal browser |
 | **Traduzione** (endpoint gratuito di Google) | "Google Translate non è riuscito a tradurre... limite di richieste raggiunto o servizio bloccato" | Utilizza **MarianMT** (offline) o **Ollama** (locale) - nessun limite di richieste. Anche una VPN aiuta. Il flusso batch ora **ritorna automaticamente a MarianMT** quando Google viene bloccato. |
+
+**PO token (un 403 che né la VPN né il login nel browser risolvono).** YouTube sta imponendo a ondate un token GVS Proof-of-Origin (PO) per i dati del video: la pagina viene estratta correttamente, poi ogni stream risponde HTTP 403, qualunque sia il client. Il rimedio è un provider di PO token per yt-dlp, `bgutil-ytdlp-pot-provider`: un container Docker in ascolto su `127.0.0.1:4416` più un plugin pip nello stesso ambiente Python usato dall'app. Con entrambi attivi, `yt-dlp -v` mostra `PO Token Providers: bgutil` e il 403 sparisce (verificato sul campo). Due avvertenze oneste. Primo, batte il blocco sul token, non il controllo anti-bot legato all'IP: su un IP già segnalato possono servire anche i cookie del browser descritti nella riga sopra. Secondo, il provider è software GPL-3.0 che installi tu a runtime (come il runtime JS); non è incluso in questa app. Dettagli di configurazione, versioni di immagine e plugin: la [PO Token Guide di yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) e il README del provider.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Temi e aspetto
 

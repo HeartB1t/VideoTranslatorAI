@@ -339,7 +339,7 @@ Liikkuminen lisää hienovaraisen sävytetyn taustan. Säätimet, jotka eivät o
 
 > yt-dlp tukee YouTubea, Vimeoa, Twitter/X:ää, TikTokia ja [1000+ muuta sivustoa](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Reilun käytön huomautus:** Videoiden lataaminen yt-dlp:n kautta katsotaan YouTuben kaltaisten alustojen automaattiseksi pääsyksi, ja se voi rikkoa niiden käyttöehtoja. Raskas tai toistuva käyttö samasta IP-osoitteesta voi johtaa tilapäisiin estoihin (HTTP 429 / sisäänkirjautumisen edellyttämät virheet). Käytä VPN:ää tai käännä IP-osoitettasi, jos kohtaat latausvirheitä. Tämä työkalu on tarkoitettu vain henkilökohtaiseen, ei-kaupalliseen käyttöön. Käännetyn sisällön levittäminen voi loukata tekijänoikeuksia - kunnioita aina alkuperäisen sisällöntuottajan oikeuksia.
+> ⚠️ **Reilun käytön huomautus:** Videoiden lataaminen yt-dlp:n kautta katsotaan YouTuben kaltaisten alustojen automaattiseksi pääsyksi, ja se voi rikkoa niiden käyttöehtoja. Raskas tai toistuva käyttö samasta IP-osoitteesta voi johtaa tilapäisiin estoihin (HTTP 429 / sisäänkirjautumisen edellyttämät virheet). Käytä VPN:ää tai käännä IP-osoitettasi, jos kohtaat latausvirheitä. Tämä työkalu on tarkoitettu vain henkilökohtaiseen, ei-kaupalliseen käyttöön. Käännetyn sisällön levittäminen voi loukata tekijänoikeuksia - kunnioita aina alkuperäisen sisällöntuottajan oikeuksia. 403-virhe, joka jatkuu myös VPN:llä ja selaimeen kirjautuneena, on yleensä PO-token: katso huomautus vianmääritystaulukon alla.
 
 ### Reaaliaikainen käännös (tekstitys ja kokeellinen äänikopiointi)
 
@@ -377,6 +377,13 @@ Kaksi erilaista lohkoa voi tapahtua eri korjauksin:
 |-------|---------|-----|
 | **Lataa** (yt-dlp) | "Kirjaudu sisään vahvistaaksesi, että et ole robotti", HTTP 429 / 403 | **VPN** / käännä IP-osoitetta tai kirjaudu sisään YouTubeen selaimessasi (evästeet luetaan automaattisesti); tai aseta config.json-tiedostoon `yt_dlp_cookies_file` selaimesta viedyn cookies.txt-tiedoston polku |
 | **Käännös** (Googlen ilmainen päätepiste) | "Google Translate ei voinut kääntää... pyyntöjen määrä rajoitettu/estetty" | Käytä **MarianMT** (offline) tai **Ollama** (paikallinen) - ei pyyntöjen määrärajoitusta. VPN auttaa myös. Erävirta nyt **palautuu MarianMT:hen automaattisesti**, kun Google estetään. |
+
+**PO-token (403-virhe, jota VPN tai selaimeen kirjautuminen ei poista).** YouTube ottaa aalloittain käyttöön GVS Proof-of-Origin -tokenin (PO) videon datalle: sivu puretaan oikein, mutta jokainen virta vastaa HTTP 403 asiakkaasta riippumatta. Ratkaisu on yt-dlp:n PO-token-tarjoaja `bgutil-ytdlp-pot-provider`: Docker-kontti, joka kuuntelee osoitteessa `127.0.0.1:4416`, sekä pip-liitännäinen samassa Python-ympäristössä, jota sovellus käyttää. Kun molemmat ovat käynnissä, `yt-dlp -v` näyttää rivin `PO Token Providers: bgutil` ja 403-virhe katoaa (todennettu käytännössä). Kaksi rehellistä varausta. Ensinnäkin se voittaa token-eston, ei IP-osoitteeseen sidottua bottitarkistusta: jo merkityllä IP-osoitteella voidaan yhä tarvita yllä olevalla rivillä kuvattuja selaimen evästeitä. Toiseksi tarjoaja on GPL-3.0-ohjelmisto, jonka asennat itse ajon aikana (kuten JS-ajoympäristön); sitä ei toimiteta tämän sovelluksen mukana. Asennuksen yksityiskohdat sekä image- ja liitännäisversiot: [yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) ja tarjoajan oma README.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Teemat ja ulkoasu
 

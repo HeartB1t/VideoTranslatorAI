@@ -339,7 +339,7 @@ Fareyle üzerine gelme, ince renkli bir arka plan ekler. Kullanılamayan kontrol
 
 > yt-dlp; YouTube, Vimeo, Twitter/X, TikTok ve [1000'den fazla diğer siteyi](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) destekler.
 
-> ⚠️ **Adil kullanım bildirimi:** Videoların yt-dlp aracılığıyla indirilmesi, YouTube gibi platformlar tarafından otomatik erişim olarak kabul edilir ve Hizmet Şartlarını ihlal edebilir. Aynı IP adresinin yoğun veya tekrarlı kullanımı, geçici engellemelere (HTTP 429 / oturum açmayı gerektiren hatalar) neden olabilir. İndirme hatalarıyla karşılaşırsanız bir VPN kullanın veya IP'nizi değiştirin. Bu araç yalnızca ticari olmayan, kişisel kullanıma yöneliktir. Çevrilmiş içeriğin yeniden dağıtımı telif hakkını ihlal edebilir; her zaman orijinal içerik oluşturucunun haklarına saygı gösterin.
+> ⚠️ **Adil kullanım bildirimi:** Videoların yt-dlp aracılığıyla indirilmesi, YouTube gibi platformlar tarafından otomatik erişim olarak kabul edilir ve Hizmet Şartlarını ihlal edebilir. Aynı IP adresinin yoğun veya tekrarlı kullanımı, geçici engellemelere (HTTP 429 / oturum açmayı gerektiren hatalar) neden olabilir. İndirme hatalarıyla karşılaşırsanız bir VPN kullanın veya IP'nizi değiştirin. Bu araç yalnızca ticari olmayan, kişisel kullanıma yöneliktir. Çevrilmiş içeriğin yeniden dağıtımı telif hakkını ihlal edebilir; her zaman orijinal içerik oluşturucunun haklarına saygı gösterin. VPN ve tarayıcı girişiyle bile süren bir 403 genellikle PO token'dır: aşağıdaki sorun giderme tablosunun altındaki nota bakın.
 
 ### Gerçek zamanlı çeviri (altyazılar ve deneysel sesli dublaj)
 
@@ -377,6 +377,13 @@ Farklı düzeltmelerle iki farklı blok meydana gelebilir:
 |-------|---------|-----|
 | **İndir** (yt-dlp) | "Bot olmadığınızı doğrulamak için oturum açın", HTTP 429 / 403 | **VPN** / IP döndürün veya tarayıcınızdan YouTube'da oturum açın (çerezler otomatik olarak okunur); ya da config.json içinde `yt_dlp_cookies_file` değerini tarayıcıdan dışa aktarılan bir cookies.txt dosyasına ayarlayın |
 | **Çeviri** (Google ücretsiz uç noktası) | "Google Translate çevrilemedi... istek hızı sınırlı/engellendi" | **MarianMT** (çevrimdışı) veya **Ollama** (yerel) kullanın; istek hızı sınırı yoktur. Bir VPN de yardımcı olur. Toplu akış artık Google engellendiğinde **otomatik olarak MarianMT'ye geri dönüyor**. |
+
+**PO token (VPN'in de tarayıcı girişinin de çözmediği bir 403).** YouTube, video verileri için dalgalar halinde bir GVS Proof-of-Origin (PO) token zorunluluğu getiriyor: sayfa sorunsuz ayrıştırılıyor, ardından istemci ne olursa olsun her akış HTTP 403 döndürüyor. Çözüm, yt-dlp için bir PO token sağlayıcısıdır: `bgutil-ytdlp-pot-provider`, yani `127.0.0.1:4416` adresini dinleyen bir Docker konteyneri ile uygulamanın kullandığı Python ortamına kurulan bir pip eklentisi. İkisi de çalışırken `yt-dlp -v` çıktısında `PO Token Providers: bgutil` görünür ve 403 kaybolur (sahada doğrulandı). İki dürüst uyarı. Birincisi, token engelini aşar, IP'ye bağlı bot denetimini değil: zaten işaretlenmiş bir IP'de yukarıdaki satırda anlatılan tarayıcı çerezleri yine gerekebilir. İkincisi, sağlayıcı GPL-3.0 lisanslı bir yazılımdır ve çalışma zamanında kendiniz kurarsınız (JS çalışma zamanı gibi); bu uygulamayla birlikte gelmez. Kurulum ayrıntıları, imaj ve eklenti sürümleri: [yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) ve sağlayıcının kendi README dosyası.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Temalar ve görünüm
 

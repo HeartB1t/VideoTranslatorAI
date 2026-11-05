@@ -339,7 +339,7 @@ Di chuột sẽ thêm nền có tông màu tinh tế. Các điều khiển khôn
 
 > yt-dlp hỗ trợ YouTube, Vimeo, Twitter/X, TikTok và [hơn 1000 trang web khác](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
-> ⚠️ **Thông báo sử dụng hợp lý:** Việc tải video xuống qua yt-dlp được các nền tảng như YouTube coi là quyền truy cập tự động và có thể vi phạm Điều khoản dịch vụ của họ. Việc sử dụng nhiều hoặc nhiều lần từ cùng một địa chỉ IP có thể dẫn đến chặn tạm thời (lỗi HTTP 429/yêu cầu đăng nhập). Sử dụng VPN hoặc thay đổi IP của bạn nếu bạn gặp lỗi tải xuống. Công cụ này chỉ dành cho mục đích sử dụng cá nhân, phi thương mại. Việc phân phối lại nội dung đã dịch có thể vi phạm bản quyền - luôn tôn trọng quyền của người sáng tạo ban đầu.
+> ⚠️ **Thông báo sử dụng hợp lý:** Việc tải video xuống qua yt-dlp được các nền tảng như YouTube coi là quyền truy cập tự động và có thể vi phạm Điều khoản dịch vụ của họ. Việc sử dụng nhiều hoặc nhiều lần từ cùng một địa chỉ IP có thể dẫn đến chặn tạm thời (lỗi HTTP 429/yêu cầu đăng nhập). Sử dụng VPN hoặc thay đổi IP của bạn nếu bạn gặp lỗi tải xuống. Công cụ này chỉ dành cho mục đích sử dụng cá nhân, phi thương mại. Việc phân phối lại nội dung đã dịch có thể vi phạm bản quyền - luôn tôn trọng quyền của người sáng tạo ban đầu. Lỗi 403 vẫn còn dù đã dùng VPN và đăng nhập trình duyệt thường là do PO token: xem ghi chú dưới bảng khắc phục sự cố bên dưới.
 
 ### Dịch thuật thời gian thực (phụ đề và lồng tiếng thử nghiệm)
 
@@ -377,6 +377,13 @@ Hai khối khác nhau có thể xảy ra với các cách khắc phục khác nh
 |-------|---------|-----|
 | **Tải xuống** (yt-dlp) | "Đăng nhập để xác nhận bạn không phải là bot", HTTP 429 / 403 | **VPN** / xoay IP hoặc đăng nhập vào YouTube trên trình duyệt của bạn (cookie được đọc tự động); hoặc đặt `yt_dlp_cookies_file` trong config.json thành tệp cookies.txt xuất từ trình duyệt |
 | **Dịch** (điểm cuối miễn phí của Google) | "Google Translate không thể dịch... tốc độ yêu cầu bị giới hạn/bị chặn" | Sử dụng **MarianMT** (ngoại tuyến) hoặc **Ollama** (cục bộ) - không giới hạn tỷ lệ yêu cầu. VPN cũng có ích. Luồng hàng loạt hiện **tự động quay trở lại MarianMT** khi Google bị chặn. |
+
+**PO token (lỗi 403 mà cả VPN lẫn đăng nhập trình duyệt đều không giải quyết được).** YouTube đang áp dụng theo từng đợt một token GVS Proof-of-Origin (PO) cho dữ liệu video: trang vẫn trích xuất bình thường, sau đó mọi luồng đều trả về HTTP 403, bất kể client nào. Cách khắc phục là một nhà cung cấp PO token cho yt-dlp, `bgutil-ytdlp-pot-provider`: một container Docker lắng nghe tại `127.0.0.1:4416` cùng một plugin pip trong chính môi trường Python mà ứng dụng sử dụng. Khi cả hai cùng chạy, `yt-dlp -v` hiển thị `PO Token Providers: bgutil` và lỗi 403 biến mất (đã kiểm chứng thực tế). Hai lưu ý trung thực. Thứ nhất, nó vượt qua chặn theo token, không phải kiểm tra bot gắn với IP: trên một IP đã bị gắn cờ, bạn vẫn có thể cần cookie trình duyệt được mô tả ở hàng trên. Thứ hai, nhà cung cấp này là phần mềm GPL-3.0 mà bạn tự cài khi chạy (giống runtime JS); nó không được đóng gói kèm ứng dụng này. Chi tiết thiết lập, phiên bản image và plugin: [PO Token Guide của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) và README của chính nhà cung cấp.
+
+```bash
+docker run -d --name bgutil-provider --restart unless-stopped -p 127.0.0.1:4416:4416 brainicism/bgutil-ytdlp-pot-provider
+pip install bgutil-ytdlp-pot-provider
+```
 
 ### Chủ đề và sự xuất hiện
 
