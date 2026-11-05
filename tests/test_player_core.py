@@ -213,6 +213,37 @@ class PlayerControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.state.position, 2.5)
         self.assertTrue(self.states)
 
+    def test_load_of_a_stream_url_passes_reconnect_options(self):
+        stream = MediaItem("https://example.com/live.m3u8", "source", "live")
+        self.controller.load(stream, paused=True, start=0)
+        load_calls = [call for call in self.backend.calls if call[0] == "load"]
+        self.assertEqual(len(load_calls), 1)
+        options = load_calls[0][4]
+        self.assertEqual(options.get("network_timeout"), "10")
+        self.assertIn("demuxer_lavf_o", options)
+        self.assertIn("reconnect=1", options["demuxer_lavf_o"])
+        # the existing 256MiB demuxer cache still travels with the stream options
+        self.assertEqual(options.get("demuxer_max_bytes"), str(256 * 1024 * 1024))
+
+    def test_load_of_a_finished_file_passes_no_stream_options(self):
+        self.controller.load(self.result, paused=True, start=0)
+        load_calls = [call for call in self.backend.calls if call[0] == "load"]
+        self.assertEqual(load_calls[-1],
+                         ("load", self.result.path, True, 0.0, {}))
+
+    def test_attach_backend_replays_stream_options_for_a_stream_url(self):
+        settings = PlayerSettings(100, False, "dubbed", True, True, None, True)
+        states = []
+        controller = pc.PlayerController(None, settings, on_change=states.append,
+                                         save=lambda _cfg: None)
+        stream = MediaItem("https://example.com/live.m3u8", "source", "live")
+        controller.load(stream, paused=True, start=0)
+        backend = InMemoryBackend()
+        controller.attach_backend(backend)
+        load_calls = [call for call in backend.calls if call[0] == "load"]
+        self.assertEqual(len(load_calls), 1)
+        self.assertEqual(load_calls[0][4].get("network_timeout"), "10")
+
     def test_attach_backend_replays_only_the_last_pending_load(self):
         settings = PlayerSettings(100, False, "dubbed", True, True, None, True)
         states = []

@@ -354,7 +354,15 @@ class OptionBuilderTests(unittest.TestCase):
             "demuxer_max_back_bytes": str(32 * 1024 * 1024),
             "cache_pause": "yes",
             "cache_pause_wait": "1",
+            "network_timeout": "10",
+            "demuxer_lavf_o":
+                "reconnect=1,reconnect_streamed=1,"
+                "reconnect_delay_max=30,http_persistent=0",
         })
+        # delay_max_s drives reconnect_delay_max (default kept short to avoid a
+        # long backoff on a live edge that already fell behind).
+        self.assertIn("reconnect_delay_max=5",
+                      pe.stream_session_options(5)["demuxer_lavf_o"])
 
 
 class InMemoryBackendTests(unittest.TestCase):
