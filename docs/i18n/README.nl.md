@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Optioneel: installeer de geteste NVIDIA CUDA 12.4 PyTorch-stack vooraan
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Optioneel: installeer alle Python-runtimepakketten vooraf in plaats van de GUI te laten werken
 # installeer ontbrekende pakketten bij de eerste keer uitvoeren
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Optioneel: de geïntegreerde videospeler (libmpv uit de distributie, python-mpv uit PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Optioneel: installeer het project als een bewerkbaar Python-pakket
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Bestand | Doel |
 |------|---------|
 | `requirements.txt` | Volledige, achterwaarts compatibele runtime-installatie. |
-| `requirements-core.txt` | Standaard pijplijnpakketten die worden gebruikt door GUI/CLI. |
-| `requirements-optional.txt` | XTTS, MarianMT-tokenizers, dagboekregistratie, VAD, sleutelhanger. |
-| `requirements-wav2lip.txt` | Wav2Lip runtime en gezichtsdetectiestack (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch-stack getest met NVIDIA CUDA 12.4-wielen. |
-| `requirements-player.txt` | Geïntegreerde videospeler: python-mpv (vereist libmpv van het systeem of van het Windows-installatieprogramma). |
-| `requirements-dev.txt` | Lichtgewicht afhankelijkheden die worden gebruikt door CI/unit-tests. |
+| `requirements/core.txt` | Standaard pijplijnpakketten die worden gebruikt door GUI/CLI. |
+| `requirements/optional.txt` | XTTS, MarianMT-tokenizers, dagboekregistratie, VAD, sleutelhanger. |
+| `requirements/wav2lip.txt` | Wav2Lip runtime en gezichtsdetectiestack (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch-stack getest met NVIDIA CUDA 12.4-wielen. |
+| `requirements/player.txt` | Geïntegreerde videospeler: python-mpv (vereist libmpv van het systeem of van het Windows-installatieprogramma). |
+| `requirements/dev.txt` | Lichtgewicht afhankelijkheden die worden gebruikt door CI/unit-tests. |
 
 ## Bijwerken
 

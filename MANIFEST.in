@@ -1,7 +1,12 @@
 include README.md
 include LICENSE
-include requirements*.txt
+include requirements.txt
+recursive-include requirements *.txt
 include setup_windows.bat
 recursive-include assets *.ico *.png
 recursive-include assets/fonts *.ttf OFL-*.txt
-recursive-include docs *.md
+# Git-ignored development notes may exist in a local source tree. Package
+# only public documentation, including when a previous SOURCES.txt exists.
+prune docs
+include docs/TEST_PLAN.md
+recursive-include docs/i18n README*.md

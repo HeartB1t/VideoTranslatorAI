@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # 可选：预先安装经过测试的 NVIDIA CUDA 12.4 PyTorch 堆栈
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # 可选：预安装所有Python运行时包而不是让GUI
 # 首次运行时安装缺少的软件包
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # 可选：集成视频播放器（发行版中的 libmpv，PyPI 中的 python-mpv）
 sudo apt install libmpv2        # Fedora：mpv-libs，Arch：mpv，openSUSE：libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # 可选：将项目安装为可编辑的 Python 包
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | 文件 | 目的 |
 |------|---------|
 | `requirements.txt` | 完整的、向后兼容的运行时安装。 |
-| `requirements-core.txt` | GUI/CLI 使用的默认管道包。 |
-| `requirements-optional.txt` | XTTS、MarianMT 标记器、二值化、VAD、密钥环。 |
-| `requirements-wav2lip.txt` | Wav2Lip 运行时和人脸检测堆栈（`new-basicsr`、`facexlib`、`dlib`）。 |
-| `requirements-gpu-cu124.txt` | PyTorch 堆栈使用 NVIDIA CUDA 12.4 轮进行测试。 |
-| `requirements-player.txt` | 集成视频播放器：python-mpv（需要系统或 Windows 安装程序中的 libmpv）。 |
-| `requirements-dev.txt` | CI/单元测试使用的轻量级依赖项。 |
+| `requirements/core.txt` | GUI/CLI 使用的默认管道包。 |
+| `requirements/optional.txt` | XTTS、MarianMT 标记器、二值化、VAD、密钥环。 |
+| `requirements/wav2lip.txt` | Wav2Lip 运行时和人脸检测堆栈（`new-basicsr`、`facexlib`、`dlib`）。 |
+| `requirements/gpu-cu124.txt` | PyTorch 堆栈使用 NVIDIA CUDA 12.4 轮进行测试。 |
+| `requirements/player.txt` | 集成视频播放器：python-mpv（需要系统或 Windows 安装程序中的 libmpv）。 |
+| `requirements/dev.txt` | CI/单元测试使用的轻量级依赖项。 |
 
 ## 更新
 

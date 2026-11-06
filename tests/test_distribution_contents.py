@@ -2,7 +2,7 @@
 
 A wheel is installed outside the checkout, so the assets travel inside the
 package (``videotranslator/assets``); the sdist keeps the repository layout.
-Both are built for real with setuptools from a copy of the tracked files, as
+Both are built for real with setuptools from tracked and new non-ignored files, as
 pip would build them, without network access (no build isolation).
 """
 import os
@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ICONS = ("icon.ico", "icon.png", "icon_256.png")
 FONTS = ("fonts/PixelifySans.ttf", "fonts/VT323-Regular.ttf",
          "fonts/OFL-PixelifySans.txt", "fonts/OFL-VT323.txt")
+LOCAL_NOTES = ("docs/ACTION_PLAN.md", "docs/ARCHITECTURE_PREVIEW.md",
+               "docs/superpowers/plans/local-plan.md", "docs/local-review.md")
 
 # One hook per process, as pypa/build does: two builds in the same process
 # reuse setuptools state and the wheel lands in the sdist's folder.
@@ -42,7 +44,8 @@ _INSTALLED = (
 
 def _tracked_files():
     try:
-        out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
+        out = subprocess.run(["git", "ls-files", "--cached", "--others",
+                              "--exclude-standard", "-z"], cwd=ROOT, check=True,
                              capture_output=True, timeout=60).stdout
     except (OSError, subprocess.SubprocessError):
         return None
@@ -78,6 +81,52 @@ class PackageListTests(unittest.TestCase):
         self.assertIn("videotranslator.assets", listed)
 
 
+@unittest.skipUnless(shutil.which("git"), "git is not available")
+class ReleaseArchiveTests(unittest.TestCase):
+    def test_release_zip_keeps_installer_bytes_and_dependency_profiles(self):
+        from videotranslator import __version__, updater, system_packages
+
+        files = _tracked_files()
+        self.assertIsNotNone(files)
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            source.mkdir()
+            for name in files:
+                path = ROOT / name
+                if path.is_file():
+                    dest = source / name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(path, dest)
+
+            def git(*args):
+                return subprocess.run(
+                    ["git", "-c", "core.autocrlf=false", "-c",
+                     f"core.attributesFile={os.devnull}", *args], cwd=source,
+                    check=True, capture_output=True, text=True, timeout=60,
+                ).stdout.strip()
+
+            git("init", "--quiet")
+            # Use the checkout's file list, including new profiles before commit.
+            git("add", "--", *[name for name in files if (source / name).is_file()])
+            tree = git("write-tree")
+            archive = Path(tmp) / "release.zip"
+            git("archive", "--format=zip", "--prefix=VideoTranslatorAI/",
+                f"--output={archive}", tree)
+            with zipfile.ZipFile(archive) as zipped:
+                self.assertEqual(zipped.read("VideoTranslatorAI/setup_windows.bat"),
+                                 (ROOT / "setup_windows.bat").read_bytes())
+                for name in (".gitignore", ".gitattributes", "tests/", ".github/"):
+                    self.assertFalse(any(p.startswith("VideoTranslatorAI/" + name)
+                                         for p in zipped.namelist()), name)
+            unpacked = updater.safe_extract(archive, Path(tmp) / "unpacked",
+                                            updater.parse_version(__version__))
+            for path in (ROOT / "requirements").glob("*.txt"):
+                self.assertEqual((unpacked / "requirements" / path.name).read_bytes(),
+                                 path.read_bytes())
+            constraints = system_packages.pip_constraint_args(unpacked)
+            self.assertEqual(constraints.count("-c"), 3)
+
+
 class DistributionContentsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -93,6 +142,12 @@ class DistributionContentsTests(unittest.TestCase):
             if path.is_file():
                 (source / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, source / name)
+        # A developer can build from a working tree containing ignored notes.
+        # Git's ignore rules do not constrain setuptools' MANIFEST.in globs.
+        for name in LOCAL_NOTES:
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Private development note: do not distribute.\n", encoding="utf-8")
         dist = cls.tmp / "dist"
         dist.mkdir()
         cls.sdist = dist / cls._build("build_sdist", source, dist)
@@ -128,6 +183,22 @@ class DistributionContentsTests(unittest.TestCase):
         for name in ICONS + FONTS:
             with self.subTest(name=name):
                 self.assertTrue(f"assets/{name}" in names, "missing from the sdist")
+        self.assertIn("requirements.txt", names)
+        for path in (ROOT / "requirements").glob("*.txt"):
+            self.assertIn(path.relative_to(ROOT).as_posix(), names)
+
+    def test_distributions_exclude_local_notes_and_keep_public_documentation(self):
+        with tarfile.open(self.sdist) as archive:
+            source_names = {name.split("/", 1)[1] for name in archive.getnames() if "/" in name}
+        with zipfile.ZipFile(self.wheel) as archive:
+            wheel_names = set(archive.namelist())
+        for name in LOCAL_NOTES:
+            with self.subTest(local_note=name):
+                self.assertNotIn(name, source_names)
+                self.assertNotIn(name, wheel_names)
+        for path in (ROOT / "docs" / "i18n").glob("README*.md"):
+            self.assertIn(path.relative_to(ROOT).as_posix(), source_names)
+        self.assertIn("docs/TEST_PLAN.md", source_names)
 
     def test_an_installed_wheel_finds_its_assets_outside_the_checkout(self):
         site = self.tmp / "site"

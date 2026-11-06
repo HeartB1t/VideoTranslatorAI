@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Opsional: instal tumpukan NVIDIA CUDA 12.4 PyTorch yang diuji di depan
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Opsional: pra-instal semua paket runtime Python alih-alih membiarkan GUI
 # instal paket yang hilang saat pertama kali dijalankan
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Opsional: pemutar video terintegrasi (libmpv dari distribusi, python-mpv dari PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Lengkungan: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Opsional: instal proyek sebagai paket Python yang dapat diedit
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Mengajukan | Tujuan |
 |------|---------|
 | `requirements.txt` | Penginstalan runtime penuh yang kompatibel dengan versi sebelumnya. |
-| `requirements-core.txt` | Paket pipa default yang digunakan oleh GUI/CLI. |
-| `requirements-optional.txt` | XTTS, tokenizer MarianMT, diarisasi, VAD, gantungan kunci. |
-| `requirements-wav2lip.txt` | Runtime Wav2Lip dan tumpukan deteksi wajah (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Tumpukan PyTorch diuji dengan roda NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Pemutar video terintegrasi: python-mpv (membutuhkan libmpv dari sistem atau dari penginstal Windows). |
-| `requirements-dev.txt` | Ketergantungan ringan yang digunakan oleh CI/pengujian unit. |
+| `requirements/core.txt` | Paket pipa default yang digunakan oleh GUI/CLI. |
+| `requirements/optional.txt` | XTTS, tokenizer MarianMT, diarisasi, VAD, gantungan kunci. |
+| `requirements/wav2lip.txt` | Runtime Wav2Lip dan tumpukan deteksi wajah (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Tumpukan PyTorch diuji dengan roda NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Pemutar video terintegrasi: python-mpv (membutuhkan libmpv dari sistem atau dari penginstal Windows). |
+| `requirements/dev.txt` | Ketergantungan ringan yang digunakan oleh CI/pengujian unit. |
 
 ## Pembaruan
 

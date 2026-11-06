@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Необязательно: установите протестированный стек NVIDIA CUDA 12.4 PyTorch заранее.
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Необязательно: предварительно установите все пакеты времени выполнения Python вместо того, чтобы разрешить графическому интерфейсу.
 # установить недостающие пакеты при первом запуске
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Дополнительно: встроенный видеоплеер (libmpv из дистрибутива, python-mpv из PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Необязательно: установите проект как редактируемый пакет Python.
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Файл | Цель |
 |------|---------|
 | `requirements.txt` | Полная, обратно совместимая установка среды выполнения. |
-| `requirements-core.txt` | Пакеты конвейера по умолчанию, используемые GUI/CLI. |
-| `requirements-optional.txt` | XTTS, токенизаторы MarianMT, дневникизация, VAD, брелок. |
-| `requirements-wav2lip.txt` | Среда выполнения Wav2Lip и стек обнаружения лиц (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Стек PyTorch протестирован с колесами NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Встроенный видеоплеер: python-mpv (требуется libmpv из системы или из установщика Windows). |
-| `requirements-dev.txt` | Облегченные зависимости, используемые CI/юнит-тестами. |
+| `requirements/core.txt` | Пакеты конвейера по умолчанию, используемые GUI/CLI. |
+| `requirements/optional.txt` | XTTS, токенизаторы MarianMT, дневникизация, VAD, брелок. |
+| `requirements/wav2lip.txt` | Среда выполнения Wav2Lip и стек обнаружения лиц (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Стек PyTorch протестирован с колесами NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Встроенный видеоплеер: python-mpv (требуется libmpv из системы или из установщика Windows). |
+| `requirements/dev.txt` | Облегченные зависимости, используемые CI/юнит-тестами. |
 
 ## Обновление
 

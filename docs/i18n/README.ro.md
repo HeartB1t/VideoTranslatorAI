@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Opțional: instalați stiva NVIDIA CUDA 12.4 PyTorch testată în față
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Opțional: preinstalați toate pachetele de rulare Python în loc să lăsați GUI
 # instalați pachetele lipsă la prima rulare
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Opțional: playerul video integrat (libmpv din distribuție, python-mpv din PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Opțional: instalați proiectul ca pachet Python editabil
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Fișier | Scop |
 |------|---------|
 | `requirements.txt` | Instalare completă, compatibilă cu versiunea anterioară. |
-| `requirements-core.txt` | Pachetele de conducte implicite utilizate de GUI/CLI. |
-| `requirements-optional.txt` | XTTS, tokenizer MarianMT, diarizare, VAD, breloc. |
-| `requirements-wav2lip.txt` | Timp de rulare Wav2Lip și stivă de detectare a feței (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Stiva PyTorch testată cu roți NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Player video integrat: python-mpv (necesită libmpv din sistem sau din programul de instalare Windows). |
-| `requirements-dev.txt` | Dependențe ușoare utilizate de testele CI/unități. |
+| `requirements/core.txt` | Pachetele de conducte implicite utilizate de GUI/CLI. |
+| `requirements/optional.txt` | XTTS, tokenizer MarianMT, diarizare, VAD, breloc. |
+| `requirements/wav2lip.txt` | Timp de rulare Wav2Lip și stivă de detectare a feței (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Stiva PyTorch testată cu roți NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Player video integrat: python-mpv (necesită libmpv din sistem sau din programul de instalare Windows). |
+| `requirements/dev.txt` | Dependențe ușoare utilizate de testele CI/unități. |
 
 ## Actualizare
 

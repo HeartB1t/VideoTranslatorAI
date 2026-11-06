@@ -99,8 +99,8 @@ class PlanTests(unittest.TestCase):
         # or transformers: the installer's profiles go in as constraints.
         cmd = sp.pip_install_command("py", ["sacremoses"])
         root = Path(__file__).resolve().parents[1]
-        for name in ("requirements-core.txt", "requirements-optional.txt",
-                     "requirements-gpu-cu124.txt"):
+        for name in ("requirements/core.txt", "requirements/optional.txt",
+                     "requirements/gpu-cu124.txt"):
             with self.subTest(profile=name):
                 index = cmd.index(str(root / name))
                 self.assertEqual(cmd[index - 1], "-c")
@@ -110,9 +110,10 @@ class PlanTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(sp.pip_constraint_args(Path(tmp)), [])     # an installed wheel
-            (Path(tmp) / "requirements-optional.txt").write_text("keyring\n", encoding="utf-8")
+            (Path(tmp) / "requirements").mkdir()
+            (Path(tmp) / "requirements/optional.txt").write_text("keyring\n", encoding="utf-8")
             self.assertEqual(sp.pip_constraint_args(Path(tmp)),
-                             ["-c", str(Path(tmp) / "requirements-optional.txt")])
+                             ["-c", str(Path(tmp) / "requirements/optional.txt")])
 
 
 class _FakePopen:

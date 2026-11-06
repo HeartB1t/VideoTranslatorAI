@@ -1,10 +1,11 @@
+# Generated Python files and build output
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 *.egg-info/
+build/
+dist/
 
-# Output files
+# Generated media
 *.mp4
 *.mkv
 *.avi
@@ -13,51 +14,26 @@ __pycache__/
 *.wav
 *.srt
 
-# Temp/cache directories
+# Temporary files, caches and crash dumps
 tmp/
 temp/
 .cache/
+.pytest_cache/
+.ruff_cache/
 demucs_tmp/
-.project_backups/
+/core
+/core.[0-9]*
 
-# Python virtual environments
+# Virtual environments and editor/OS metadata
 venv/
 .venv/
 env/
-
-# OS
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode/
-.idea/
-
-# Project memory file (loaded automatically by Claude Code, must stay in repo root)
-CLAUDE.md
-
-# Local task tracker (internal dev notes, not for the public repo)
-TRACKER.md
-
-# Tutto il resto del contesto dev locale: CHANGELOG, memoria feedback,
-# script dev, backup .bak. Sono tutti dentro `_dev/` che è gitignored.
-# Vedi `_dev/memory/MEMORY.md` per l'indice della memoria.
-_dev/
-
-# Claude Code local session state (notes, settings, scheduled tasks)
-.claude/
-
-# Claude Code SDD scratch workspace
-.superpowers/
-
-# Internal development documents: design specs, implementation plans, handoff
-# notes and the action plan. Kept on the developer machine, not published.
-docs/superpowers/
-docs/ACTION_PLAN.md
-docs/ARCHITECTURE_PREVIEW.md
-
-# Integrated player runtime: DLLs and archives fetched by
-# `python -m videotranslator.libmpv_runtime install` must never be committed.
+# Downloaded player runtime
 mpv-runtime/
 *.dll
 *.7z

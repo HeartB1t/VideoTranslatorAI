@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Optional: Installieren Sie den getesteten NVIDIA CUDA 12.4 PyTorch-Stack vorne
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Optional: Installieren Sie alle Python-Laufzeitpakete vor, anstatt die GUI zuzulassen
 # Fehlende Pakete beim ersten Start installieren
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Optional: der integrierte Videoplayer (libmpv aus der Distribution, python-mpv von PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Optional: Installieren Sie das Projekt als bearbeitbares Python-Paket
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Datei | Zweck |
 |------|---------|
 | `requirements.txt` | Vollständige, abwärtskompatible Laufzeitinstallation. |
-| `requirements-core.txt` | Von GUI/CLI verwendete Standard-Pipeline-Pakete. |
-| `requirements-optional.txt` | XTTS, MarianMT-Tokenizer, Diarisierung, VAD, Schlüsselring. |
-| `requirements-wav2lip.txt` | Wav2Lip-Laufzeit- und Gesichtserkennungsstapel (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch-Stack mit NVIDIA CUDA 12.4-Rädern getestet. |
-| `requirements-player.txt` | Integrierter Videoplayer: python-mpv (benötigt libmpv vom System oder vom Windows-Installer). |
-| `requirements-dev.txt` | Leichte Abhängigkeiten, die von CI/Unit-Tests verwendet werden. |
+| `requirements/core.txt` | Von GUI/CLI verwendete Standard-Pipeline-Pakete. |
+| `requirements/optional.txt` | XTTS, MarianMT-Tokenizer, Diarisierung, VAD, Schlüsselring. |
+| `requirements/wav2lip.txt` | Wav2Lip-Laufzeit- und Gesichtserkennungsstapel (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch-Stack mit NVIDIA CUDA 12.4-Rädern getestet. |
+| `requirements/player.txt` | Integrierter Videoplayer: python-mpv (benötigt libmpv vom System oder vom Windows-Installer). |
+| `requirements/dev.txt` | Leichte Abhängigkeiten, die von CI/Unit-Tests verwendet werden. |
 
 ## Aktualisieren
 

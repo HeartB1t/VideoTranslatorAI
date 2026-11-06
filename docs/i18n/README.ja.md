@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # オプション: テスト済みの NVIDIA CUDA 12.4 PyTorch スタックを前面にインストールします
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # オプション: GUI を使用せずに、すべての Python ランタイム パッケージをプレインストールします。
 # 不足しているパッケージを最初の実行時にインストールする
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # オプション: 統合ビデオプレーヤー (ディストリビューションからの libmpv、PyPI からの python-mpv)
 sudo apt install libmpv2        # Fedora: mpv-libs、Arch: mpv、openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # オプション: プロジェクトを編集可能な Python パッケージとしてインストールします
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | ファイル | 目的 |
 |------|---------|
 | `requirements.txt` | 完全な下位互換性のあるランタイムのインストール。 |
-| `requirements-core.txt` | GUI/CLI で使用されるデフォルトのパイプライン パッケージ。 |
-| `requirements-optional.txt` | XTTS、MarianMT トークナイザー、日記化、VAD、キーリング。 |
-| `requirements-wav2lip.txt` | Wav2Lip ランタイムおよび顔検出スタック (`new-basicsr`、`facexlib`、`dlib`)。 |
-| `requirements-gpu-cu124.txt` | PyTorch スタックは NVIDIA CUDA 12.4 ホイールでテストされました。 |
-| `requirements-player.txt` | 統合ビデオプレーヤー: python-mpv (システムまたは Windows インストーラーからの libmpv が必要)。 |
-| `requirements-dev.txt` | CI/単体テストで使用される軽量の依存関係。 |
+| `requirements/core.txt` | GUI/CLI で使用されるデフォルトのパイプライン パッケージ。 |
+| `requirements/optional.txt` | XTTS、MarianMT トークナイザー、日記化、VAD、キーリング。 |
+| `requirements/wav2lip.txt` | Wav2Lip ランタイムおよび顔検出スタック (`new-basicsr`、`facexlib`、`dlib`)。 |
+| `requirements/gpu-cu124.txt` | PyTorch スタックは NVIDIA CUDA 12.4 ホイールでテストされました。 |
+| `requirements/player.txt` | 統合ビデオプレーヤー: python-mpv (システムまたは Windows インストーラーからの libmpv が必要)。 |
+| `requirements/dev.txt` | CI/単体テストで使用される軽量の依存関係。 |
 
 ## アップデート
 

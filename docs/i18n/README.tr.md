@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # İsteğe bağlı: test edilen NVIDIA CUDA 12.4 PyTorch yığınını öne yükleyin
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # İsteğe bağlı: GUI'ye izin vermek yerine tüm Python çalışma zamanı paketlerini önceden yükleyin
 # ilk çalıştırmada eksik paketleri yükleyin
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # İsteğe bağlı: entegre video oynatıcı (dağıtımdan libmpv, PyPI'den python-mpv)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # İsteğe bağlı: projeyi düzenlenebilir bir Python paketi olarak yükleyin
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Dosya | Amaç |
 |------|---------|
 | `requirements.txt` | Tam, geriye dönük uyumlu çalışma zamanı kurulumu. |
-| `requirements-core.txt` | GUI/CLI tarafından kullanılan varsayılan işlem hattı paketleri. |
-| `requirements-optional.txt` | XTTS, MarianMT belirteçleri, günlük tutma, VAD, anahtarlık. |
-| `requirements-wav2lip.txt` | Wav2Lip çalışma zamanı ve yüz algılama yığını (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch yığını NVIDIA CUDA 12.4 tekerlekleriyle test edildi. |
-| `requirements-player.txt` | Entegre video oynatıcı: python-mpv (sistemden veya Windows yükleyicisinden libmpv gerekir). |
-| `requirements-dev.txt` | CI/birim testleri tarafından kullanılan hafif bağımlılıklar. |
+| `requirements/core.txt` | GUI/CLI tarafından kullanılan varsayılan işlem hattı paketleri. |
+| `requirements/optional.txt` | XTTS, MarianMT belirteçleri, günlük tutma, VAD, anahtarlık. |
+| `requirements/wav2lip.txt` | Wav2Lip çalışma zamanı ve yüz algılama yığını (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch yığını NVIDIA CUDA 12.4 tekerlekleriyle test edildi. |
+| `requirements/player.txt` | Entegre video oynatıcı: python-mpv (sistemden veya Windows yükleyicisinden libmpv gerekir). |
+| `requirements/dev.txt` | CI/birim testleri tarafından kullanılan hafif bağımlılıklar. |
 
 ## Güncelle
 

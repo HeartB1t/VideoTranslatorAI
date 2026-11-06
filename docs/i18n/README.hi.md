@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # वैकल्पिक: परीक्षण किए गए NVIDIA CUDA 12.4 PyTorch स्टैक को सामने स्थापित करें
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # वैकल्पिक: जीयूआई देने के बजाय सभी Python रनटाइम पैकेजों को पूर्व-स्थापित करें
 # पहले रन पर लापता पैकेज स्थापित करें
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # वैकल्पिक: एकीकृत वीडियो प्लेयर (वितरण से libmpv, PyPI से Python-mpv)
 sudo apt install libmpv2        # फेडोरा: mpv-libs, आर्क: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # वैकल्पिक: प्रोजेक्ट को संपादन योग्य Python पैकेज के रूप में स्थापित करें
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | फ़ाइल | प्रयोजन |
 |------|---------|
 | `requirements.txt` | पूर्ण, पश्चगामी-संगत रनटाइम इंस्टालेशन। |
-| `requirements-core.txt` | जीयूआई/सीएलआई द्वारा उपयोग किए जाने वाले डिफ़ॉल्ट पाइपलाइन पैकेज। |
-| `requirements-optional.txt` | एक्सटीटीएस, MarianMT टोकनाइज़र, डायराइजेशन, वीएडी, कीरिंग। |
-| `requirements-wav2lip.txt` | Wav2Lip रनटाइम और फेस-डिटेक्शन स्टैक (`new-basicsr`, `facexlib`, `dlib`)। |
-| `requirements-gpu-cu124.txt` | PyTorch स्टैक का NVIDIA CUDA 12.4 पहियों के साथ परीक्षण किया गया। |
-| `requirements-player.txt` | एकीकृत वीडियो प्लेयर: Python-एमपीवी (सिस्टम से या विंडोज इंस्टॉलर से libmpv की आवश्यकता है)। |
-| `requirements-dev.txt` | सीआई/यूनिट परीक्षणों द्वारा उपयोग की जाने वाली हल्की निर्भरताएँ। |
+| `requirements/core.txt` | जीयूआई/सीएलआई द्वारा उपयोग किए जाने वाले डिफ़ॉल्ट पाइपलाइन पैकेज। |
+| `requirements/optional.txt` | एक्सटीटीएस, MarianMT टोकनाइज़र, डायराइजेशन, वीएडी, कीरिंग। |
+| `requirements/wav2lip.txt` | Wav2Lip रनटाइम और फेस-डिटेक्शन स्टैक (`new-basicsr`, `facexlib`, `dlib`)। |
+| `requirements/gpu-cu124.txt` | PyTorch स्टैक का NVIDIA CUDA 12.4 पहियों के साथ परीक्षण किया गया। |
+| `requirements/player.txt` | एकीकृत वीडियो प्लेयर: Python-एमपीवी (सिस्टम से या विंडोज इंस्टॉलर से libmpv की आवश्यकता है)। |
+| `requirements/dev.txt` | सीआई/यूनिट परीक्षणों द्वारा उपयोग की जाने वाली हल्की निर्भरताएँ। |
 
 ## अपडेट करें
 

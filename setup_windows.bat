@@ -36,10 +36,10 @@ set "START_MENU_DIR=%ProgramData%\Microsoft\Windows\Start Menu\Programs\Video Tr
 set "ICON_PATH=%INSTALL_DIR%\assets\icon.ico"
 set "SCRIPT_DIR=%~dp0"
 :: Profiles are copied beside the installed application for offline repair.
-set "CORE_REQUIREMENTS=%INSTALL_DIR%\requirements-core.txt"
-set "OPTIONAL_REQUIREMENTS=%INSTALL_DIR%\requirements-optional.txt"
-set "GPU_REQUIREMENTS=%INSTALL_DIR%\requirements-gpu-cu124.txt"
-set "PLAYER_REQUIREMENTS=%INSTALL_DIR%\requirements-player.txt"
+set "CORE_REQUIREMENTS=%INSTALL_DIR%\requirements\core.txt"
+set "OPTIONAL_REQUIREMENTS=%INSTALL_DIR%\requirements\optional.txt"
+set "GPU_REQUIREMENTS=%INSTALL_DIR%\requirements\gpu-cu124.txt"
+set "PLAYER_REQUIREMENTS=%INSTALL_DIR%\requirements\player.txt"
 :: A new release is unpacked here before the hand-over. Program Files, never
 :: %TEMP%: only administrators can write it, so a non-elevated process cannot
 :: swap the verified files before this elevated script runs them.
@@ -973,8 +973,8 @@ goto :eof
 echo.
 :: Refuse an incomplete source before changing the installed files, including
 :: when repair runs directly from the installation folder.
-for %%F in (requirements-core.txt requirements-optional.txt requirements-gpu-cu124.txt requirements-player.txt) do (
-    if not exist "%SCRIPT_DIR%%%F" (
+for %%F in (core.txt optional.txt gpu-cu124.txt player.txt) do (
+    if not exist "%SCRIPT_DIR%requirements\%%F" (
         echo  [ERROR] Missing %%F. Extract the complete release archive before running setup.
         call :logfile "Step 2/6 copy files: missing dependency profile %%F"
         exit /b 1
@@ -993,8 +993,14 @@ if not errorlevel 1 (
     call :logfile "Step 2/6 copy files: running from the install folder, nothing to copy"
     exit /b 0
 )
-for %%F in (requirements-core.txt requirements-optional.txt requirements-gpu-cu124.txt requirements-player.txt) do (
-    copy /Y "%SCRIPT_DIR%%%F" "%INSTALL_DIR%\%%F" >nul
+if not exist "%INSTALL_DIR%\requirements" mkdir "%INSTALL_DIR%\requirements"
+if not exist "%INSTALL_DIR%\requirements" (
+    echo  [ERROR] Could not create dependency profile folder.
+    call :logfile "Step 2/6 copy files: dependency profile folder not created"
+    exit /b 1
+)
+for %%F in (core.txt optional.txt gpu-cu124.txt player.txt) do (
+    copy /Y "%SCRIPT_DIR%requirements\%%F" "%INSTALL_DIR%\requirements\%%F" >nul
     if errorlevel 1 (
         echo  [ERROR] Could not copy dependency profile %%F.
         call :logfile "Step 2/6 copy files: dependency profile %%F not copied"

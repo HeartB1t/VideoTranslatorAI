@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Facultatif : installez la pile NVIDIA CUDA 12.4 PyTorch testée à l'avance
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Facultatif : préinstallez tous les packages d'exécution Python au lieu de laisser l'interface graphique
 # installer les packages manquants lors de la première exécution
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # En option : le lecteur vidéo intégré (libmpv de la distribution, python-mpv de PyPI)
 sudo apt install libmpv2        # Fedora : mpv-libs, Arch : mpv, openSUSE : libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Facultatif : installez le projet en tant que package Python modifiable
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Fichier | Objectif |
 |------|---------|
 | `requirements.txt` | Installation d'exécution complète et rétrocompatible. |
-| `requirements-core.txt` | Packages de pipeline par défaut utilisés par GUI/CLI. |
-| `requirements-optional.txt` | XTTS, tokenizers MarianMT, diarisation, VAD, porte-clés. |
-| `requirements-wav2lip.txt` | Runtime Wav2Lip et pile de détection de visage (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Pile PyTorch testée avec les roues NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Lecteur vidéo intégré : python-mpv (nécessite libmpv du système ou du programme d'installation Windows). |
-| `requirements-dev.txt` | Dépendances légères utilisées par les tests CI/unitaires. |
+| `requirements/core.txt` | Packages de pipeline par défaut utilisés par GUI/CLI. |
+| `requirements/optional.txt` | XTTS, tokenizers MarianMT, diarisation, VAD, porte-clés. |
+| `requirements/wav2lip.txt` | Runtime Wav2Lip et pile de détection de visage (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Pile PyTorch testée avec les roues NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Lecteur vidéo intégré : python-mpv (nécessite libmpv du système ou du programme d'installation Windows). |
+| `requirements/dev.txt` | Dépendances légères utilisées par les tests CI/unitaires. |
 
 ## Mettre à jour
 

@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # اختياري: قم بتثبيت حزمة NVIDIA CUDA 12.4 PyTorch التي تم اختبارها في المقدمة
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # اختياري: قم بالتثبيت المسبق لجميع حزم وقت تشغيل Python بدلاً من السماح بواجهة المستخدم الرسومية
 # تثبيت الحزم المفقودة عند التشغيل لأول مرة
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # اختياري: مشغل الفيديو المدمج (libmpv من التوزيع، python-mpv من PyPI)
 sudo apt install libmpv2        # فيدورا: mpv-libs، القوس: mpv، openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # اختياري: قم بتثبيت المشروع كحزمة Python قابلة للتحرير
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | ملف | الغرض |
 |------|---------|
 | `requirements.txt` | تثبيت وقت التشغيل الكامل والمتوافق مع الإصدارات السابقة. |
-| `requirements-core.txt` | حزم خطوط الأنابيب الافتراضية التي تستخدمها واجهة المستخدم الرسومية/CLI. |
-| `requirements-optional.txt` | XTTS، رموز MarianMT، تمييز المتحدثين، VAD، حلقة المفاتيح. |
-| `requirements-wav2lip.txt` | وقت تشغيل Wav2Lip ومكدس اكتشاف الوجه (`new-basicsr`، `facexlib`، `dlib`). |
-| `requirements-gpu-cu124.txt` | تم اختبار مكدس PyTorch باستخدام عجلات NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | مشغل فيديو متكامل: python-mpv (يحتاج إلى libmpv من النظام أو من مثبت Windows). |
-| `requirements-dev.txt` | تبعيات خفيفة الوزن تستخدمها اختبارات CI/الوحدة. |
+| `requirements/core.txt` | حزم خطوط الأنابيب الافتراضية التي تستخدمها واجهة المستخدم الرسومية/CLI. |
+| `requirements/optional.txt` | XTTS، رموز MarianMT، تمييز المتحدثين، VAD، حلقة المفاتيح. |
+| `requirements/wav2lip.txt` | وقت تشغيل Wav2Lip ومكدس اكتشاف الوجه (`new-basicsr`، `facexlib`، `dlib`). |
+| `requirements/gpu-cu124.txt` | تم اختبار مكدس PyTorch باستخدام عجلات NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | مشغل فيديو متكامل: python-mpv (يحتاج إلى libmpv من النظام أو من مثبت Windows). |
+| `requirements/dev.txt` | تبعيات خفيفة الوزن تستخدمها اختبارات CI/الوحدة. |
 
 ## التحديث
 
