@@ -173,7 +173,7 @@ def run_plan(plan: Sequence[Sequence[str]], *, runner: Callable[[Sequence[str]],
 # installation (not in a wheel), and every install the app makes passes them
 # as constraints: a missing package, the MarianMT tokenizers or the Wav2Lip
 # stack cannot then upgrade the tested torch, numpy or transformers.
-# The pinned PyTorch (torch>=2.6,<2.8 in requirements-gpu-cu124.txt) ships
+# The pinned PyTorch (torch>=2.6,<2.8 in requirements/gpu-cu124.txt) ships
 # wheels for CPython 3.9 to 3.13 only. Started with a newer Python, a pip
 # install of the AI stack can only fail (seen on a Kali whose python3 is 3.14,
 # while python3.13 next to it had everything): the app says so instead, and
@@ -290,8 +290,8 @@ def relaunch_on_unsupported_python(command: Sequence[str], *,
     raise SystemExit(code)
 
 
-CONSTRAINT_PROFILES = ("requirements-core.txt", "requirements-optional.txt",
-                       "requirements-gpu-cu124.txt")
+CONSTRAINT_PROFILES = ("requirements/core.txt", "requirements/optional.txt",
+                       "requirements/gpu-cu124.txt")
 APP_DIR = Path(__file__).resolve().parents[1]
 
 

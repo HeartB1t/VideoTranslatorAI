@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Volitelné: nainstalujte testovaný zásobník NVIDIA CUDA 12.4 PyTorch dopředu
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Volitelné: předinstalujte všechny balíčky běhového prostředí Pythonu namísto ponechání GUI
 # nainstalovat chybějící balíčky při prvním spuštění
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Volitelné: integrovaný přehrávač videa (libmpv z distribuce, python-mpv z PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Volitelné: nainstalujte projekt jako upravitelný balíček Pythonu
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Soubor | Účel |
 |------|---------|
 | `requirements.txt` | Plná, zpětně kompatibilní instalace runtime. |
-| `requirements-core.txt` | Výchozí balíčky potrubí používané GUI/CLI. |
-| `requirements-optional.txt` | XTTS, tokenizéry MarianMT, diarizace, VAD, klíčenka. |
-| `requirements-wav2lip.txt` | Runtime Wav2Lip a zásobník detekce obličejů (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Stoh PyTorch testován s koly NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Integrovaný přehrávač videa: python-mpv (potřebuje libmpv ze systému nebo z instalačního programu Windows). |
-| `requirements-dev.txt` | Odlehčené závislosti používané testy CI/jednotka. |
+| `requirements/core.txt` | Výchozí balíčky potrubí používané GUI/CLI. |
+| `requirements/optional.txt` | XTTS, tokenizéry MarianMT, diarizace, VAD, klíčenka. |
+| `requirements/wav2lip.txt` | Runtime Wav2Lip a zásobník detekce obličejů (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Stoh PyTorch testován s koly NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Integrovaný přehrávač videa: python-mpv (potřebuje libmpv ze systému nebo z instalačního programu Windows). |
+| `requirements/dev.txt` | Odlehčené závislosti používané testy CI/jednotka. |
 
 ## Aktualizace
 

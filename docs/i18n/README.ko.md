@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # 선택 사항: 테스트된 NVIDIA CUDA 12.4 PyTorch 스택을 전면에 설치합니다.
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # 선택 사항: GUI를 허용하는 대신 모든 Python 런타임 패키지를 사전 설치합니다.
 # 처음 실행 시 누락된 패키지 설치
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # 선택 사항: 통합 비디오 플레이어(배포판의 libmpv, PyPI의 python-mpv)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # 선택 사항: 프로젝트를 편집 가능한 Python 패키지로 설치
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | 파일 | 목적 |
 |------|---------|
 | `requirements.txt` | 전체, 이전 버전과 호환되는 런타임 설치. |
-| `requirements-core.txt` | GUI/CLI에서 사용되는 기본 파이프라인 패키지입니다. |
-| `requirements-optional.txt` | XTTS, MarianMT 토크나이저, 분할, VAD, 키링. |
-| `requirements-wav2lip.txt` | Wav2Lip 런타임 및 얼굴 감지 스택(`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch 스택은 NVIDIA CUDA 12.4 휠로 테스트되었습니다. |
-| `requirements-player.txt` | 통합 비디오 플레이어: python-mpv(시스템 또는 Windows 설치 프로그램의 libmpv 필요) |
-| `requirements-dev.txt` | CI/단위 테스트에서 사용되는 경량 종속성입니다. |
+| `requirements/core.txt` | GUI/CLI에서 사용되는 기본 파이프라인 패키지입니다. |
+| `requirements/optional.txt` | XTTS, MarianMT 토크나이저, 분할, VAD, 키링. |
+| `requirements/wav2lip.txt` | Wav2Lip 런타임 및 얼굴 감지 스택(`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch 스택은 NVIDIA CUDA 12.4 휠로 테스트되었습니다. |
+| `requirements/player.txt` | 통합 비디오 플레이어: python-mpv(시스템 또는 Windows 설치 프로그램의 libmpv 필요) |
+| `requirements/dev.txt` | CI/단위 테스트에서 사용되는 경량 종속성입니다. |
 
 ## 업데이트
 

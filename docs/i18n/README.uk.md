@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Додатково: інсталюйте перевірений стек NVIDIA CUDA 12.4 PyTorch спереду
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Необов’язково: попередньо інсталюйте всі пакети середовища виконання Python замість дозволу графічного інтерфейсу користувача
 # встановити відсутні пакети під час першого запуску
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Додатково: інтегрований відеоплеєр (libmpv із дистрибутива, python-mpv із PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Необов’язково: установіть проект як редагований пакет Python
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Файл | призначення |
 |------|---------|
 | `requirements.txt` | Повна інсталяція середовища виконання із зворотною сумісністю. |
-| `requirements-core.txt` | Пакети конвеєрів за замовчуванням, які використовуються GUI/CLI. |
-| `requirements-optional.txt` | XTTS, токенізери MarianMT, діаризація, VAD, брелок. |
-| `requirements-wav2lip.txt` | Середовище виконання Wav2Lip і стек розпізнавання облич (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Стек PyTorch протестовано з колесами NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Інтегрований відеоплеєр: python-mpv (потрібно libmpv із системи або з інсталятора Windows). |
-| `requirements-dev.txt` | Полегшені залежності, які використовуються CI/модульними тестами. |
+| `requirements/core.txt` | Пакети конвеєрів за замовчуванням, які використовуються GUI/CLI. |
+| `requirements/optional.txt` | XTTS, токенізери MarianMT, діаризація, VAD, брелок. |
+| `requirements/wav2lip.txt` | Середовище виконання Wav2Lip і стек розпізнавання облич (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Стек PyTorch протестовано з колесами NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Інтегрований відеоплеєр: python-mpv (потрібно libmpv із системи або з інсталятора Windows). |
+| `requirements/dev.txt` | Полегшені залежності, які використовуються CI/модульними тестами. |
 
 ## Оновити
 

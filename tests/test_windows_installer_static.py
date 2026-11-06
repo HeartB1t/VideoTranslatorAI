@@ -141,8 +141,8 @@ class WindowsInstallerStaticTests(unittest.TestCase):
     def test_player_uses_the_canonical_profile(self):
         body = self._label_body("step_player", ":player_check")
         self.assertIn('-r "%PLAYER_REQUIREMENTS%"', body)
-        self.assertIn('set "PLAYER_REQUIREMENTS=%INSTALL_DIR%\\requirements-player.txt"', self.text)
-        self.assertIn(PIN, (ROOT / "requirements-player.txt").read_text(encoding="utf-8"))
+        self.assertIn('set "PLAYER_REQUIREMENTS=%INSTALL_DIR%\\requirements\\player.txt"', self.text)
+        self.assertIn(PIN, (ROOT / "requirements/player.txt").read_text(encoding="utf-8"))
 
     def test_pyannote_uses_profile_constraints_without_cmd_redirection(self):
         # Version bounds live in text files, so cmd never parses their < or >.
@@ -150,7 +150,7 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         command = next(line for line in commands if ' pyannote.audio ' in line)
         self.assertIn('-c "%OPTIONAL_REQUIREMENTS%"', command)
         self.assertIn('pyannote.audio>=3.1,<4.0',
-                      (ROOT / 'requirements-optional.txt').read_text())
+                      (ROOT / 'requirements/optional.txt').read_text())
         self.assertNotRegex(self.flat, re.compile(r'^set "[A-Z_0-9]+="[^"\n]*[<>]', re.M))
 
     def test_every_pip_install_preserves_the_core_optional_and_torch_bounds(self):
@@ -166,10 +166,10 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         body = self.flat[self.flat.index('\n:step_copy_files\n'):
                          self.flat.index('\n:step_install_deps\n')]
         for profile in ('core', 'optional', 'gpu-cu124', 'player'):
-            self.assertIn(f'requirements-{profile}.txt', body)
-        self.assertIn('if not exist "%SCRIPT_DIR%%%F"', body)
-        self.assertLess(body.index('if not exist "%SCRIPT_DIR%%%F"'), body.index('os.path.samefile'))
-        self.assertIn('copy /Y "%SCRIPT_DIR%%%F" "%INSTALL_DIR%\\%%F"', body)
+            self.assertIn(f'{profile}.txt', body)
+        self.assertIn('if not exist "%SCRIPT_DIR%requirements\\%%F"', body)
+        self.assertLess(body.index('if not exist "%SCRIPT_DIR%requirements\\%%F"'), body.index('os.path.samefile'))
+        self.assertIn('copy /Y "%SCRIPT_DIR%requirements\\%%F" "%INSTALL_DIR%\\requirements\\%%F"', body)
         # A missing profile must stop before pip can modify the installation.
         self.assertIn('exit /b 1', body[:body.index('os.path.samefile')])
 
@@ -242,7 +242,7 @@ class WindowsInstallerStaticTests(unittest.TestCase):
         # With a version range, --no-deps could pick a torch version that the
         # pinned torchaudio/torchvision cannot use during a forced reinstall.
         self.assertNotIn('--no-deps', body)
-        core = (ROOT / 'requirements-core.txt').read_text().splitlines()
+        core = (ROOT / 'requirements/core.txt').read_text().splitlines()
         self.assertIn('requests', core)
         self.assertIn('numpy>=2.0,<2.4', core)
         self.assertIn('audioop-lts; python_version >= "3.13"', core)

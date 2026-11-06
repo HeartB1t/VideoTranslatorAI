@@ -387,6 +387,9 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
             program_files = r"C:\Program Files"
+            # The resolver creates work_dir even with fake asset probes. Use
+            # a real temp path so Windows tests leave no C:\... folder on Linux.
+            localappdata = str(home / "AppData" / "Local")
             asset_target = Path(program_files) / "VideoTranslatorAI" / "wav2lip"
 
             def fake_assets_check(path: Path) -> bool:
@@ -399,7 +402,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
                 "win32",
                 {
                     "ProgramFiles": program_files,
-                    "LOCALAPPDATA": r"C:\Users\Example\AppData\Local",
+                    "LOCALAPPDATA": localappdata,
                 },
                 home,
                 writable_check=fake_writable_check,
@@ -410,7 +413,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         # work_dir must always live under LOCALAPPDATA, never ProgramFiles.
         self.assertEqual(
             paths.work_dir,
-            Path(r"C:\Users\Example\AppData\Local") / "VideoTranslatorAI" / "wav2lip-work",
+            Path(localappdata) / "VideoTranslatorAI" / "wav2lip-work",
         )
 
     def test_windows_program_files_present_but_not_writable_is_valid_asset_dir(self):
@@ -423,7 +426,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
             program_files = r"C:\Program Files"
-            localappdata = r"C:\Users\Example\AppData\Local"
+            localappdata = str(home / "AppData" / "Local")
             program_files_assets = Path(program_files) / "VideoTranslatorAI" / "wav2lip"
             localappdata_assets = Path(localappdata) / "VideoTranslatorAI" / "wav2lip"
 
@@ -451,7 +454,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
             program_files = r"C:\Program Files"
-            localappdata = r"C:\Users\Example\AppData\Local"
+            localappdata = str(home / "AppData" / "Local")
             localappdata_assets = Path(localappdata) / "VideoTranslatorAI" / "wav2lip"
 
             def fake_assets_check(path: Path) -> bool:
@@ -476,7 +479,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
             program_files = r"C:\Program Files"
-            localappdata = r"C:\Users\Example\AppData\Local"
+            localappdata = str(home / "AppData" / "Local")
             localappdata_assets = Path(localappdata) / "VideoTranslatorAI" / "wav2lip"
 
             def fake_assets_check(_path: Path) -> bool:
@@ -502,7 +505,7 @@ class Wav2LipPathResolverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home_str:
             home = Path(home_str)
             program_files = r"C:\Program Files"
-            localappdata = r"C:\Users\Example\AppData\Local"
+            localappdata = str(home / "AppData" / "Local")
 
             def fake_assets_check(_path: Path) -> bool:
                 return False

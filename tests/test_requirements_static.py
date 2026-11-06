@@ -23,18 +23,18 @@ class RequirementsStaticTests(unittest.TestCase):
         self.assertEqual(
             refs,
             [
-                "requirements-core.txt",
-                "requirements-optional.txt",
-                "requirements-wav2lip.txt",
-                "requirements-gpu-cu124.txt",
-                "requirements-player.txt",
+                "requirements/core.txt",
+                "requirements/optional.txt",
+                "requirements/wav2lip.txt",
+                "requirements/gpu-cu124.txt",
+                "requirements/player.txt",
             ],
         )
         for ref in refs:
             self.assertTrue((ROOT / ref).exists(), ref)
 
     def test_dev_requirements_match_ci_lightweight_dependencies(self):
-        lines = set(_requirement_lines(ROOT / "requirements-dev.txt"))
+        lines = set(_requirement_lines(ROOT / "requirements/dev.txt"))
 
         self.assertIn("opencv-python-headless", lines)
         self.assertIn("numpy>=2.0,<2.4", lines)
@@ -46,10 +46,10 @@ class RequirementsStaticTests(unittest.TestCase):
         self.assertIn("wheel", lines)
 
     def test_core_and_optional_profiles_keep_expected_runtime_families(self):
-        core = set(_requirement_lines(ROOT / "requirements-core.txt"))
-        optional = set(_requirement_lines(ROOT / "requirements-optional.txt"))
-        wav2lip = set(_requirement_lines(ROOT / "requirements-wav2lip.txt"))
-        gpu = set(_requirement_lines(ROOT / "requirements-gpu-cu124.txt"))
+        core = set(_requirement_lines(ROOT / "requirements/core.txt"))
+        optional = set(_requirement_lines(ROOT / "requirements/optional.txt"))
+        wav2lip = set(_requirement_lines(ROOT / "requirements/wav2lip.txt"))
+        gpu = set(_requirement_lines(ROOT / "requirements/gpu-cu124.txt"))
 
         self.assertIn("faster-whisper", core)
         self.assertIn("requests", core)
@@ -67,7 +67,7 @@ class RequirementsStaticTests(unittest.TestCase):
         # read-aloud service, 7.3.1 works. The installer runs pip without
         # --upgrade, so only a floor makes a repair or an update replace an
         # old copy: the default TTS (file dub and live voice) depends on it.
-        core = set(_requirement_lines(ROOT / "requirements-core.txt"))
+        core = set(_requirement_lines(ROOT / "requirements/core.txt"))
         project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
         self.assertIn("edge-tts>=7.3.1", core)
@@ -77,22 +77,24 @@ class RequirementsStaticTests(unittest.TestCase):
         from videotranslator.libmpv_runtime import PYTHON_MPV_REQUIREMENT
 
         self.assertEqual(PYTHON_MPV_REQUIREMENT, "mpv>=1.0.6,<2")
-        self.assertEqual(_requirement_lines(ROOT / "requirements-player.txt"), [PYTHON_MPV_REQUIREMENT])
+        self.assertEqual(_requirement_lines(ROOT / "requirements/player.txt"), [PYTHON_MPV_REQUIREMENT])
         data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(data["project"]["optional-dependencies"]["player"], [PYTHON_MPV_REQUIREMENT])
 
     def test_no_other_new_requirement_file_or_package(self):
-        names = sorted(path.name for path in ROOT.glob("requirements*.txt"))
+        self.assertEqual(sorted(path.name for path in ROOT.glob("requirements*.txt")),
+                         ["requirements.txt"])
+        names = sorted(path.relative_to(ROOT).as_posix()
+                       for path in (ROOT / "requirements").glob("*.txt"))
         self.assertEqual(names, [
-            "requirements-core.txt", "requirements-dev.txt", "requirements-gpu-cu124.txt",
-            "requirements-optional.txt", "requirements-player.txt", "requirements-wav2lip.txt",
-            "requirements.txt",
+            "requirements/core.txt", "requirements/dev.txt", "requirements/gpu-cu124.txt",
+            "requirements/optional.txt", "requirements/player.txt", "requirements/wav2lip.txt",
         ])
         for name in names:
             for line in _requirement_lines(ROOT / name):
                 package = re.split(r"[<>=!~;\[\s]", line, maxsplit=1)[0].lower()
                 with self.subTest(file=name, line=line):
-                    if name == "requirements-core.txt" and package == "av":
+                    if name == "requirements/core.txt" and package == "av":
                         # A ceiling only: faster-whisper still brings av; PyAV 19
                         # dropped the av.open() argument faster-whisper 1.2.1 passes.
                         self.assertRegex(line, r"^av<\d+$")
@@ -101,7 +103,7 @@ class RequirementsStaticTests(unittest.TestCase):
                     # python-mpv would install a second mpv.py.
                     self.assertNotIn(package, {"av", "onnxruntime", "python-mpv"})
         dev = {re.split(r"[<>=!~;\[\s]", line, maxsplit=1)[0].lower()
-               for line in _requirement_lines(ROOT / "requirements-dev.txt")}
+               for line in _requirement_lines(ROOT / "requirements/dev.txt")}
         self.assertNotIn("mpv", dev)  # CI must never import a python-mpv without libmpv
 
     def test_gitignore_keeps_player_binaries_out_of_git(self):

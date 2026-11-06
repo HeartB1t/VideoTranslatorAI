@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Προαιρετικά: εγκαταστήστε τη δοκιμασμένη στοίβα NVIDIA CUDA 12.4 PyTorch μπροστά
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Προαιρετικά: προεγκαταστήστε όλα τα πακέτα χρόνου εκτέλεσης Python αντί να αφήσετε το GUI
 # εγκαταστήστε τα πακέτα που λείπουν κατά την πρώτη εκτέλεση
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Προαιρετικό: το ενσωματωμένο πρόγραμμα αναπαραγωγής βίντεο (libmpv από τη διανομή, python-mpv από το PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Προαιρετικά: εγκαταστήστε το έργο ως επεξεργάσιμο πακέτο Python
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Αρχείο | Σκοπός |
 |------|---------|
 | `requirements.txt` | Πλήρης, συμβατή με το παρελθόν εγκατάσταση χρόνου εκτέλεσης. |
-| `requirements-core.txt` | Προεπιλεγμένα πακέτα αγωγών που χρησιμοποιούνται από το GUI/CLI. |
-| `requirements-optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, μπρελόκ. |
-| `requirements-wav2lip.txt` | Wav2Lip χρόνου εκτέλεσης και στοίβα ανίχνευσης προσώπου (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Η στοίβα PyTorch δοκιμάστηκε με τροχούς NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Ενσωματωμένο πρόγραμμα αναπαραγωγής βίντεο: python-mpv (χρειάζεται libmpv από το σύστημα ή από το πρόγραμμα εγκατάστασης των Windows). |
-| `requirements-dev.txt` | Ελαφρές εξαρτήσεις που χρησιμοποιούνται από δοκιμές CI/μονάδας. |
+| `requirements/core.txt` | Προεπιλεγμένα πακέτα αγωγών που χρησιμοποιούνται από το GUI/CLI. |
+| `requirements/optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, μπρελόκ. |
+| `requirements/wav2lip.txt` | Wav2Lip χρόνου εκτέλεσης και στοίβα ανίχνευσης προσώπου (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Η στοίβα PyTorch δοκιμάστηκε με τροχούς NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Ενσωματωμένο πρόγραμμα αναπαραγωγής βίντεο: python-mpv (χρειάζεται libmpv από το σύστημα ή από το πρόγραμμα εγκατάστασης των Windows). |
+| `requirements/dev.txt` | Ελαφρές εξαρτήσεις που χρησιμοποιούνται από δοκιμές CI/μονάδας. |
 
 ## Ενημέρωση
 

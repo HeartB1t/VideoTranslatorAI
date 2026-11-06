@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Valinnainen: asenna testattu NVIDIA CUDA 12.4 PyTorch -pino eteen
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Valinnainen: esiasenna kaikki Python-ajonaikaiset paketit graafisen käyttöliittymän sallimisen sijaan
 # asenna puuttuvat paketit ensimmäisellä kerralla
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Valinnainen: integroitu videosoitin (libmpv jakelusta, python-mpv PyPI:stä)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Valinnainen: asenna projekti muokattavana Python-paketina
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Tiedosto | Tarkoitus |
 |------|---------|
 | `requirements.txt` | Täysi, taaksepäin yhteensopiva suoritusaikainen asennus. |
-| `requirements-core.txt` | GUI/CLI:n käyttämät oletusputket. |
-| `requirements-optional.txt` | XTTS, MarianMT tokenisers, diarisointi, VAD, avaimenperä. |
-| `requirements-wav2lip.txt` | Wav2Lip-ajoaika ja kasvojentunnistuspino (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch-pino testattu NVIDIA CUDA 12.4 -pyörillä. |
-| `requirements-player.txt` | Integroitu videosoitin: python-mpv (vaatii libmpv:n järjestelmästä tai Windowsin asennusohjelmasta). |
-| `requirements-dev.txt` | Kevyet riippuvuudet, joita käytetään CI/yksikkötesteissä. |
+| `requirements/core.txt` | GUI/CLI:n käyttämät oletusputket. |
+| `requirements/optional.txt` | XTTS, MarianMT tokenisers, diarisointi, VAD, avaimenperä. |
+| `requirements/wav2lip.txt` | Wav2Lip-ajoaika ja kasvojentunnistuspino (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch-pino testattu NVIDIA CUDA 12.4 -pyörillä. |
+| `requirements/player.txt` | Integroitu videosoitin: python-mpv (vaatii libmpv:n järjestelmästä tai Windowsin asennusohjelmasta). |
+| `requirements/dev.txt` | Kevyet riippuvuudet, joita käytetään CI/yksikkötesteissä. |
 
 ## Päivitys
 

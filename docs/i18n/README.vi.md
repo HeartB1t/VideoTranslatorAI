@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Tùy chọn: cài đặt trước NVIDIA CUDA 12.4 PyTorch đã được thử nghiệm
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Tùy chọn: cài đặt sẵn tất cả các gói thời gian chạy Python thay vì để GUI
 # cài đặt các gói bị thiếu trong lần chạy đầu tiên
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Tùy chọn: trình phát video tích hợp (libmpv từ bản phân phối, python-mpv từ PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Tùy chọn: cài đặt dự án dưới dạng gói Python có thể chỉnh sửa
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Tập tin | Mục đích |
 |------|---------|
 | `requirements.txt` | Cài đặt thời gian chạy đầy đủ, tương thích ngược. |
-| `requirements-core.txt` | Các gói đường dẫn mặc định được GUI/CLI sử dụng. |
-| `requirements-optional.txt` | XTTS, mã thông báo MarianMT, nhật ký, VAD, móc khóa. |
-| `requirements-wav2lip.txt` | Thời gian chạy Wav2Lip và ngăn xếp nhận diện khuôn mặt (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Ngăn xếp PyTorch đã được thử nghiệm với bánh xe NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Trình phát video tích hợp: python-mpv (cần libmpv từ hệ thống hoặc từ trình cài đặt Windows). |
-| `requirements-dev.txt` | Các phần phụ thuộc nhẹ được CI/kiểm thử đơn vị sử dụng. |
+| `requirements/core.txt` | Các gói đường dẫn mặc định được GUI/CLI sử dụng. |
+| `requirements/optional.txt` | XTTS, mã thông báo MarianMT, nhật ký, VAD, móc khóa. |
+| `requirements/wav2lip.txt` | Thời gian chạy Wav2Lip và ngăn xếp nhận diện khuôn mặt (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Ngăn xếp PyTorch đã được thử nghiệm với bánh xe NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Trình phát video tích hợp: python-mpv (cần libmpv từ hệ thống hoặc từ trình cài đặt Windows). |
+| `requirements/dev.txt` | Các phần phụ thuộc nhẹ được CI/kiểm thử đơn vị sử dụng. |
 
 ## Cập nhật
 

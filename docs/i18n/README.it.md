@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Opzionale: installare in anticipo lo stack NVIDIA CUDA 12.4 PyTorch testato
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Facoltativo: preinstalla tutti i pacchetti Python invece di lasciare alla GUI
 # il compito di installare quelli mancanti al primo avvio
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Opzionale: il lettore video integrato (libmpv dalla distribuzione, python-mpv da PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Facoltativo: installa il progetto come pacchetto Python modificabile
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | File | Scopo |
 |------|---------|
 | `requirements.txt` | Installazione runtime completa e compatibile con le versioni precedenti. |
-| `requirements-core.txt` | Pacchetti pipeline predefiniti utilizzati da GUI/CLI. |
-| `requirements-optional.txt` | XTTS, tokenizzatori MarianMT, diarizzazione, VAD, portachiavi. |
-| `requirements-wav2lip.txt` | Runtime Wav2Lip e stack di rilevamento volti (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Stack PyTorch verificato con pacchetti wheel per NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Lettore video integrato: python-mpv (richiede libmpv dal sistema o dal programma di installazione di Windows). |
-| `requirements-dev.txt` | Dipendenze leggere utilizzate dai test CI/unità. |
+| `requirements/core.txt` | Pacchetti pipeline predefiniti utilizzati da GUI/CLI. |
+| `requirements/optional.txt` | XTTS, tokenizzatori MarianMT, diarizzazione, VAD, portachiavi. |
+| `requirements/wav2lip.txt` | Runtime Wav2Lip e stack di rilevamento volti (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Stack PyTorch verificato con pacchetti wheel per NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Lettore video integrato: python-mpv (richiede libmpv dal sistema o dal programma di installazione di Windows). |
+| `requirements/dev.txt` | Dipendenze leggere utilizzate dai test CI/unità. |
 
 ## Aggiornamento
 

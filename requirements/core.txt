@@ -1,7 +1,7 @@
 # Core runtime used by the default local/GUI pipeline.
 #
 # Install together with a PyTorch profile (for example
-# requirements-gpu-cu124.txt) so packages like Demucs and torchcodec do not
+# requirements/gpu-cu124.txt) so packages like Demucs and torchcodec do not
 # drift to an untested transitive torch version.
 
 faster-whisper

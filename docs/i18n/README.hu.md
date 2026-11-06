@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Opcionális: telepítse a tesztelt NVIDIA CUDA 12.4 PyTorch stacket előre
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Nem kötelező: telepítse elő az összes Python futásidejű csomagot a grafikus felhasználói felület engedélyezése helyett
 # telepítse a hiányzó csomagokat első futtatásra
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Opcionális: az integrált videolejátszó (libmpv a disztribúcióból, python-mpv a PyPI-ből)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Nem kötelező: telepítse a projektet szerkeszthető Python-csomagként
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Fájl | Cél |
 |------|---------|
 | `requirements.txt` | Teljes, visszafelé kompatibilis futásidejű telepítés. |
-| `requirements-core.txt` | A GUI/CLI által használt alapértelmezett folyamatcsomagok. |
-| `requirements-optional.txt` | XTTS, MarianMT tokenizátorok, naplózás, VAD, kulcstartó. |
-| `requirements-wav2lip.txt` | Wav2Lip futásidejű és arcfelismerési verem (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | A PyTorch stack NVIDIA CUDA 12.4 kerekekkel tesztelve. |
-| `requirements-player.txt` | Integrált videolejátszó: python-mpv (libmpv szükséges a rendszerből vagy a Windows telepítőből). |
-| `requirements-dev.txt` | A CI/egységtesztek által használt könnyű függőségek. |
+| `requirements/core.txt` | A GUI/CLI által használt alapértelmezett folyamatcsomagok. |
+| `requirements/optional.txt` | XTTS, MarianMT tokenizátorok, naplózás, VAD, kulcstartó. |
+| `requirements/wav2lip.txt` | Wav2Lip futásidejű és arcfelismerési verem (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | A PyTorch stack NVIDIA CUDA 12.4 kerekekkel tesztelve. |
+| `requirements/player.txt` | Integrált videolejátszó: python-mpv (libmpv szükséges a rendszerből vagy a Windows telepítőből). |
+| `requirements/dev.txt` | A CI/egységtesztek által használt könnyű függőségek. |
 
 ## Frissítés
 

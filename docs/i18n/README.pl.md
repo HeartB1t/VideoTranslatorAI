@@ -194,7 +194,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Opcjonalnie: zainstaluj przetestowany stos NVIDIA CUDA 12.4 PyTorch z przodu
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Opcjonalnie: zainstaluj wstępnie wszystkie pakiety środowiska uruchomieniowego Pythona, zamiast zezwalać na GUI
 # zainstaluj brakujące pakiety przy pierwszym uruchomieniu
@@ -202,7 +202,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Opcjonalnie: zintegrowany odtwarzacz wideo (libmpv z dystrybucji, python-mpv z PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Opcjonalnie: zainstaluj projekt jako edytowalny pakiet Pythona
 pip install --break-system-packages --no-deps -e .
@@ -224,12 +224,12 @@ videotranslatorai --preflight
 | Plik | Cel |
 |------|---------|
 | `requirements.txt` | Pełna, kompatybilna wstecz instalacja środowiska wykonawczego. |
-| `requirements-core.txt` | Domyślne pakiety potoków używane przez GUI/CLI. |
-| `requirements-optional.txt` | Tokenizatory XTTS, MarianMT, diaryzacja, VAD, brelok. |
-| `requirements-wav2lip.txt` | Środowisko wykonawcze Wav2Lip i stos wykrywania twarzy (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | Stos PyTorch przetestowany z kołami NVIDIA CUDA 12.4. |
-| `requirements-player.txt` | Zintegrowany odtwarzacz wideo: python-mpv (wymaga libmpv z systemu lub z instalatora Windows). |
-| `requirements-dev.txt` | Lekkie zależności używane przez CI/testy jednostkowe. |
+| `requirements/core.txt` | Domyślne pakiety potoków używane przez GUI/CLI. |
+| `requirements/optional.txt` | Tokenizatory XTTS, MarianMT, diaryzacja, VAD, brelok. |
+| `requirements/wav2lip.txt` | Środowisko wykonawcze Wav2Lip i stos wykrywania twarzy (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | Stos PyTorch przetestowany z kołami NVIDIA CUDA 12.4. |
+| `requirements/player.txt` | Zintegrowany odtwarzacz wideo: python-mpv (wymaga libmpv z systemu lub z instalatora Windows). |
+| `requirements/dev.txt` | Lekkie zależności używane przez CI/testy jednostkowe. |
 
 ## Aktualizacja
 

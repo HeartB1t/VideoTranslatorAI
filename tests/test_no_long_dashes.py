@@ -13,6 +13,7 @@ def _checked_files():
     files += sorted((ROOT / "videotranslator").glob("*.py"))
     files += sorted((ROOT / "tests").glob("*.py"))
     files += sorted(ROOT.glob("requirements*.txt"))
+    files += sorted((ROOT / "requirements").glob("*.txt"))
     return files
 
 

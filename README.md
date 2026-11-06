@@ -201,7 +201,7 @@ git clone https://github.com/HeartB1t/VideoTranslatorAI.git
 cd VideoTranslatorAI
 
 # Optional: install the tested NVIDIA CUDA 12.4 PyTorch stack up front
-pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements-gpu-cu124.txt
+pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu124 -r requirements/gpu-cu124.txt
 
 # Optional: pre-install all Python runtime packages instead of letting the GUI
 # install missing packages on first run
@@ -209,7 +209,7 @@ pip install --break-system-packages -r requirements.txt
 
 # Optional: the integrated video player (libmpv from the distribution, python-mpv from PyPI)
 sudo apt install libmpv2        # Fedora: mpv-libs, Arch: mpv, openSUSE: libmpv2
-pip install --break-system-packages -r requirements-player.txt
+pip install --break-system-packages -r requirements/player.txt
 
 # Optional: install the project as an editable Python package
 pip install --break-system-packages --no-deps -e .
@@ -231,12 +231,12 @@ videotranslatorai --preflight
 | File | Purpose |
 |------|---------|
 | `requirements.txt` | Full, backward-compatible runtime install. |
-| `requirements-core.txt` | Default pipeline packages used by GUI/CLI. |
-| `requirements-optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, keyring. |
-| `requirements-wav2lip.txt` | Wav2Lip runtime and face-detection stack (`new-basicsr`, `facexlib`, `dlib`). |
-| `requirements-gpu-cu124.txt` | PyTorch stack tested with NVIDIA CUDA 12.4 wheels. |
-| `requirements-player.txt` | Integrated video player: python-mpv (needs libmpv from the system or from the Windows installer). |
-| `requirements-dev.txt` | Lightweight dependencies used by CI/unit tests. |
+| `requirements/core.txt` | Default pipeline packages used by GUI/CLI. |
+| `requirements/optional.txt` | XTTS, MarianMT tokenizers, diarization, VAD, keyring. |
+| `requirements/wav2lip.txt` | Wav2Lip runtime and face-detection stack (`new-basicsr`, `facexlib`, `dlib`). |
+| `requirements/gpu-cu124.txt` | PyTorch stack tested with NVIDIA CUDA 12.4 wheels. |
+| `requirements/player.txt` | Integrated video player: python-mpv (needs libmpv from the system or from the Windows installer). |
+| `requirements/dev.txt` | Lightweight dependencies used by CI/unit tests. |
 
 ## Update
 
