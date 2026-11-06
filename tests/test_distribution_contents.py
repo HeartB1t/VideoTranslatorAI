@@ -21,6 +21,7 @@ ICONS = ("icon.ico", "icon.png", "icon_256.png")
 FONTS = ("fonts/PixelifySans.ttf", "fonts/VT323-Regular.ttf",
          "fonts/OFL-PixelifySans.txt", "fonts/OFL-VT323.txt")
 LOCAL_NOTES = ("docs/ACTION_PLAN.md", "docs/ARCHITECTURE_PREVIEW.md",
+               "docs/TEST_PLAN.md",
                "docs/superpowers/plans/local-plan.md", "docs/local-review.md")
 
 # One hook per process, as pypa/build does: two builds in the same process
@@ -198,7 +199,6 @@ class DistributionContentsTests(unittest.TestCase):
                 self.assertNotIn(name, wheel_names)
         for path in (ROOT / "docs" / "i18n").glob("README*.md"):
             self.assertIn(path.relative_to(ROOT).as_posix(), source_names)
-        self.assertIn("docs/TEST_PLAN.md", source_names)
 
     def test_an_installed_wheel_finds_its_assets_outside_the_checkout(self):
         site = self.tmp / "site"
