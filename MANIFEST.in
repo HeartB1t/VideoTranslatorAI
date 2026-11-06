@@ -8,5 +8,4 @@ recursive-include assets/fonts *.ttf OFL-*.txt
 # Git-ignored development notes may exist in a local source tree. Package
 # only public documentation, including when a previous SOURCES.txt exists.
 prune docs
-include docs/TEST_PLAN.md
 recursive-include docs/i18n README*.md
