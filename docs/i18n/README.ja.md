@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> ソースコードから起動する場合は、Python、Tkinter、pip がインストールされている必要があります。依存関係の自動インストールは GUI で行われ、CLI は不足している依存関係を報告します。
+
 > 最初の起動時に、GUI は不足しているパッケージ (faster-whisper、Demucs、Edge-TTS など) を検出し、それらを自動的にインストールし、出力をログ ウィンドウにストリーミングします。 ffmpeg は、`apt-get` / `dnf` / `pacman` (Linux) 経由で自動的にインストールされるか、GitHub (Windows) からダウンロードされます。PyTorch が対応していない Python で起動された場合、アプリは PC 上で見つかった対応版 Python で自動的に再起動します。
 
 > ヘッダーには **プレイヤー** バッジが表示されます。 libmpv または python-mpv が見つからない場合、左側のペインに何が足りないのかが表示され、**プレイヤーのインストール** が表示されます。Linux では、pkexec (その後は `sudo -n`) を介してパッケージ マネージャーが使用され、どちらも機能しない場合は手動コマンドが表示されます。 Windows では、現在のユーザーの libmpv (約 32 MB) をダウンロードする前に質問されます。
 
 ### 要件プロファイル
+
+`requirements/` フォルダーは `requirements.txt` および `setup_windows.bat` と同じ場所に置いてください。これらのプロファイルはインストールと修復に必要です。ルートの `requirements.txt` はすべての実行時プロファイルを含み、`requirements/dev.txt` は開発とテスト専用です。
 
 | ファイル | 目的 |
 |------|---------|

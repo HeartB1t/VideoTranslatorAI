@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Aby uruchomić program z kodu źródłowego, trzeba mieć zainstalowane Python, Tkinter i pip. Automatyczna instalacja zależności działa w interfejsie graficznym; CLI zgłasza brakujące zależności.
+
 > Przy pierwszym uruchomieniu GUI wykrywa brakujące pakiety (faster-whisper, Demucs, Edge-TTS itp.) i instaluje je automatycznie, przesyłając strumieniowo dane wyjściowe do okna dziennika. ffmpeg jest również instalowany automatycznie przez `apt-get` / `dnf` / `pacman` (Linux) lub pobierany z GitHub (Windows). Uruchomiona z Pythonem, którego PyTorch nie obsługuje, aplikacja sama uruchamia się ponownie z obsługiwanym Pythonem znalezionym na komputerze.
 
 > Nagłówek pokazuje odznakę **Gracza**. Gdy brakuje libmpv lub python-mpv, lewy panel informuje, czego brakuje i oferuje **Zainstaluj odtwarzacz**: w systemie Linux używa menedżera pakietów poprzez pkexec (następnie `sudo -n`) i wyświetla polecenie ręczne, gdy żadne z nich nie działa; w systemie Windows pyta przed pobraniem libmpv dla bieżącego użytkownika (około 32 MB).
 
 ### Profile wymagań
+
+Zachowaj `requirements/` obok `requirements.txt` i `setup_windows.bat`. Te profile są wymagane do instalacji i naprawy. Plik `requirements.txt` w katalogu głównym zawiera wszystkie profile wykonawcze; `requirements/dev.txt` służy wyłącznie do prac programistycznych i testów.
 
 | Plik | Cel |
 |------|---------|
