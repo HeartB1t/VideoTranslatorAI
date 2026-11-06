@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> 소스 코드에서 실행하려면 Python, Tkinter, pip가 이미 설치되어 있어야 합니다. 의존성 자동 설치는 GUI에서 수행되며, CLI는 누락된 의존성을 알려 줍니다.
+
 > 처음 실행 시 GUI는 누락된 패키지(faster-whisper, Demucs, Edge-TTS 등)를 감지하고 자동으로 설치하여 출력을 로그 창으로 스트리밍합니다. ffmpeg는 `apt-get` / `dnf` / `pacman`(Linux)를 통해 자동으로 설치되거나 GitHub(Windows)에서 다운로드됩니다. PyTorch가 지원하지 않는 Python으로 시작되면 앱이 PC에서 찾은 지원되는 Python으로 스스로 다시 시작합니다.
 
 > 헤더에는 **플레이어** 배지가 표시됩니다. libmpv 또는 python-mpv가 누락된 경우 왼쪽 창에 누락된 항목이 표시되고 **플레이어 설치**가 제공됩니다. Linux에서는 pkexec(이후 `sudo -n`)를 통해 패키지 관리자를 사용하고 둘 다 작동하지 않으면 수동 명령을 표시합니다. Windows에서는 현재 사용자(약 32MB)에 대한 libmpv를 다운로드하기 전에 묻습니다.
 
 ### 요구 사항 프로필
+
+`requirements/` 폴더는 `requirements.txt` 및 `setup_windows.bat`와 같은 위치에 두세요. 이 프로필은 설치와 복구에 필요합니다. 루트의 `requirements.txt`에는 모든 런타임 프로필이 포함되며, `requirements/dev.txt`는 개발과 테스트 전용입니다.
 
 | 파일 | 목적 |
 |------|---------|

@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Để chạy từ mã nguồn, Python, Tkinter và pip phải được cài đặt sẵn. Tính năng tự động cài đặt các thư viện phụ thuộc hoạt động trong GUI; CLI thông báo các thư viện còn thiếu.
+
 > Trong lần khởi chạy đầu tiên, GUI sẽ phát hiện mọi gói bị thiếu (faster-whisper, Demucs, Edge-TTS, v.v.) và tự động cài đặt chúng, truyền dữ liệu đầu ra tới cửa sổ nhật ký. ffmpeg cũng được cài đặt tự động thông qua `apt-get`/`dnf`/`pacman` (Linux) hoặc tải xuống từ GitHub (Windows). Nếu được khởi động bằng một Python mà PyTorch không hỗ trợ, ứng dụng tự khởi động lại bằng một Python được hỗ trợ tìm thấy trên máy.
 
 > Tiêu đề hiển thị huy hiệu **Người chơi**. Khi thiếu libmpv hoặc python-mpv, khung bên trái sẽ cho biết nội dung còn thiếu và cung cấp **Cài đặt trình phát**: trên Linux, nó sử dụng trình quản lý gói thông qua pkexec (sau đó là `sudo -n`) và hiển thị lệnh thủ công khi cả hai đều không hoạt động; trên Windows nó hỏi trước khi tải xuống libmpv cho người dùng hiện tại (khoảng 32 MB).
 
 ### Hồ sơ yêu cầu
+
+Giữ thư mục `requirements/` cùng với `requirements.txt` và `setup_windows.bat`. Các hồ sơ này cần thiết cho việc cài đặt và sửa chữa. Tệp `requirements.txt` ở thư mục gốc bao gồm mọi hồ sơ phục vụ chạy chương trình; `requirements/dev.txt` chỉ dành cho phát triển và kiểm thử.
 
 | Tập tin | Mục đích |
 |------|---------|

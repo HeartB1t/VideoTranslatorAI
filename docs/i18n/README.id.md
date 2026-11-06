@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Untuk menjalankan dari kode sumber, Python, Tkinter, dan pip harus sudah terpasang. Instalasi dependensi otomatis berjalan di GUI; CLI melaporkan dependensi yang belum tersedia.
+
 > Pada peluncuran pertama GUI mendeteksi paket yang hilang (faster-whisper, Demucs, Edge-TTS, dll.) dan menginstalnya secara otomatis, mengalirkan output ke jendela log. ffmpeg juga diinstal secara otomatis melalui `apt-get` / `dnf` / `pacman` (Linux) atau diunduh dari GitHub (Windows). Jika dijalankan dengan Python yang tidak didukung PyTorch, aplikasi memulai ulang sendiri dengan Python yang didukung yang ditemukan di PC.
 
 > Header menunjukkan lencana **Pemain**. Ketika libmpv atau python-mpv tidak ada, panel kiri menunjukkan apa yang hilang dan menawarkan **Instal pemutar**: di Linux ia menggunakan manajer paket melalui pkexec (kemudian `sudo -n`) dan menampilkan perintah manual ketika tidak ada yang berfungsi; di Windows ia menanyakan sebelum mengunduh libmpv untuk pengguna saat ini (sekitar 32 MB).
 
 ### Profil kebutuhan
+
+Simpan `requirements/` bersama `requirements.txt` dan `setup_windows.bat`. Profil ini diperlukan untuk instalasi dan perbaikan. File `requirements.txt` di direktori utama mencakup semua profil runtime; `requirements/dev.txt` hanya untuk pengembangan dan pengujian.
 
 | Mengajukan | Tujuan |
 |------|---------|

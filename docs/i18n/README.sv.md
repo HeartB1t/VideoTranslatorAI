@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> För att starta från källkoden måste Python, Tkinter och pip redan vara installerade. Automatisk installation av beroenden sker i det grafiska gränssnittet; CLI visar vilka som saknas.
+
 > Vid första start upptäcker det grafiska användargränssnittet alla saknade paket (faster-whisper, Demucs, Edge-TTS, etc.) och installerar dem automatiskt och strömmar utdata till loggfönstret. ffmpeg installeras också automatiskt via `apt-get` / `dnf` / `pacman` (Linux) eller laddas ner från GitHub (Windows). Startas den med en Python som PyTorch inte stöder startar appen om sig själv med en stödd Python som hittats på datorn.
 
 > Rubriken visar ett **Spelare**-märke. När libmpv eller python-mpv saknas, säger den vänstra rutan vad som saknas och erbjuder **Installera spelare**: på Linux använder den pakethanteraren genom pkexec (då `sudo -n`) och visar det manuella kommandot när inget av dem fungerar; på Windows frågar den innan libmpv laddas ner för den aktuella användaren (cirka 32 MB).
 
 ### Kravprofiler
+
+Behåll `requirements/` bredvid `requirements.txt` och `setup_windows.bat`. Dessa profiler behövs för installation och reparation. Filen `requirements.txt` i rotmappen inkluderar alla körningsprofiler; `requirements/dev.txt` används bara för utveckling och tester.
 
 | Arkiv | Syfte |
 |------|---------|

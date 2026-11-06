@@ -222,11 +222,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> For a source launch, Python, Tkinter and pip must already be installed. Automatic dependency installation runs in the GUI; the CLI reports missing dependencies.
+
 > On first launch the GUI detects any missing packages (faster-whisper, Demucs, Edge-TTS, etc.) and installs them automatically, streaming the output to the log window. ffmpeg is also installed automatically via `apt-get` / `dnf` / `pacman` (Linux) or downloaded from GitHub (Windows). Started with a Python that PyTorch does not support, the app restarts by itself with a supported one found on the PC.
 
 > The header shows a **Player** badge. When libmpv or python-mpv is missing, the left pane says what is missing and offers **Install player**: on Linux it uses the package manager through pkexec (then `sudo -n`) and shows the manual command when neither works; on Windows it asks before downloading libmpv for the current user (about 32 MB).
 
 ### Requirement profiles
+
+Keep `requirements/` alongside `requirements.txt` and `setup_windows.bat`. These profiles are required for installation and repair. The root `requirements.txt` includes all runtime profiles; `requirements/dev.txt` is only for development and tests.
 
 | File | Purpose |
 |------|---------|

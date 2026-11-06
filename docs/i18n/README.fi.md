@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Lähdekoodista käynnistäminen edellyttää, että Python, Tkinter ja pip on jo asennettu. Riippuvuuksien automaattinen asennus tapahtuu graafisessa käyttöliittymässä; komentorivikäyttöliittymä ilmoittaa puuttuvat riippuvuudet.
+
 > Ensimmäisellä käynnistyksellä graafinen käyttöliittymä havaitsee puuttuvat paketit (faster-whisper, Demucs, Edge-TTS jne.) ja asentaa ne automaattisesti, suoratoistaen tulosteen loki-ikkunaan. ffmpeg asennetaan myös automaattisesti `apt-get` / `dnf` / `pacman` (Linux) kautta tai ladataan GitHubista (Windows). Jos sovellus käynnistetään Pythonilla, jota PyTorch ei tue, se käynnistyy itse uudelleen tietokoneelta löytyneellä tuetulla Pythonilla.
 
 > Otsikossa näkyy **Pelaaja**-merkki. Kun libmpv tai python-mpv puuttuu, vasen ruutu kertoo, mitä puuttuu ja tarjoaa **Install player**: Linuxissa se käyttää paketinhallintaa pkexecin kautta (siis `sudo -n`) ja näyttää manuaalisen komennon, kun kumpikaan ei toimi; Windowsissa se kysyy ennen libmpv:n lataamista nykyiselle käyttäjälle (noin 32 Mt).
 
 ### Vaatimusprofiilit
+
+Säilytä `requirements/` samassa hakemistossa kuin `requirements.txt` ja `setup_windows.bat`. Näitä profiileja tarvitaan asennukseen ja korjaukseen. Juurihakemiston `requirements.txt` sisältää kaikki ajonaikaiset profiilit; `requirements/dev.txt` on vain kehitystä ja testejä varten.
 
 | Tiedosto | Tarkoitus |
 |------|---------|

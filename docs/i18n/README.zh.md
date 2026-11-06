@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> 从源代码启动前，必须已安装 Python、Tkinter 和 pip。依赖项的自动安装在图形界面中执行；命令行界面会报告缺少的依赖项。
+
 > 首次启动时，GUI 会检测到任何缺失的软件包（faster-whisper、Demucs、Edge-TTS 等）并自动安装它们，将输出流式传输到日志窗口。 ffmpeg 也会通过 `apt-get` / `dnf` / `pacman` (Linux) 自动安装或从 GitHub (Windows) 下载。如果用 PyTorch 不支持的 Python 启动，应用会自动改用电脑上找到的受支持 Python 重新启动。
 
 > 标题显示 **玩家** 徽章。当 libmpv 或 python-mpv 丢失时，左窗格会显示缺少的内容并提供 **安装播放器**：在 Linux 上，它通过 pkexec （然后是 `sudo -n`）使用包管理器，并在两者都不起作用时显示手动命令；在 Windows 上，它会在为当前用户下载 libmpv 之前询问（大约 32 MB）。
 
 ### 需求概况
+
+请将 `requirements/` 文件夹与 `requirements.txt` 和 `setup_windows.bat` 放在一起。安装和修复都需要这些依赖配置。根目录中的 `requirements.txt` 包含所有运行时配置；`requirements/dev.txt` 仅用于开发和测试。
 
 | 文件 | 目的 |
 |------|---------|

@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Pro spuštění ze zdrojového kódu musí být Python, Tkinter a pip již nainstalované. Automatická instalace závislostí probíhá v grafickém rozhraní; CLI hlásí chybějící závislosti.
+
 > Při prvním spuštění GUI detekuje všechny chybějící balíčky (faster-whisper, Demucs, Edge-TTS atd.) a automaticky je nainstaluje, přičemž výstup streamuje do okna protokolu. ffmpeg se také instaluje automaticky přes `apt-get` / `dnf` / `pacman` (Linux) nebo stahuje z GitHubu (Windows). Spuštěna s Pythonem, který PyTorch nepodporuje, aplikace se sama restartuje s podporovaným Pythonem nalezeným v počítači.
 
 > V záhlaví je odznak **Hráč**. Když chybí libmpv nebo python-mpv, v levém podokně je napsáno, co chybí, a nabízí se **Instalovat přehrávač**: v Linuxu používá správce balíčků přes pkexec (pak `sudo -n`) a zobrazuje ruční příkaz, když nefunguje ani jeden; ve Windows se zeptá před stažením libmpv pro aktuálního uživatele (asi 32 MB).
 
 ### Profily požadavků
+
+Ponechte `requirements/` vedle souborů `requirements.txt` a `setup_windows.bat`. Tyto profily jsou nutné pro instalaci a opravu. Soubor `requirements.txt` v kořenové složce zahrnuje všechny běhové profily; `requirements/dev.txt` slouží pouze pro vývoj a testy.
 
 | Soubor | Účel |
 |------|---------|

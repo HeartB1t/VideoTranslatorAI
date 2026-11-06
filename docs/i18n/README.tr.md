@@ -215,11 +215,15 @@ videotranslatorai
 videotranslatorai --preflight
 ```
 
+> Kaynak koddan başlatmak için Python, Tkinter ve pip önceden kurulu olmalıdır. Bağımlılıkların otomatik kurulumu grafik arayüzde çalışır; CLI eksik bağımlılıkları bildirir.
+
 > İlk başlatmada GUI, eksik paketleri (faster-whisper, Demucs, Edge-TTS, vb.) algılar ve çıktıyı günlük penceresine aktararak bunları otomatik olarak yükler. ffmpeg ayrıca `apt-get` / `dnf` / `pacman` (Linux) aracılığıyla otomatik olarak yüklenir veya GitHub'dan (Windows) indirilir. PyTorch'un desteklemediği bir Python ile başlatılırsa uygulama, bilgisayarda bulunan desteklenen bir Python ile kendiliğinden yeniden başlar.
 
 > Başlıkta **Oyuncu** rozeti gösteriliyor. Libmpv veya python-mpv eksik olduğunda, sol bölmede neyin eksik olduğu belirtilir ve **Oynatıcıyı yükle** seçeneği sunulur: Linux'ta pkexec (sonra `sudo -n`) aracılığıyla paket yöneticisini kullanır ve ikisi de çalışmadığında manuel komutu gösterir; Windows'ta geçerli kullanıcı için libmpv'yi indirmeden önce sorar (yaklaşık 32 MB).
 
 ### Gereksinim profilleri
+
+`requirements/` klasörünü `requirements.txt` ve `setup_windows.bat` ile aynı yerde tutun. Bu profiller kurulum ve onarım için gereklidir. Kök dizindeki `requirements.txt` tüm çalışma zamanı profillerini içerir; `requirements/dev.txt` yalnızca geliştirme ve test içindir.
 
 | Dosya | Amaç |
 |------|---------|
