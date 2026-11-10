@@ -3,21 +3,28 @@ name: release
 # Pushing a vX.Y.Z tag publishes the GitHub release that the Windows updater
 # installs (docs/superpowers/specs/2026-09-27-windows-updater-design.md):
 # VideoTranslatorAI-vX.Y.Z.zip plus sha256.txt.
+#
+# Two jobs on purpose: "test" installs third-party packages from PyPI, so it
+# runs with a read-only token; "release" holds contents: write and installs
+# nothing, so a compromised dependency can never alter the zip, sha256.txt or
+# the release that the updater trusts.
 
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout the tag
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -47,6 +54,25 @@ jobs:
           pip install -r requirements/dev.txt
           python -m unittest discover -s tests
 
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # No pip install and no pip cache in this job: the updater check below
+      # runs on the standard library only.
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
       - name: Build the release zip
         run: |
           name="VideoTranslatorAI-$GITHUB_REF_NAME"
@@ -56,7 +82,7 @@ jobs:
 
       - name: Check the zip exactly as the updater will
         run: |
-          python - <<'PY'
+          python -S - <<'PY'
           import os, sys, tempfile
           from pathlib import Path
           from videotranslator import updater
@@ -73,6 +99,7 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "VideoTranslatorAI-$GITHUB_REF_NAME.zip" sha256.txt \
