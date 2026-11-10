@@ -1,11 +1,14 @@
 import ast
 import io
+import os
+import stat
 import threading
 import time
 import unittest
 import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from videotranslator import voice_preview as vp
 
@@ -242,6 +245,45 @@ class ControllerTests(unittest.TestCase):
         preview.toggle("b", lambda: b"y")
         time.sleep(0.1)
         self.assertNotIn(("b", "loading", None), self.events)
+
+
+class TempFileTests(unittest.TestCase):
+    """The sample is written where no other local user can plant or read it."""
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.folder = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def preview(self, **kwargs):
+        return vp.VoicePreview(lambda *_: None, player_factory=FakePlayer, **kwargs)
+
+    def test_default_folder_is_the_private_temp_dir(self):
+        with mock.patch.object(vp, "private_temp_dir", return_value=self.folder) as private:
+            path = self.preview()._write(b"mp3", ".mp3")
+        private.assert_called_once_with()
+        self.assertEqual(path.parent, self.folder)
+        self.assertEqual(path.read_bytes(), b"mp3")
+        self.assertEqual(path.suffix, ".mp3")
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_a_planted_symlink_at_the_old_guessable_name_is_not_followed(self):
+        victim = self.folder / "victim.txt"
+        victim.write_bytes(b"keep me")
+        for seq in range(1, 4):
+            planted = self.folder / f"vtai_voice_preview_{os.getpid()}_{seq}.mp3"
+            planted.symlink_to(victim)
+        path = self.preview(temp_dir=self.folder)._write(b"mp3", ".mp3")
+        self.assertEqual(victim.read_bytes(), b"keep me")
+        self.assertFalse(path.is_symlink())
+        self.assertEqual(path.read_bytes(), b"mp3")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permission bits")
+    def test_the_sample_is_owner_only(self):
+        path = self.preview(temp_dir=self.folder)._write(b"mp3", ".mp3")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
 
 class MakePlayerTests(unittest.TestCase):

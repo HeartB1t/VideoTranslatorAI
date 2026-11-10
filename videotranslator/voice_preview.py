@@ -31,6 +31,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+from .platforms import private_temp_dir
 from .subprocess_utils import no_window_kwargs
 
 MAX_SAMPLE_BYTES = 5 * 1024 * 1024
@@ -237,7 +238,8 @@ class VoicePreview:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._on_state = on_state
         self._player_factory = player_factory
-        self._temp_dir = Path(temp_dir) if temp_dir else Path(tempfile.gettempdir())
+        # None = the per-user private temp dir, resolved on the first sample.
+        self._temp_dir = Path(temp_dir) if temp_dir else None
         self._thread_factory = thread_factory
         self._clock = clock
         self._requests: queue.Queue = queue.Queue()
@@ -246,7 +248,6 @@ class VoicePreview:
         self._thread: threading.Thread | None = None
         self._player = None
         self._closed = False
-        self._seq = 0
 
     # -- Tk-side API -------------------------------------------------------------
 
@@ -393,12 +394,23 @@ class VoicePreview:
             return None
 
     def _write(self, data: bytes, suffix: str) -> Path | None:
-        self._seq += 1
-        path = self._temp_dir / f"vtai_voice_preview_{os.getpid()}_{self._seq}{suffix}"
+        # The default folder is private to the user (0700 on POSIX), and mkstemp
+        # creates a random name with O_EXCL and mode 0600: a symlink planted at a
+        # guessable path in a shared /tmp is never followed.
         try:
+            if self._temp_dir is None:
+                self._temp_dir = private_temp_dir()
             self._temp_dir.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
+            fd, name = tempfile.mkstemp(prefix="vtai_voice_preview_", suffix=suffix,
+                                        dir=self._temp_dir)
         except OSError:
+            return None
+        path = Path(name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+        except OSError:
+            self._remove(path)
             return None
         return path
 
